@@ -1,92 +1,90 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { Quote, ArrowLeft, ArrowRight, Star } from "lucide-react";
-import { Eyebrow } from "@/components/ui/primitives";
+import { Quote, Star } from "lucide-react";
 import { testimonials } from "@/lib/content";
 
-export function Testimonials() {
-  const [index, setIndex] = useState(0);
-  const go = (dir: 1 | -1) =>
-    setIndex((i) => (i + dir + testimonials.length) % testimonials.length);
-  const t = testimonials[index];
+type Testimonial = (typeof testimonials)[number];
 
-  // Auto-advance every 5 seconds; resets whenever the active slide changes.
-  useEffect(() => {
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    if (reduce) return;
-    const id = setTimeout(() => setIndex((i) => (i + 1) % testimonials.length), 5000);
-    return () => clearTimeout(id);
-  }, [index]);
+const AVATAR_COLORS = ["#0a196d", "#2540c4", "#4c6ef5", "#1e9df5", "#0f766e", "#7c3aed"];
+
+function initials(name: string) {
+  return name
+    .split(" ")
+    .slice(0, 2)
+    .map((n) => n[0])
+    .join("");
+}
+
+function Card({ t, i }: { t: Testimonial; i: number }) {
+  return (
+    <figure className="flex w-[300px] shrink-0 flex-col gap-4 rounded-card border border-hairline bg-surface p-6 sm:w-[380px]">
+      <Quote className="size-7 text-brand" />
+      <blockquote className="text-sm leading-relaxed text-ink sm:text-[0.95rem]">
+        {t.quote}
+      </blockquote>
+      <figcaption className="mt-auto flex items-center gap-3">
+        <span
+          className="grid size-10 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
+          style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}
+        >
+          {initials(t.name)}
+        </span>
+        <span>
+          <span className="block text-sm font-semibold text-ink">{t.name}</span>
+          <span className="block text-xs text-muted">{t.role}</span>
+        </span>
+      </figcaption>
+    </figure>
+  );
+}
+
+function Row({ items, reverse }: { items: Testimonial[]; reverse?: boolean }) {
+  const doubled = [...items, ...items];
+  return (
+    <div className="group relative flex overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_6%,black_94%,transparent)]">
+      <div
+        className={`flex w-max gap-4 pr-4 ${reverse ? "animate-[marquee-rev_40s_linear_infinite]" : "animate-[marquee-fwd_40s_linear_infinite]"} group-hover:[animation-play-state:paused]`}
+      >
+        {doubled.map((t, i) => (
+          <Card key={i} t={t} i={i} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function Testimonials() {
+  const mid = Math.ceil(testimonials.length / 2);
+  const rowA = testimonials.slice(0, mid);
+  const rowB = testimonials.slice(mid);
 
   return (
     <section className="px-3 md:px-4">
-      <div className="relative mx-auto max-w-[1400px] overflow-hidden rounded-hero bg-ink px-6 py-16 text-white md:px-16 md:py-24">
-        <div className="absolute inset-0 bg-dot-grid opacity-50" />
-        <div className="absolute -left-20 bottom-0 size-80 rounded-full bg-brand/40 blur-3xl" />
+      <div className="mx-auto max-w-[1400px] overflow-hidden rounded-hero bg-brand px-4 py-16 sm:px-8 md:py-20">
+        <div className="mx-auto max-w-3xl px-2 text-center">
+          <span className="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-xs font-medium text-white">
+            <Star className="size-3.5 fill-highlight text-highlight" />
+            Rated 5/5 by clients across sectors
+          </span>
+          <h2 className="mt-6 font-display text-3xl font-bold leading-tight tracking-tight text-white text-balance sm:text-4xl md:text-[2.75rem]">
+            Words of praise from those we&rsquo;ve helped.
+          </h2>
+        </div>
 
-        <div className="relative mx-auto flex max-w-3xl flex-col items-center text-center">
-          <Eyebrow tone="dark">What our clients say</Eyebrow>
-          <Quote className="mt-8 size-10 text-highlight" />
-
-          <div className="mt-6 min-h-[180px] md:min-h-[150px]">
-            <AnimatePresence mode="wait">
-              <motion.blockquote
-                key={index}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -16 }}
-                transition={{ duration: 0.4 }}
-              >
-                <p className="font-display text-xl font-medium leading-snug text-balance md:text-2xl">
-                  &ldquo;{t.quote}&rdquo;
-                </p>
-                <footer className="mt-6">
-                  <div className="mb-2 flex justify-center">
-                    {Array.from({ length: 5 }).map((_, i) => (
-                      <Star key={i} className="size-4 fill-highlight text-highlight" />
-                    ))}
-                  </div>
-                  <p className="font-semibold">{t.name}</p>
-                  <p className="text-sm text-white/60">{t.role}</p>
-                </footer>
-              </motion.blockquote>
-            </AnimatePresence>
-          </div>
-
-          <div className="mt-8 flex items-center gap-3">
-            <button
-              onClick={() => go(-1)}
-              aria-label="Previous testimonial"
-              className="grid size-11 place-items-center rounded-full border border-white/20 text-white transition-colors hover:bg-white/10"
-            >
-              <ArrowLeft className="size-5" />
-            </button>
-            <div className="flex gap-1.5">
-              {testimonials.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setIndex(i)}
-                  aria-label={`Testimonial ${i + 1}`}
-                  className="h-1.5 rounded-full transition-all"
-                  style={{
-                    width: i === index ? 28 : 8,
-                    background: i === index ? "#4c6ef5" : "rgba(255,255,255,0.3)",
-                  }}
-                />
-              ))}
-            </div>
-            <button
-              onClick={() => go(1)}
-              aria-label="Next testimonial"
-              className="grid size-11 place-items-center rounded-full border border-white/20 text-white transition-colors hover:bg-white/10"
-            >
-              <ArrowRight className="size-5" />
-            </button>
-          </div>
+        <div className="mt-12 flex flex-col gap-4">
+          <Row items={rowA} />
+          <Row items={rowB} reverse />
         </div>
       </div>
+
+      <style>{`
+        @keyframes marquee-fwd { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+        @keyframes marquee-rev { from { transform: translateX(-50%); } to { transform: translateX(0); } }
+        @media (prefers-reduced-motion: reduce) {
+          .animate-\\[marquee-fwd_40s_linear_infinite\\],
+          .animate-\\[marquee-rev_40s_linear_infinite\\] { animation: none; }
+        }
+      `}</style>
     </section>
   );
 }

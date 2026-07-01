@@ -17,11 +17,11 @@ export const site = {
   phoneHref: "+2348133824779",
   location: "Lagos, Nigeria",
   nav: [
-    { label: "Services", href: "#services" },
-    { label: "Approach", href: "#process" },
-    { label: "Insights", href: "#insights" },
-    { label: "Case Studies", href: "#case-studies" },
-    { label: "About", href: "#about" },
+    { label: "Services", href: "/#services" },
+    { label: "Approach", href: "/#process" },
+    { label: "Insights", href: "/#insights" },
+    { label: "Case Studies", href: "/#case-studies" },
+    { label: "About", href: "/#about" },
   ],
   socials: [
     { label: "LinkedIn", href: "#" },
@@ -192,7 +192,7 @@ export const grow = {
 
 export const scrollHighlight = {
   lead: "We believe",
-  text: "great financial decisions start with clarity; clean numbers, honest insight, and a partner who translates complexity into confidence, so your business can move forward without hesitation.",
+  text: "Great financial decisions start with clarity; clean numbers, honest insight, and a partner who translates complexity into confidence, so your business can move forward without hesitation.",
 };
 
 export const audiences = {
@@ -221,20 +221,38 @@ export const testimonials = [
   {
     quote:
       "Before Litch, our reporting was always late and never trusted. Now the board gets one clear picture, and our decisions have never been sharper.",
-    name: "Adaeze O.",
+    name: "Adaeze Okafor",
     role: "CFO, Retail Group",
   },
   {
     quote:
       "Their financial model gave us the confidence to raise. Investors could see we knew our numbers cold.",
-    name: "Tunde A.",
+    name: "Tunde Adeyemi",
     role: "Founder, FinTech Startup",
   },
   {
     quote:
       "The forensic review uncovered leakage we didn't know existed. It paid for itself many times over.",
-    name: "Grace M.",
+    name: "Grace Mensah",
     role: "MD, Manufacturing",
+  },
+  {
+    quote:
+      "Litch turned our tax function from a source of stress into a genuine competitive advantage. Calm, precise, dependable.",
+    name: "Ibrahim Bello",
+    role: "Finance Director, Logistics",
+  },
+  {
+    quote:
+      "We finally understand our unit economics. Every board meeting now starts from a place of clarity rather than confusion.",
+    name: "Chiamaka Eze",
+    role: "COO, Healthtech",
+  },
+  {
+    quote:
+      "Responsive, rigorous and genuinely invested in our growth. It feels like having a finance partner, not just a vendor.",
+    name: "Daniel Osei",
+    role: "Managing Partner, Advisory",
   },
 ];
 
@@ -286,4 +304,27 @@ export const faqs = [
 export const cta = {
   title: "Ready to take control of your financial future?",
   body: "Book a consultation and let's build the clarity, compliance and confidence your business deserves.",
+};
+
+export const bookingSteps = {
+  eyebrow: "How it works",
+  title: "Book your consultation in three simple steps.",
+  body: "Getting started is easy. Follow these steps to connect with a Litch advisor who fits your needs; from anywhere, anytime.",
+  steps: [
+    {
+      no: "01",
+      title: "Pick a date and time",
+      body: "Choose a slot that works for you from our live availability. It takes less than a minute.",
+    },
+    {
+      no: "02",
+      title: "Share a few details",
+      body: "Tell us which service you're interested in and a little about your goals so we come prepared.",
+    },
+    {
+      no: "03",
+      title: "Meet your advisor",
+      body: "Join a secure Google Meet or phone call and get clear, tailored financial guidance.",
+    },
+  ],
 };

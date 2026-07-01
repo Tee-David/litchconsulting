@@ -74,7 +74,7 @@ export function Hero() {
               <p className="mb-3 text-sm font-medium uppercase tracking-[0.16em] text-highlight">
                 {slide.eyebrow}
               </p>
-              <h1 className="font-display text-4xl font-bold leading-[1.05] tracking-tight text-white text-balance sm:text-5xl md:text-6xl lg:text-[4.25rem]">
+              <h1 className="font-display text-[2.6rem] font-bold leading-[1.05] tracking-tight text-white text-pretty sm:text-5xl sm:text-balance md:text-6xl lg:text-[4.25rem]">
                 {slide.headline}
               </h1>
               <p className="mt-5 max-w-xl text-base leading-relaxed text-white/80 md:text-lg">
@@ -83,11 +83,11 @@ export function Hero() {
             </motion.div>
           </AnimatePresence>
 
-          <div className="mt-8 flex flex-row items-center gap-3">
-            <Button href="#contact" withArrow className="flex-1 px-4 sm:flex-none sm:px-6">
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Button href="/book" withArrow className="w-full sm:w-auto">
               Book a Consultation
             </Button>
-            <Button href="#services" variant="light" withArrow className="flex-1 px-4 sm:flex-none sm:px-6">
+            <Button href="/#services" variant="light" withArrow className="w-full sm:w-auto">
               Explore Services
             </Button>
           </div>

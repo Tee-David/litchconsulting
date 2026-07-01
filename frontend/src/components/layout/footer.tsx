@@ -34,8 +34,8 @@ export function Footer() {
 
   return (
     <footer className="px-3 pb-3 md:px-4 md:pb-4">
-      <div className="mx-auto max-w-[1400px] overflow-hidden rounded-hero bg-ink px-6 pt-14 text-white sm:px-10 md:px-14">
-        <div className="grid gap-12 lg:grid-cols-[1.3fr_1fr_1fr]">
+      <div className="relative mx-auto max-w-[1400px] overflow-hidden rounded-hero bg-ink px-6 pt-14 text-white sm:px-10 md:px-14">
+        <div className="relative z-10 grid gap-12 lg:grid-cols-[1.3fr_1fr_1fr]">
           {/* Newsletter */}
           <div>
             <h3 className="max-w-xs font-display text-lg font-semibold">
@@ -108,15 +108,40 @@ export function Footer() {
           </div>
         </div>
 
-        {/* Giant wordmark */}
-        <div className="relative mt-10 select-none">
-          <span className="block text-center font-display font-bold leading-[0.8] tracking-tighter text-white/[0.07] text-[clamp(5rem,26vw,22rem)]">
-            Litch
-            <sup className="align-super text-brand text-[0.2em]">®</sup>
-          </span>
+        {/* Giant background wordmark — fills the container width */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 select-none" aria-hidden>
+          <svg
+            className="block w-full"
+            viewBox="0 0 1000 300"
+            preserveAspectRatio="xMidYMax meet"
+          >
+            <text
+              x="500"
+              y="270"
+              textAnchor="middle"
+              textLength="980"
+              lengthAdjust="spacingAndGlyphs"
+              fontFamily="var(--font-space-grotesk), sans-serif"
+              fontWeight="700"
+              fill="rgba(255,255,255,0.05)"
+            >
+              Litch
+            </text>
+            <text
+              x="962"
+              y="120"
+              fontFamily="var(--font-space-grotesk), sans-serif"
+              fontWeight="700"
+              fontSize="48"
+              fill="rgba(76,110,245,0.35)"
+            >
+              ®
+            </text>
+          </svg>
         </div>
 
-        <div className="flex flex-col items-center justify-between gap-3 border-t border-white/10 py-6 text-sm text-white/50 md:flex-row">
+        {/* Copyright — overlaps the wordmark, no divider */}
+        <div className="relative z-10 mt-32 flex flex-col items-center justify-between gap-3 py-6 text-sm text-white/60 md:mt-44 md:flex-row">
           <p>
             © {new Date().getFullYear()} {site.legalName}. All rights reserved.
           </p>

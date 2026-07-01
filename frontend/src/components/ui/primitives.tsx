@@ -28,7 +28,7 @@ export function Button({
   type = "button",
 }: ButtonProps) {
   const base =
-    "group inline-flex items-center justify-center gap-2 rounded-full px-6 py-3 text-sm font-medium transition-all duration-300 focus-visible:outline-none active:scale-[0.98]";
+    "group inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full px-6 py-3 text-sm font-medium transition-all duration-300 focus-visible:outline-none active:scale-[0.98]";
   const styles = {
     primary: "bg-brand text-white hover:bg-brand-hover hover:shadow-lg hover:shadow-brand/25",
     outline: "border border-hairline bg-white text-ink hover:bg-brand hover:text-white hover:border-brand",
@@ -118,7 +118,7 @@ export function SectionHeading({
       <Reveal delay={0.05}>
         <h2
           className={cn(
-            "font-display text-3xl font-bold leading-[1.1] tracking-tight text-balance sm:text-4xl md:text-[2.75rem]",
+            "font-display text-[1.9rem] font-bold leading-[1.12] tracking-tight text-pretty sm:text-4xl sm:text-balance md:text-[2.75rem]",
             tone === "dark" ? "text-white" : "text-ink"
           )}
         >
