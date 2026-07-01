@@ -1,0 +1,54 @@
+# ==============================================================================
+# CRITICAL: client brief — MUST NEVER be pushed to the repository
+# ==============================================================================
+plans/
+plans
+
+# Secrets / environment
+.env
+.env.*
+!.env.example
+*.pem
+
+# Dependencies
+node_modules/
+.pnp
+.pnp.*
+.yarn/*
+
+# Build output
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# Vercel
+.vercel/
+
+# Testing / coverage
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Caches
+.cache/
+.turbo/
+.eslintcache
+
+# Installed agent skills (external repo content)
+.agents/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json
