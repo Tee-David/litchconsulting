@@ -15,12 +15,34 @@ const mobileItems = [
 
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
+  const [active, setActive] = useState<string>("");
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Scroll-spy: underline the nav item whose section is in view.
+  useEffect(() => {
+    const ids = site.nav.map((n) => n.href.split("#")[1]).filter(Boolean);
+    const sections = ids
+      .map((id) => document.getElementById(id))
+      .filter((el): el is HTMLElement => Boolean(el));
+    if (!sections.length) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (visible) setActive(visible.target.id);
+      },
+      { rootMargin: "-45% 0px -50% 0px", threshold: [0, 0.25, 0.5, 1] }
+    );
+    sections.forEach((s) => observer.observe(s));
+    return () => observer.disconnect();
   }, []);
 
   return (
@@ -41,15 +63,24 @@ export function Header() {
             </Link>
 
             <nav className="flex items-center gap-7">
-              {site.nav.map((item) => (
-                <a
-                  key={item.href}
-                  href={item.href}
-                  className="text-sm font-medium text-body transition-colors hover:text-brand"
-                >
-                  {item.label}
-                </a>
-              ))}
+              {site.nav.map((item) => {
+                const id = item.href.split("#")[1];
+                const isActive = id && active === id;
+                return (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "text-sm font-medium underline-offset-8 transition-colors hover:text-brand",
+                      isActive
+                        ? "text-brand underline decoration-2"
+                        : "text-body no-underline"
+                    )}
+                  >
+                    {item.label}
+                  </a>
+                );
+              })}
             </nav>
 
             <Button href="/book" withArrow>

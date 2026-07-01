@@ -108,36 +108,15 @@ export function Footer() {
           </div>
         </div>
 
-        {/* Giant background wordmark — fills the container width */}
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 select-none" aria-hidden>
-          <svg
-            className="block w-full"
-            viewBox="0 0 1000 300"
-            preserveAspectRatio="xMidYMax meet"
-          >
-            <text
-              x="500"
-              y="270"
-              textAnchor="middle"
-              textLength="980"
-              lengthAdjust="spacingAndGlyphs"
-              fontFamily="var(--font-space-grotesk), sans-serif"
-              fontWeight="700"
-              fill="rgba(255,255,255,0.05)"
-            >
-              Litch
-            </text>
-            <text
-              x="962"
-              y="120"
-              fontFamily="var(--font-space-grotesk), sans-serif"
-              fontWeight="700"
-              fontSize="48"
-              fill="rgba(76,110,245,0.35)"
-            >
-              ®
-            </text>
-          </svg>
+        {/* Giant background wordmark — scales with the container width, no distortion */}
+        <div
+          className="pointer-events-none absolute inset-x-0 bottom-[-0.08em] select-none [container-type:inline-size]"
+          aria-hidden
+        >
+          <span className="relative block text-center font-display font-bold leading-[0.72] tracking-tighter text-white/[0.06] text-[38cqw]">
+            Litch
+            <span className="align-top text-[0.12em] text-highlight/40">®</span>
+          </span>
         </div>
 
         {/* Copyright — overlaps the wordmark, no divider */}
