@@ -52,10 +52,10 @@ export function Hero() {
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-xs font-medium text-white backdrop-blur-md">
             <span className="flex">
               {Array.from({ length: 5 }).map((_, i) => (
-                <Star key={i} className="size-3.5 fill-highlight text-highlight" />
+                <Star key={i} className="size-3.5 fill-amber-400 text-amber-400" />
               ))}
             </span>
-            Trusted financial advisory · 5.0 client rating
+            4.7 · 1,000+ reviews
           </div>
 
           <AnimatePresence mode="wait">
@@ -67,7 +67,7 @@ export function Hero() {
               transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
               className="max-w-3xl"
             >
-              <p className="text-shadow-soft mb-3 text-sm font-medium uppercase tracking-[0.16em] text-highlight">
+              <p className="text-shadow-soft mb-3 text-sm font-medium uppercase tracking-[0.16em] text-white/85">
                 {slide.eyebrow}
               </p>
               <h1 className="text-shadow-hero font-display text-[2.6rem] font-bold leading-[1.05] tracking-tight text-white text-pretty sm:text-5xl sm:text-balance md:text-6xl lg:text-[4.25rem]">

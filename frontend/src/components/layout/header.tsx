@@ -10,16 +10,17 @@ import StaggeredMenu from "@/components/ui/StaggeredMenu";
 import { site } from "@/lib/content";
 import { cn } from "@/lib/utils";
 
-const menuItems = [
+const mobileItems = [
   ...site.nav.map((n) => ({ label: n.label, link: n.href, ariaLabel: n.label })),
+  { label: "Log in", link: "/login", ariaLabel: "Log in" },
   { label: "Book a consultation", link: "/book", ariaLabel: "Book a consultation" },
 ];
 const socialItems = site.socials.map((s) => ({ label: s.label, link: s.href }));
 
 /**
- * `overlay` = the header sits transparent over a dark hero (home page). Only
- * after scrolling past the hero does it become the solid blur pill (and the
- * full logo collapses to the emblem). On pages with no hero it's always solid.
+ * `overlay` = the header sits transparent over a dark hero (home page). After
+ * scrolling past the hero it becomes the glassy pill (and the full logo
+ * collapses to the emblem). On pages with no hero it's always solid.
  */
 export function Header({
   overlay = false,
@@ -32,7 +33,7 @@ export function Header({
   const [solid, setSolid] = useState(!overlay);
 
   useEffect(() => {
-    if (!overlay) return; // initial state is already solid when there's no hero
+    if (!overlay) return; // initial state is already solid without a hero
     const onScroll = () => setSolid(window.scrollY > window.innerHeight - 90);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -54,9 +55,9 @@ export function Header({
           >
             <Link href="/" aria-label="Litch Consulting home" className="flex items-center">
               {solid ? (
-                <LogoMark tone="dark" className="h-9" />
+                <LogoMark tone="dark" className="h-14" />
               ) : (
-                <Logo tone="light" className="h-9" />
+                <Logo tone="light" className="h-14" />
               )}
             </Link>
 
@@ -69,12 +70,12 @@ export function Header({
                     key={item.href}
                     href={item.href}
                     className={cn(
-                      "text-[13px] font-medium underline-offset-8 transition-colors hover:underline",
+                      "text-sm font-medium underline-offset-8 transition-colors hover:underline",
                       isActive && "underline decoration-2",
                       solid
                         ? isActive
-                          ? "text-brand"
-                          : "text-body hover:text-brand"
+                          ? "text-brand dark:text-white dark:decoration-white"
+                          : "text-body hover:text-brand dark:text-white/80 dark:hover:text-white dark:hover:decoration-white"
                         : "text-shadow-soft " + (isActive ? "text-white" : "text-white/90 hover:text-white"),
                     )}
                   >
@@ -107,16 +108,13 @@ export function Header({
       <div className="md:hidden">
         <StaggeredMenu
           isFixed
+          solid={solid}
           position="right"
-          items={
-            showLogin ? [{ label: "Log in", link: "/login", ariaLabel: "Log in" }, ...menuItems] : menuItems
-          }
+          items={mobileItems}
           socialItems={socialItems}
           displaySocials
           colors={["#2540c4", "#0a196d"]}
           accentColor="#0a196d"
-          menuButtonColor="#ffffff"
-          openMenuButtonColor="#0a196d"
           logoUrl="/brand/litch-mark.svg"
         />
       </div>

@@ -20,6 +20,7 @@ export interface StaggeredMenuProps {
   className?: string;
   logoUrl?: string;
   isFixed?: boolean;
+  solid?: boolean;
   closeOnClickAway?: boolean;
   accentColor?: string;
   menuButtonColor?: string;
@@ -38,6 +39,7 @@ export const StaggeredMenu: React.FC<StaggeredMenuProps> = ({
   className,
   logoUrl = "/brand/litch-mark.svg",
   isFixed = false,
+  solid = false,
   closeOnClickAway = true,
   accentColor = "#0a196d",
   onMenuOpen,
@@ -189,6 +191,7 @@ export const StaggeredMenu: React.FC<StaggeredMenuProps> = ({
       style={accentColor ? ({ ["--sm-accent" as string]: accentColor } as React.CSSProperties) : undefined}
       data-position={position}
       data-open={open || undefined}
+      data-solid={solid || undefined}
     >
       <div ref={preLayersRef} className="sm-prelayers" aria-hidden="true">
         {prelayerColors.map((c, i) => (

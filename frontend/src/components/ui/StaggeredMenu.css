@@ -232,3 +232,39 @@
 .sm-socials-link:hover {
   color: var(--sm-accent, #0a196d);
 }
+
+/* Bulletproof theming — explicit colours avoid any var-inheritance edge cases */
+.staggered-menu-panel {
+  background: #ffffff;
+}
+.dark .staggered-menu-panel {
+  background: #0b1020;
+}
+.sm-panel-item {
+  color: #0a0e1a;
+}
+.dark .sm-panel-item {
+  color: #ffffff;
+}
+.sm-socials-link,
+.sm-panel-theme {
+  color: #5b6474;
+}
+.dark .sm-socials-link,
+.dark .sm-panel-theme {
+  color: rgba(255, 255, 255, 0.78);
+}
+.sm-socials-title {
+  color: #0a196d;
+}
+.dark .sm-socials-title {
+  color: #93a4ff;
+}
+
+/* Glassy sticky bar on scroll (dark-tinted so white logo/toggle stay legible) */
+.staggered-menu-wrapper[data-solid]:not([data-open]) .staggered-menu-header {
+  background: rgba(11, 16, 32, 0.42);
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
