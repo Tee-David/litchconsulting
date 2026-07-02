@@ -31,7 +31,7 @@ export function Button({
     "group inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full px-6 py-3 text-sm font-medium transition-all duration-300 focus-visible:outline-none active:scale-[0.98]";
   const styles = {
     primary: "bg-brand text-white hover:bg-brand-hover hover:shadow-lg hover:shadow-brand/25",
-    outline: "border border-hairline bg-white text-ink hover:bg-brand hover:text-white hover:border-brand",
+    outline: "border border-hairline bg-paper text-ink hover:bg-brand hover:text-white hover:border-brand",
     ghost: "text-ink hover:text-brand",
     light: "border border-white/20 bg-white/10 text-white backdrop-blur-md hover:bg-white hover:text-brand",
   }[variant];
@@ -75,7 +75,7 @@ export function Eyebrow({
     <span
       className={cn(
         "inline-flex items-center text-xs font-semibold uppercase tracking-[0.16em]",
-        tone === "light" ? "text-brand" : "text-highlight",
+        tone === "light" ? "text-brand dark:text-highlight" : "text-highlight",
         className
       )}
     >

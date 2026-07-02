@@ -32,7 +32,7 @@ function Counter({ value, suffix }: { value: number; suffix: string }) {
   return (
     <span ref={ref} className="font-display text-4xl font-bold text-white md:text-5xl">
       {display}
-      <span className="text-highlight">{suffix}</span>
+      <span className="text-white/80">{suffix}</span>
     </span>
   );
 }

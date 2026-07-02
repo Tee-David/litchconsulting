@@ -104,7 +104,7 @@ export default async function CaseStudyPage({
               {caseStudyDetails
                 .filter((d) => d.slug !== slug)
                 .slice(0, 6)
-                .map((d, idx) => {
+                .map((d) => {
                   const orig = caseStudies[caseStudyDetails.findIndex((x) => x.slug === d.slug)];
                   return (
                     <Link

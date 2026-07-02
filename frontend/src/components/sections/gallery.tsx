@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useTheme } from "next-themes";
 import { Eyebrow, Reveal } from "@/components/ui/primitives";
 import { gallery } from "@/lib/content";
 
@@ -9,6 +10,8 @@ const CircularGallery = dynamic(() => import("@/components/CircularGallery"), {
 });
 
 export function Gallery() {
+  const { resolvedTheme } = useTheme();
+  const textColor = resolvedTheme === "dark" ? "#ffffff" : "#0a196d";
   return (
     <section className="overflow-hidden py-20 md:py-28">
       <div className="container-page">
@@ -27,7 +30,7 @@ export function Gallery() {
         <CircularGallery
           items={gallery}
           bend={1.6}
-          textColor="#0a196d"
+          textColor={textColor}
           borderRadius={0.06}
           scrollEase={0.06}
           font="bold 26px Space Grotesk"

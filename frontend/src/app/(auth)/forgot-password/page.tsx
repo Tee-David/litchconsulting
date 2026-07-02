@@ -14,8 +14,8 @@ export default function ForgotPasswordPage() {
         <h1 className="font-display text-2xl font-bold tracking-tight text-ink">Reset password</h1>
         <p className="mt-3 text-sm text-body">
           Password reset by email is coming soon. In the meantime, contact us at{" "}
-          <a href="mailto:adenuga.saheed@gmail.com" className="font-semibold text-brand hover:underline">
-            adenuga.saheed@gmail.com
+          <a href="mailto:info@litchconsulting.com" className="font-semibold text-brand hover:underline">
+            info@litchconsulting.com
           </a>{" "}
           and we&rsquo;ll help you back in.
         </p>

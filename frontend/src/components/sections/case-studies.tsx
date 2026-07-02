@@ -11,6 +11,7 @@ import {
   Wallet,
   FileText,
 } from "lucide-react";
+import Image from "next/image";
 import { Section, SectionHeading } from "@/components/ui/primitives";
 import { CardCarousel, carouselCardClass } from "@/components/ui/card-carousel";
 import { caseStudies, caseStudyDetails } from "@/lib/content";
@@ -33,8 +34,17 @@ export function CaseStudies() {
               data-card
               className={`group relative aspect-[3/4] overflow-hidden rounded-hero bg-night ${carouselCardClass}`}
             >
+              <Image
+                src={study.image}
+                alt=""
+                fill
+                sizes="(max-width: 640px) 82vw, (max-width: 1024px) 46vw, 29vw"
+                className="object-cover transition-transform duration-500 group-hover:scale-105"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-night/95 via-brand/75 to-brand/40" />
+
               {/* Resting state */}
-              <div className="flex h-full flex-col justify-between p-6">
+              <div className="relative flex h-full flex-col justify-between p-6">
                 <Icon className="size-7 text-orange-500" />
                 <div>
                   <p className="font-display text-3xl font-bold text-white">{study.stat}</p>

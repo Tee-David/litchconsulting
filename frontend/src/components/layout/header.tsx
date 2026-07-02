@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Logo, LogoMark } from "@/components/ui/logo";
 import { Button } from "@/components/ui/primitives";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
@@ -20,14 +21,18 @@ const socialItems = site.socials.map((s) => ({ label: s.label, link: s.href }));
  * after scrolling past the hero does it become the solid blur pill (and the
  * full logo collapses to the emblem). On pages with no hero it's always solid.
  */
-export function Header({ overlay = false }: { overlay?: boolean }) {
+export function Header({
+  overlay = false,
+  showLogin = false,
+}: {
+  overlay?: boolean;
+  showLogin?: boolean;
+}) {
+  const pathname = usePathname();
   const [solid, setSolid] = useState(!overlay);
 
   useEffect(() => {
-    if (!overlay) {
-      setSolid(true);
-      return;
-    }
+    if (!overlay) return; // initial state is already solid when there's no hero
     const onScroll = () => setSolid(window.scrollY > window.innerHeight - 90);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
@@ -43,8 +48,8 @@ export function Header({ overlay = false }: { overlay?: boolean }) {
             className={cn(
               "mt-3 flex items-center justify-between rounded-full px-6 py-2.5 transition-all duration-300",
               solid
-                ? "border border-hairline bg-paper/85 shadow-sm shadow-black/5 backdrop-blur-xl"
-                : "border border-transparent bg-transparent",
+                ? "border border-hairline/60 bg-paper/50 shadow-sm shadow-black/5 backdrop-blur-2xl backdrop-saturate-150 supports-[backdrop-filter]:bg-paper/40"
+                : "bg-transparent",
             )}
           >
             <Link href="/" aria-label="Litch Consulting home" className="flex items-center">
@@ -56,23 +61,41 @@ export function Header({ overlay = false }: { overlay?: boolean }) {
             </Link>
 
             <nav className="flex items-center gap-9">
-              {site.nav.map((item) => (
-                <a
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "text-[13px] font-medium underline-offset-8 transition-colors hover:underline",
-                    solid ? "text-body hover:text-brand" : "text-white/80 hover:text-white",
-                  )}
-                >
-                  {item.label}
-                </a>
-              ))}
+              {site.nav.map((item) => {
+                const isActive =
+                  item.href === "/" ? pathname === "/" : pathname.startsWith(item.href.split("#")[0]);
+                return (
+                  <a
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "text-[13px] font-medium underline-offset-8 transition-colors hover:underline",
+                      isActive && "underline decoration-2",
+                      solid
+                        ? isActive
+                          ? "text-brand"
+                          : "text-body hover:text-brand"
+                        : "text-shadow-soft " + (isActive ? "text-white" : "text-white/90 hover:text-white"),
+                    )}
+                  >
+                    {item.label}
+                  </a>
+                );
+              })}
             </nav>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <ThemeToggle />
-              <Button href="/book" withArrow variant={solid ? "primary" : "light"}>
+              {showLogin && (
+                <Button href="/login" variant={solid ? "primary" : "light"}>
+                  Log in
+                </Button>
+              )}
+              <Button
+                href="/book"
+                withArrow
+                variant={showLogin ? "outline" : solid ? "primary" : "light"}
+              >
                 Book a Consultation
               </Button>
             </div>
@@ -85,7 +108,9 @@ export function Header({ overlay = false }: { overlay?: boolean }) {
         <StaggeredMenu
           isFixed
           position="right"
-          items={menuItems}
+          items={
+            showLogin ? [{ label: "Log in", link: "/login", ariaLabel: "Log in" }, ...menuItems] : menuItems
+          }
           socialItems={socialItems}
           displaySocials
           colors={["#2540c4", "#0a196d"]}

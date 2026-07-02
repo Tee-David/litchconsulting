@@ -67,13 +67,13 @@ export function Hero() {
               transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
               className="max-w-3xl"
             >
-              <p className="mb-3 text-sm font-medium uppercase tracking-[0.16em] text-highlight">
+              <p className="text-shadow-soft mb-3 text-sm font-medium uppercase tracking-[0.16em] text-highlight">
                 {slide.eyebrow}
               </p>
-              <h1 className="font-display text-[2.6rem] font-bold leading-[1.05] tracking-tight text-white text-pretty sm:text-5xl sm:text-balance md:text-6xl lg:text-[4.25rem]">
+              <h1 className="text-shadow-hero font-display text-[2.6rem] font-bold leading-[1.05] tracking-tight text-white text-pretty sm:text-5xl sm:text-balance md:text-6xl lg:text-[4.25rem]">
                 {slide.headline}
               </h1>
-              <p className="mx-auto mt-5 max-w-xl text-base leading-relaxed text-white/80 md:mx-0 md:text-lg">
+              <p className="text-shadow-soft mx-auto mt-5 max-w-xl text-base leading-relaxed text-white/85 md:mx-0 md:text-lg">
                 {slide.sub}
               </p>
             </motion.div>

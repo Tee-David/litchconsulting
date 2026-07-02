@@ -92,7 +92,7 @@ export default function AboutPage() {
                 </div>
                 <div className="p-5">
                   <h3 className="font-display text-base font-bold text-ink">{m.name}</h3>
-                  <p className="text-sm font-medium text-brand">{m.role}</p>
+                  <p className="text-sm font-medium text-highlight">{m.role}</p>
                   <p className="mt-2 text-sm leading-relaxed text-body">{m.bio}</p>
                 </div>
               </article>

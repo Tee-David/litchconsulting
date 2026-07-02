@@ -12,20 +12,21 @@ export const site = {
   tagline: "Clarity in every number.",
   description:
     "Litch Consulting is a professional finance firm delivering financial reporting, modelling, taxation, forensic accounting and advisory that turn numbers into confident decisions.",
-  email: "adenuga.saheed@gmail.com",
+  email: "info@litchconsulting.com",
   phone: "+234 813 382 4779",
   phoneHref: "+2348133824779",
   location: "Lagos, Nigeria",
   nav: [
+    { label: "Home", href: "/" },
     { label: "Services", href: "/services" },
-    { label: "Approach", href: "/#process" },
+    { label: "Case Studies", href: "/case-studies" },
     { label: "Insights", href: "/insights" },
     { label: "About", href: "/about" },
     { label: "Contact", href: "/contact" },
   ],
   socials: [
+    { label: "WhatsApp", href: "https://wa.me/2348133824779" },
     { label: "LinkedIn", href: "#" },
-    { label: "X", href: "#" },
     { label: "Instagram", href: "#" },
   ],
 };
@@ -518,6 +519,11 @@ export const faqs = [
   { q: "Which services do you specialise in?", a: "Financial reporting, financial modelling, taxation planning and management, forensic accounting, data analytics, and broader accounting and advisory services; all under one roof." },
   { q: "How do I get started?", a: "Book a consultation. We'll assess your current financial position, understand your goals, and propose a tailored engagement." },
   { q: "Do you offer ongoing support?", a: "Yes. Many clients work with us on a retained basis for continuous reporting, advisory and compliance support." },
+  { q: "Are you up to date with the 2026 tax reforms?", a: "Yes. Our tax advice reflects the Nigeria Tax Act 2026, including the new PAYE bands and reliefs, VAT rules, company income tax changes and the development levy." },
+  { q: "Can you work with our existing accounting software?", a: "Absolutely. We work with your current stack; QuickBooks, Xero, Sage, ERPNext and others; and improve the process and controls around it rather than forcing a switch." },
+  { q: "How do you keep our financial data secure?", a: "We treat financial information with strict confidentiality, use encrypted transmission and restricted access, and share documents only through secure channels." },
+  { q: "Do you work with businesses outside Lagos?", a: "Yes. We're based in Lagos but work with clients across Nigeria and beyond, delivering consultations and services remotely over secure video or phone." },
+  { q: "What does a typical engagement cost?", a: "It depends on scope and complexity. After a free consultation we propose a clear, tailored engagement so you know exactly what to expect before we begin." },
 ];
 
 export const cta = {
@@ -701,3 +707,88 @@ export const contactPage = {
   intro:
     "Tell us a little about your business and what you need. We'll get back to you quickly to arrange a conversation.",
 };
+
+const LEGAL_UPDATED = "2 July 2026";
+export const legalImage = U("1450101499163-c8848c66ca85", 1200);
+
+export const legal = [
+  {
+    slug: "privacy-policy",
+    title: "Privacy Policy",
+    updated: LEGAL_UPDATED,
+    intro:
+      "This Privacy Policy explains how Litch Consulting Limited collects, uses, and protects the personal information you share with us through this website and our services.",
+    sections: [
+      { heading: "Information we collect", body: [
+        "We collect information you provide directly; such as your name, email address, phone number, company details, and any information contained in messages, enquiries, booking requests, or documents you send us.",
+        "We also collect limited technical information automatically, including your IP address, browser type, device information, and how you interact with the site, through cookies and similar technologies.",
+      ] },
+      { heading: "How we use your information", body: [
+        "We use your information to respond to enquiries, arrange and deliver consultations, provide our financial services, send information you request, improve our website, and meet our legal and regulatory obligations.",
+        "Where you upload financial documents through a secure portal, we use them solely to provide the services you have engaged us for.",
+      ] },
+      { heading: "How we protect your information", body: [
+        "We apply appropriate technical and organisational measures to safeguard your information, including encrypted transmission and restricted access. Financial documents are treated with strict confidentiality.",
+        "No method of transmission or storage is completely secure, but we take reasonable steps to protect your data and to limit access to those who need it to serve you.",
+      ] },
+      { heading: "Sharing your information", body: [
+        "We do not sell your personal information. We may share it with trusted service providers who help us operate the site and deliver our services, and where required by law or regulation.",
+      ] },
+      { heading: "Your rights", body: [
+        "You may request access to, correction of, or deletion of your personal information, and you may object to certain processing. To exercise these rights, contact us using the details below.",
+      ] },
+      { heading: "Contact us", body: [
+        "If you have questions about this Privacy Policy or how we handle your information, email info@litchconsulting.com.",
+      ] },
+    ],
+  },
+  {
+    slug: "terms-and-conditions",
+    title: "Terms & Conditions",
+    updated: LEGAL_UPDATED,
+    intro:
+      "These Terms & Conditions govern your use of the Litch Consulting website. By using this site, you agree to these terms.",
+    sections: [
+      { heading: "Use of this website", body: [
+        "You may use this website for lawful purposes only. You agree not to use it in any way that could damage, disable, or impair the site or interfere with anyone else's use of it.",
+      ] },
+      { heading: "No financial advice without engagement", body: [
+        "The content, tools, calculators, and articles on this website are provided for general information only and do not constitute financial, tax, accounting, or legal advice. Financial tools give estimates based on the inputs you provide and should not be relied upon as a substitute for professional advice.",
+        "A formal advisory relationship with Litch Consulting begins only when we agree an engagement in writing.",
+      ] },
+      { heading: "Intellectual property", body: [
+        "All content on this website, including text, graphics, logos, and design, is owned by or licensed to Litch Consulting Limited and is protected by applicable laws. You may not reproduce or redistribute it without our permission.",
+      ] },
+      { heading: "Limitation of liability", body: [
+        "To the fullest extent permitted by law, Litch Consulting is not liable for any loss or damage arising from your use of, or reliance on, this website or the general information and tools it contains.",
+      ] },
+      { heading: "Third-party links", body: [
+        "This website may contain links to third-party sites. We are not responsible for the content or practices of those sites and provide the links for convenience only.",
+      ] },
+      { heading: "Changes to these terms", body: [
+        "We may update these Terms from time to time. Continued use of the site after changes are posted constitutes acceptance of the updated Terms.",
+      ] },
+    ],
+  },
+  {
+    slug: "cookie-policy",
+    title: "Cookie Policy",
+    updated: LEGAL_UPDATED,
+    intro:
+      "This Cookie Policy explains how Litch Consulting uses cookies and similar technologies on this website.",
+    sections: [
+      { heading: "What cookies are", body: [
+        "Cookies are small text files stored on your device when you visit a website. They help the site function, remember your preferences, and understand how the site is used.",
+      ] },
+      { heading: "How we use cookies", body: [
+        "We use essential cookies to make the site work (for example, to keep you signed in to secure areas), preference cookies to remember choices such as light or dark mode, and analytics cookies to understand how visitors use the site so we can improve it.",
+      ] },
+      { heading: "Managing cookies", body: [
+        "You can control and delete cookies through your browser settings. Disabling some cookies may affect how parts of the site function, such as staying signed in to the client portal.",
+      ] },
+      { heading: "Contact us", body: [
+        "If you have questions about our use of cookies, email info@litchconsulting.com.",
+      ] },
+    ],
+  },
+] as const;

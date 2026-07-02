@@ -81,8 +81,8 @@ export function Solutions() {
                 <span className="mb-3 inline-block rounded-full bg-white/15 px-3 py-1 text-[11px] font-medium uppercase tracking-widest text-white backdrop-blur-md">
                   {item.no} · {item.kind}
                 </span>
-                <h3 className="font-display text-2xl font-bold text-white">{item.title}</h3>
-                <p className="mt-2 max-w-md text-sm leading-relaxed text-white/80">{item.body}</p>
+                <h3 className="text-shadow-soft font-display text-2xl font-bold text-white">{item.title}</h3>
+                <p className="text-shadow-soft mt-2 max-w-md text-sm leading-relaxed text-white/85">{item.body}</p>
                 <a
                   href="#contact"
                   className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-white hover:text-highlight"

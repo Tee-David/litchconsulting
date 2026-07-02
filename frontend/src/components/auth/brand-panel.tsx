@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { Logo } from "@/components/ui/logo";
 
@@ -30,7 +31,7 @@ export function BrandPanel() {
   const active = QUOTES[i];
 
   return (
-    <div className="relative hidden w-[42%] shrink-0 overflow-hidden lg:block">
+    <div className="relative hidden overflow-hidden lg:block">
       <div
         className="absolute inset-0 bg-cover bg-center"
         style={{ backgroundImage: `url(${IMAGE})` }}
@@ -38,7 +39,9 @@ export function BrandPanel() {
       <div className="absolute inset-0 bg-gradient-to-b from-brand/85 via-brand/70 to-night/85" />
 
       <div className="relative flex h-full flex-col justify-between p-9">
-        <Logo tone="light" />
+        <Link href="/" aria-label="Back to Litch Consulting website" className="w-fit">
+          <Logo tone="light" />
+        </Link>
 
         <figure className="max-w-sm">
           <AnimatePresence mode="wait">

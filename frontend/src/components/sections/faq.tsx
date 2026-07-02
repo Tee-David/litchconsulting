@@ -12,12 +12,14 @@ export function Faq() {
 
   return (
     <Section id="faq">
-      <div className="grid gap-12 lg:grid-cols-[0.8fr_1fr]">
-        <SectionHeading
-          eyebrow="FAQ"
-          title="Frequently asked questions"
-          body="Everything you need to know before we begin. Still curious? Book a consultation and we'll answer in detail."
-        />
+      <div className="grid items-start gap-12 lg:grid-cols-[0.8fr_1fr]">
+        <div className="lg:sticky lg:top-28">
+          <SectionHeading
+            eyebrow="FAQ"
+            title="Frequently asked questions"
+            body="Everything you need to know before we begin. Still curious? Book a consultation and we'll answer in detail."
+          />
+        </div>
 
         <div className="flex flex-col divide-y divide-hairline border-t border-hairline">
           {faqs.map((item, i) => {

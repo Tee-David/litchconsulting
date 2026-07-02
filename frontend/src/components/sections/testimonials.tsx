@@ -18,7 +18,7 @@ function initials(name: string) {
 function Card({ t, i }: { t: Testimonial; i: number }) {
   return (
     <figure className="flex w-[300px] shrink-0 flex-col gap-4 rounded-card border border-hairline bg-surface p-6 sm:w-[380px]">
-      <Quote className="size-7 text-brand" />
+      <Quote className="size-7 text-brand/40 dark:text-white/50" />
       <blockquote className="text-sm leading-relaxed text-ink sm:text-[0.95rem]">
         {t.quote}
       </blockquote>

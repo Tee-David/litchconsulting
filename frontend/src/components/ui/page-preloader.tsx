@@ -24,6 +24,7 @@ export function PagePreloader() {
     try {
       sessionStorage.setItem(KEY, "1");
     } catch {}
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot intro on first mount
     setVisible(true);
     const t = setTimeout(() => setVisible(false), 1700);
     return () => clearTimeout(t);

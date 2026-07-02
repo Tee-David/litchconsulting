@@ -50,9 +50,9 @@
   transition: filter 0.3s ease;
 }
 
-/* open: show the true brand-blue emblem over the light panel */
+/* keep the emblem white in both states (over hero and over the panel) */
 .staggered-menu-wrapper[data-open] .sm-logo-img {
-  filter: none;
+  filter: brightness(0) invert(1);
 }
 
 .sm-toggle {
