@@ -51,7 +51,7 @@ export function Solutions() {
               <div
                 className={cn(
                   "absolute inset-0 transition-opacity duration-500",
-                  isActive ? "bg-gradient-to-t from-ink/90 via-ink/30 to-transparent opacity-100" : "opacity-0"
+                  isActive ? "bg-gradient-to-t from-night/90 via-night/30 to-transparent opacity-100" : "opacity-0"
                 )}
               />
 
@@ -104,7 +104,7 @@ export function Solutions() {
           >
             <div className="relative h-44">
               <Image src={item.image} alt="" fill sizes="100vw" className="object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-t from-ink/90 to-ink/20" />
+              <div className="absolute inset-0 bg-gradient-to-t from-night/90 to-night/20" />
               <div className="absolute inset-x-0 bottom-0 p-5">
                 <span className="text-xs font-medium uppercase tracking-widest text-highlight">
                   {item.no} · {item.kind}

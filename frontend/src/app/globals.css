@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Class-based dark mode (next-themes toggles `.dark` on <html>). */
+@custom-variant dark (&:is(.dark *));
+
 /* ==========================================================================
    Litch Consulting — design tokens (brand blue #0A196D)
    ========================================================================== */
@@ -14,6 +17,7 @@
 
   /* Neutrals */
   --color-ink: #0a0e1a;
+  --color-night: #0a0e1a; /* always-dark surfaces (does NOT flip in dark mode) */
   --color-body: #5b6474;
   --color-muted: #8a92a6;
   --color-hairline: #e6e8f0;
@@ -43,6 +47,26 @@
 :root {
   --background: #ffffff;
   --foreground: var(--color-ink);
+  color-scheme: light;
+}
+
+/* Dark theme — override the neutral palette so every semantic token
+   (bg-paper / bg-surface / text-ink / text-body / border-hairline …) flips.
+   Brand blue stays constant. */
+.dark {
+  --color-ink: #eef1fb;
+  --color-body: #aab4c9;
+  --color-muted: #7c8299;
+  --color-hairline: #232c46;
+  --color-surface: #131a2e;
+  --color-cloud: #0d1426;
+  --color-paper: #0b1020;
+  --color-brand-tint: #151f42;
+  --color-brand-soft: #1c2857;
+
+  --background: #0a0e1a;
+  --foreground: var(--color-ink);
+  color-scheme: dark;
 }
 
 * {
@@ -140,4 +164,17 @@ body {
   outline: 2px solid var(--color-accent);
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+/* View-transition theme switch (circle wipe from the toggle) */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+::view-transition-old(root) {
+  z-index: 1;
+}
+::view-transition-new(root) {
+  z-index: 9999;
 }

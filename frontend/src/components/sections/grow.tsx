@@ -16,7 +16,7 @@ export function Grow() {
               const Icon = icons[i];
               return (
                 <Reveal key={card.title} delay={i * 0.07}>
-                  <div className="group flex items-start gap-4 rounded-card border border-hairline bg-white p-5 transition-all hover:border-brand-soft hover:shadow-lg hover:shadow-brand/5">
+                  <div className="group flex items-start gap-4 rounded-card border border-hairline bg-paper p-5 transition-all hover:border-brand-soft hover:shadow-lg hover:shadow-brand/5">
                     <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-brand-tint text-brand transition-colors group-hover:bg-brand group-hover:text-white">
                       <Icon className="size-5" />
                     </span>

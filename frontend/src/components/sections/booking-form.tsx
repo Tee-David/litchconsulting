@@ -116,7 +116,7 @@ export function BookingForm() {
   const stepsMeta = ["Date", "Time", "Details", "Done"];
 
   return (
-    <div className="grid overflow-hidden rounded-hero border border-hairline bg-white lg:grid-cols-[0.85fr_1.15fr]">
+    <div className="grid overflow-hidden rounded-hero border border-hairline bg-paper lg:grid-cols-[0.85fr_1.15fr]">
       {/* Summary panel */}
       <div className="relative flex flex-col justify-between gap-6 bg-brand p-7 text-white md:p-9">
         <div className="absolute -right-16 -top-16 size-64 rounded-full bg-highlight/25 blur-3xl" />
@@ -200,7 +200,7 @@ export function BookingForm() {
               <select
                 value={service}
                 onChange={(e) => setService(e.target.value)}
-                className="mt-2 w-full rounded-xl border border-hairline bg-white px-4 py-2.5 text-sm outline-none focus:border-brand"
+                className="mt-2 w-full rounded-xl border border-hairline bg-paper px-4 py-2.5 text-sm outline-none focus:border-brand"
               >
                 {serviceOptions.map((s) => (
                   <option key={s}>{s}</option>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Space_Grotesk, Outfit } from "next/font/google";
 import "./globals.css";
 import { SmoothCursorMount } from "@/components/ui/smooth-cursor";
+import { Providers } from "@/components/providers";
 import { site } from "@/lib/content";
 
 const spaceGrotesk = Space_Grotesk({
@@ -55,11 +56,14 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning
       className={`${spaceGrotesk.variable} ${outfit.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-paper text-ink">
-        <SmoothCursorMount />
-        {children}
+        <Providers>
+          <SmoothCursorMount />
+          {children}
+        </Providers>
       </body>
     </html>
   );

@@ -62,7 +62,7 @@ export function Testimonials() {
     <section className="px-3 md:px-4">
       <div className="mx-auto max-w-[1400px] overflow-hidden rounded-hero bg-brand px-4 py-16 sm:px-8 md:py-20">
         <div className="mx-auto max-w-3xl px-2 text-center">
-          <span className="inline-flex items-center gap-2 rounded-full bg-ink px-4 py-2 text-xs font-medium text-white">
+          <span className="inline-flex items-center gap-2 rounded-full bg-night px-4 py-2 text-xs font-medium text-white">
             <Star className="size-3.5 fill-highlight text-highlight" />
             Rated 5/5 by clients across sectors
           </span>

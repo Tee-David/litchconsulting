@@ -1,25 +1,74 @@
 import { cn } from "@/lib/utils";
 
-/** Temporary "Litch" wordmark — an interlocking L mark + wordmark. */
-export function Logo({
+/**
+ * Litch brand marks — vectorised from the official logo (plans/logo.png) and
+ * recoloured to brand blue. Rendered via CSS mask + `currentColor` so the mark
+ * adapts to context:
+ *   tone "dark"  → brand blue on light surfaces, white in dark theme
+ *   tone "light" → white (over the hero image / dark bands)
+ *
+ * `Logo`     = full lockup (emblem + "LITCH / CONSULTING" wordmark)
+ * `LogoMark` = emblem only (ring + L + keyhole)
+ */
+type Tone = "dark" | "light";
+
+function Mask({
+  src,
+  ratio,
+  label,
+  tone,
   className,
-  tone = "dark",
 }: {
+  src: string;
+  ratio: number;
+  label: string;
+  tone: Tone;
   className?: string;
-  tone?: "dark" | "light";
 }) {
-  const text = tone === "light" ? "text-white" : "text-ink";
   return (
-    <span className={cn("inline-flex items-center gap-2.5 font-display", className)}>
-      <span aria-hidden className="grid size-8 place-items-center rounded-lg bg-brand text-white">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-          <path d="M6 4v13a2 2 0 0 0 2 2h10" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M13 5l5 3v6" stroke="#4c6ef5" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </span>
-      <span className={cn("text-lg font-bold tracking-tight", text)}>
-        Litch<span className="text-brand">.</span>
-      </span>
-    </span>
+    <span
+      role="img"
+      aria-label={label}
+      className={cn(
+        "inline-block shrink-0 bg-current align-middle",
+        tone === "light" ? "text-white" : "text-brand dark:text-white",
+        className,
+      )}
+      style={{
+        aspectRatio: String(ratio),
+        WebkitMaskImage: `url(${src})`,
+        maskImage: `url(${src})`,
+        WebkitMaskRepeat: "no-repeat",
+        maskRepeat: "no-repeat",
+        WebkitMaskPosition: "center",
+        maskPosition: "center",
+        WebkitMaskSize: "contain",
+        maskSize: "contain",
+      }}
+    />
+  );
+}
+
+export function Logo({ className, tone = "dark" }: { className?: string; tone?: Tone }) {
+  return (
+    <Mask
+      src="/brand/litch-logo.svg"
+      ratio={575 / 281}
+      label="Litch Consulting"
+      tone={tone}
+      className={cn("h-8", className)}
+    />
+  );
+}
+
+export function LogoMark({ className, tone = "dark" }: { className?: string; tone?: Tone }) {
+  return (
+    <Mask
+      src="/brand/litch-mark.svg"
+      ratio={235 / 234}
+      label="Litch Consulting"
+      tone={tone}
+      className={cn("size-8", className)}
+    />
   );
 }

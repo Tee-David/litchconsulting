@@ -17,7 +17,7 @@ export function Contact() {
             </h2>
             <p className="mt-4 max-w-lg text-white/75">{cta.body}</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Button href="/book" variant="light" withArrow className="w-full bg-white text-brand hover:bg-white/90 sm:w-auto">
+              <Button href="/book" variant="light" withArrow className="w-full bg-paper text-brand hover:bg-white/90 sm:w-auto">
                 Book a Consultation
               </Button>
               <Button href={`mailto:${site.email}`} variant="light" withArrow className="w-full sm:w-auto">

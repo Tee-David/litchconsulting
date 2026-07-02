@@ -94,7 +94,7 @@ export function Impact() {
         </div>
 
         <Reveal delay={0.1}>
-          <div className="rounded-hero border border-hairline bg-white p-8 shadow-xl shadow-brand/5">
+          <div className="rounded-hero border border-hairline bg-paper p-8 shadow-xl shadow-brand/5">
             <p className="mb-6 text-center font-display text-sm font-semibold text-ink">
               Impact metrics after our consulting
             </p>

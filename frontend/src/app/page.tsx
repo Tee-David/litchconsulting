@@ -21,7 +21,7 @@ import { Contact } from "@/components/sections/contact";
 export default function Home() {
   return (
     <>
-      <Header />
+      <Header overlay />
       <main className="flex-1">
         <Hero />
         <Partners />

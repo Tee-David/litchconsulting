@@ -32,7 +32,9 @@ export default function BookPage() {
         <BookingSteps />
 
         <section className="container-page py-12 md:py-16">
-          <BookingForm />
+          <div className="mx-auto max-w-4xl">
+            <BookingForm />
+          </div>
         </section>
       </main>
       <Footer />

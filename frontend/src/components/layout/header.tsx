@@ -2,102 +2,97 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Logo } from "@/components/ui/logo";
+import { Logo, LogoMark } from "@/components/ui/logo";
 import { Button } from "@/components/ui/primitives";
-import BubbleMenu from "@/components/ui/BubbleMenu";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
+import StaggeredMenu from "@/components/ui/StaggeredMenu";
 import { site } from "@/lib/content";
 import { cn } from "@/lib/utils";
 
-const mobileItems = [
-  ...site.nav.map((n) => ({ label: n.label, href: n.href })),
-  { label: "Book a consultation", href: "/book", hoverStyles: { bgColor: "#0a196d", textColor: "#ffffff" } },
+const menuItems = [
+  ...site.nav.map((n) => ({ label: n.label, link: n.href, ariaLabel: n.label })),
+  { label: "Book a consultation", link: "/book", ariaLabel: "Book a consultation" },
 ];
+const socialItems = site.socials.map((s) => ({ label: s.label, link: s.href }));
 
-export function Header() {
-  const [scrolled, setScrolled] = useState(false);
-  const [active, setActive] = useState<string>("");
+/**
+ * `overlay` = the header sits transparent over a dark hero (home page). Only
+ * after scrolling past the hero does it become the solid blur pill (and the
+ * full logo collapses to the emblem). On pages with no hero it's always solid.
+ */
+export function Header({ overlay = false }: { overlay?: boolean }) {
+  const [solid, setSolid] = useState(!overlay);
 
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 12);
+    if (!overlay) {
+      setSolid(true);
+      return;
+    }
+    const onScroll = () => setSolid(window.scrollY > window.innerHeight - 90);
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, []);
-
-  // Scroll-spy: underline the nav item whose section is in view.
-  useEffect(() => {
-    const ids = site.nav.map((n) => n.href.split("#")[1]).filter(Boolean);
-    const sections = ids
-      .map((id) => document.getElementById(id))
-      .filter((el): el is HTMLElement => Boolean(el));
-    if (!sections.length) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((e) => e.isIntersecting)
-          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
-        if (visible) setActive(visible.target.id);
-      },
-      { rootMargin: "-45% 0px -50% 0px", threshold: [0, 0.25, 0.5, 1] }
-    );
-    sections.forEach((s) => observer.observe(s));
-    return () => observer.disconnect();
-  }, []);
+  }, [overlay]);
 
   return (
     <header>
       {/* Desktop bar */}
       <div className="fixed inset-x-0 top-0 z-50 hidden md:block">
-        <div className="mx-auto max-w-[1400px] px-3 md:px-4">
+        <div className="mx-auto max-w-[1400px] px-4">
           <div
             className={cn(
-              "mt-3 flex items-center justify-between rounded-full border px-5 py-2.5 transition-all duration-300",
-              scrolled
-                ? "border-hairline bg-white/85 shadow-sm shadow-black/5 backdrop-blur-xl"
-                : "border-transparent bg-transparent"
+              "mt-3 flex items-center justify-between rounded-full px-6 py-2.5 transition-all duration-300",
+              solid
+                ? "border border-hairline bg-paper/85 shadow-sm shadow-black/5 backdrop-blur-xl"
+                : "border border-transparent bg-transparent",
             )}
           >
-            <Link href="/" aria-label="Litch Consulting home">
-              <Logo />
+            <Link href="/" aria-label="Litch Consulting home" className="flex items-center">
+              {solid ? (
+                <LogoMark tone="dark" className="h-9" />
+              ) : (
+                <Logo tone="light" className="h-9" />
+              )}
             </Link>
 
-            <nav className="flex items-center gap-7">
-              {site.nav.map((item) => {
-                const id = item.href.split("#")[1];
-                const isActive = id && active === id;
-                return (
-                  <a
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "text-sm font-medium underline-offset-8 transition-colors hover:text-brand",
-                      isActive
-                        ? "text-brand underline decoration-2"
-                        : "text-body no-underline"
-                    )}
-                  >
-                    {item.label}
-                  </a>
-                );
-              })}
+            <nav className="flex items-center gap-9">
+              {site.nav.map((item) => (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  className={cn(
+                    "text-[13px] font-medium underline-offset-8 transition-colors hover:underline",
+                    solid ? "text-body hover:text-brand" : "text-white/80 hover:text-white",
+                  )}
+                >
+                  {item.label}
+                </a>
+              ))}
             </nav>
 
-            <Button href="/book" withArrow>
-              Book a Consultation
-            </Button>
+            <div className="flex items-center gap-4">
+              <ThemeToggle />
+              <Button href="/book" withArrow variant={solid ? "primary" : "light"}>
+                Book a Consultation
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Mobile bubble menu */}
+      {/* Mobile staggered menu */}
       <div className="md:hidden">
-        <BubbleMenu
-          logo={<Logo />}
-          items={mobileItems}
-          menuBg="#ffffff"
-          menuContentColor="#0a0e1a"
-          useFixedPosition
+        <StaggeredMenu
+          isFixed
+          position="right"
+          items={menuItems}
+          socialItems={socialItems}
+          displaySocials
+          colors={["#2540c4", "#0a196d"]}
+          accentColor="#0a196d"
+          menuButtonColor="#ffffff"
+          openMenuButtonColor="#0a196d"
+          logoUrl="/brand/litch-mark.svg"
         />
       </div>
     </header>

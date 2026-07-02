@@ -34,7 +34,7 @@ export function Footer() {
 
   return (
     <footer className="px-3 pb-3 md:px-4 md:pb-4">
-      <div className="relative mx-auto max-w-[1400px] overflow-hidden rounded-hero bg-ink px-6 pt-14 text-white sm:px-10 md:px-14">
+      <div className="relative mx-auto max-w-[1400px] overflow-hidden rounded-hero bg-night px-6 pt-14 text-white sm:px-10 md:px-14">
         <div className="relative z-10 grid gap-12 lg:grid-cols-[1.3fr_1fr_1fr]">
           {/* Newsletter */}
           <div>

@@ -1,93 +1,70 @@
 "use client";
 
-import { useState } from "react";
-import Image from "next/image";
-import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ArrowRight } from "lucide-react";
-import { Section, SectionHeading, Eyebrow, Button } from "@/components/ui/primitives";
-import { caseStudies } from "@/lib/content";
+import {
+  ArrowRight,
+  BarChart3,
+  Zap,
+  TrendingUp,
+  ShieldCheck,
+  Scale,
+  PieChart,
+  Wallet,
+  FileText,
+} from "lucide-react";
+import { Section, SectionHeading } from "@/components/ui/primitives";
+import { CardCarousel, carouselCardClass } from "@/components/ui/card-carousel";
+import { caseStudies, caseStudyDetails } from "@/lib/content";
+
+const ICONS = [BarChart3, Zap, TrendingUp, ShieldCheck, Scale, PieChart, Wallet, FileText];
 
 export function CaseStudies() {
-  const [index, setIndex] = useState(0);
-  const go = (dir: 1 | -1) =>
-    setIndex((i) => (i + dir + caseStudies.length) % caseStudies.length);
-  const study = caseStudies[index];
-
   return (
     <Section id="case-studies">
-      <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
-        <SectionHeading eyebrow="Case studies" title="Real engagements, measurable outcomes." />
-        <div className="flex gap-2">
-          <button
-            onClick={() => go(-1)}
-            aria-label="Previous case study"
-            className="grid size-11 place-items-center rounded-full border border-hairline bg-white text-ink transition-colors hover:border-brand hover:text-brand"
-          >
-            <ArrowLeft className="size-5" />
-          </button>
-          <button
-            onClick={() => go(1)}
-            aria-label="Next case study"
-            className="grid size-11 place-items-center rounded-full border border-hairline bg-white text-ink transition-colors hover:border-brand hover:text-brand"
-          >
-            <ArrowRight className="size-5" />
-          </button>
-        </div>
-      </div>
-
-      <div className="mt-10 overflow-hidden rounded-hero border border-hairline bg-white">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={index}
-            initial={{ opacity: 0, x: 24 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -24 }}
-            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="grid lg:grid-cols-2"
-          >
-            <div className="relative min-h-[280px] lg:min-h-[440px]">
-              <Image
-                src={study.image}
-                alt=""
-                fill
-                sizes="(max-width: 1024px) 100vw, 50vw"
-                className="object-cover"
-              />
-              <div className="absolute bottom-5 left-5 rounded-2xl bg-white/90 px-5 py-4 backdrop-blur-md">
-                <p className="font-display text-3xl font-bold text-brand">{study.stat}</p>
-                <p className="text-xs text-muted">{study.statLabel}</p>
+      <CardCarousel
+        heading={
+          <SectionHeading eyebrow="Case studies" title="Real engagements, measurable outcomes." />
+        }
+      >
+        {caseStudies.map((study, i) => {
+          const Icon = ICONS[i % ICONS.length];
+          return (
+            <article
+              key={study.title}
+              data-card
+              className={`group relative aspect-[3/4] overflow-hidden rounded-hero bg-night ${carouselCardClass}`}
+            >
+              {/* Resting state */}
+              <div className="flex h-full flex-col justify-between p-6">
+                <Icon className="size-7 text-orange-500" />
+                <div>
+                  <p className="font-display text-3xl font-bold text-white">{study.stat}</p>
+                  <p className="mt-1 text-xs uppercase tracking-widest text-white/50">
+                    {study.statLabel}
+                  </p>
+                  <h3 className="mt-4 font-display text-xl font-bold leading-snug text-white">
+                    {study.title}
+                  </h3>
+                </div>
               </div>
-            </div>
-            <div className="flex flex-col justify-center gap-5 p-8 md:p-12">
-              <Eyebrow>{study.tag}</Eyebrow>
-              <h3 className="font-display text-2xl font-bold leading-tight tracking-tight text-balance md:text-3xl">
-                {study.title}
-              </h3>
-              <p className="text-body">{study.body}</p>
-              <div>
-                <Button href="#contact" withArrow>
-                  Read the case study
-                </Button>
-              </div>
-            </div>
-          </motion.div>
-        </AnimatePresence>
-      </div>
 
-      <div className="mt-6 flex justify-center gap-1.5">
-        {caseStudies.map((_, i) => (
-          <button
-            key={i}
-            onClick={() => setIndex(i)}
-            aria-label={`Case study ${i + 1}`}
-            className="h-1.5 rounded-full transition-all"
-            style={{
-              width: i === index ? 28 : 8,
-              background: i === index ? "#0a196d" : "#e6e8f0",
-            }}
-          />
-        ))}
-      </div>
+              {/* Hover reveal */}
+              <div className="absolute inset-0 flex translate-y-full flex-col justify-end bg-orange-500 p-6 transition-transform duration-300 ease-out group-hover:translate-y-0">
+                <Icon className="size-7 text-white" />
+                <h3 className="mt-4 font-display text-xl font-bold leading-snug text-white">
+                  {study.title}
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-white/90">{study.body}</p>
+                <a
+                  href={`/case-studies/${caseStudyDetails[i].slug}`}
+                  className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold text-white"
+                >
+                  Read the case study <ArrowRight className="size-4" />
+                </a>
+              </div>
+            </article>
+          );
+        })}
+      </CardCarousel>
     </Section>
   );
 }
