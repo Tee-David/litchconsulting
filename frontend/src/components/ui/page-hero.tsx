@@ -28,7 +28,10 @@ export function PageHero({
     : [];
 
   return (
-    <section className="relative flex h-[62vh] min-h-[460px] w-full items-center justify-center overflow-hidden">
+    <section
+      data-hero
+      className="relative flex h-[62vh] min-h-[460px] w-full items-center justify-center overflow-hidden"
+    >
       <Image src={image} alt="" fill priority sizes="100vw" className="object-cover" />
       {/* Overlay: darken the image so white copy stays legible */}
       <div className="absolute inset-0 bg-gradient-to-b from-night/75 via-night/60 to-night/80" />

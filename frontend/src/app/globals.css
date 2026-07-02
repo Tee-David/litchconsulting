@@ -73,6 +73,15 @@
   border-color: var(--color-hairline);
 }
 
+/* Dark mode: the brand navy (#0a196d) is invisible on dark-flipping surfaces,
+   so brand-coloured TEXT and ICONS flip to white. Opt out with `keep-brand`
+   where brand text sits on a surface that stays light in dark mode (white
+   pills / buttons). Note: `hover:text-brand` and `dark:text-brand` are separate
+   utilities and are intentionally NOT affected by this rule. */
+.dark .text-brand:not(.keep-brand) {
+  color: #ffffff;
+}
+
 html {
   scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
@@ -150,6 +159,18 @@ body {
   }
   .no-scrollbar::-webkit-scrollbar {
     display: none;
+  }
+
+  /* Subtle underline that animates in from the left on hover (uses currentColor). */
+  .link-underline {
+    background-image: linear-gradient(currentColor, currentColor);
+    background-size: 0% 1.5px;
+    background-position: 0 100%;
+    background-repeat: no-repeat;
+    transition: background-size 0.3s var(--ease-out-soft);
+  }
+  .link-underline:hover {
+    background-size: 100% 1.5px;
   }
 }
 

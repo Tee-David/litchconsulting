@@ -324,7 +324,12 @@ class Media {
     });
     const img = new Image();
     img.crossOrigin = "anonymous";
-    img.src = this.image;
+    // Cross-origin R2/Unsplash images have no CORS headers, which taints the
+    // WebGL texture. Route them through the same-origin /api/img proxy so the
+    // texture loads. Relative/same-origin sources are used as-is.
+    img.src = /^https?:\/\//.test(this.image)
+      ? `/api/img?src=${encodeURIComponent(this.image)}`
+      : this.image;
     img.onload = () => {
       texture.image = img;
       this.program.uniforms.uImageSizes.value = [img.naturalWidth, img.naturalHeight];

@@ -185,6 +185,12 @@
   gap: 1.5rem;
 }
 
+.sm-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
 .sm-panel-theme {
   display: flex;
   align-items: center;

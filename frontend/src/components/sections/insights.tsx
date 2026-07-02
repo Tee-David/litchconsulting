@@ -29,7 +29,7 @@ export function Insights() {
                   sizes="(max-width: 768px) 100vw, 33vw"
                   className="object-cover transition-transform duration-500 group-hover:scale-105"
                 />
-                <span className="absolute left-4 top-4 rounded-full bg-white/90 px-3 py-1 text-[11px] font-medium uppercase tracking-widest text-brand backdrop-blur-md">
+                <span className="keep-brand absolute left-4 top-4 rounded-full bg-white/90 px-3 py-1 text-[11px] font-medium uppercase tracking-widest text-brand backdrop-blur-md">
                   {post.tag}
                 </span>
               </div>

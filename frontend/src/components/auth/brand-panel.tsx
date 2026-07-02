@@ -4,9 +4,10 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { Logo } from "@/components/ui/logo";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 const IMAGE =
-  "https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=1200&q=80";
+  "https://pub-f833c8f2eac548fea544f812455f9ba3.r2.dev/assets/1554224155-6726b3ff858f.jpg";
 
 const QUOTES = [
   {
@@ -39,9 +40,12 @@ export function BrandPanel() {
       <div className="absolute inset-0 bg-gradient-to-b from-brand/85 via-brand/70 to-night/85" />
 
       <div className="relative flex h-full flex-col justify-between p-9">
-        <Link href="/" aria-label="Back to Litch Consulting website" className="w-fit">
-          <Logo tone="light" />
-        </Link>
+        <div className="flex items-center justify-between gap-4">
+          <Link href="/" aria-label="Back to Litch Consulting website" className="w-fit">
+            <Logo tone="light" className="h-12" />
+          </Link>
+          <ThemeToggle />
+        </div>
 
         <figure className="max-w-sm">
           <AnimatePresence mode="wait">

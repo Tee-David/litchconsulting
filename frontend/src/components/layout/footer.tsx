@@ -2,7 +2,7 @@
 
 import { useState, type SVGProps } from "react";
 import Link from "next/link";
-import { ArrowRight, Check } from "lucide-react";
+import { ArrowRight, ArrowUpRight, Check } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
 import { site, legal } from "@/lib/content";
 import { newsletterSchema } from "@/lib/schemas";
@@ -72,16 +72,16 @@ export function Footer() {
   };
 
   const linkCls =
-    "text-sm text-body transition-colors hover:text-brand dark:text-white/70 dark:hover:text-white";
+    "link-underline text-sm text-body transition-colors hover:text-brand dark:text-white/70 dark:hover:text-white";
   const headCls = "font-display text-sm font-semibold text-ink dark:text-white";
 
   return (
-    <footer className="px-3 pb-3 md:px-4 md:pb-4">
-      <div className="relative mx-auto max-w-[1400px] overflow-hidden rounded-hero border border-hairline bg-paper px-6 pt-14 text-ink dark:border-transparent dark:bg-brand dark:text-white sm:px-10 md:px-14">
+    <footer className="px-3 md:px-4">
+      <div className="relative mx-auto max-w-[1400px] overflow-hidden rounded-t-hero border border-hairline bg-paper px-6 pt-14 text-ink dark:border-transparent dark:bg-brand dark:text-white sm:px-10 md:px-14">
         <div className="relative z-10 grid gap-12 lg:grid-cols-[1.5fr_1fr_1fr_1fr]">
           {/* Newsletter */}
           <div>
-            <Logo className="h-8" />
+            <Logo className="h-11" />
             <h3 className="mt-6 max-w-xs font-display text-lg font-semibold text-ink dark:text-white">
               Join our newsletter for financial insights, monthly.
             </h3>
@@ -109,23 +109,6 @@ export function Footer() {
                 {error && <p className="mt-2 text-xs text-red-500 dark:text-red-300">{error}</p>}
               </form>
             )}
-            <div className="mt-6 flex gap-2">
-              {site.socials.map((s) => {
-                const Icon = SOCIAL_ICON[s.label] ?? WhatsAppIcon;
-                return (
-                  <a
-                    key={s.label}
-                    href={s.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={s.label}
-                    className="grid size-9 place-items-center rounded-full border border-hairline text-body transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand dark:border-white/25 dark:text-white dark:hover:border-white dark:hover:bg-white/10 dark:hover:text-white"
-                  >
-                    <Icon className="size-4" />
-                  </a>
-                );
-              })}
-            </div>
           </div>
 
           {/* Company */}
@@ -161,17 +144,44 @@ export function Footer() {
             <h4 className={headCls}>Get in touch</h4>
             <ul className="mt-4 flex flex-col gap-2.5 text-sm text-body dark:text-white/70">
               <li>
-                <a href={`tel:${site.phoneHref}`} className="hover:text-brand dark:hover:text-white">
+                <a
+                  href={`tel:${site.phoneHref}`}
+                  className="link-underline inline-flex items-center gap-1 hover:text-brand dark:hover:text-white"
+                >
                   {site.phone}
+                  <ArrowUpRight className="size-3.5" />
                 </a>
               </li>
               <li>
-                <a href={`mailto:${site.email}`} className="break-all hover:text-brand dark:hover:text-white">
+                <a
+                  href={`mailto:${site.email}`}
+                  className="link-underline inline-flex items-center gap-1 break-all hover:text-brand dark:hover:text-white"
+                >
                   {site.email}
+                  <ArrowUpRight className="size-3.5 shrink-0" />
                 </a>
               </li>
               <li>{site.location}</li>
             </ul>
+
+            {/* Social icons */}
+            <div className="mt-6 flex gap-2">
+              {site.socials.map((s) => {
+                const Icon = SOCIAL_ICON[s.label] ?? WhatsAppIcon;
+                return (
+                  <a
+                    key={s.label}
+                    href={s.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={s.label}
+                    className="grid size-9 place-items-center rounded-full border border-hairline text-body transition-colors hover:border-brand hover:bg-brand/5 hover:text-brand dark:border-white/25 dark:text-white dark:hover:border-white dark:hover:bg-white/10 dark:hover:text-white"
+                  >
+                    <Icon className="size-4" />
+                  </a>
+                );
+              })}
+            </div>
           </div>
         </div>
 

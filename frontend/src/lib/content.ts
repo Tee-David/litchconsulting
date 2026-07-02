@@ -3,8 +3,9 @@
  * Curated finance copy — single source of truth for every section.
  */
 
-const U = (id: string, w = 1200) =>
-  `https://images.unsplash.com/photo-${id}?auto=format&fit=crop&w=${w}&q=80`;
+// Self-hosted images on Cloudflare R2 (migrated from stock; see scripts/migrate-images.mjs).
+const R2_ASSETS = "https://pub-f833c8f2eac548fea544f812455f9ba3.r2.dev/assets";
+const U = (id: string, _w = 1200) => `${R2_ASSETS}/${id}.jpg`;
 
 export const site = {
   name: "Litch Consulting",

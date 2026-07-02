@@ -6,38 +6,8 @@ import Link from "next/link";
 import { signIn, signUp } from "@/lib/auth-client";
 import { isDisposableEmail } from "@/lib/block-disposable-email";
 import { FloatingInput, OrDivider, GoogleButton } from "./ui";
-
-const STRENGTH_LABEL = ["Weak", "Fair", "Good", "Strong"];
-const STRENGTH_COLOR = ["#e5484d", "#f5a524", "#4c6ef5", "#16a34a"];
-
-function scorePassword(pw: string) {
-  let s = 0;
-  if (pw.length >= 8) s++;
-  if (/[0-9]|[^A-Za-z0-9]/.test(pw)) s++;
-  if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) s++;
-  if (pw.length >= 12) s++;
-  return Math.min(Math.max(s, 1), 4);
-}
-
-function PasswordStrength({ password }: { password: string }) {
-  const score = scorePassword(password);
-  return (
-    <div className="mt-2">
-      <div className="flex gap-1.5">
-        {[0, 1, 2, 3].map((i) => (
-          <span
-            key={i}
-            className="h-1 flex-1 rounded-full transition-colors"
-            style={{ background: i < score ? STRENGTH_COLOR[score - 1] : "var(--color-hairline)" }}
-          />
-        ))}
-      </div>
-      <p className="mt-1 text-xs" style={{ color: STRENGTH_COLOR[score - 1] }}>
-        {STRENGTH_LABEL[score - 1]} password
-      </p>
-    </div>
-  );
-}
+import { PasswordStrength } from "./password-strength";
+import { PasswordConfirmInput } from "./password-confirm-input";
 
 export function SignupForm() {
   const params = useSearchParams();
@@ -109,24 +79,9 @@ export function SignupForm() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          {password.length > 0 && <PasswordStrength password={password} />}
+          <PasswordStrength password={password} forbidden={[name, email.split("@")[0], email]} />
         </div>
-        <div>
-          <FloatingInput
-            id="confirm"
-            label="Confirm password"
-            type="password"
-            autoComplete="new-password"
-            required
-            value={confirm}
-            onChange={(e) => setConfirm(e.target.value)}
-          />
-          {confirm.length > 0 && (
-            <p className={`mt-1.5 text-xs ${password === confirm ? "text-green-600" : "text-red-600"}`}>
-              {password === confirm ? "Passwords match" : "Passwords don't match"}
-            </p>
-          )}
-        </div>
+        <PasswordConfirmInput passwordToMatch={password} value={confirm} onChange={setConfirm} />
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 

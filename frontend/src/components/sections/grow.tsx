@@ -42,8 +42,8 @@ export function Grow() {
             />
             <div className="absolute inset-0 bg-gradient-to-t from-brand/40 to-transparent" />
             <div className="absolute bottom-5 left-5 right-5 rounded-2xl bg-white/90 p-4 backdrop-blur-md">
-              <p className="text-sm font-semibold text-ink">&ldquo;Litch gave us the clarity we didn&rsquo;t know we needed.&rdquo;</p>
-              <p className="mt-1 text-xs text-muted">David I. · Operations Director</p>
+              <p className="text-sm font-semibold text-night">&ldquo;Litch gave us the clarity we didn&rsquo;t know we needed.&rdquo;</p>
+              <p className="mt-1 text-xs text-night/60">David I. · Operations Director</p>
             </div>
           </div>
         </Reveal>

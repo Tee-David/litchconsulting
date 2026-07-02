@@ -89,7 +89,7 @@ export default async function CaseStudyPage({
                   </p>
                   <Link
                     href="/book"
-                    className="mt-4 inline-flex rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-brand transition-colors hover:bg-white/90"
+                    className="keep-brand mt-4 inline-flex rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-brand transition-colors hover:bg-white/90"
                   >
                     Book a consultation
                   </Link>

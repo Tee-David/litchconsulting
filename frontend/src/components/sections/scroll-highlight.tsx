@@ -21,19 +21,25 @@ export function ScrollHighlight() {
     }
 
     gsap.registerPlugin(ScrollTrigger);
+    // Animate OPACITY, not colour: the text keeps the theme-aware `text-ink`
+    // token, so it stays correct (and updates live) when the theme is toggled
+    // without a reload. Unfilled = dim (0.25), filled = full.
     const ctx = gsap.context(() => {
-      gsap.to(words, {
-        opacity: 1,
-        color: "#0a0e1a",
-        stagger: 0.5,
-        ease: "none",
-        scrollTrigger: {
-          trigger: el,
-          start: "top 75%",
-          end: "bottom 60%",
-          scrub: true,
+      gsap.fromTo(
+        words,
+        { opacity: 0.25 },
+        {
+          opacity: 1,
+          stagger: 0.5,
+          ease: "none",
+          scrollTrigger: {
+            trigger: el,
+            start: "top 75%",
+            end: "bottom 60%",
+            scrub: true,
+          },
         },
-      });
+      );
     }, el);
 
     return () => ctx.revert();
@@ -49,7 +55,7 @@ export function ScrollHighlight() {
         </p>
         <p className="mx-auto max-w-4xl text-center font-display text-2xl font-bold leading-snug tracking-tight text-balance sm:text-3xl md:text-[2.6rem] md:leading-[1.25]">
           {words.map((word, i) => (
-            <span key={i} data-word className="text-ink/15" style={{ transition: "none" }}>
+            <span key={i} data-word className="text-ink" style={{ opacity: 0.25, transition: "none" }}>
               {word}{" "}
             </span>
           ))}

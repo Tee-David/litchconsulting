@@ -22,7 +22,7 @@ export function FloatingInput({
         type={inputType}
         placeholder=" "
         className={cn(
-          "peer w-full rounded-xl border border-hairline bg-white px-3.5 pb-2 pt-5 text-sm text-ink outline-none transition-colors placeholder-transparent focus:border-brand focus:ring-2 focus:ring-brand/15",
+          "peer w-full rounded-xl border border-hairline bg-white px-3.5 pb-2 pt-5 text-sm text-ink outline-none transition-colors placeholder-transparent focus:border-brand focus:ring-2 focus:ring-brand/15 dark:border-white/15 dark:bg-white/[0.06] dark:text-white",
           isPassword && "pr-11",
           className,
         )}
@@ -72,7 +72,7 @@ export function GoogleButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="inline-flex w-full items-center justify-center gap-2.5 rounded-xl border border-hairline bg-white px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-surface disabled:opacity-60"
+      className="inline-flex w-full items-center justify-center gap-2.5 rounded-xl border border-hairline bg-white px-4 py-3 text-sm font-semibold text-ink transition-colors hover:bg-surface disabled:opacity-60 dark:border-white/20 dark:bg-white/10 dark:text-white dark:hover:bg-white/15"
     >
       <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
         <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.9c1.7-1.57 2.7-3.88 2.7-6.62Z" />

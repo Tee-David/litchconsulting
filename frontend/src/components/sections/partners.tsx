@@ -1,7 +1,9 @@
 import { partners } from "@/lib/content";
 
 export function Partners() {
-  const row = [...partners, ...partners];
+  // 4× (two identical halves) so the -50% loop is seamless and always wider
+  // than the viewport — no empty gaps at any width.
+  const row = [...partners, ...partners, ...partners, ...partners];
   return (
     <section className="py-14 md:py-16">
       <div className="container-page">
@@ -13,7 +15,7 @@ export function Partners() {
             {row.map((name, i) => (
               <span
                 key={i}
-                className="font-display text-xl font-bold tracking-tight text-ink/35 transition-colors hover:text-brand"
+                className="font-display text-xl font-bold tracking-tight text-ink/35 transition-colors hover:text-brand dark:hover:text-white"
               >
                 {name}
               </span>

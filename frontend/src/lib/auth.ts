@@ -54,9 +54,13 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 8,
-    // SMTP not wired yet, so don't block sign-in on verification. Flip to true
-    // once transactional email (Resend) is connected for verification.
+    // Verification email not required to sign in yet. SMTP (Truehost) is wired
+    // for password reset below via lib/email.
     requireEmailVerification: false,
+    sendResetPassword: async ({ user, url }) => {
+      const { sendPasswordResetEmail } = await import("./email");
+      await sendPasswordResetEmail(user.email, url);
+    },
   },
   socialProviders: googleEnabled
     ? { google: { clientId: googleId!, clientSecret: googleSecret! } }

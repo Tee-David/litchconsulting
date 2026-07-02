@@ -12,7 +12,11 @@ const KEY = "litch:preloaded";
  * none, so it never locks scroll.
  */
 export function PagePreloader() {
-  const [visible, setVisible] = useState(false);
+  // Start visible so the overlay covers the page from the very first paint
+  // (rather than flashing the homepage content first). The effect hides it
+  // immediately when it shouldn't run (already seen this session / reduced
+  // motion), otherwise it plays once and fades out.
+  const [visible, setVisible] = useState(true);
 
   useEffect(() => {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -20,13 +24,14 @@ export function PagePreloader() {
     try {
       seen = sessionStorage.getItem(KEY) === "1";
     } catch {}
-    if (seen || reduced) return;
+    if (seen || reduced) {
+      setVisible(false);
+      return;
+    }
     try {
       sessionStorage.setItem(KEY, "1");
     } catch {}
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot intro on first mount
-    setVisible(true);
-    const t = setTimeout(() => setVisible(false), 1700);
+    const t = setTimeout(() => setVisible(false), 3200);
     return () => clearTimeout(t);
   }, []);
 

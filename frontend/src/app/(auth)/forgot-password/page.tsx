@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { AuthShell } from "@/components/auth/auth-shell";
+import { ForgotPasswordForm } from "@/components/auth/forgot-password-form";
 
 export const metadata: Metadata = {
   title: "Reset password",
@@ -10,22 +10,7 @@ export const metadata: Metadata = {
 export default function ForgotPasswordPage() {
   return (
     <AuthShell>
-      <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight text-ink">Reset password</h1>
-        <p className="mt-3 text-sm text-body">
-          Password reset by email is coming soon. In the meantime, contact us at{" "}
-          <a href="mailto:info@litchconsulting.com" className="font-semibold text-brand hover:underline">
-            info@litchconsulting.com
-          </a>{" "}
-          and we&rsquo;ll help you back in.
-        </p>
-        <Link
-          href="/login"
-          className="mt-6 inline-block rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
-        >
-          Back to log in
-        </Link>
-      </div>
+      <ForgotPasswordForm />
     </AuthShell>
   );
 }

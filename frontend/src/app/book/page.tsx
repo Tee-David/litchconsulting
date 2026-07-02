@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 export default function BookPage() {
   return (
     <>
-      <Header showLogin />
+      <Header />
       <main className="flex-1 pt-28 md:pt-32">
         {/* Intro */}
         <section className="container-page pb-4 pt-4 text-center">

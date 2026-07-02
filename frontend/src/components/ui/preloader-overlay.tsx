@@ -25,16 +25,16 @@ export function PreloaderOverlay() {
         <motion.div
           className="flex justify-end overflow-hidden"
           initial={{ width: 0 }}
-          animate={{ width: 92 }}
-          transition={{ ...spring, delay: 0.35 }}
+          animate={{ width: 160 }}
+          transition={{ ...spring, delay: 0.12 }}
         >
           <motion.span
             className="pr-3.5"
             initial={{ x: -150, opacity: 0 }}
             animate={{ x: 0, opacity: 1 }}
-            transition={{ ...spring, delay: 0.35 }}
+            transition={{ ...spring, delay: 0.12 }}
           >
-            <LogoMark className="h-[4.5rem]" />
+            <LogoMark className="size-[7rem]" />
           </motion.span>
         </motion.div>
 

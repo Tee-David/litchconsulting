@@ -7,8 +7,6 @@ export function Process() {
       <SectionHeading eyebrow={process.eyebrow} title={process.title} align="center" />
 
       <div className="relative mt-14 grid gap-6 md:grid-cols-4">
-        {/* connecting line */}
-        <div className="absolute left-0 right-0 top-7 hidden h-px bg-gradient-to-r from-transparent via-brand-soft to-transparent md:block" />
         {process.steps.map((step, i) => (
           <Reveal key={step.no} delay={i * 0.08}>
             <div className="relative flex flex-col items-start">

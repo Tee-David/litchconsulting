@@ -9,12 +9,19 @@ import "./StaggeredMenu.css";
 
 export type StaggeredMenuItem = { label: string; link: string; ariaLabel?: string };
 export type StaggeredMenuSocial = { label: string; link: string };
+export type StaggeredMenuAction = {
+  label: string;
+  link?: string;
+  onClick?: () => void;
+  variant?: "primary" | "outline";
+};
 
 export interface StaggeredMenuProps {
   position?: "left" | "right";
   colors?: string[];
   items?: StaggeredMenuItem[];
   socialItems?: StaggeredMenuSocial[];
+  actions?: StaggeredMenuAction[];
   displaySocials?: boolean;
   displayItemNumbering?: boolean;
   className?: string;
@@ -33,8 +40,7 @@ export const StaggeredMenu: React.FC<StaggeredMenuProps> = ({
   position = "right",
   colors = ["#2540c4", "#0a196d"],
   items = [],
-  socialItems = [],
-  displaySocials = true,
+  actions = [],
   displayItemNumbering = false,
   className,
   logoUrl = "/brand/litch-mark.svg",
@@ -229,25 +235,39 @@ export const StaggeredMenu: React.FC<StaggeredMenuProps> = ({
           </ul>
 
           <div className="sm-panel-footer">
+            {actions.length > 0 && (
+              <div className="sm-actions">
+                {actions.map((a) => {
+                  const cls =
+                    "flex w-full items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition-colors " +
+                    (a.variant === "outline"
+                      ? "border border-white/25 text-white hover:bg-white/10"
+                      : "keep-brand bg-white text-brand hover:bg-white/90");
+                  return a.link ? (
+                    <Link key={a.label} href={a.link} className={cls} onClick={closeMenu}>
+                      {a.label}
+                    </Link>
+                  ) : (
+                    <button
+                      key={a.label}
+                      type="button"
+                      className={cls}
+                      onClick={() => {
+                        a.onClick?.();
+                        closeMenu();
+                      }}
+                    >
+                      {a.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             <div className="sm-panel-theme">
               <span>Appearance</span>
               <ThemeToggle />
             </div>
-
-            {displaySocials && socialItems.length > 0 && (
-              <div className="sm-socials" aria-label="Social links">
-                <h3 className="sm-socials-title">Socials</h3>
-                <ul className="sm-socials-list" role="list">
-                  {socialItems.map((s, i) => (
-                    <li key={s.label + i} className="sm-socials-item">
-                      <a href={s.link} target="_blank" rel="noopener noreferrer" className="sm-socials-link">
-                        {s.label}
-                      </a>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
           </div>
         </div>
       </aside>

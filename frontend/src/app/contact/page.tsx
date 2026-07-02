@@ -33,10 +33,10 @@ export default function ContactPage() {
           image={services[0].image}
         />
 
-        <section className="container-page relative z-10 pb-20 md:pb-28">
-          <div className="grid gap-10 lg:grid-cols-[0.85fr_1.15fr]">
-            {/* Details — kept in place, below the hero */}
-            <div className="order-2 lg:order-1 lg:pt-24">
+        <section className="container-page relative z-10 pt-16 pb-20 md:pt-24 md:pb-28">
+          <div className="grid items-start gap-10 lg:grid-cols-[0.85fr_1.15fr]">
+            {/* Details */}
+            <div className="order-2 lg:order-1">
               <h2 className="font-display text-2xl font-bold tracking-tight text-ink">Get in touch</h2>
               <p className="mt-3 max-w-md text-body">
                 Prefer to talk it through? Reach us directly, or send a message and we&rsquo;ll come back to you quickly.
@@ -54,15 +54,15 @@ export default function ContactPage() {
                         <a
                           href={href}
                           {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-                          className="group inline-flex items-center gap-1 text-body transition-colors hover:text-brand"
+                          className="group inline-flex items-center gap-1 text-body transition-colors hover:text-[#ffffff]"
                         >
-                          <ArrowUpRight className="size-4 text-brand transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                           {value}
+                          <ArrowUpRight className="size-4 text-brand transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
                         </a>
                       ) : (
                         <p className="inline-flex items-center gap-1 text-body">
-                          <ArrowUpRight className="size-4 text-brand" />
                           {value}
+                          <ArrowUpRight className="size-4 text-brand" />
                         </p>
                       )}
                     </div>
@@ -71,8 +71,8 @@ export default function ContactPage() {
               </ul>
             </div>
 
-            {/* Form — leans up onto the hero */}
-            <div className="relative z-20 order-1 -mt-24 lg:order-2 lg:-mt-44">
+            {/* Form */}
+            <div className="relative z-20 order-1 lg:order-2">
               <div className="rounded-card shadow-2xl shadow-black/10">
                 <ContactForm />
               </div>

@@ -26,6 +26,7 @@ export function Hero() {
   return (
     <section
       id="top"
+      data-hero
       className="relative flex min-h-[100svh] w-full flex-col justify-end overflow-hidden"
     >
       {/* Background slider */}
