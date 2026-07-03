@@ -1,5 +1,5 @@
 import path from "node:path";
-import { Document, Page, View, Text, StyleSheet, Link, Svg, Path, Font } from "@react-pdf/renderer";
+import { Document, Page, View, Text, StyleSheet, Link, Svg, Path, Font, Image } from "@react-pdf/renderer";
 import { computeTotals, formatMoney } from "@/lib/invoice/money";
 import { issuer as defaultIssuer, type Issuer } from "@/lib/invoice/issuer";
 import type { InvoiceData } from "@/lib/invoice/types";
@@ -69,10 +69,12 @@ export function InvoiceDocument({
   data,
   variant = "invoice",
   issuer = defaultIssuer,
+  qrDataUrl,
 }: {
   data: InvoiceData;
   variant?: "invoice" | "receipt";
   issuer?: Issuer;
+  qrDataUrl?: string;
 }) {
   const isReceipt = variant === "receipt";
   const totals = computeTotals(data.items);
@@ -203,11 +205,19 @@ export function InvoiceDocument({
           <Text style={{ color: BODY, fontSize: 8, marginTop: 3 }}>Authorised signatory</Text>
         </View>
 
-        <View style={s.section}>
+        <View style={[s.section, { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }]}>
+          <View>
           <Text style={s.sectionLabel}>Payment details</Text>
           <Text style={{ color: BODY }}>Bank: {issuer.bank.name}</Text>
           <Text style={{ color: BODY }}>Account name: {issuer.bank.accountName}</Text>
           <Text style={{ color: BODY }}>Account number: {issuer.bank.accountNumber}</Text>
+          </View>
+          {qrDataUrl ? (
+            <View style={{ alignItems: "center" }}>
+              <Image src={qrDataUrl} style={{ width: 62, height: 62 }} />
+              <Text style={{ color: BODY, fontSize: 7, marginTop: 2 }}>{isReceipt ? "Scan to view" : "Scan to pay"}</Text>
+            </View>
+          ) : null}
         </View>
         {data.notes ? (
           <View style={s.section}>
