@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { desc } from "drizzle-orm";
-import { Plus, Wallet, BadgeCheck, Clock, AlertTriangle, Users, FileText } from "lucide-react";
+import { Plus, Wallet, BadgeCheck, Clock, AlertTriangle, Users, FileText, BarChart3, Receipt } from "lucide-react";
 import { db } from "@/lib/db/client";
 import { lead } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/server-user";
@@ -50,6 +50,9 @@ export default async function AdminDashboard() {
   const recent = invoices.slice(0, 5);
   const recentLeads = leads.slice(0, 5);
   const newLeads30 = leads.filter((l) => l.createdAt && new Date(l.createdAt).getTime() > Date.now() - 30 * 864e5).length;
+  const collectionRate = stats.invoiced ? Math.round((stats.paid / stats.invoiced) * 100) : 0;
+  const monthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
+  const thisMonth = invoices.filter((i) => (i.issueDate || "").startsWith(monthKey)).reduce((s, i) => s + num(i.total), 0);
   const firstName = (user?.name || "there").split(" ")[0];
   const greeting = new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 18 ? "Good afternoon" : "Good evening";
 
@@ -124,8 +127,42 @@ export default async function AdminDashboard() {
           </div>
         </div>
 
-        {/* Right: donut + recent leads */}
+        {/* Right: quick actions + collection + donut + recent leads */}
         <div className="space-y-6">
+          {/* Quick actions */}
+          <div className="rounded-card border border-hairline bg-paper p-5">
+            <h3 className="mb-3 font-display text-sm font-bold text-ink">Quick actions</h3>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { href: "/admin/finance/invoices/new", icon: Plus, label: "New invoice" },
+                { href: "/admin/clients", icon: Users, label: "Clients" },
+                { href: "/admin/reports", icon: BarChart3, label: "Reports" },
+                { href: "/admin/finance/receipts", icon: Receipt, label: "Receipts" },
+              ].map((a) => (
+                <Link
+                  key={a.href}
+                  href={a.href}
+                  className="flex items-center gap-2 rounded-xl border border-hairline px-3 py-2.5 text-sm font-medium text-ink transition-colors hover:border-brand hover:bg-surface"
+                >
+                  <a.icon className="size-4 text-brand" />
+                  {a.label}
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          {/* Collection rate */}
+          <div className="rounded-card border border-hairline bg-paper p-5">
+            <div className="flex items-center justify-between">
+              <h3 className="font-display text-sm font-bold text-ink">Collection rate</h3>
+              <span className="font-display text-lg font-bold text-ink">{collectionRate}%</span>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface">
+              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${collectionRate}%` }} />
+            </div>
+            <p className="mt-2 text-xs text-muted">{formatMoney(thisMonth)} invoiced this month</p>
+          </div>
+
           <div className="rounded-card border border-hairline bg-paper p-5">
             <h3 className="mb-4 font-display text-sm font-bold text-ink">Invoices by status</h3>
             {byStatus.length === 0 ? (
