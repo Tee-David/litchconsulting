@@ -8,6 +8,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { MoreHorizontal, Plus, Eye, PenLine, Copy, Send, CheckCircle2, Trash2, FileText } from "lucide-react";
 import { DataTable } from "@/components/admin/ui/data-table";
 import { ExportMenu } from "@/components/admin/ui/export-menu";
+import { DateRangeFilter, type DateRange } from "@/components/admin/ui/date-range-filter";
 import { StatCard } from "@/components/admin/ui/stat-card";
 import { EmptyState } from "@/components/admin/ui/empty-state";
 import { Badge, invoiceStatusTone } from "@/components/admin/ui/badge";
@@ -125,10 +126,18 @@ function RowActions({ row }: { row: InvoiceRow }) {
 export function InvoiceList({ invoices }: { invoices: InvoiceRow[] }) {
   const router = useRouter();
   const [status, setStatus] = useState("all");
+  const [dateRange, setDateRange] = useState<DateRange>({ from: null, to: null });
 
   const filtered = useMemo(
-    () => (status === "all" ? invoices : invoices.filter((i) => i.status === status)),
-    [invoices, status],
+    () =>
+      invoices.filter((i) => {
+        if (status !== "all" && i.status !== status) return false;
+        const d = i.issueDate || "";
+        if (dateRange.from && d < dateRange.from) return false;
+        if (dateRange.to && d > dateRange.to) return false;
+        return true;
+      }),
+    [invoices, status, dateRange],
   );
 
   const stats = useMemo(() => {
@@ -227,6 +236,7 @@ export function InvoiceList({ invoices }: { invoices: InvoiceRow[] }) {
           onRowClick={(r) => router.push(`/admin/finance/invoices/${r.id}`)}
           toolbar={
             <>
+              <DateRangeFilter onChange={setDateRange} />
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}

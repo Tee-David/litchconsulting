@@ -17,7 +17,7 @@ const outfit = Outfit({
   display: "swap",
 });
 
-const siteUrl = "https://litchconsulting.com";
+const siteUrl = "https://www.litchconsulting.com";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),

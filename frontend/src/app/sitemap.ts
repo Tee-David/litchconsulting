@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
-import { services, caseStudyDetails, insights } from "@/lib/content";
+import { services, caseStudyDetails, insights, legal } from "@/lib/content";
 
-const base = "https://litchconsulting.com";
+const base = "https://www.litchconsulting.com";
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date();
@@ -37,5 +37,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.6,
   }));
 
-  return [...staticRoutes, ...serviceRoutes, ...caseStudyRoutes, ...insightRoutes];
+  const legalRoutes: MetadataRoute.Sitemap = legal.map((l) => ({
+    url: `${base}/legal/${l.slug}`,
+    lastModified: now,
+    changeFrequency: "yearly",
+    priority: 0.3,
+  }));
+
+  return [...staticRoutes, ...serviceRoutes, ...caseStudyRoutes, ...insightRoutes, ...legalRoutes];
 }
