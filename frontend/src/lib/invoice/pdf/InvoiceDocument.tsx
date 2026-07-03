@@ -40,13 +40,20 @@ const s = StyleSheet.create({
   footer: { position: "absolute", bottom: 26, left: 44, right: 44, borderTopWidth: 1, borderTopColor: HAIR, paddingTop: 8, color: BODY, fontSize: 8, flexDirection: "row", justifyContent: "space-between" },
 });
 
-export function InvoiceDocument({ data }: { data: InvoiceData }) {
+export function InvoiceDocument({
+  data,
+  variant = "invoice",
+}: {
+  data: InvoiceData;
+  variant?: "invoice" | "receipt";
+}) {
+  const isReceipt = variant === "receipt";
   const totals = computeTotals(data.items);
   const cur = data.currency;
   const fmt = (n: number) => formatMoney(n, cur);
 
   return (
-    <Document title={`Invoice ${data.number}`} author={issuer.name}>
+    <Document title={`${isReceipt ? "Receipt" : "Invoice"} ${data.number}`} author={issuer.name}>
       <Page size="A4" style={s.page}>
         {/* Header */}
         <View style={s.rowBetween}>
@@ -55,9 +62,12 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
             <Text style={s.issuerMeta}>{issuer.address}</Text>
             <Text style={s.issuerMeta}>{issuer.email}</Text>
             <Text style={s.issuerMeta}>{issuer.phone}</Text>
+            {isReceipt ? (
+              <Text style={{ marginTop: 8, color: "#16a34a", fontFamily: "Helvetica-Bold" }}>PAID ✓</Text>
+            ) : null}
           </View>
           <View>
-            <Text style={s.invoiceTitle}>INVOICE</Text>
+            <Text style={s.invoiceTitle}>{isReceipt ? "RECEIPT" : "INVOICE"}</Text>
             <View style={s.rule} />
           </View>
         </View>
@@ -128,13 +138,13 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
             <Text>{fmt(totals.taxTotal)}</Text>
           </View>
           <View style={s.grandRow}>
-            <Text style={s.grandText}>Total Due ({cur})</Text>
+            <Text style={s.grandText}>{isReceipt ? "Total Paid" : "Total Due"} ({cur})</Text>
             <Text style={s.grandText}>{fmt(totals.total)}</Text>
           </View>
         </View>
 
-        {/* Pay button */}
-        {data.paymentUrl ? (
+        {/* Pay button (invoices only) */}
+        {!isReceipt && data.paymentUrl ? (
           <Link src={data.paymentUrl} style={s.payBtn}>
             <Text style={{ color: "#fff", fontFamily: "Helvetica-Bold" }}>Pay this invoice</Text>
           </Link>

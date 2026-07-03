@@ -10,6 +10,8 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   const user = await getSessionUser();
   if (!user) redirect("/login?redirect=/dashboard");
+  // Admins get the full admin dashboard, not the client portal.
+  if (user.role === "admin") redirect("/admin");
 
   return (
     <div className="min-h-screen bg-cloud">
