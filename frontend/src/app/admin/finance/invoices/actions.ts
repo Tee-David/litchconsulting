@@ -69,10 +69,11 @@ export async function saveInvoiceAction(input: InvoiceInput): Promise<ActionResu
       if (items.length) await tx.insert(invoiceItem).values(items.map((it) => ({ ...it, invoiceId: input.id! })));
       return input.id;
     }
-    const number = input.number || (await nextInvoiceNumber());
+    const kind = input.kind === "quote" ? "quote" : "invoice";
+    const number = input.number || (await nextInvoiceNumber(kind));
     const [row] = await tx
       .insert(invoice)
-      .values({ ...fields, number, publicToken: randomUUID(), createdByUserId: uid })
+      .values({ ...fields, kind, number, publicToken: randomUUID(), createdByUserId: uid })
       .returning({ id: invoice.id });
     if (items.length) await tx.insert(invoiceItem).values(items.map((it) => ({ ...it, invoiceId: row.id })));
     return row.id;
@@ -216,6 +217,62 @@ export async function sendInvoiceAction(id: string): Promise<ActionResult> {
   revalidatePath("/admin/finance/invoices");
   revalidatePath(`/admin/finance/invoices/${id}`);
   return { ok: true, error: delivered ? undefined : "Invoice marked sent (email not configured)." };
+}
+
+/** Convert an accepted quote into a draft invoice (marks the quote accepted). */
+export async function convertQuoteToInvoiceAction(id: string): Promise<ActionResult> {
+  const uid = await requireAdmin();
+  if (!uid) return { ok: false, error: "Unauthorized" };
+  const data = await getInvoice(id);
+  if (!data || data.invoice.kind !== "quote") return { ok: false, error: "Not a quote" };
+  const { invoice: q, items } = data;
+  const number = await nextInvoiceNumber("invoice");
+  const newId = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .insert(invoice)
+      .values({
+        number,
+        kind: "invoice",
+        status: "draft",
+        clientId: q.clientId,
+        billToName: q.billToName,
+        billToCompany: q.billToCompany,
+        billToEmail: q.billToEmail,
+        billToAddress: q.billToAddress,
+        billToTaxId: q.billToTaxId,
+        projectTitle: q.projectTitle,
+        currency: q.currency,
+        issueDate: new Date().toISOString().slice(0, 10),
+        dueDate: q.dueDate,
+        notes: q.notes,
+        terms: q.terms,
+        paymentUrl: q.paymentUrl,
+        subtotal: q.subtotal,
+        taxTotal: q.taxTotal,
+        total: q.total,
+        publicToken: randomUUID(),
+        createdByUserId: uid,
+      })
+      .returning({ id: invoice.id });
+    if (items.length)
+      await tx.insert(invoiceItem).values(
+        items.map((it) => ({
+          invoiceId: row.id,
+          description: it.description,
+          detail: it.detail,
+          quantity: it.quantity,
+          unitPrice: it.unitPrice,
+          taxRate: it.taxRate,
+          amount: it.amount,
+          position: it.position,
+        })),
+      );
+    return row.id;
+  });
+  await db.update(invoice).set({ status: "accepted", updatedAt: new Date() }).where(eq(invoice.id, id));
+  revalidatePath("/admin/finance/quotes");
+  revalidatePath("/admin/finance/invoices");
+  return { ok: true, id: newId };
 }
 
 /** Create a bill-to client from the builder's inline form. */

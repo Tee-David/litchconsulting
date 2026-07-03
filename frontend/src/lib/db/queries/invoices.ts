@@ -7,9 +7,14 @@ import { num } from "@/lib/invoice/money";
 export type InvoiceRow = typeof invoice.$inferSelect;
 export type InvoiceItemRow = typeof invoiceItem.$inferSelect;
 
-/** All invoices, newest first (for the list table). */
+/** Invoices (kind='invoice'), newest first. */
 export async function listInvoices(): Promise<InvoiceRow[]> {
-  return db.select().from(invoice).orderBy(desc(invoice.createdAt));
+  return db.select().from(invoice).where(eq(invoice.kind, "invoice")).orderBy(desc(invoice.createdAt));
+}
+
+/** Quotes (kind='quote'), newest first. */
+export async function listQuotes(): Promise<InvoiceRow[]> {
+  return db.select().from(invoice).where(eq(invoice.kind, "quote")).orderBy(desc(invoice.createdAt));
 }
 
 /** One invoice with its line items (ordered), or null. */
@@ -36,9 +41,12 @@ export async function getInvoiceByToken(token: string) {
   return { invoice: inv, items };
 }
 
-/** KPI aggregates for the dashboard / list header. */
+/** KPI aggregates for the dashboard / list header (invoices only). */
 export async function invoiceStats() {
-  const rows = await db.select({ status: invoice.status, total: invoice.total, amountPaid: invoice.amountPaid }).from(invoice);
+  const rows = await db
+    .select({ status: invoice.status, total: invoice.total, amountPaid: invoice.amountPaid })
+    .from(invoice)
+    .where(eq(invoice.kind, "invoice"));
   let invoiced = 0,
     paid = 0,
     outstanding = 0,
@@ -55,10 +63,10 @@ export async function invoiceStats() {
   return { invoiced, paid, outstanding, overdueCount, draftCount, count: rows.length };
 }
 
-/** Next sequential number for the current year: INV-YYYY-NNN. */
-export async function nextInvoiceNumber(): Promise<string> {
+/** Next sequential number for the current year: INV-YYYY-NNN or QUO-YYYY-NNN. */
+export async function nextInvoiceNumber(kind: "invoice" | "quote" = "invoice"): Promise<string> {
   const year = new Date().getFullYear();
-  const prefix = `INV-${year}-`;
+  const prefix = `${kind === "quote" ? "QUO" : "INV"}-${year}-`;
   const rows = await db
     .select({ number: invoice.number })
     .from(invoice)
@@ -71,7 +79,12 @@ export async function nextInvoiceNumber(): Promise<string> {
   return `${prefix}${String(max + 1).padStart(3, "0")}`;
 }
 
-/** Recent-activity feed helper (dashboard). */
+/** Recent invoices feed helper (dashboard). */
 export async function recentInvoices(limit = 5): Promise<InvoiceRow[]> {
-  return db.select().from(invoice).orderBy(desc(invoice.createdAt)).limit(limit);
+  return db
+    .select()
+    .from(invoice)
+    .where(eq(invoice.kind, "invoice"))
+    .orderBy(desc(invoice.createdAt))
+    .limit(limit);
 }

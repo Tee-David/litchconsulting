@@ -40,6 +40,8 @@ const STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS "invoice_client_idx" ON "invoice" ("client_id")`,
   `CREATE INDEX IF NOT EXISTS "invoice_created_idx" ON "invoice" ("created_at")`,
   `CREATE INDEX IF NOT EXISTS "invoice_item_invoice_idx" ON "invoice_item" ("invoice_id")`,
+  `ALTER TABLE "invoice" ADD COLUMN IF NOT EXISTS "kind" text NOT NULL DEFAULT 'invoice'`,
+  `CREATE INDEX IF NOT EXISTS "invoice_kind_idx" ON "invoice" ("kind")`,
   `CREATE TABLE IF NOT EXISTS "org_settings" (
     "id" text PRIMARY KEY,
     "company_name" text, "logo_url" text,

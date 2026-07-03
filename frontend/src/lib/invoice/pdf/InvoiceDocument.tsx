@@ -28,6 +28,8 @@ const STATUS_STAMP: Record<string, { label: string; color: string }> = {
   overdue: { label: "OVERDUE", color: "#dc2626" },
   draft: { label: "DRAFT", color: "#8a92a6" },
   void: { label: "VOID", color: "#8a92a6" },
+  accepted: { label: "ACCEPTED", color: "#16a34a" },
+  declined: { label: "DECLINED", color: "#dc2626" },
 };
 const INK = "#0a0e1a";
 const BODY = "#5b6474";
@@ -72,11 +74,13 @@ export function InvoiceDocument({
   qrDataUrl,
 }: {
   data: InvoiceData;
-  variant?: "invoice" | "receipt";
+  variant?: "invoice" | "receipt" | "quote";
   issuer?: Issuer;
   qrDataUrl?: string;
 }) {
   const isReceipt = variant === "receipt";
+  const isQuote = variant === "quote";
+  const docTitle = isQuote ? "QUOTE" : isReceipt ? "RECEIPT" : "INVOICE";
   const totals = computeTotals(data.items);
   const cur = data.currency;
   const fmt = (n: number) => formatMoney(n, cur);
@@ -84,7 +88,7 @@ export function InvoiceDocument({
   const stamp = STATUS_STAMP[data.status];
 
   return (
-    <Document title={`${isReceipt ? "Receipt" : "Invoice"} ${data.number}`} author={issuer.name}>
+    <Document title={`${isQuote ? "Quote" : isReceipt ? "Receipt" : "Invoice"} ${data.number}`} author={issuer.name}>
       <Page size="A4" style={s.page}>
         {/* Favicon watermark on every page */}
         <View fixed style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
@@ -114,7 +118,7 @@ export function InvoiceDocument({
             ) : null}
           </View>
           <View>
-            <Text style={s.invoiceTitle}>{isReceipt ? "RECEIPT" : "INVOICE"}</Text>
+            <Text style={s.invoiceTitle}>{docTitle}</Text>
             <View style={s.rule} />
           </View>
         </View>
@@ -185,13 +189,13 @@ export function InvoiceDocument({
             <Text>{fmt(totals.taxTotal)}</Text>
           </View>
           <View style={s.grandRow}>
-            <Text style={s.grandText}>{isReceipt ? "Total Paid" : "Total Due"} ({cur})</Text>
+            <Text style={s.grandText}>{isQuote ? "Total" : isReceipt ? "Total Paid" : "Total Due"} ({cur})</Text>
             <Text style={s.grandText}>{fmt(totals.total)}</Text>
           </View>
         </View>
 
         {/* Pay button (invoices only) */}
-        {!isReceipt && data.paymentUrl ? (
+        {!isReceipt && !isQuote && data.paymentUrl ? (
           <Link src={data.paymentUrl} style={s.payBtn}>
             <Text style={{ color: "#fff", fontFamily: "NotoSans", fontWeight: 700 }}>Pay this invoice</Text>
           </Link>

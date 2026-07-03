@@ -45,7 +45,10 @@ export function invoiceStatusTone(status: string): BadgeTone {
     case "sent":
       return "info";
     case "overdue":
+    case "declined":
       return "danger";
+    case "accepted":
+      return "success";
     case "void":
       return "neutral";
     default:

@@ -13,7 +13,7 @@ export async function qrDataUrl(url: string): Promise<string> {
 /** Render an invoice (or receipt variant) to a PDF Buffer (server-only). */
 export async function renderInvoicePdf(
   data: InvoiceData,
-  variant: "invoice" | "receipt" = "invoice",
+  variant: "invoice" | "receipt" | "quote" = "invoice",
   issuer?: Issuer,
   qr?: string,
 ): Promise<Buffer> {

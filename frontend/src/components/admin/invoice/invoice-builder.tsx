@@ -25,12 +25,18 @@ export function InvoiceBuilder({
   clients,
   defaultNumber,
   issuer = defaultIssuer,
+  kind = "invoice",
 }: {
   initial?: InvoiceInput;
   clients: ClientRow[];
   defaultNumber: string;
   issuer?: Issuer;
+  kind?: "invoice" | "quote";
 }) {
+  const isQuote = kind === "quote";
+  const noun = isQuote ? "quote" : "invoice";
+  const basePath = isQuote ? "/admin/finance/quotes" : "/admin/finance/invoices";
+  const pdfBase = isQuote ? "/api/admin/quotes" : "/api/admin/invoices";
   const router = useRouter();
   const toast = useToast();
 
@@ -68,7 +74,7 @@ export function InvoiceBuilder({
   };
 
   function payload(status?: string): InvoiceInput {
-    return { id, number, status, clientId: clientId || null, billTo, projectTitle, currency, issueDate, dueDate, notes, terms, paymentUrl, items };
+    return { id, kind, number, status, clientId: clientId || null, billTo, projectTitle, currency, issueDate, dueDate, notes, terms, paymentUrl, items };
   }
 
   function pickClient(cid: string) {
@@ -125,13 +131,13 @@ export function InvoiceBuilder({
     const res = await sendInvoiceAction(savedId);
     setBusy(null);
     if (!res.ok) return toast.error(res.error || "Could not send.");
-    toast.success(res.error || "Invoice sent.");
-    router.push(`/admin/finance/invoices/${savedId}`);
+    toast.success(res.error || `${isQuote ? "Quote" : "Invoice"} sent.`);
+    router.push(`${basePath}/${savedId}`);
   }
 
   async function onDownload() {
     const savedId = id ?? (await doSave("draft"));
-    if (savedId) window.open(`/api/admin/invoices/${savedId}/pdf`, "_blank");
+    if (savedId) window.open(`${pdfBase}/${savedId}/pdf`, "_blank");
   }
 
   return (
@@ -168,7 +174,7 @@ export function InvoiceBuilder({
             disabled={busy !== null}
             className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover disabled:opacity-60"
           >
-            {busy === "send" ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />} Send invoice
+            {busy === "send" ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />} Send {noun}
           </button>
         </div>
       </div>
@@ -320,7 +326,7 @@ export function InvoiceBuilder({
 
         {/* Live preview */}
         <div className={`min-w-0 lg:sticky lg:top-20 lg:self-start ${mobileView === "form" ? "hidden lg:block" : ""}`}>
-          <InvoicePreview data={data} issuer={issuer} />
+          <InvoicePreview data={data} issuer={issuer} variant={isQuote ? "quote" : "invoice"} />
         </div>
       </div>
     </div>

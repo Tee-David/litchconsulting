@@ -72,8 +72,10 @@ export const invoice = pgTable(
   "invoice",
   {
     id: id(),
-    number: text("number").notNull().unique(), // INV-YYYY-NNN
-    // draft | sent | paid | overdue | void
+    number: text("number").notNull().unique(), // INV-YYYY-NNN or QUO-YYYY-NNN
+    // invoice | quote — quotes reuse the whole invoice engine
+    kind: text("kind").notNull().default("invoice"),
+    // invoice: draft|sent|paid|overdue|void · quote: draft|sent|accepted|declined
     status: text("status").notNull().default("draft"),
 
     clientId: uuid("client_id"), // soft ref → client.id
@@ -109,6 +111,7 @@ export const invoice = pgTable(
     index("invoice_status_idx").on(t.status),
     index("invoice_client_idx").on(t.clientId),
     index("invoice_created_idx").on(t.createdAt),
+    index("invoice_kind_idx").on(t.kind),
   ]
 );
 

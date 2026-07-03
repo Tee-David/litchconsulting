@@ -37,6 +37,7 @@ export type InvoiceStatus = (typeof INVOICE_STATUSES)[number];
 /** Serializable payload sent from the builder to the save server action. */
 export type InvoiceInput = {
   id?: string;
+  kind?: "invoice" | "quote";
   number: string;
   status?: string;
   clientId?: string | null;

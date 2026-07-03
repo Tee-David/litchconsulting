@@ -6,10 +6,12 @@ const BRAND = "#0a196d";
 
 const STATUS_STAMP: Record<string, { label: string; color: string }> = {
   paid: { label: "PAID", color: "#16a34a" },
-  sent: { label: "UNPAID", color: "#d97706" },
+  sent: { label: "SENT", color: "#d97706" },
   overdue: { label: "OVERDUE", color: "#dc2626" },
   draft: { label: "DRAFT", color: "#8a92a6" },
   void: { label: "VOID", color: "#8a92a6" },
+  accepted: { label: "ACCEPTED", color: "#16a34a" },
+  declined: { label: "DECLINED", color: "#dc2626" },
 };
 
 /**
@@ -18,7 +20,16 @@ const STATUS_STAMP: Record<string, { label: string; color: string }> = {
  * live preview, the admin view page and the public pay page. A faint centred
  * favicon watermark + a status stamp brand every page.
  */
-export function InvoicePreview({ data, issuer = defaultIssuer }: { data: InvoiceData; issuer?: Issuer }) {
+export function InvoicePreview({
+  data,
+  issuer = defaultIssuer,
+  variant = "invoice",
+}: {
+  data: InvoiceData;
+  issuer?: Issuer;
+  variant?: "invoice" | "quote";
+}) {
+  const isQuote = variant === "quote";
   const totals = computeTotals(data.items);
   const fmt = (n: number) => formatMoney(n, data.currency);
   const stamp = STATUS_STAMP[data.status];
@@ -70,7 +81,7 @@ export function InvoicePreview({ data, issuer = defaultIssuer }: { data: Invoice
           </p>
         </div>
         <div className="text-right">
-          <p className="text-2xl font-extrabold tracking-tight sm:text-3xl">INVOICE</p>
+          <p className="text-2xl font-extrabold tracking-tight sm:text-3xl">{isQuote ? "QUOTE" : "INVOICE"}</p>
           <span className="ml-auto mt-1.5 block h-[3px] w-16 rounded" style={{ background: BRAND }} />
         </div>
       </div>
@@ -144,14 +155,14 @@ export function InvoicePreview({ data, issuer = defaultIssuer }: { data: Invoice
             className="mt-2 flex items-center justify-between rounded px-3 py-2.5 font-bold text-white"
             style={{ background: BRAND }}
           >
-            <span>Total Due ({data.currency})</span>
+            <span>{isQuote ? "Total" : "Total Due"} ({data.currency})</span>
             <span className="tabular-nums">{fmt(totals.total)}</span>
           </div>
         </div>
       </div>
 
       {/* Pay */}
-      {data.paymentUrl && (
+      {!isQuote && data.paymentUrl && (
         <a
           href={data.paymentUrl}
           target="_blank"
