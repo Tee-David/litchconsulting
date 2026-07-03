@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, Search, LogOut, Home } from "lucide-react";
+import { Menu, Search, LogOut, Home, Bell, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { signOut } from "@/lib/auth-client";
 import { activeNavItem } from "./nav";
@@ -21,6 +21,42 @@ function initialsOf(name?: string | null, email?: string | null) {
   const parts = src.split(/\s+/).filter(Boolean);
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
   return src.slice(0, 2).toUpperCase();
+}
+
+function NotificationBell() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, []);
+
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        aria-label="Notifications"
+        onClick={() => setOpen((o) => !o)}
+        className="relative grid size-9 place-items-center rounded-full border border-hairline text-body transition-colors hover:bg-surface hover:text-ink"
+      >
+        <Bell className="size-4.5" />
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-2 w-72 overflow-hidden rounded-2xl border border-hairline bg-paper shadow-xl shadow-black/10">
+          <div className="border-b border-hairline px-4 py-3">
+            <p className="text-sm font-semibold text-ink">Notifications</p>
+          </div>
+          <div className="px-4 py-8 text-center">
+            <p className="text-sm text-body">You&rsquo;re all caught up.</p>
+            <p className="mt-1 text-xs text-muted">New activity will show up here.</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function AccountDropdown({ user }: { user: AdminUser }) {
@@ -78,7 +114,17 @@ function AccountDropdown({ user }: { user: AdminUser }) {
   );
 }
 
-export function AdminTopbar({ onMenuClick, user }: { onMenuClick: () => void; user: AdminUser }) {
+export function AdminTopbar({
+  onMenuClick,
+  onToggleSidebar,
+  collapsed,
+  user,
+}: {
+  onMenuClick: () => void;
+  onToggleSidebar: () => void;
+  collapsed: boolean;
+  user: AdminUser;
+}) {
   const pathname = usePathname();
   const title = activeNavItem(pathname)?.label ?? "Dashboard";
 
@@ -107,7 +153,16 @@ export function AdminTopbar({ onMenuClick, user }: { onMenuClick: () => void; us
           />
         </div>
         <ThemeToggle />
+        <NotificationBell />
         <AccountDropdown user={user} />
+        <button
+          type="button"
+          onClick={onToggleSidebar}
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="hidden size-9 place-items-center rounded-full border border-hairline text-body transition-colors hover:bg-surface hover:text-ink lg:grid"
+        >
+          {collapsed ? <PanelLeftOpen className="size-4.5" /> : <PanelLeftClose className="size-4.5" />}
+        </button>
       </div>
     </header>
   );

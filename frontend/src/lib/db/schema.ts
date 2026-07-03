@@ -129,6 +129,21 @@ export const invoiceItem = pgTable(
   (t) => [index("invoice_item_invoice_idx").on(t.invoiceId)]
 );
 
+/**
+ * Singleton org settings (id = "default"). Powers the invoice issuer / bank
+ * details shown on invoices & receipts, editable from admin Settings.
+ */
+export const orgSettings = pgTable("org_settings", {
+  id: text("id").primaryKey(), // always "default"
+  bankName: text("bank_name"),
+  accountName: text("account_name"),
+  accountNumber: text("account_number"),
+  invoiceFromEmail: text("invoice_from_email"),
+  invoiceTerms: text("invoice_terms"),
+  updatedAt: updatedAt(),
+});
+
 export type Client = typeof client.$inferSelect;
 export type Invoice = typeof invoice.$inferSelect;
 export type InvoiceItem = typeof invoiceItem.$inferSelect;
+export type OrgSettings = typeof orgSettings.$inferSelect;

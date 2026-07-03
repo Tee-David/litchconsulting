@@ -6,7 +6,11 @@ import path from "node:path";
 // Resolve the CockroachDB CA cert: inline env PEM → committed file → the
 // default `~/.postgresql/root.crt` written by the cluster's download command.
 function ca(): string | undefined {
-  const env = process.env.COCKROACH_CA_CERT || process.env.COCKROACH_CERT;
+  const env =
+    process.env.COCKROACH_CA_CERT ||
+    process.env.COCKROACH_CERT ||
+    process.env.COCKROACHDB_CERT ||
+    process.env.COCKROACHDB_CA_CERT;
   if (env && env.includes("BEGIN CERTIFICATE")) return env;
   for (const f of [
     path.join(process.cwd(), "certs", "cockroach-ca.crt"),

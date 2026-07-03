@@ -4,19 +4,59 @@ import type { InvoiceData } from "@/lib/invoice/types";
 
 const BRAND = "#0a196d";
 
+const STATUS_STAMP: Record<string, { label: string; color: string }> = {
+  paid: { label: "PAID", color: "#16a34a" },
+  sent: { label: "UNPAID", color: "#d97706" },
+  overdue: { label: "OVERDUE", color: "#dc2626" },
+  draft: { label: "DRAFT", color: "#8a92a6" },
+  void: { label: "VOID", color: "#8a92a6" },
+};
+
 /**
  * On-screen invoice — an always-"paper" document (white, dark ink) so it reads
  * the same in light/dark and mirrors the branded PDF. Shared by the builder's
- * live preview, the admin view page and the public pay page.
+ * live preview, the admin view page and the public pay page. A faint centred
+ * favicon watermark + a status stamp brand every page.
  */
 export function InvoicePreview({ data }: { data: InvoiceData }) {
   const totals = computeTotals(data.items);
   const fmt = (n: number) => formatMoney(n, data.currency);
+  const stamp = STATUS_STAMP[data.status];
 
   return (
-    <div className="mx-auto w-full max-w-3xl rounded-card border border-hairline bg-white p-6 text-[#0a0e1a] shadow-sm sm:p-9">
+    <div className="relative mx-auto w-full max-w-3xl overflow-hidden rounded-card border border-hairline bg-white p-6 text-[#0a0e1a] shadow-sm sm:p-9">
+      {/* Centered favicon watermark (brand-tinted, faint) */}
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <span
+          className="block aspect-square w-[60%] max-w-[360px] opacity-[0.045]"
+          style={{
+            backgroundColor: BRAND,
+            WebkitMaskImage: "url(/brand/litch-mark.svg)",
+            maskImage: "url(/brand/litch-mark.svg)",
+            WebkitMaskSize: "contain",
+            maskSize: "contain",
+            WebkitMaskRepeat: "no-repeat",
+            maskRepeat: "no-repeat",
+            WebkitMaskPosition: "center",
+            maskPosition: "center",
+          }}
+        />
+      </div>
+
+      {/* Status stamp */}
+      {stamp && (
+        <div className="pointer-events-none absolute right-5 top-[4.5rem] -rotate-12 sm:right-10 sm:top-24">
+          <span
+            className="inline-block rounded-lg border-[3px] px-3 py-0.5 font-display text-xl font-black uppercase tracking-wider opacity-70 sm:text-2xl"
+            style={{ color: stamp.color, borderColor: stamp.color }}
+          >
+            {stamp.label}
+          </span>
+        </div>
+      )}
+
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="relative flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-lg font-bold" style={{ color: BRAND }}>
             {issuer.name}
@@ -123,8 +163,22 @@ export function InvoicePreview({ data }: { data: InvoiceData }) {
         </a>
       )}
 
+      {/* Signature */}
+      <div className="relative mt-8 flex justify-end">
+        <div className="text-center">
+          <p
+            className="text-2xl leading-none text-[#0a0e1a]"
+            style={{ fontFamily: "'Segoe Script','Brush Script MT',cursive", fontStyle: "italic" }}
+          >
+            Litch Consulting
+          </p>
+          <div className="mx-auto mt-1.5 w-44 border-t border-[#0a0e1a]" />
+          <p className="mt-1.5 text-xs text-[#8a92a6]">Authorised signatory</p>
+        </div>
+      </div>
+
       {/* Payment details + notes */}
-      <div className="mt-7 grid gap-6 border-t border-[#e6e8f0] pt-5 text-sm sm:grid-cols-2">
+      <div className="relative mt-7 grid gap-6 border-t border-[#e6e8f0] pt-5 text-sm sm:grid-cols-2">
         <div>
           <p className="font-semibold">Payment details</p>
           <p className="mt-1 text-[#5b6474]">Bank: {issuer.bank.name}</p>

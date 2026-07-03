@@ -1,8 +1,8 @@
-import Link from "next/link";
-import { Users, Plus } from "lucide-react";
+import { Users } from "lucide-react";
 import { listClients } from "@/lib/db/queries/clients";
 import { PageHeader } from "@/components/admin/ui/page-header";
 import { EmptyState } from "@/components/admin/ui/empty-state";
+import { NewClientButton } from "@/components/admin/client/new-client-button";
 
 export const dynamic = "force-dynamic";
 
@@ -11,20 +11,15 @@ export default async function ClientsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Clients" description="Your bill-to directory. New clients added from the invoice builder appear here.">
-        <Link
-          href="/admin/finance/invoices/new"
-          className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
-        >
-          <Plus className="size-4" /> New invoice
-        </Link>
+      <PageHeader title="Clients" description="Your client directory — add new clients and bill them on invoices.">
+        <NewClientButton />
       </PageHeader>
 
       {clients.length === 0 ? (
         <EmptyState
           icon={Users}
           title="No clients yet"
-          description="Clients are created automatically when you add a bill-to on an invoice. Full client profiles, documents and activity land here next."
+          description="Add your first client with the New client button. Clients you bill on invoices also appear here automatically."
         />
       ) : (
         <div className="overflow-x-auto rounded-card border border-hairline bg-paper">
