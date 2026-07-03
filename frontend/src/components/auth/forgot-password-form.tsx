@@ -5,8 +5,10 @@ import Link from "next/link";
 import { MailCheck } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { FloatingInput } from "./ui";
+import { useToast } from "@/components/admin/ui/toaster";
 
 export function ForgotPasswordForm() {
+  const toast = useToast();
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -22,9 +24,12 @@ export function ForgotPasswordForm() {
     });
     setLoading(false);
     if (error) {
-      setError(error.message || "Something went wrong. Please try again.");
+      const msg = error.message || "Something went wrong. Please try again.";
+      setError(msg);
+      toast.error(msg);
       return;
     }
+    toast.success("Reset link sent — check your email.");
     setSent(true);
   }
 
@@ -61,6 +66,7 @@ export function ForgotPasswordForm() {
           id="email"
           label="Email"
           type="email"
+          placeholder="you@company.com"
           autoComplete="email"
           required
           value={email}

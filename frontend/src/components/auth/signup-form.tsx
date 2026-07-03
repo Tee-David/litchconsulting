@@ -8,8 +8,10 @@ import { isDisposableEmail } from "@/lib/block-disposable-email";
 import { FloatingInput, OrDivider, GoogleButton } from "./ui";
 import { PasswordStrength } from "./password-strength";
 import { PasswordConfirmInput } from "./password-confirm-input";
+import { useToast } from "@/components/admin/ui/toaster";
 
 export function SignupForm() {
+  const toast = useToast();
   const params = useSearchParams();
   const redirectParam = params.get("redirect");
   const redirectTo = redirectParam && redirectParam.startsWith("/") ? redirectParam : "/dashboard";
@@ -34,9 +36,12 @@ export function SignupForm() {
     const { error } = await signUp.email({ name: name.trim(), email, password });
     setLoading(false);
     if (error) {
-      setError(error.message || "Could not create your account.");
+      const msg = error.message || "Could not create your account.";
+      setError(msg);
+      toast.error(msg);
       return;
     }
+    toast.success("Account created — redirecting…");
     window.location.href = redirectTo;
   }
 
@@ -55,6 +60,7 @@ export function SignupForm() {
         <FloatingInput
           id="name"
           label="Full name"
+          placeholder="e.g. Adaeze Okafor"
           autoComplete="name"
           required
           value={name}
@@ -64,6 +70,7 @@ export function SignupForm() {
           id="email"
           label="Email"
           type="email"
+          placeholder="you@company.com"
           autoComplete="email"
           required
           value={email}
@@ -74,6 +81,7 @@ export function SignupForm() {
             id="password"
             label="Password"
             type="password"
+            placeholder="Create a strong password"
             autoComplete="new-password"
             required
             value={password}

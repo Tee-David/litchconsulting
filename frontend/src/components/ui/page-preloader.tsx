@@ -31,7 +31,7 @@ export function PagePreloader() {
     try {
       sessionStorage.setItem(KEY, "1");
     } catch {}
-    const t = setTimeout(() => setVisible(false), 3200);
+    const t = setTimeout(() => setVisible(false), 3000);
     return () => clearTimeout(t);
   }, []);
 

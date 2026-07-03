@@ -47,7 +47,7 @@ export function BrandPanel() {
           <ThemeToggle />
         </div>
 
-        <figure className="max-w-sm">
+        <figure>
           <AnimatePresence mode="wait">
             <motion.blockquote
               key={i}

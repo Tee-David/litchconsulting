@@ -26,7 +26,7 @@ export function PreloaderOverlay() {
           className="flex justify-end overflow-hidden"
           initial={{ width: 0 }}
           animate={{ width: 160 }}
-          transition={{ ...spring, delay: 0.12 }}
+          transition={{ ...spring, delay: 0.05 }}
         >
           <motion.span
             className="pr-3.5"

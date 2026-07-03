@@ -6,8 +6,10 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { CheckCircle2 } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { FloatingInput } from "./ui";
+import { useToast } from "@/components/admin/ui/toaster";
 
 export function ResetPasswordForm() {
+  const toast = useToast();
   const params = useSearchParams();
   const router = useRouter();
   const token = params.get("token");
@@ -40,9 +42,12 @@ export function ResetPasswordForm() {
     const { error } = await authClient.resetPassword({ newPassword: password, token });
     setLoading(false);
     if (error) {
-      setError(error.message || "Could not reset password. Request a new link.");
+      const msg = error.message || "Could not reset password. Request a new link.";
+      setError(msg);
+      toast.error(msg);
       return;
     }
+    toast.success("Password updated — redirecting to sign in…");
     setDone(true);
     setTimeout(() => router.push("/login"), 1600);
   }
@@ -86,6 +91,7 @@ export function ResetPasswordForm() {
           id="password"
           label="New password"
           type="password"
+          placeholder="Create a strong password"
           autoComplete="new-password"
           required
           value={password}
@@ -95,6 +101,7 @@ export function ResetPasswordForm() {
           id="confirm"
           label="Confirm password"
           type="password"
+          placeholder="Re-enter your password"
           autoComplete="new-password"
           required
           value={confirm}

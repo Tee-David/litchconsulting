@@ -5,14 +5,17 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { signIn } from "@/lib/auth-client";
 import { FloatingInput, OrDivider, GoogleButton } from "./ui";
+import { useToast } from "@/components/admin/ui/toaster";
 
 export function LoginForm() {
+  const toast = useToast();
   const params = useSearchParams();
   const redirectParam = params.get("redirect");
   const redirectTo = redirectParam && redirectParam.startsWith("/") ? redirectParam : "/dashboard";
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -20,12 +23,15 @@ export function LoginForm() {
     e.preventDefault();
     setError(null);
     setLoading(true);
-    const { error } = await signIn.email({ email, password });
+    const { error } = await signIn.email({ email, password, rememberMe: remember });
     setLoading(false);
     if (error) {
-      setError(error.message || "Invalid email or password.");
+      const msg = error.message || "Invalid email or password.";
+      setError(msg);
+      toast.error(msg);
       return;
     }
+    toast.success("Signed in — redirecting…");
     // Hard navigation so the fresh session cookie is included on the next request.
     window.location.href = redirectTo;
   }
@@ -44,6 +50,7 @@ export function LoginForm() {
           id="email"
           label="Email"
           type="email"
+          placeholder="you@company.com"
           autoComplete="email"
           required
           value={email}
@@ -53,13 +60,23 @@ export function LoginForm() {
           id="password"
           label="Password"
           type="password"
+          placeholder="Enter your password"
           autoComplete="current-password"
           required
           value={password}
           onChange={(e) => setPassword(e.target.value)}
         />
 
-        <div className="flex justify-end">
+        <div className="flex items-center justify-between">
+          <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-body">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              className="size-4 rounded accent-brand"
+            />
+            Remember me
+          </label>
           <Link href="/forgot-password" className="text-xs font-semibold text-brand hover:underline">
             Forgot password?
           </Link>
