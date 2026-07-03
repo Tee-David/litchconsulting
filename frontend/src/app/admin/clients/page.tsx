@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Users } from "lucide-react";
 import { listClients } from "@/lib/db/queries/clients";
 import { PageHeader } from "@/components/admin/ui/page-header";
@@ -34,9 +35,11 @@ export default async function ClientsPage() {
             </thead>
             <tbody>
               {clients.map((c) => (
-                <tr key={c.id} className="border-b border-hairline last:border-0">
+                <tr key={c.id} className="border-b border-hairline last:border-0 transition-colors hover:bg-surface">
                   <td className="px-4 py-3">
-                    <p className="font-semibold text-ink">{c.company || c.name}</p>
+                    <Link href={`/admin/clients/${c.id}`} className="font-semibold text-ink hover:text-brand">
+                      {c.company || c.name}
+                    </Link>
                     {c.company && c.name && <p className="text-xs text-muted">{c.name}</p>}
                   </td>
                   <td className="px-4 py-3 text-body">{c.email || "—"}</td>
