@@ -1,12 +1,10 @@
-import { Calculator } from "lucide-react";
-import { EmptyState } from "@/components/admin/ui/empty-state";
+import { CalculatorsView } from "@/components/admin/finance/calculators-view";
 
 export default function CalculatorsPage() {
   return (
-    <EmptyState
-      icon={Calculator}
-      title="Financial calculators are coming next"
-      description="Tax, VAT, loan and budgeting calculators your team (and clients) can use — matching the public-site tools."
-    />
+    <div className="space-y-4">
+      <p className="text-sm text-body">Quick financial calculators for VAT, loan repayments and savings goals.</p>
+      <CalculatorsView />
+    </div>
   );
 }
