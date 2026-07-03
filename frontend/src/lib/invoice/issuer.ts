@@ -18,6 +18,8 @@ export const issuer = {
   },
 };
 
+export type Issuer = typeof issuer;
+
 /** Default payment terms line shown on invoices. */
 export const DEFAULT_TERMS =
   "Payment is due within 14 days of the issue date. Thank you for your business.";

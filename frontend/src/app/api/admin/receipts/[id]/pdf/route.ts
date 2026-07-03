@@ -2,6 +2,7 @@ import { isAdmin } from "@/lib/server-user";
 import { getInvoice } from "@/lib/db/queries/invoices";
 import { toInvoiceData } from "@/lib/invoice/map";
 import { renderInvoicePdf } from "@/lib/invoice/pdf/render";
+import { getIssuer } from "@/lib/invoice/get-issuer";
 
 export const runtime = "nodejs";
 
@@ -11,7 +12,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const data = await getInvoice(id);
   if (!data) return new Response("Not found", { status: 404 });
 
-  const pdf = await renderInvoicePdf(toInvoiceData(data.invoice, data.items), "receipt");
+  const issuer = await getIssuer();
+  const pdf = await renderInvoicePdf(toInvoiceData(data.invoice, data.items), "receipt", issuer);
   return new Response(new Uint8Array(pdf), {
     headers: {
       "Content-Type": "application/pdf",

@@ -4,13 +4,14 @@ import { ArrowLeft } from "lucide-react";
 import { getInvoice } from "@/lib/db/queries/invoices";
 import { listClients } from "@/lib/db/queries/clients";
 import { toInvoiceInput } from "@/lib/invoice/map";
+import { getIssuer } from "@/lib/invoice/get-issuer";
 import { InvoiceBuilder } from "@/components/admin/invoice/invoice-builder";
 
 export const dynamic = "force-dynamic";
 
 export default async function EditInvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [data, clients] = await Promise.all([getInvoice(id), listClients()]);
+  const [data, clients, issuer] = await Promise.all([getInvoice(id), listClients(), getIssuer()]);
   if (!data) notFound();
   const initial = toInvoiceInput(data.invoice, data.items);
 
@@ -20,7 +21,7 @@ export default async function EditInvoicePage({ params }: { params: Promise<{ id
         <ArrowLeft className="size-4" /> Back to invoice
       </Link>
       <h2 className="font-display text-lg font-bold text-ink">Edit {initial.number}</h2>
-      <InvoiceBuilder initial={initial} clients={clients} defaultNumber={initial.number} />
+      <InvoiceBuilder initial={initial} clients={clients} defaultNumber={initial.number} issuer={issuer} />
     </div>
   );
 }

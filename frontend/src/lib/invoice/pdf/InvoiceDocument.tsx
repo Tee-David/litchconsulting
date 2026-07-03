@@ -1,7 +1,7 @@
 import path from "node:path";
 import { Document, Page, View, Text, StyleSheet, Link, Svg, Path, Font } from "@react-pdf/renderer";
 import { computeTotals, formatMoney } from "@/lib/invoice/money";
-import { issuer } from "@/lib/invoice/issuer";
+import { issuer as defaultIssuer, type Issuer } from "@/lib/invoice/issuer";
 import type { InvoiceData } from "@/lib/invoice/types";
 
 // Noto Sans supports the Naira (₦) and other currency glyphs that the built-in
@@ -68,9 +68,11 @@ const s = StyleSheet.create({
 export function InvoiceDocument({
   data,
   variant = "invoice",
+  issuer = defaultIssuer,
 }: {
   data: InvoiceData;
   variant?: "invoice" | "receipt";
+  issuer?: Issuer;
 }) {
   const isReceipt = variant === "receipt";
   const totals = computeTotals(data.items);
@@ -84,8 +86,8 @@ export function InvoiceDocument({
       <Page size="A4" style={s.page}>
         {/* Favicon watermark on every page */}
         <View fixed style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
-          <Svg width={300} height={300} viewBox="0 0 235 234">
-            <Path d={MARK} fill={BRAND} fillOpacity={0.045} />
+          <Svg width={330} height={330} viewBox="0 0 235 234" style={{ opacity: 0.04 }}>
+            <Path d={MARK} fill={BRAND} />
           </Svg>
         </View>
 

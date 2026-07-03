@@ -40,6 +40,12 @@ const STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS "invoice_client_idx" ON "invoice" ("client_id")`,
   `CREATE INDEX IF NOT EXISTS "invoice_created_idx" ON "invoice" ("created_at")`,
   `CREATE INDEX IF NOT EXISTS "invoice_item_invoice_idx" ON "invoice_item" ("invoice_id")`,
+  `CREATE TABLE IF NOT EXISTS "org_settings" (
+    "id" text PRIMARY KEY,
+    "company_name" text, "logo_url" text,
+    "bank_name" text, "account_name" text, "account_number" text,
+    "invoice_from_email" text, "default_currency" text, "invoice_terms" text,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL)`,
 ];
 
 async function main() {

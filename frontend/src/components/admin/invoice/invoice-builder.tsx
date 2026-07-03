@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Plus, Trash2, Save, Send, Download, Eye, PenLine, Loader2, GripVertical } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CURRENCIES, DEFAULT_CURRENCY, formatMoney, computeTotals } from "@/lib/invoice/money";
-import { DEFAULT_TERMS } from "@/lib/invoice/issuer";
+import { DEFAULT_TERMS, issuer as defaultIssuer, type Issuer } from "@/lib/invoice/issuer";
 import type { InvoiceInput, InvoiceItemData, InvoiceData } from "@/lib/invoice/types";
 import type { ClientRow } from "@/lib/db/queries/clients";
 import { InvoicePreview } from "./invoice-preview";
@@ -24,10 +24,12 @@ export function InvoiceBuilder({
   initial,
   clients,
   defaultNumber,
+  issuer = defaultIssuer,
 }: {
   initial?: InvoiceInput;
   clients: ClientRow[];
   defaultNumber: string;
+  issuer?: Issuer;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -318,7 +320,7 @@ export function InvoiceBuilder({
 
         {/* Live preview */}
         <div className={`min-w-0 lg:sticky lg:top-20 lg:self-start ${mobileView === "form" ? "hidden lg:block" : ""}`}>
-          <InvoicePreview data={data} />
+          <InvoicePreview data={data} issuer={issuer} />
         </div>
       </div>
     </div>

@@ -135,10 +135,13 @@ export const invoiceItem = pgTable(
  */
 export const orgSettings = pgTable("org_settings", {
   id: text("id").primaryKey(), // always "default"
+  companyName: text("company_name"),
+  logoUrl: text("logo_url"),
   bankName: text("bank_name"),
   accountName: text("account_name"),
   accountNumber: text("account_number"),
   invoiceFromEmail: text("invoice_from_email"),
+  defaultCurrency: text("default_currency"),
   invoiceTerms: text("invoice_terms"),
   updatedAt: updatedAt(),
 });

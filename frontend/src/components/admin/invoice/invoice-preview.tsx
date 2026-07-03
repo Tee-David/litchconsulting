@@ -1,5 +1,5 @@
 import { computeTotals, formatMoney } from "@/lib/invoice/money";
-import { issuer } from "@/lib/invoice/issuer";
+import { issuer as defaultIssuer, type Issuer } from "@/lib/invoice/issuer";
 import type { InvoiceData } from "@/lib/invoice/types";
 
 const BRAND = "#0a196d";
@@ -18,7 +18,7 @@ const STATUS_STAMP: Record<string, { label: string; color: string }> = {
  * live preview, the admin view page and the public pay page. A faint centred
  * favicon watermark + a status stamp brand every page.
  */
-export function InvoicePreview({ data }: { data: InvoiceData }) {
+export function InvoicePreview({ data, issuer = defaultIssuer }: { data: InvoiceData; issuer?: Issuer }) {
   const totals = computeTotals(data.items);
   const fmt = (n: number) => formatMoney(n, data.currency);
   const stamp = STATUS_STAMP[data.status];

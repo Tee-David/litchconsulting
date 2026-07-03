@@ -192,7 +192,8 @@ export async function sendInvoiceAction(id: string): Promise<ActionResult> {
 
   const { renderInvoicePdf } = await import("@/lib/invoice/pdf/render");
   const { sendEmail, emailLayout } = await import("@/lib/email");
-  const pdf = await renderInvoicePdf(invoiceData);
+  const { getIssuer } = await import("@/lib/invoice/get-issuer");
+  const pdf = await renderInvoicePdf(invoiceData, "invoice", await getIssuer());
 
   const payHref = inv.paymentUrl || publicLink;
   const html = emailLayout(`

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { getInvoice } from "@/lib/db/queries/invoices";
 import { toInvoiceData } from "@/lib/invoice/map";
+import { getIssuer } from "@/lib/invoice/get-issuer";
 import { InvoicePreview } from "@/components/admin/invoice/invoice-preview";
 import { InvoiceViewActions } from "@/components/admin/invoice/invoice-view-actions";
 import { Badge, invoiceStatusTone } from "@/components/admin/ui/badge";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 export default async function ViewInvoicePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const data = await getInvoice(id);
+  const [data, issuer] = await Promise.all([getInvoice(id), getIssuer()]);
   if (!data) notFound();
   const invoiceData = toInvoiceData(data.invoice, data.items);
 
@@ -27,7 +28,7 @@ export default async function ViewInvoicePage({ params }: { params: Promise<{ id
         </div>
         <InvoiceViewActions id={data.invoice.id} status={data.invoice.status} />
       </div>
-      <InvoicePreview data={invoiceData} />
+      <InvoicePreview data={invoiceData} issuer={issuer} />
     </div>
   );
 }

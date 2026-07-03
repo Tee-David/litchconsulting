@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { CreditCard } from "lucide-react";
 import { getInvoiceByToken } from "@/lib/db/queries/invoices";
 import { toInvoiceData } from "@/lib/invoice/map";
+import { getIssuer } from "@/lib/invoice/get-issuer";
 import { InvoicePreview } from "@/components/admin/invoice/invoice-preview";
 import { Logo } from "@/components/ui/logo";
 import { formatMoney, computeTotals } from "@/lib/invoice/money";
@@ -12,7 +13,7 @@ export const metadata: Metadata = { title: "Invoice", robots: { index: false, fo
 
 export default async function PublicInvoicePage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const data = await getInvoiceByToken(token);
+  const [data, issuer] = await Promise.all([getInvoiceByToken(token), getIssuer()]);
   if (!data) notFound();
 
   const invoiceData = toInvoiceData(data.invoice, data.items);
@@ -55,7 +56,7 @@ export default async function PublicInvoicePage({ params }: { params: Promise<{ 
           )}
         </div>
 
-        <InvoicePreview data={invoiceData} />
+        <InvoicePreview data={invoiceData} issuer={issuer} />
 
         <p className="mt-6 text-center text-xs text-muted">
           Powered by Litch Consulting · Questions? Reply to the email this invoice came from.
