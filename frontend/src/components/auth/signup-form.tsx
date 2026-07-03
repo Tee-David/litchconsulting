@@ -41,8 +41,8 @@ export function SignupForm() {
       toast.error(msg);
       return;
     }
-    toast.success("Account created — redirecting…");
-    window.location.href = redirectTo;
+    toast.success("Account created — check your email to verify.");
+    window.location.href = "/verify-email";
   }
 
   function google() {

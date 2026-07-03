@@ -70,6 +70,21 @@ function brandButton(href: string, label: string): string {
   return `<a href="${href}" style="display:inline-block;background:#0a196d;color:#ffffff;text-decoration:none;font-weight:600;font-size:14px;padding:12px 22px;border-radius:9999px;">${label}</a>`;
 }
 
+export async function sendVerificationEmail(to: string, url: string) {
+  const html = emailLayout(`
+    <p style="margin:0 0 14px;">Welcome to Litch Consulting 👋</p>
+    <p style="margin:0 0 20px;">Confirm your email address to secure your account and unlock your client portal.</p>
+    <p style="margin:0 0 22px;">${brandButton(url, "Verify email")}</p>
+    <p style="margin:0;color:#5b6474;font-size:13px;">If you didn't create an account, you can ignore this email.</p>
+  `);
+  return sendEmail({
+    to,
+    subject: "Verify your Litch Consulting email",
+    html,
+    text: `Verify your Litch Consulting email: ${url}`,
+  });
+}
+
 export async function sendPasswordResetEmail(to: string, url: string) {
   const html = emailLayout(`
     <p style="margin:0 0 14px;">Hi,</p>

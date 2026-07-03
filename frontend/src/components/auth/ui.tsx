@@ -33,7 +33,7 @@ export function FloatingInput({
       />
       <label
         htmlFor={id}
-        className="pointer-events-none absolute left-3.5 top-2 text-[11px] font-medium text-muted transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:text-sm peer-focus:top-2 peer-focus:translate-y-0 peer-focus:text-[11px] peer-focus:text-brand"
+        className="pointer-events-none absolute left-3.5 top-2 text-[11px] font-medium text-muted transition-all peer-placeholder-shown:top-1/2 peer-placeholder-shown:-translate-y-1/2 peer-placeholder-shown:text-sm peer-focus:top-2 peer-focus:translate-y-0 peer-focus:text-[11px] peer-focus:text-brand dark:peer-focus:text-white"
       >
         {label}
       </label>

@@ -62,6 +62,16 @@ export const auth = betterAuth({
       await sendPasswordResetEmail(user.email, url);
     },
   },
+  emailVerification: {
+    // A verification email is sent on sign-up, but verification is not required
+    // to log in (so existing/seeded accounts aren't locked out).
+    sendOnSignUp: true,
+    autoSignInAfterVerification: true,
+    sendVerificationEmail: async ({ user, url }) => {
+      const { sendVerificationEmail } = await import("./email");
+      await sendVerificationEmail(user.email, url);
+    },
+  },
   socialProviders: googleEnabled
     ? { google: { clientId: googleId!, clientSecret: googleSecret! } }
     : {},
