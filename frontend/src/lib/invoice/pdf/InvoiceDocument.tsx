@@ -86,8 +86,10 @@ export function InvoiceDocument({
       <Page size="A4" style={s.page}>
         {/* Favicon watermark on every page */}
         <View fixed style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
-          <Svg width={330} height={330} viewBox="0 0 235 234" style={{ opacity: 0.04 }}>
-            <Path d={MARK} fill={BRAND} />
+          {/* react-pdf rasterises fill/opacity unreliably, so use a solid faint
+              tint (matches the preview's navy-at-~4.5% watermark) rather than opacity. */}
+          <Svg width={330} height={330} viewBox="0 0 235 234">
+            <Path d={MARK} fill="#f1f3fb" />
           </Svg>
         </View>
 

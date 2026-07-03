@@ -241,8 +241,8 @@ export const StaggeredMenu: React.FC<StaggeredMenuProps> = ({
                   const cls =
                     "flex w-full items-center justify-center rounded-full px-5 py-3 text-sm font-semibold transition-colors " +
                     (a.variant === "outline"
-                      ? "border border-white/25 text-white hover:bg-white/10"
-                      : "keep-brand bg-white text-brand hover:bg-white/90");
+                      ? "border border-hairline text-ink hover:bg-surface"
+                      : "bg-brand text-white hover:bg-brand-hover dark:bg-highlight dark:hover:bg-highlight/90");
                   return a.link ? (
                     <Link key={a.label} href={a.link} className={cls} onClick={closeMenu}>
                       {a.label}
