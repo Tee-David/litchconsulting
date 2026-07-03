@@ -9,6 +9,13 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "images.unsplash.com" },
     ],
   },
+  // Ship the invoice PDF fonts (Noto Sans, for the ₦ glyph) with the serverless
+  // functions that render PDFs, so they resolve at runtime on Vercel.
+  outputFileTracingIncludes: {
+    "/api/admin/invoices/**": ["./src/lib/invoice/pdf/fonts/**"],
+    "/api/admin/receipts/**": ["./src/lib/invoice/pdf/fonts/**"],
+    "/admin/finance/**": ["./src/lib/invoice/pdf/fonts/**"],
+  },
 };
 
 export default nextConfig;

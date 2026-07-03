@@ -48,6 +48,10 @@ export const metadata: Metadata = {
     description: site.description,
   },
   robots: { index: true, follow: true },
+  icons: {
+    icon: "/icon.svg",
+    apple: "/app-icon.svg",
+  },
 };
 
 export default function RootLayout({

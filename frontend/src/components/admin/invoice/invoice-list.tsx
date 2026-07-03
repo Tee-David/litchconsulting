@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -25,17 +26,41 @@ const STATUSES = ["all", "draft", "sent", "paid", "overdue", "void"];
 
 function RowActions({ row }: { row: InvoiceRow }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const toast = useToast();
 
   useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
     const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      const t = e.target as Node;
+      if (menuRef.current?.contains(t) || btnRef.current?.contains(t)) return;
+      setOpen(false);
     };
     document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("resize", close);
+    };
+  }, [open]);
+
+  function toggle(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      const width = 180;
+      const height = 268;
+      const top = r.bottom + height > window.innerHeight ? r.top - height - 4 : r.bottom + 6;
+      setPos({ top, left: Math.max(8, r.right - width) });
+    }
+    setOpen((o) => !o);
+  }
 
   async function run(fn: () => Promise<{ ok: boolean; error?: string }>, ok: string) {
     setOpen(false);
@@ -48,43 +73,52 @@ function RowActions({ row }: { row: InvoiceRow }) {
   const item = "flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm text-ink transition-colors hover:bg-surface";
 
   return (
-    <div className="relative" ref={ref} onClick={(e) => e.stopPropagation()}>
+    <>
       <button
+        ref={btnRef}
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={toggle}
         className="grid size-8 place-items-center rounded-lg text-muted transition-colors hover:bg-surface hover:text-ink"
         aria-label="Actions"
       >
         <MoreHorizontal className="size-4" />
       </button>
-      {open && (
-        <div className="absolute right-0 z-30 mt-1 w-44 rounded-xl border border-hairline bg-paper p-1.5 shadow-xl shadow-black/10">
-          <Link href={`/admin/finance/invoices/${row.id}`} className={item}>
-            <Eye className="size-4 text-muted" /> View
-          </Link>
-          <Link href={`/admin/finance/invoices/${row.id}/edit`} className={item}>
-            <PenLine className="size-4 text-muted" /> Edit
-          </Link>
-          <button className={item} onClick={() => run(() => sendInvoiceAction(row.id), "Invoice sent.")}>
-            <Send className="size-4 text-muted" /> Send
-          </button>
-          <button className={item} onClick={() => run(() => setInvoiceStatusAction(row.id, "paid"), "Marked paid.")}>
-            <CheckCircle2 className="size-4 text-muted" /> Mark paid
-          </button>
-          <button className={item} onClick={() => run(() => duplicateInvoiceAction(row.id), "Duplicated.")}>
-            <Copy className="size-4 text-muted" /> Duplicate
-          </button>
-          <button
-            className={`${item} text-red-600`}
-            onClick={() => {
-              if (confirm(`Delete invoice ${row.number}?`)) run(() => deleteInvoiceAction(row.id), "Deleted.");
-            }}
+      {open &&
+        pos &&
+        createPortal(
+          <div
+            ref={menuRef}
+            onClick={(e) => e.stopPropagation()}
+            style={{ position: "fixed", top: pos.top, left: pos.left, width: 180 }}
+            className="z-[100] rounded-xl border border-hairline bg-paper p-1.5 shadow-xl shadow-black/15"
           >
-            <Trash2 className="size-4" /> Delete
-          </button>
-        </div>
-      )}
-    </div>
+            <Link href={`/admin/finance/invoices/${row.id}`} className={item}>
+              <Eye className="size-4 text-muted" /> View
+            </Link>
+            <Link href={`/admin/finance/invoices/${row.id}/edit`} className={item}>
+              <PenLine className="size-4 text-muted" /> Edit
+            </Link>
+            <button className={item} onClick={() => run(() => sendInvoiceAction(row.id), "Invoice sent.")}>
+              <Send className="size-4 text-muted" /> Send
+            </button>
+            <button className={item} onClick={() => run(() => setInvoiceStatusAction(row.id, "paid"), "Marked paid.")}>
+              <CheckCircle2 className="size-4 text-muted" /> Mark paid
+            </button>
+            <button className={item} onClick={() => run(() => duplicateInvoiceAction(row.id), "Duplicated.")}>
+              <Copy className="size-4 text-muted" /> Duplicate
+            </button>
+            <button
+              className={`${item} text-red-600`}
+              onClick={() => {
+                if (confirm(`Delete invoice ${row.number}?`)) run(() => deleteInvoiceAction(row.id), "Deleted.");
+              }}
+            >
+              <Trash2 className="size-4" /> Delete
+            </button>
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 

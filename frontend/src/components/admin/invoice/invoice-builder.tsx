@@ -2,12 +2,14 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Trash2, Save, Send, Download, Eye, PenLine, Loader2 } from "lucide-react";
+import { Plus, Trash2, Save, Send, Download, Eye, PenLine, Loader2, GripVertical } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { CURRENCIES, DEFAULT_CURRENCY, formatMoney, computeTotals } from "@/lib/invoice/money";
 import { DEFAULT_TERMS } from "@/lib/invoice/issuer";
 import type { InvoiceInput, InvoiceItemData, InvoiceData } from "@/lib/invoice/types";
 import type { ClientRow } from "@/lib/db/queries/clients";
 import { InvoicePreview } from "./invoice-preview";
+import { ClientCombobox } from "./client-combobox";
 import { useToast } from "@/components/admin/ui/toaster";
 import { saveInvoiceAction, sendInvoiceAction } from "@/app/admin/finance/invoices/actions";
 
@@ -44,6 +46,8 @@ export function InvoiceBuilder({
   const [paymentUrl, setPaymentUrl] = useState(initial?.paymentUrl ?? "");
   const [busy, setBusy] = useState<"save" | "send" | null>(null);
   const [mobileView, setMobileView] = useState<"form" | "preview">("form");
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const totals = useMemo(() => computeTotals(items), [items]);
 
@@ -81,6 +85,18 @@ export function InvoiceBuilder({
 
   function updateItem(i: number, patch: Partial<InvoiceItemData>) {
     setItems((prev) => prev.map((it, idx) => (idx === i ? { ...it, ...patch } : it)));
+  }
+
+  function reorder(to: number) {
+    setItems((prev) => {
+      if (dragIndex === null || dragIndex === to) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(dragIndex, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+    setDragIndex(null);
+    setDragOverIndex(null);
   }
 
   async function doSave(status = "draft"): Promise<string | undefined> {
@@ -157,7 +173,7 @@ export function InvoiceBuilder({
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Form */}
-        <div className={`space-y-5 ${mobileView === "preview" ? "hidden lg:block" : ""}`}>
+        <div className={`min-w-0 space-y-5 ${mobileView === "preview" ? "hidden lg:block" : ""}`}>
           <div className="rounded-card border border-hairline bg-paper p-5">
             <h3 className="mb-4 font-display text-sm font-bold text-ink">Invoice details</h3>
             <div className="grid grid-cols-2 gap-3">
@@ -196,14 +212,7 @@ export function InvoiceBuilder({
             {clients.length > 0 && (
               <div className="mb-3">
                 <label className={labelCls}>Existing client</label>
-                <select className={inputCls} value={clientId} onChange={(e) => pickClient(e.target.value)}>
-                  <option value="">— Select or enter manually —</option>
-                  {clients.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.company || c.name}
-                    </option>
-                  ))}
-                </select>
+                <ClientCombobox clients={clients} value={clientId} onPick={pickClient} />
               </div>
             )}
             <div className="grid grid-cols-2 gap-3">
@@ -225,8 +234,37 @@ export function InvoiceBuilder({
             </div>
             <div className="space-y-3">
               {items.map((it, i) => (
-                <div key={i} className="rounded-lg border border-hairline p-3">
+                <div
+                  key={i}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    if (dragIndex !== null && dragOverIndex !== i) setDragOverIndex(i);
+                  }}
+                  onDrop={() => reorder(i)}
+                  className={cn(
+                    "rounded-lg border border-hairline p-3 transition-colors",
+                    dragOverIndex === i && dragIndex !== null && "border-brand bg-brand-tint/40",
+                    dragIndex === i && "opacity-50",
+                  )}
+                >
                   <div className="flex items-start gap-2">
+                    <button
+                      type="button"
+                      draggable
+                      onDragStart={(e) => {
+                        setDragIndex(i);
+                        e.dataTransfer.effectAllowed = "move";
+                      }}
+                      onDragEnd={() => {
+                        setDragIndex(null);
+                        setDragOverIndex(null);
+                      }}
+                      title="Drag to reorder"
+                      aria-label="Drag to reorder"
+                      className="mt-1.5 shrink-0 cursor-grab text-muted transition-colors hover:text-ink active:cursor-grabbing"
+                    >
+                      <GripVertical className="size-4" />
+                    </button>
                     <input className={`${inputCls} flex-1`} placeholder="Description" value={it.description} onChange={(e) => updateItem(i, { description: e.target.value })} />
                     <button
                       onClick={() => setItems(items.filter((_, idx) => idx !== i))}
@@ -279,7 +317,7 @@ export function InvoiceBuilder({
         </div>
 
         {/* Live preview */}
-        <div className={`lg:sticky lg:top-20 lg:self-start ${mobileView === "form" ? "hidden lg:block" : ""}`}>
+        <div className={`min-w-0 lg:sticky lg:top-20 lg:self-start ${mobileView === "form" ? "hidden lg:block" : ""}`}>
           <InvoicePreview data={data} />
         </div>
       </div>

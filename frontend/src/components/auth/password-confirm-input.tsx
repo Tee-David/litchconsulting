@@ -87,7 +87,7 @@ export function PasswordConfirmInput({
           value={value}
           onChange={handleChange}
           autoComplete="new-password"
-          className="w-full rounded-xl border-2 bg-white px-3.5 py-2.5 pr-10 text-sm tracking-[0.25em] text-ink placeholder:tracking-normal placeholder:text-muted focus:outline-none dark:bg-white/[0.06] dark:text-white"
+          className="w-full rounded-xl border-2 bg-white px-3.5 py-2.5 pr-10 text-base tracking-[0.25em] text-ink placeholder:tracking-normal placeholder:text-muted focus:outline-none sm:text-sm dark:bg-white/[0.06] dark:text-white"
           animate={{ borderColor }}
           style={{ borderColor }}
         />

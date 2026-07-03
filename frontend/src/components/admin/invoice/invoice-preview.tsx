@@ -24,7 +24,7 @@ export function InvoicePreview({ data }: { data: InvoiceData }) {
   const stamp = STATUS_STAMP[data.status];
 
   return (
-    <div className="relative mx-auto w-full max-w-3xl overflow-hidden rounded-card border border-hairline bg-white p-6 text-[#0a0e1a] shadow-sm sm:p-9">
+    <div className="relative mx-auto w-full max-w-3xl overflow-hidden rounded-card border border-hairline bg-white p-4 text-[#0a0e1a] shadow-sm sm:p-6 md:p-9">
       {/* Centered favicon watermark (brand-tinted, faint) */}
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <span
@@ -70,7 +70,7 @@ export function InvoicePreview({ data }: { data: InvoiceData }) {
           </p>
         </div>
         <div className="text-right">
-          <p className="text-3xl font-extrabold tracking-tight">INVOICE</p>
+          <p className="text-2xl font-extrabold tracking-tight sm:text-3xl">INVOICE</p>
           <span className="ml-auto mt-1.5 block h-[3px] w-16 rounded" style={{ background: BRAND }} />
         </div>
       </div>

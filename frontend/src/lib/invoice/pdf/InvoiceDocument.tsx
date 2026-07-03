@@ -1,7 +1,20 @@
-import { Document, Page, View, Text, StyleSheet, Link, Svg, Path } from "@react-pdf/renderer";
+import path from "node:path";
+import { Document, Page, View, Text, StyleSheet, Link, Svg, Path, Font } from "@react-pdf/renderer";
 import { computeTotals, formatMoney } from "@/lib/invoice/money";
 import { issuer } from "@/lib/invoice/issuer";
 import type { InvoiceData } from "@/lib/invoice/types";
+
+// Noto Sans supports the Naira (₦) and other currency glyphs that the built-in
+// Helvetica lacks — so the PDF renders currency exactly like the on-screen preview.
+const FONT_DIR = path.join(process.cwd(), "src/lib/invoice/pdf/fonts");
+Font.register({
+  family: "NotoSans",
+  fonts: [
+    { src: path.join(FONT_DIR, "NotoSans-Regular.ttf") },
+    { src: path.join(FONT_DIR, "NotoSans-Bold.ttf"), fontWeight: 700 },
+    { src: path.join(FONT_DIR, "NotoSans-Italic.ttf"), fontStyle: "italic" },
+  ],
+});
 
 const BRAND = "#0a196d";
 
@@ -22,33 +35,33 @@ const HAIR = "#e6e8f0";
 const TINT = "#eef1fb";
 
 const s = StyleSheet.create({
-  page: { paddingTop: 44, paddingBottom: 56, paddingHorizontal: 44, fontSize: 9.5, color: INK, fontFamily: "Helvetica" },
+  page: { paddingTop: 44, paddingBottom: 56, paddingHorizontal: 44, fontSize: 9.5, color: INK, fontFamily: "NotoSans" },
   rowBetween: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
-  brand: { fontSize: 16, fontFamily: "Helvetica-Bold", color: BRAND },
+  brand: { fontSize: 16, fontFamily: "NotoSans", fontWeight: 700, color: BRAND },
   issuerMeta: { color: BODY, marginTop: 4, lineHeight: 1.4 },
-  invoiceTitle: { fontSize: 30, fontFamily: "Helvetica-Bold", letterSpacing: 1, color: INK },
+  invoiceTitle: { fontSize: 30, fontFamily: "NotoSans", fontWeight: 700, letterSpacing: 1, color: INK },
   rule: { height: 3, backgroundColor: BRAND, width: 70, marginTop: 6, marginLeft: "auto" },
   metaGrid: { flexDirection: "row", gap: 28, marginTop: 26 },
   metaLabel: { color: BODY, fontSize: 7.5, letterSpacing: 0.8, textTransform: "uppercase" },
-  metaValue: { fontFamily: "Helvetica-Bold", marginTop: 3, fontSize: 10 },
+  metaValue: { fontFamily: "NotoSans", fontWeight: 700, marginTop: 3, fontSize: 10 },
   billBlock: { marginTop: 26 },
   th: { flexDirection: "row", backgroundColor: TINT, paddingVertical: 7, paddingHorizontal: 8, marginTop: 6, borderRadius: 3 },
-  thText: { color: BRAND, fontFamily: "Helvetica-Bold", fontSize: 8, textTransform: "uppercase", letterSpacing: 0.5 },
+  thText: { color: BRAND, fontFamily: "NotoSans", fontWeight: 700, fontSize: 8, textTransform: "uppercase", letterSpacing: 0.5 },
   tr: { flexDirection: "row", paddingVertical: 8, paddingHorizontal: 8, borderBottomWidth: 1, borderBottomColor: HAIR },
   cDesc: { flex: 4 },
   cQty: { flex: 1, textAlign: "right" },
   cRate: { flex: 1.6, textAlign: "right" },
   cTax: { flex: 1, textAlign: "right" },
   cAmt: { flex: 1.6, textAlign: "right" },
-  itemName: { fontFamily: "Helvetica-Bold" },
+  itemName: { fontFamily: "NotoSans", fontWeight: 700 },
   itemDetail: { color: BODY, marginTop: 2, fontSize: 8.5 },
   totals: { marginTop: 14, marginLeft: "auto", width: 240 },
   totalRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 4 },
   grandRow: { flexDirection: "row", justifyContent: "space-between", backgroundColor: BRAND, color: "#fff", paddingVertical: 9, paddingHorizontal: 10, borderRadius: 3, marginTop: 6 },
-  grandText: { color: "#fff", fontFamily: "Helvetica-Bold", fontSize: 11 },
+  grandText: { color: "#fff", fontFamily: "NotoSans", fontWeight: 700, fontSize: 11 },
   payBtn: { marginTop: 18, backgroundColor: BRAND, color: "#fff", paddingVertical: 9, paddingHorizontal: 18, borderRadius: 20, alignSelf: "flex-start", textDecoration: "none" },
   section: { marginTop: 22 },
-  sectionLabel: { fontFamily: "Helvetica-Bold", fontSize: 9, marginBottom: 4 },
+  sectionLabel: { fontFamily: "NotoSans", fontWeight: 700, fontSize: 9, marginBottom: 4 },
   footer: { position: "absolute", bottom: 26, left: 44, right: 44, borderTopWidth: 1, borderTopColor: HAIR, paddingTop: 8, color: BODY, fontSize: 8, flexDirection: "row", justifyContent: "space-between" },
 });
 
@@ -79,7 +92,7 @@ export function InvoiceDocument({
         {/* Status stamp */}
         {stamp ? (
           <View style={{ position: "absolute", top: 96, right: 44, borderWidth: 2, borderColor: stamp.color, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2, transform: "rotate(-12deg)" }}>
-            <Text style={{ color: stamp.color, fontFamily: "Helvetica-Bold", fontSize: 16, letterSpacing: 1, opacity: 0.75 }}>{stamp.label}</Text>
+            <Text style={{ color: stamp.color, fontFamily: "NotoSans", fontWeight: 700, fontSize: 16, letterSpacing: 1, opacity: 0.75 }}>{stamp.label}</Text>
           </View>
         ) : null}
 
@@ -91,7 +104,7 @@ export function InvoiceDocument({
             <Text style={s.issuerMeta}>{issuer.email}</Text>
             <Text style={s.issuerMeta}>{issuer.phone}</Text>
             {isReceipt ? (
-              <Text style={{ marginTop: 8, color: "#16a34a", fontFamily: "Helvetica-Bold" }}>PAID ✓</Text>
+              <Text style={{ marginTop: 8, color: "#16a34a", fontFamily: "NotoSans", fontWeight: 700 }}>PAID ✓</Text>
             ) : null}
           </View>
           <View>
@@ -174,14 +187,14 @@ export function InvoiceDocument({
         {/* Pay button (invoices only) */}
         {!isReceipt && data.paymentUrl ? (
           <Link src={data.paymentUrl} style={s.payBtn}>
-            <Text style={{ color: "#fff", fontFamily: "Helvetica-Bold" }}>Pay this invoice</Text>
+            <Text style={{ color: "#fff", fontFamily: "NotoSans", fontWeight: 700 }}>Pay this invoice</Text>
           </Link>
         ) : null}
 
         {/* Payment details + notes */}
         {/* Signature */}
         <View style={{ marginTop: 26, alignItems: "flex-end" }}>
-          <Text style={{ fontFamily: "Helvetica-Oblique", fontSize: 15, color: INK }}>Litch Consulting</Text>
+          <Text style={{ fontFamily: "NotoSans", fontStyle: "italic", fontSize: 15, color: INK }}>Litch Consulting</Text>
           <View style={{ width: 150, borderTopWidth: 1, borderTopColor: INK, marginTop: 4 }} />
           <Text style={{ color: BODY, fontSize: 8, marginTop: 3 }}>Authorised signatory</Text>
         </View>

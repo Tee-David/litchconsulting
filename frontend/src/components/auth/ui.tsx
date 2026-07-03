@@ -25,7 +25,8 @@ export function FloatingInput({
         className={cn(
           // placeholder is hidden while the label sits centred, and fades in on
           // focus (once the label has floated up) so the two never overlap.
-          "peer w-full rounded-xl border border-hairline bg-white px-3.5 pb-2 pt-5 text-sm text-ink outline-none transition-colors placeholder:text-transparent focus:border-brand focus:ring-2 focus:ring-brand/15 focus:placeholder:text-muted dark:border-white/15 dark:bg-white/[0.06] dark:text-white",
+          // text-base (16px) on mobile prevents iOS Safari from zooming the page on focus.
+          "peer w-full rounded-xl border border-hairline bg-white px-3.5 pb-2 pt-5 text-base text-ink outline-none transition-colors placeholder:text-transparent focus:border-brand focus:ring-2 focus:ring-brand/15 focus:placeholder:text-muted sm:text-sm dark:border-white/15 dark:bg-white/[0.06] dark:text-white",
           isPassword && "pr-11",
           className,
         )}
