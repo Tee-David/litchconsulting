@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getSessionUser } from "@/lib/server-user";
 import { SignOutButton } from "@/components/auth/sign-out-button";
 import { Logo } from "@/components/ui/logo";
+import { InstallPrompt } from "@/components/admin/install-prompt";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +38,7 @@ export default async function DashboardPage() {
           check back soon.
         </p>
       </main>
+      <InstallPrompt />
     </div>
   );
 }

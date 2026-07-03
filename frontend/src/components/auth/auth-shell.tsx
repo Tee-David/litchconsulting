@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { BrandPanel } from "./brand-panel";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { InstallPrompt } from "@/components/admin/install-prompt";
 
 /** Full-bleed split-screen auth: brand panel (left) + form area (right). */
 export function AuthShell({ children }: { children: ReactNode }) {
@@ -14,6 +15,7 @@ export function AuthShell({ children }: { children: ReactNode }) {
         </div>
         <div className="w-full max-w-sm">{children}</div>
       </div>
+      <InstallPrompt />
     </div>
   );
 }

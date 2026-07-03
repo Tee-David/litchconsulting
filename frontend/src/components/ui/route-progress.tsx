@@ -54,12 +54,13 @@ export function RouteProgress() {
   useEffect(() => {
     if (!active) return;
     stopTrickle();
-    setWidth(100);
+    const rafId = requestAnimationFrame(() => setWidth(100));
     doneTimer.current = setTimeout(() => {
       setActive(false);
       setWidth(0);
     }, 350);
     return () => {
+      cancelAnimationFrame(rafId);
       if (doneTimer.current) clearTimeout(doneTimer.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
