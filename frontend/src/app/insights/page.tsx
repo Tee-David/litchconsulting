@@ -8,18 +8,22 @@ import { Section, SectionHeading } from "@/components/ui/primitives";
 import { PageHero } from "@/components/ui/page-hero";
 import { Contact } from "@/components/sections/contact";
 import { insights } from "@/lib/content";
+import { getAllInsights } from "@/lib/insights";
 
 export const metadata: Metadata = {
   title: "Insights",
   description: "Articles on finance, tax updates and business advisory from the team at Litch Consulting.",
 };
 
+export const dynamic = "force-dynamic";
+
 function fmtDate(iso: string) {
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 }
 
-export default function InsightsPage() {
-  const [featured, ...rest] = insights.posts;
+export default async function InsightsPage() {
+  const posts = await getAllInsights();
+  const [featured, ...rest] = posts;
 
   return (
     <>

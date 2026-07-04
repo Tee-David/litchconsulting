@@ -7,11 +7,10 @@ import { Footer } from "@/components/layout/footer";
 import { Section, SectionHeading } from "@/components/ui/primitives";
 import { PageHero } from "@/components/ui/page-hero";
 import { Contact } from "@/components/sections/contact";
-import { insights } from "@/lib/content";
+import { InsightBody } from "@/components/insights/insight-body";
+import { getAllInsights, getInsight } from "@/lib/insights";
 
-export function generateStaticParams() {
-  return insights.posts.map((p) => ({ slug: p.slug }));
-}
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,
@@ -19,14 +18,17 @@ export async function generateMetadata({
   params: Promise<{ slug: string }>;
 }): Promise<Metadata> {
   const { slug } = await params;
-  const post = insights.posts.find((p) => p.slug === slug);
+  const post = await getInsight(slug);
   if (!post) return { title: "Article not found" };
+  const title = post.seoTitle || post.title;
+  const description = post.seoDescription || post.excerpt;
   return {
-    title: post.title,
-    description: post.excerpt,
+    title,
+    description,
+    alternates: { canonical: `/insights/${post.slug}` },
     openGraph: {
-      title: post.title,
-      description: post.excerpt,
+      title,
+      description,
       images: [post.image],
       type: "article",
       publishedTime: post.date,
@@ -45,9 +47,9 @@ export default async function InsightPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const post = insights.posts.find((p) => p.slug === slug);
+  const post = await getInsight(slug);
   if (!post) notFound();
-  const related = insights.posts.filter((p) => p.slug !== slug).slice(0, 3);
+  const related = (await getAllInsights()).filter((p) => p.slug !== slug).slice(0, 3);
 
   return (
     <>
@@ -72,13 +74,7 @@ export default async function InsightPage({
 
             <p className="mt-8 text-xl leading-relaxed text-ink text-pretty">{post.excerpt}</p>
 
-            <div className="mt-6 space-y-6">
-              {post.body.map((para, i) => (
-                <p key={i} className="text-base leading-relaxed text-body">
-                  {para}
-                </p>
-              ))}
-            </div>
+            <InsightBody paragraphs={post.body} className="mt-2" />
 
             <div className="mt-10 rounded-card border border-hairline bg-surface p-6 text-center">
               <p className="font-display text-lg font-bold text-ink">Want this applied to your numbers?</p>

@@ -133,6 +133,34 @@ export const invoiceItem = pgTable(
 );
 
 /**
+ * Blog / Insights posts managed from the admin CMS. Published posts merge with
+ * the curated static posts on the public /insights pages. Body is stored as
+ * plain text (paragraphs separated by blank lines; lightweight markdown).
+ */
+export const post = pgTable(
+  "post",
+  {
+    id: id(),
+    slug: text("slug").notNull().unique(),
+    title: text("title").notNull(),
+    tag: text("tag").notNull().default("Insights"),
+    excerpt: text("excerpt"),
+    coverImage: text("cover_image"),
+    author: text("author").notNull().default("Litch Consulting"),
+    body: text("body").notNull().default(""),
+    status: text("status").notNull().default("draft"), // draft | published
+    seoTitle: text("seo_title"),
+    seoDescription: text("seo_description"),
+    readMins: integer("read_mins").notNull().default(1),
+    createdByUserId: text("created_by_user_id"),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("post_status_idx").on(t.status), index("post_published_idx").on(t.publishedAt)]
+);
+
+/**
  * Business expenses ledger. Income for the P&L is derived from collected
  * invoices; this table records the outgoings so Accounting can show a running
  * profit & loss. Money stored as numeric(14,2), one currency per entry.
@@ -177,4 +205,5 @@ export type Client = typeof client.$inferSelect;
 export type Invoice = typeof invoice.$inferSelect;
 export type InvoiceItem = typeof invoiceItem.$inferSelect;
 export type Expense = typeof expense.$inferSelect;
+export type Post = typeof post.$inferSelect;
 export type OrgSettings = typeof orgSettings.$inferSelect;

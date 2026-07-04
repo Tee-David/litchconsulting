@@ -52,6 +52,18 @@ const STATEMENTS = [
     "updated_at" timestamp with time zone DEFAULT now() NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS "expense_date_idx" ON "expense" ("date")`,
   `CREATE INDEX IF NOT EXISTS "expense_category_idx" ON "expense" ("category")`,
+  `CREATE TABLE IF NOT EXISTS "post" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "slug" text NOT NULL, "title" text NOT NULL, "tag" text DEFAULT 'Insights' NOT NULL,
+    "excerpt" text, "cover_image" text, "author" text DEFAULT 'Litch Consulting' NOT NULL,
+    "body" text DEFAULT '' NOT NULL, "status" text DEFAULT 'draft' NOT NULL,
+    "seo_title" text, "seo_description" text, "read_mins" integer DEFAULT 1 NOT NULL,
+    "created_by_user_id" text, "published_at" timestamp with time zone,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT "post_slug_unique" UNIQUE("slug"))`,
+  `CREATE INDEX IF NOT EXISTS "post_status_idx" ON "post" ("status")`,
+  `CREATE INDEX IF NOT EXISTS "post_published_idx" ON "post" ("published_at")`,
   `CREATE TABLE IF NOT EXISTS "org_settings" (
     "id" text PRIMARY KEY,
     "company_name" text, "logo_url" text,

@@ -1,10 +1,12 @@
 import type { MetadataRoute } from "next";
-import { services, caseStudyDetails, insights, legal } from "@/lib/content";
+import { services, caseStudyDetails, legal } from "@/lib/content";
+import { getAllInsights } from "@/lib/insights";
 
 const base = "https://www.litchconsulting.com";
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date();
+  const insightPosts = await getAllInsights();
 
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: base, lastModified: now, changeFrequency: "weekly", priority: 1 },
@@ -30,7 +32,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     priority: 0.6,
   }));
 
-  const insightRoutes: MetadataRoute.Sitemap = insights.posts.map((p) => ({
+  const insightRoutes: MetadataRoute.Sitemap = insightPosts.map((p) => ({
     url: `${base}/insights/${p.slug}`,
     lastModified: new Date(p.date),
     changeFrequency: "monthly",
