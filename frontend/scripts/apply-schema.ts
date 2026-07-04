@@ -42,6 +42,16 @@ const STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS "invoice_item_invoice_idx" ON "invoice_item" ("invoice_id")`,
   `ALTER TABLE "invoice" ADD COLUMN IF NOT EXISTS "kind" text NOT NULL DEFAULT 'invoice'`,
   `CREATE INDEX IF NOT EXISTS "invoice_kind_idx" ON "invoice" ("kind")`,
+  `CREATE TABLE IF NOT EXISTS "expense" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "date" date NOT NULL, "category" text DEFAULT 'other' NOT NULL,
+    "vendor" text, "description" text,
+    "amount" numeric(14, 2) DEFAULT '0' NOT NULL, "currency" text DEFAULT 'NGN' NOT NULL,
+    "method" text, "reference" text, "created_by_user_id" text,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS "expense_date_idx" ON "expense" ("date")`,
+  `CREATE INDEX IF NOT EXISTS "expense_category_idx" ON "expense" ("category")`,
   `CREATE TABLE IF NOT EXISTS "org_settings" (
     "id" text PRIMARY KEY,
     "company_name" text, "logo_url" text,

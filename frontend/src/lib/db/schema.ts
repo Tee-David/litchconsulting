@@ -133,6 +133,30 @@ export const invoiceItem = pgTable(
 );
 
 /**
+ * Business expenses ledger. Income for the P&L is derived from collected
+ * invoices; this table records the outgoings so Accounting can show a running
+ * profit & loss. Money stored as numeric(14,2), one currency per entry.
+ */
+export const expense = pgTable(
+  "expense",
+  {
+    id: id(),
+    date: date("date").notNull(),
+    category: text("category").notNull().default("other"),
+    vendor: text("vendor"),
+    description: text("description"),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull().default("0"),
+    currency: text("currency").notNull().default("NGN"),
+    method: text("method"), // cash | transfer | card | cheque
+    reference: text("reference"),
+    createdByUserId: text("created_by_user_id"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("expense_date_idx").on(t.date), index("expense_category_idx").on(t.category)]
+);
+
+/**
  * Singleton org settings (id = "default"). Powers the invoice issuer / bank
  * details shown on invoices & receipts, editable from admin Settings.
  */
@@ -152,4 +176,5 @@ export const orgSettings = pgTable("org_settings", {
 export type Client = typeof client.$inferSelect;
 export type Invoice = typeof invoice.$inferSelect;
 export type InvoiceItem = typeof invoiceItem.$inferSelect;
+export type Expense = typeof expense.$inferSelect;
 export type OrgSettings = typeof orgSettings.$inferSelect;
