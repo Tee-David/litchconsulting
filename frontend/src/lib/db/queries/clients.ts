@@ -13,3 +13,32 @@ export async function getClient(id: string): Promise<ClientRow | null> {
   const [c] = await db.select().from(client).where(eq(client.id, id)).limit(1);
   return c ?? null;
 }
+
+export async function getClientForUser(userId: string, email: string, name?: string): Promise<ClientRow> {
+  // 1. Try to find by userId
+  let [c] = await db.select().from(client).where(eq(client.userId, userId)).limit(1);
+  if (c) return c;
+
+  // 2. Try to find by email
+  if (email) {
+    [c] = await db.select().from(client).where(eq(client.email, email)).limit(1);
+    if (c) {
+      // Link the client to the user
+      await db.update(client).set({ userId, updatedAt: new Date() }).where(eq(client.id, c.id));
+      c.userId = userId;
+      return c;
+    }
+  }
+
+  // 3. Create a new client record
+  const [newClient] = await db
+    .insert(client)
+    .values({
+      userId,
+      name: name || "Client",
+      email: email || null,
+    })
+    .returning();
+  return newClient;
+}
+

@@ -1,5 +1,5 @@
 import "server-only";
-import { desc, eq, like } from "drizzle-orm";
+import { desc, eq, like, and } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { invoice, invoiceItem } from "@/lib/db/schema";
 import { num } from "@/lib/invoice/money";
@@ -87,4 +87,51 @@ export async function recentInvoices(limit = 5): Promise<InvoiceRow[]> {
     .where(eq(invoice.kind, "invoice"))
     .orderBy(desc(invoice.createdAt))
     .limit(limit);
+}
+
+/** Invoices and quotes for a specific client. */
+export async function listClientInvoices(clientId: string): Promise<InvoiceRow[]> {
+  return db
+    .select()
+    .from(invoice)
+    .where(eq(invoice.clientId, clientId))
+    .orderBy(desc(invoice.createdAt));
+}
+
+/** Get a client's invoice or quote by ID, with line items. */
+export async function getClientInvoice(id: string, clientId: string) {
+  const [inv] = await db
+    .select()
+    .from(invoice)
+    .where(and(eq(invoice.id, id), eq(invoice.clientId, clientId)))
+    .limit(1);
+  if (!inv) return null;
+  const items = await db
+    .select()
+    .from(invoiceItem)
+    .where(eq(invoiceItem.invoiceId, id))
+    .orderBy(invoiceItem.position);
+  return { invoice: inv, items };
+}
+
+/** KPI aggregates for a client's dashboard. */
+export async function clientInvoiceStats(clientId: string) {
+  const rows = await db
+    .select({ status: invoice.status, total: invoice.total, amountPaid: invoice.amountPaid })
+    .from(invoice)
+    .where(and(eq(invoice.clientId, clientId), eq(invoice.kind, "invoice")));
+  let invoiced = 0,
+    paid = 0,
+    outstanding = 0,
+    overdueCount = 0,
+    draftCount = 0;
+  for (const r of rows) {
+    const total = num(r.total);
+    invoiced += total;
+    if (r.status === "paid") paid += total;
+    if (r.status === "sent" || r.status === "overdue") outstanding += total - num(r.amountPaid);
+    if (r.status === "overdue") overdueCount++;
+    if (r.status === "draft") draftCount++;
+  }
+  return { invoiced, paid, outstanding, overdueCount, draftCount, count: rows.length };
 }

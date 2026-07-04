@@ -5,6 +5,7 @@ const FINANCE_TABS = [
   { label: "Quotes", href: "/admin/finance/quotes" },
   { label: "Receipts", href: "/admin/finance/receipts" },
   { label: "Accounting", href: "/admin/finance/accounting" },
+  { label: "Models", href: "/admin/finance/tools" },
   { label: "Calculators", href: "/admin/finance/calculators" },
 ];
 

@@ -1,5 +1,5 @@
 import "server-only";
-import { asc, desc, eq, like } from "drizzle-orm";
+import { asc, desc, eq, like, and } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { ticket, ticketMessage } from "@/lib/db/schema";
 
@@ -39,4 +39,29 @@ export async function nextTicketNumber(): Promise<string> {
     if (Number.isFinite(n) && n > max) max = n;
   }
   return `TKT-${max + 1}`;
+}
+
+/** All tickets for a specific client, most recently active first. */
+export async function listClientTickets(clientId: string): Promise<TicketRow[]> {
+  return db
+    .select()
+    .from(ticket)
+    .where(eq(ticket.clientId, clientId))
+    .orderBy(desc(ticket.lastReplyAt), desc(ticket.createdAt));
+}
+
+/** Get a ticket details and thread for a client, validating ownership. */
+export async function getClientTicket(id: string, clientId: string) {
+  const [t] = await db
+    .select()
+    .from(ticket)
+    .where(and(eq(ticket.id, id), eq(ticket.clientId, clientId)))
+    .limit(1);
+  if (!t) return null;
+  const messages = await db
+    .select()
+    .from(ticketMessage)
+    .where(eq(ticketMessage.ticketId, id))
+    .orderBy(asc(ticketMessage.createdAt));
+  return { ticket: t, messages };
 }

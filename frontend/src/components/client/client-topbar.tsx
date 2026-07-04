@@ -3,14 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, Search, LogOut, Home, Bell, UserPlus, Send, CheckCircle2, LifeBuoy, MessageSquare } from "lucide-react";
+import { Menu, LogOut, Home, Bell, Send, CheckCircle2, MessageSquare, User, Settings } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { signOut } from "@/lib/auth-client";
-import { activeNavItem } from "./nav";
+import { activeClientNavItem } from "./client-nav";
 import type { NotificationItem } from "@/lib/db/queries/notifications";
 import { cn } from "@/lib/utils";
 
-export type AdminUser = {
+export type ClientUser = {
   name?: string | null;
   email?: string | null;
   image?: string | null;
@@ -19,7 +19,7 @@ export type AdminUser = {
 
 function initialsOf(name?: string | null, email?: string | null) {
   const src = (name || email || "").trim();
-  if (!src) return "A";
+  if (!src) return "C";
   const parts = src.split(/\s+/).filter(Boolean);
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
   return src.slice(0, 2).toUpperCase();
@@ -36,17 +36,14 @@ function timeAgo(iso: string) {
 }
 
 const NOTIF_ICON = { 
-  lead: UserPlus, 
   invoice_sent: Send, 
   invoice_paid: CheckCircle2,
-  ticket_created: LifeBuoy,
   ticket_replied: MessageSquare
 } as const;
 
+const SEEN_KEY = "litch:client-notif-seen";
 
-const SEEN_KEY = "litch:notif-seen";
-
-function NotificationBell({ notifications }: { notifications: NotificationItem[] }) {
+function ClientNotificationBell({ notifications }: { notifications: NotificationItem[] }) {
   const [open, setOpen] = useState(false);
   const [lastSeen, setLastSeen] = useState<number>(0);
   const ref = useRef<HTMLDivElement>(null);
@@ -56,6 +53,7 @@ function NotificationBell({ notifications }: { notifications: NotificationItem[]
       setLastSeen(Number(localStorage.getItem(SEEN_KEY) || 0));
     } catch {}
   }, []);
+  
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
@@ -109,12 +107,12 @@ function NotificationBell({ notifications }: { notifications: NotificationItem[]
           {notifications.length === 0 ? (
             <div className="px-4 py-8 text-center">
               <p className="text-sm text-body">You&rsquo;re all caught up.</p>
-              <p className="mt-1 text-xs text-muted">New activity will show up here.</p>
+              <p className="mt-1 text-xs text-muted">Updates about your invoices or tickets will appear here.</p>
             </div>
           ) : (
             <ul className="max-h-80 divide-y divide-hairline overflow-y-auto">
               {notifications.slice(0, 6).map((n) => {
-                const Icon = NOTIF_ICON[n.type];
+                const Icon = NOTIF_ICON[n.type as keyof typeof NOTIF_ICON] || MessageSquare;
                 return (
                   <li key={n.id}>
                     <Link
@@ -137,11 +135,11 @@ function NotificationBell({ notifications }: { notifications: NotificationItem[]
             </ul>
           )}
           <Link
-            href="/admin/notifications"
+            href="/dashboard/invoices"
             onClick={() => setOpen(false)}
             className="block border-t border-hairline px-4 py-3 text-center text-sm font-medium text-brand transition-colors hover:bg-surface"
           >
-            View all notifications
+            View all invoices
           </Link>
         </div>
       )}
@@ -149,9 +147,10 @@ function NotificationBell({ notifications }: { notifications: NotificationItem[]
   );
 }
 
-function AccountDropdown({ user }: { user: AdminUser }) {
+function ClientAccountDropdown({ user }: { user: ClientUser }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
@@ -178,17 +177,25 @@ function AccountDropdown({ user }: { user: AdminUser }) {
       {open && (
         <div className="absolute right-0 mt-2 w-56 overflow-hidden rounded-2xl border border-hairline bg-paper p-1.5 shadow-xl shadow-black/10">
           <div className="px-3 py-2.5">
-            <p className="truncate text-sm font-semibold text-ink">{user.name || "Admin"}</p>
+            <p className="truncate text-sm font-semibold text-ink">{user.name || "Client"}</p>
             {user.email && <p className="truncate text-xs text-muted">{user.email}</p>}
           </div>
           <div className="my-1 h-px bg-hairline" />
+          <Link
+            href="/dashboard/settings"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-surface"
+          >
+            <Settings className="size-4 text-muted" />
+            Profile Settings
+          </Link>
           <Link
             href="/"
             onClick={() => setOpen(false)}
             className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-surface"
           >
             <Home className="size-4 text-muted" />
-            Back to site
+            Back to website
           </Link>
           <button
             type="button"
@@ -204,17 +211,17 @@ function AccountDropdown({ user }: { user: AdminUser }) {
   );
 }
 
-export function AdminTopbar({
+export function ClientTopbar({
   onMenuClick,
   user,
   notifications,
 }: {
   onMenuClick: () => void;
-  user: AdminUser;
+  user: ClientUser;
   notifications: NotificationItem[];
 }) {
   const pathname = usePathname();
-  const title = activeNavItem(pathname)?.label ?? "Dashboard";
+  const title = activeClientNavItem(pathname)?.label ?? "Portal Dashboard";
 
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-hairline bg-paper/85 px-4 backdrop-blur-md sm:px-6">
@@ -230,20 +237,9 @@ export function AdminTopbar({
       <h1 className="truncate font-display text-base font-bold tracking-tight text-ink sm:text-lg">{title}</h1>
 
       <div className="ml-auto flex items-center gap-2 sm:gap-3">
-        <div className="relative hidden sm:block">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
-          <input
-            type="search"
-            placeholder="Search…"
-            className={cn(
-              "h-9 w-44 rounded-full border border-hairline bg-surface pl-9 pr-3 text-sm text-ink outline-none transition-all",
-              "placeholder:text-muted focus:w-60 focus:border-brand lg:w-56",
-            )}
-          />
-        </div>
         <ThemeToggle />
-        <NotificationBell notifications={notifications} />
-        <AccountDropdown user={user} />
+        <ClientNotificationBell notifications={notifications} />
+        <ClientAccountDropdown user={user} />
       </div>
     </header>
   );
