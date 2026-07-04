@@ -82,6 +82,15 @@ const STATEMENTS = [
     "author_role" text DEFAULT 'agent' NOT NULL, "body" text NOT NULL,
     "created_at" timestamp with time zone DEFAULT now() NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS "ticket_message_ticket_idx" ON "ticket_message" ("ticket_id")`,
+  `CREATE TABLE IF NOT EXISTS "template" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "title" text NOT NULL, "description" text, "category" text DEFAULT 'General' NOT NULL,
+    "file_type" text DEFAULT 'PDF' NOT NULL, "file_url" text NOT NULL, "file_key" text,
+    "size_bytes" integer DEFAULT 0 NOT NULL, "badge" text, "uploaded_by_user_id" text,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS "template_category_idx" ON "template" ("category")`,
+  `CREATE INDEX IF NOT EXISTS "template_created_idx" ON "template" ("created_at")`,
   `CREATE TABLE IF NOT EXISTS "org_settings" (
     "id" text PRIMARY KEY,
     "company_name" text, "logo_url" text,

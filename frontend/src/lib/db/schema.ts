@@ -185,6 +185,30 @@ export const expense = pgTable(
 );
 
 /**
+ * Uploaded template library. Admins import branded/working files (XLSX, DOCX,
+ * PDF, CSV) to R2; these show alongside the curated starter templates and are
+ * really downloadable and shareable.
+ */
+export const template = pgTable(
+  "template",
+  {
+    id: id(),
+    title: text("title").notNull(),
+    description: text("description"),
+    category: text("category").notNull().default("General"),
+    fileType: text("file_type").notNull().default("PDF"), // XLSX | DOCX | PDF | CSV | PPTX | ZIP
+    fileUrl: text("file_url").notNull(),
+    fileKey: text("file_key"),
+    sizeBytes: integer("size_bytes").notNull().default(0),
+    badge: text("badge"), // Popular | New | null
+    uploadedByUserId: text("uploaded_by_user_id"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("template_category_idx").on(t.category), index("template_created_idx").on(t.createdAt)]
+);
+
+/**
  * Support tickets (Help Desk). A ticket has a thread of messages. Requester is
  * captured as a snapshot; optionally linked to a client record.
  */
@@ -247,6 +271,7 @@ export type Invoice = typeof invoice.$inferSelect;
 export type InvoiceItem = typeof invoiceItem.$inferSelect;
 export type Expense = typeof expense.$inferSelect;
 export type Post = typeof post.$inferSelect;
+export type Template = typeof template.$inferSelect;
 export type Ticket = typeof ticket.$inferSelect;
 export type TicketMessage = typeof ticketMessage.$inferSelect;
 export type OrgSettings = typeof orgSettings.$inferSelect;
