@@ -185,6 +185,47 @@ export const expense = pgTable(
 );
 
 /**
+ * Support tickets (Help Desk). A ticket has a thread of messages. Requester is
+ * captured as a snapshot; optionally linked to a client record.
+ */
+export const ticket = pgTable(
+  "ticket",
+  {
+    id: id(),
+    number: text("number").notNull().unique(), // TKT-NNNN
+    subject: text("subject").notNull(),
+    requesterName: text("requester_name"),
+    requesterEmail: text("requester_email"),
+    clientId: uuid("client_id"), // soft ref → client.id
+    // open | pending | resolved | closed
+    status: text("status").notNull().default("open"),
+    // urgent | high | normal | low
+    priority: text("priority").notNull().default("normal"),
+    category: text("category").notNull().default("general"),
+    assignee: text("assignee"),
+    createdByUserId: text("created_by_user_id"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+    lastReplyAt: timestamp("last_reply_at", { withTimezone: true }),
+  },
+  (t) => [index("ticket_status_idx").on(t.status), index("ticket_created_idx").on(t.createdAt)]
+);
+
+/** One message in a ticket thread (from the client or an agent). */
+export const ticketMessage = pgTable(
+  "ticket_message",
+  {
+    id: id(),
+    ticketId: uuid("ticket_id").notNull(), // soft ref → ticket.id
+    authorName: text("author_name"),
+    authorRole: text("author_role").notNull().default("agent"), // client | agent
+    body: text("body").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("ticket_message_ticket_idx").on(t.ticketId)]
+);
+
+/**
  * Singleton org settings (id = "default"). Powers the invoice issuer / bank
  * details shown on invoices & receipts, editable from admin Settings.
  */
@@ -206,4 +247,6 @@ export type Invoice = typeof invoice.$inferSelect;
 export type InvoiceItem = typeof invoiceItem.$inferSelect;
 export type Expense = typeof expense.$inferSelect;
 export type Post = typeof post.$inferSelect;
+export type Ticket = typeof ticket.$inferSelect;
+export type TicketMessage = typeof ticketMessage.$inferSelect;
 export type OrgSettings = typeof orgSettings.$inferSelect;
