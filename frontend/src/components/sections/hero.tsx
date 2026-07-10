@@ -31,14 +31,17 @@ export function Hero() {
       data-hero
       className="relative flex min-h-[100svh] w-full flex-col justify-center overflow-hidden md:justify-end"
     >
-      {/* Background slider */}
+      {/* Background slider — Ken Burns slow zoom-in per slide */}
       <AnimatePresence>
         <motion.div
           key={index}
-          initial={{ opacity: 0, scale: 1.06 }}
-          animate={{ opacity: 1, scale: 1 }}
+          initial={{ opacity: 0, scale: 1 }}
+          animate={{ opacity: 1, scale: 1.1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 1.1, ease: [0.22, 1, 0.36, 1] }}
+          transition={{
+            opacity: { duration: 1.2, ease: [0.22, 1, 0.36, 1] },
+            scale: { duration: ROTATE_MS / 1000 + 1.2, ease: "linear" },
+          }}
           className="absolute inset-0"
         >
           <Image src={slide.image} alt="" fill priority sizes="100vw" className="object-cover" />
