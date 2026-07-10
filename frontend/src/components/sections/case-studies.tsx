@@ -32,7 +32,8 @@ export function CaseStudies() {
             <article
               key={study.title}
               data-card
-              className={`group relative aspect-[3/4] overflow-hidden rounded-hero bg-night ${carouselCardClass}`}
+              tabIndex={0}
+              className={`group relative aspect-[3/4] overflow-hidden rounded-hero bg-night outline-none ${carouselCardClass}`}
             >
               <Image
                 src={study.image}
@@ -57,8 +58,8 @@ export function CaseStudies() {
                 </div>
               </div>
 
-              {/* Hover reveal */}
-              <div className="absolute inset-0 flex translate-y-full flex-col justify-end bg-orange-500 p-6 transition-transform duration-300 ease-out group-hover:translate-y-0">
+              {/* Hover / tap reveal — group-hover for desktop, group-focus-within for touch */}
+              <div className="absolute inset-0 flex translate-y-full flex-col justify-end bg-orange-500 p-6 transition-transform duration-300 ease-out group-hover:translate-y-0 group-focus-within:translate-y-0">
                 <Icon className="size-7 text-white" />
                 <h3 className="mt-4 font-display text-xl font-bold leading-snug text-white">
                   {study.title}

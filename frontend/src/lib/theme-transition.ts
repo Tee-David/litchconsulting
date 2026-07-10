@@ -5,15 +5,15 @@ type VTDocument = Document & {
 /**
  * Theme change with a circle-wipe view transition from the click origin.
  *
- * THE CORE TRICK: do NOT trigger a React re-render inside the
- * startViewTransition callback. Instead, toggle the `.dark` class and
- * `colorScheme` on the DOM directly — this is two microsecond operations that
- * instantly produce the "after" frame. The browser can snapshot it immediately
- * with zero lag. React is synced *after* via setTheme outside the callback.
- *
- * Additionally, we suppress per-element CSS transitions during the swap
- * (the circle-wipe IS the transition, we don't want individual elements
- * fading their backgrounds/colors independently underneath it).
+ * Strategy:
+ * 1. Inject a style that kills per-element CSS transitions (the circle-wipe
+ *    IS the transition; we don't want individual elements fading underneath).
+ * 2. Inside the VT callback, toggle `.dark` + `colorScheme` directly on the
+ *    DOM — two microsecond operations, zero React overhead.
+ * 3. Immediately after, call setTheme() so React re-renders while the wipe
+ *    animation is playing on the compositor thread. The compositor-driven
+ *    clip-path animation is NOT blocked by main-thread React work.
+ * 4. Clean up the transition-suppression style after the wipe finishes.
  */
 export function animateThemeChange(
   theme: "light" | "dark",
@@ -36,24 +36,24 @@ export function animateThemeChange(
   const end = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
   const root = document.documentElement;
 
-  // ── Suppress per-element CSS transitions during the swap ──
-  // Without this, every element with `transition-colors` etc. fires its own
-  // color fade underneath the circle-wipe, causing hundreds of simultaneous
-  // transitions and visible lag.
+  // Suppress per-element CSS transitions during the swap
   const suppress = document.createElement("style");
   suppress.textContent = "*, *::before, *::after { transition-duration: 0s !important; }";
   document.head.appendChild(suppress);
 
   const vt = doc.startViewTransition(() => {
-    // Toggle theme at the DOM level only — no React re-render.
-    // This is instant: just a class toggle + a style attribute.
+    // DOM-only toggle — instant, no React
     root.classList.toggle("dark", theme === "dark");
     root.style.colorScheme = theme;
   });
 
+  // Sync React state NOW while the wipe animation plays.
+  // The clip-path animation runs on the compositor thread, so main-thread
+  // React work doesn't cause any visible jank during the wipe.
+  setTheme(theme);
+
   vt.ready
     .then(() => {
-      // Both snapshots are now taken. Animate the circle-wipe reveal.
       root.animate(
         { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${end}px at ${x}px ${y}px)`] },
         { duration, easing: "cubic-bezier(0.22, 1, 0.36, 1)", pseudoElement: "::view-transition-new(root)" },
@@ -61,16 +61,8 @@ export function animateThemeChange(
     })
     .catch(() => {});
 
-  // Once the transition finishes, sync React state and clean up.
-  // setTheme is deferred so React's re-render happens in the background
-  // AFTER the visual wipe is already playing — no jank.
+  // Clean up once the transition completes
   vt.finished
-    .then(() => {
-      suppress.remove();
-      setTheme(theme);
-    })
-    .catch(() => {
-      suppress.remove();
-      setTheme(theme);
-    });
+    .then(() => suppress.remove())
+    .catch(() => suppress.remove());
 }

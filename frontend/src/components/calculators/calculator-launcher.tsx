@@ -61,11 +61,11 @@ export function CalculatorButton({ className, tone = "dark" }: { className?: str
                   className="absolute inset-0 bg-ink/50 backdrop-blur-sm"
                 />
                 <motion.aside
-                  initial={{ x: "100%" }}
-                  animate={{ x: 0 }}
-                  exit={{ x: "100%" }}
-                  transition={{ type: "tween", duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-                  className="absolute right-0 top-0 flex h-full w-full max-w-2xl flex-col bg-paper shadow-2xl"
+                  initial={{ opacity: 0, scale: 0.97 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.97 }}
+                  transition={{ type: "tween", duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                  className="absolute inset-0 flex flex-col bg-paper"
                 >
                   <div className="flex items-center justify-between border-b border-hairline px-5 py-4">
                     <div className="flex items-center gap-2.5">
@@ -87,11 +87,13 @@ export function CalculatorButton({ className, tone = "dark" }: { className?: str
                     </button>
                   </div>
                   <div className="flex-1 overflow-y-auto p-5">
+                    <div className="mx-auto w-full max-w-4xl">
                     {active ? (
                       <CalculatorShell calcKey={active} onBack={() => setActive(null)} />
                     ) : (
                       <CalculatorHub onSelect={setActive} />
                     )}
+                    </div>
                   </div>
                 </motion.aside>
               </div>
