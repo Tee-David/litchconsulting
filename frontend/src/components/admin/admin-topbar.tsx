@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, Search, LogOut, Home, Bell, UserPlus, Send, CheckCircle2, LifeBuoy, MessageSquare } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { CalculatorButton } from "@/components/calculators/calculator-launcher";
 import { signOut } from "@/lib/auth-client";
 import { activeNavItem } from "./nav";
 import type { NotificationItem } from "@/lib/db/queries/notifications";
@@ -241,6 +242,7 @@ export function AdminTopbar({
             )}
           />
         </div>
+        <CalculatorButton tone="dark" className="size-9 border border-hairline" />
         <ThemeToggle />
         <NotificationBell notifications={notifications} />
         <AccountDropdown user={user} />

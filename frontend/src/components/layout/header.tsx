@@ -7,6 +7,7 @@ import { LogOut, LayoutDashboard } from "lucide-react";
 import { Logo, LogoMark } from "@/components/ui/logo";
 import { Button } from "@/components/ui/primitives";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { CalculatorButton } from "@/components/calculators/calculator-launcher";
 import StaggeredMenu from "@/components/ui/StaggeredMenu";
 import { useSession, signOut } from "@/lib/auth-client";
 import { site } from "@/lib/content";
@@ -119,7 +120,10 @@ export function Header({ overlay = false }: { overlay?: boolean }) {
     };
   }, [overlay]);
 
-  const mobileItems = site.nav.map((n) => ({ label: n.label, link: n.href, ariaLabel: n.label }));
+  const mobileItems = [
+    ...site.nav.map((n) => ({ label: n.label, link: n.href, ariaLabel: n.label })),
+    { label: "Calculators", link: "/calculators", ariaLabel: "Financial calculators" },
+  ];
 
   const mobileActions = user
     ? [
@@ -185,6 +189,7 @@ export function Header({ overlay = false }: { overlay?: boolean }) {
             </nav>
 
             <div className="flex items-center gap-3">
+              <CalculatorButton tone={solid ? "dark" : "light"} />
               <ThemeToggle />
               {user ? (
                 <AccountMenu user={user} />
