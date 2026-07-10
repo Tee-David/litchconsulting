@@ -208,15 +208,6 @@ body {
   z-index: 9999;
 }
 
-/* During a view transition, pause all CSS animations so the browser can
-   rasterize clean static bitmaps without compositing animated layers.
-   The JS sets --vt-pause: paused on <html> before startViewTransition(),
-   then removes it once .ready resolves. */
-:root[style*="--vt-pause"] *,
-:root[style*="--vt-pause"] *::before,
-:root[style*="--vt-pause"] *::after {
-  animation-play-state: var(--vt-pause, running) !important;
-}
 
 /* ==========================================================================
    Skeleton shimmer — dynamic "living skeleton" loading states
@@ -253,11 +244,9 @@ body {
    ring rotation is animated, so the layout survives reduced-motion. */
 .animate-orbit-spin {
   animation: orbit-spin var(--orbit-duration, 40s) linear infinite;
-  animation-play-state: var(--vt-pause, running);
 }
 .animate-orbit-reverse {
   animation: orbit-spin var(--orbit-duration, 40s) linear infinite reverse;
-  animation-play-state: var(--vt-pause, running);
 }
 @keyframes orbit-spin {
   to {

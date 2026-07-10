@@ -5,16 +5,15 @@ type VTDocument = Document & {
 /**
  * Theme change with a circle-wipe view transition from the click origin.
  *
- * The key insight: View Transitions take a full-page bitmap snapshot.
- * Running CSS animations (Ken Burns, orbits, Framer springs) during that
- * snapshot forces the browser to composite every animated layer before it can
- * rasterize — this is what causes the "hang".
+ * THE CORE TRICK: do NOT trigger a React re-render inside the
+ * startViewTransition callback. Instead, toggle the `.dark` class and
+ * `colorScheme` on the DOM directly — this is two microsecond operations that
+ * instantly produce the "after" frame. The browser can snapshot it immediately
+ * with zero lag. React is synced *after* via setTheme outside the callback.
  *
- * Fix: pause ALL CSS animations for the duration of the transition so the
- * browser snaps clean, static frames. We also avoid flushSync (which can
- * force a synchronous layout mid-transition) and instead rely on
- * next-themes' own synchronous class-toggle that happens inside the
- * startViewTransition callback naturally.
+ * Additionally, we suppress per-element CSS transitions during the swap
+ * (the circle-wipe IS the transition, we don't want individual elements
+ * fading their backgrounds/colors independently underneath it).
  */
 export function animateThemeChange(
   theme: "light" | "dark",
@@ -37,32 +36,41 @@ export function animateThemeChange(
   const end = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
   const root = document.documentElement;
 
-  // ── Pause all CSS animations so the VT snapshot is a clean static frame ──
-  // This prevents the browser from having to composite animated layers before
-  // it can rasterize the before/after bitmaps.
-  root.style.setProperty("--vt-pause", "paused");
+  // ── Suppress per-element CSS transitions during the swap ──
+  // Without this, every element with `transition-colors` etc. fires its own
+  // color fade underneath the circle-wipe, causing hundreds of simultaneous
+  // transitions and visible lag.
+  const suppress = document.createElement("style");
+  suppress.textContent = "*, *::before, *::after { transition-duration: 0s !important; }";
+  document.head.appendChild(suppress);
 
   const vt = doc.startViewTransition(() => {
-    // Apply theme — next-themes toggles `.dark` synchronously here,
-    // which is exactly what the snapshot needs. No flushSync required.
-    setTheme(theme);
-    // Ensure color-scheme is in sync immediately
+    // Toggle theme at the DOM level only — no React re-render.
+    // This is instant: just a class toggle + a style attribute.
+    root.classList.toggle("dark", theme === "dark");
     root.style.colorScheme = theme;
   });
 
-  // Once both snapshots are taken and the wipe animation can start,
-  // restore animation playback
   vt.ready
     .then(() => {
-      root.style.removeProperty("--vt-pause");
-
-      // Animate the circle wipe on the incoming frame
+      // Both snapshots are now taken. Animate the circle-wipe reveal.
       root.animate(
         { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${end}px at ${x}px ${y}px)`] },
         { duration, easing: "cubic-bezier(0.22, 1, 0.36, 1)", pseudoElement: "::view-transition-new(root)" },
       );
     })
+    .catch(() => {});
+
+  // Once the transition finishes, sync React state and clean up.
+  // setTheme is deferred so React's re-render happens in the background
+  // AFTER the visual wipe is already playing — no jank.
+  vt.finished
+    .then(() => {
+      suppress.remove();
+      setTheme(theme);
+    })
     .catch(() => {
-      root.style.removeProperty("--vt-pause");
+      suppress.remove();
+      setTheme(theme);
     });
 }
