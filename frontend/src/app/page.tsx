@@ -1,7 +1,6 @@
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { Hero } from "@/components/sections/hero";
-import { Partners } from "@/components/sections/partners";
 import { ValueCards } from "@/components/sections/value-cards";
 import { BuiltFor } from "@/components/sections/built-for";
 import { Solutions } from "@/components/sections/solutions";
@@ -24,7 +23,6 @@ export default function Home() {
       <Header overlay />
       <main className="flex-1">
         <Hero />
-        <Partners />
         <ValueCards />
         <BuiltFor />
         <Solutions />

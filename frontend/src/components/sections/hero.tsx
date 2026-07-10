@@ -5,7 +5,9 @@ import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import { Star } from "lucide-react";
 import { Button } from "@/components/ui/primitives";
-import { heroSlides } from "@/lib/content";
+import { heroSlides, partners } from "@/lib/content";
+import { OrbitingCircles } from "@/components/magicui/orbiting-circles";
+import { orbitOuter, orbitInner } from "@/components/sections/hero-orbit-icons";
 
 const ROTATE_MS = 6000;
 
@@ -47,8 +49,23 @@ export function Hero() {
       <div className="absolute inset-0 bg-gradient-to-t from-night/90 via-night/45 to-night/30" />
       <div className="absolute inset-0 bg-gradient-to-r from-brand/50 to-transparent" />
 
+      {/* Orbiting work-tool logos — bleeds off the right edge, only ~half visible */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-1/2 right-0 z-[1] hidden h-[680px] w-[680px] -translate-y-1/2 translate-x-[38%] lg:block xl:translate-x-[32%]"
+      >
+        <div className="relative size-full">
+          <OrbitingCircles iconSize={54} radius={296} duration={44}>
+            {orbitOuter}
+          </OrbitingCircles>
+          <OrbitingCircles iconSize={44} radius={196} duration={34} reverse>
+            {orbitInner}
+          </OrbitingCircles>
+        </div>
+      </div>
+
       {/* Content */}
-      <div className="relative z-10 mx-auto w-full max-w-[1400px] px-6 pb-16 pt-28 md:px-14 md:pb-24">
+      <div className="relative z-10 mx-auto w-full max-w-[1400px] px-6 pb-32 pt-28 md:px-14 md:pb-48">
         <div className="flex flex-col items-center text-center md:items-start md:text-left">
           <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-xs font-medium text-white backdrop-blur-md">
             <span className="flex">
@@ -87,6 +104,25 @@ export function Hero() {
             <Button href="/#services" variant="light" withArrow className="w-full sm:w-auto">
               Explore Services
             </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Partner logos marquee — pinned along the bottom of the hero */}
+      <div className="absolute inset-x-0 bottom-0 z-10 pb-6 md:pb-8">
+        <p className="mb-4 text-center text-[0.7rem] font-medium uppercase tracking-[0.18em] text-white/55">
+          We collaborate with forward-thinking businesses
+        </p>
+        <div className="relative overflow-hidden [mask-image:linear-gradient(to_right,transparent,black_12%,black_88%,transparent)]">
+          <div className="flex w-max animate-[marquee_28s_linear_infinite] items-center gap-14 pr-14">
+            {[...partners, ...partners, ...partners, ...partners].map((name, i) => (
+              <span
+                key={i}
+                className="font-display text-lg font-bold tracking-tight text-white/40 transition-colors hover:text-white md:text-xl"
+              >
+                {name}
+              </span>
+            ))}
           </div>
         </div>
       </div>

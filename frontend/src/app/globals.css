@@ -238,3 +238,38 @@ body {
     animation: none;
   }
 }
+
+/* Orbiting circles — used in the home hero. Positions are static; only the
+   ring rotation is animated, so the layout survives reduced-motion. */
+.animate-orbit-spin {
+  animation: orbit-spin var(--orbit-duration, 40s) linear infinite;
+}
+.animate-orbit-reverse {
+  animation: orbit-spin var(--orbit-duration, 40s) linear infinite reverse;
+}
+@keyframes orbit-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-orbit-spin,
+  .animate-orbit-reverse {
+    animation: none;
+  }
+}
+
+/* Logo marquee — used by the home hero */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[marquee_28s_linear_infinite\] {
+    animation: none;
+  }
+}
