@@ -52,13 +52,13 @@ export function Hero() {
       {/* Orbiting work-tool logos — bleeds off the right edge, only ~half visible */}
       <div
         aria-hidden
-        className="pointer-events-none absolute top-1/2 right-0 z-[1] hidden h-[680px] w-[680px] -translate-y-1/2 translate-x-[38%] lg:block xl:translate-x-[32%]"
+        className="pointer-events-none absolute top-1/2 right-0 z-[1] hidden h-[612px] w-[612px] -translate-y-1/2 translate-x-[38%] lg:block xl:translate-x-[32%]"
       >
         <div className="relative size-full">
-          <OrbitingCircles iconSize={54} radius={296} duration={44}>
+          <OrbitingCircles iconSize={48} radius={266} duration={44}>
             {orbitOuter}
           </OrbitingCircles>
-          <OrbitingCircles iconSize={44} radius={196} duration={34} reverse>
+          <OrbitingCircles iconSize={40} radius={176} duration={34} reverse>
             {orbitInner}
           </OrbitingCircles>
         </div>
