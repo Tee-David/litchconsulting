@@ -5,7 +5,7 @@ import { builtFor } from "@/lib/content";
 export function BuiltFor() {
   return (
     <section className="px-3 md:px-4">
-      <div className="relative mx-auto max-w-[1400px] overflow-hidden rounded-hero bg-night text-white">
+      <div className="relative mx-auto max-w-[1400px] overflow-hidden rounded-hero bg-brand dark:bg-night text-white">
         <div className="absolute inset-0 bg-dot-grid opacity-60" />
         <div className="absolute -right-24 -top-24 size-96 rounded-full bg-brand/40 blur-3xl" />
 
