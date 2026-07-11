@@ -1,0 +1,24 @@
+{
+  "client_name": "Okafor & Sons Ventures",
+  "period_label": "FY 2026",
+  "revenue": [
+    { "label": "POS sales", "amount": 45230410.55 },
+    { "label": "Paystack settlements", "amount": 12987654.32 },
+    { "label": "Wholesale orders", "amount": 8100000 },
+    { "label": "Discounts allowed", "amount": -1250500.5 }
+  ],
+  "cost_of_sales": [
+    { "label": "Stock purchases", "amount": 31420800.75 },
+    { "label": "Import duty & clearing", "amount": 2874120.4 },
+    { "label": "Closing stock adjustment", "amount": -1830000 }
+  ],
+  "operating_expenses": [
+    { "label": "Salaries & wages", "amount": 7420000 },
+    { "label": "Shop rent (2 locations)", "amount": 3600000 },
+    { "label": "Generator diesel", "amount": 1893450.25 },
+    { "label": "Bank & POS charges", "amount": 743210.11 },
+    { "label": "Transport & logistics", "amount": 1120500 },
+    { "label": "Repairs & maintenance", "amount": 465000 }
+  ],
+  "other_income": []
+}

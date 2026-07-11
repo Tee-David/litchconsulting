@@ -1,0 +1,20 @@
+{
+  "client_name": "Adigwe Trading Ltd",
+  "period_label": "Q1 2026 (Jan – Mar)",
+  "revenue": [
+    { "label": "Product sales", "amount": 18400000 },
+    { "label": "Delivery income", "amount": 650000 }
+  ],
+  "cost_of_sales": [
+    { "label": "Purchases", "amount": 9800000 },
+    { "label": "Carriage inwards", "amount": 420000 }
+  ],
+  "operating_expenses": [
+    { "label": "Salaries & wages", "amount": 2760000 },
+    { "label": "Rent", "amount": 1250000 },
+    { "label": "Power & diesel", "amount": 615000 }
+  ],
+  "other_income": [
+    { "label": "Interest received", "amount": 84000 }
+  ]
+}

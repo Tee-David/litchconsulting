@@ -1,0 +1,14 @@
+{
+  "client_name": "Bluepeak Consulting Ltd",
+  "period_label": "Jan 2026",
+  "revenue": [
+    { "label": "Advisory retainers", "amount": 5400000 }
+  ],
+  "cost_of_sales": [],
+  "operating_expenses": [
+    { "label": "Salaries", "amount": 2100000 },
+    { "label": "Co-working space", "amount": 350000 },
+    { "label": "Software subscriptions", "amount": 185000.99 }
+  ],
+  "other_income": []
+}
