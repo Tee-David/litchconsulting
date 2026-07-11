@@ -7,7 +7,7 @@ export default function CalculatorsPage() {
         Nigerian finance calculators for the 2026 tax year — income tax &amp; take-home pay,
         pension, VAT, loans, mortgages and import duty.
       </p>
-      <CalculatorsExplorer />
+      <CalculatorsExplorer isAdmin />
     </div>
   );
 }

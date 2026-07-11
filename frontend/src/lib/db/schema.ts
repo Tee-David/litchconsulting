@@ -28,18 +28,20 @@ const updatedAt = () =>
 
 /**
  * Better Auth User table definition for internal queries & administration.
+ * Better Auth created this table with camelCase column names (unlike the
+ * snake_case convention used everywhere else) — the mapping must match.
  */
 import { boolean } from "drizzle-orm/pg-core";
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   email: text("email").notNull().unique(),
-  emailVerified: boolean("email_verified").default(false).notNull(),
+  emailVerified: boolean("emailVerified").default(false).notNull(),
   image: text("image"),
   role: text("role").default("client"),
   banned: boolean("banned").default(false),
-  createdAt: timestamp("created_at", { withTimezone: true }),
-  updatedAt: timestamp("updated_at", { withTimezone: true }),
+  createdAt: timestamp("createdAt", { withTimezone: true }),
+  updatedAt: timestamp("updatedAt", { withTimezone: true }),
 });
 
 /**
