@@ -5,13 +5,17 @@ import { ArrowRight, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CALC_CATEGORIES, CALCULATORS } from "./registry";
 
-export function CalculatorHub({ onSelect }: { onSelect: (key: string) => void }) {
+export function CalculatorHub({ onSelect, isAdmin = false }: { onSelect: (key: string) => void; isAdmin?: boolean }) {
   const [tab, setTab] = useState<string>("all");
   const [q, setQ] = useState("");
 
-  const filtered = CALCULATORS.filter(
+  const baseCalculators = isAdmin
+    ? CALCULATORS
+    : CALCULATORS.filter((c) => c.key === "paye" || c.key === "pension");
+
+  const filtered = baseCalculators.filter(
     (c) =>
-      (tab === "all" || c.category === tab) &&
+      (!isAdmin || tab === "all" || c.category === tab) &&
       (q === "" ||
         c.name.toLowerCase().includes(q.toLowerCase()) ||
         c.blurb.toLowerCase().includes(q.toLowerCase())),
@@ -19,35 +23,37 @@ export function CalculatorHub({ onSelect }: { onSelect: (key: string) => void })
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-wrap gap-2">
-          {["all", ...CALC_CATEGORIES].map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setTab(t)}
-              className={cn(
-                "rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors",
-                tab === t
-                  ? "bg-brand text-white"
-                  : "border border-hairline text-body hover:bg-surface hover:text-ink",
-              )}
-            >
-              {t === "all" ? "All" : t}
-            </button>
-          ))}
+      {isAdmin && (
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-2">
+            {["all", ...CALC_CATEGORIES].map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTab(t)}
+                className={cn(
+                  "rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors",
+                  tab === t
+                    ? "bg-brand text-white keep-brand"
+                    : "border border-hairline text-body hover:bg-surface hover:text-ink",
+                )}
+              >
+                {t === "all" ? "All" : t}
+              </button>
+            ))}
+          </div>
+          <div className="relative sm:w-56">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
+            <input
+              type="search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search calculators…"
+              className="h-9 w-full rounded-full border border-hairline bg-surface pl-9 pr-3 text-sm text-ink outline-none placeholder:text-muted focus:border-brand"
+            />
+          </div>
         </div>
-        <div className="relative sm:w-56">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
-          <input
-            type="search"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search calculators…"
-            className="h-9 w-full rounded-full border border-hairline bg-surface pl-9 pr-3 text-sm text-ink outline-none placeholder:text-muted focus:border-brand"
-          />
-        </div>
-      </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         {filtered.map((c) => (

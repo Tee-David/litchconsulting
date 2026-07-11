@@ -1,0 +1,68 @@
+{
+  "version": "2026.1",
+  "effectiveFrom": "2026-01-01",
+  "law": "Nigeria Tax Act 2025 / Nigeria Tax Administration Act 2025",
+  "currency": "NGN",
+  "notes": "Single source of truth for Nigerian tax rates and thresholds. Consumed by frontend/src/lib/calculators/* and by the LitchAI backend template compilers (plans/prd.md §12). Rate changes from future Finance Acts are made here only; bump `version` and record it in generated files.",
+  "paye": {
+    "source": "Joint Revenue Board of Nigeria, Personal Income Tax Guidelines 2026, Appendix 1",
+    "bands": [
+      { "width": 800000, "ratePct": 0, "label": "First ₦800,000" },
+      { "width": 2200000, "ratePct": 15, "label": "Next ₦2,200,000" },
+      { "width": 9000000, "ratePct": 18, "label": "Next ₦9,000,000" },
+      { "width": 13000000, "ratePct": 21, "label": "Next ₦13,000,000" },
+      { "width": 25000000, "ratePct": 23, "label": "Next ₦25,000,000" },
+      { "width": null, "ratePct": 25, "label": "Above ₦50,000,000" }
+    ],
+    "rentRelief": { "ratePct": 20, "cap": 500000 },
+    "minimumWageMonthly": 70000
+  },
+  "vat": {
+    "standardRatePct": 7.5
+  },
+  "cit": {
+    "standardRatePct": 30,
+    "plannedReductionRatePct": 25,
+    "plannedReductionNote": "NTA 2025 retains 30%; the 25% rate activates only by presidential order on NEC advice.",
+    "smallCompany": {
+      "ratePct": 0,
+      "maxTurnover": 100000000,
+      "maxFixedAssets": 250000000,
+      "professionalServicesExcluded": true,
+      "developmentLevyExempt": true
+    },
+    "developmentLevy": {
+      "ratePct": 4,
+      "base": "assessable_profit",
+      "replaces": ["Tertiary Education Tax", "IT levy", "NASENI levy", "Police Trust Fund levy"]
+    }
+  },
+  "wht": {
+    "source": "Deduction of Tax at Source (Withholding) Regulations 2024 / NTA 2025",
+    "smallSupplierExemption": {
+      "maxMonthlyPayment": 2000000,
+      "note": "Payments to suppliers not exceeding ₦2m per month are exempt from WHT deduction, subject to conditions."
+    },
+    "rates": {
+      "dividend": { "label": "Dividends", "corporatePct": 10, "individualPct": 10 },
+      "interest": { "label": "Interest", "corporatePct": 10, "individualPct": 10 },
+      "rent": { "label": "Rent", "corporatePct": 10, "individualPct": 10 },
+      "royalty": { "label": "Royalties", "corporatePct": 10, "individualPct": 5 },
+      "commission": { "label": "Commission / agency fees", "corporatePct": 10, "individualPct": 5 },
+      "consultancy": { "label": "Consultancy / prof. fees", "corporatePct": 10, "individualPct": 5 },
+      "construction": { "label": "Construction / building", "corporatePct": 5, "individualPct": 5 },
+      "supply": { "label": "Supply of goods", "corporatePct": 5, "individualPct": 5 },
+      "technical": { "label": "Technical services", "corporatePct": 10, "individualPct": 5 }
+    }
+  },
+  "payroll": {
+    "pension": {
+      "source": "Pension Reform Act 2014",
+      "employeePct": 8,
+      "employerPct": 10,
+      "employerOnlyPct": 20
+    },
+    "nhf": { "employeePct": 2.5 },
+    "nsitf": { "employerPct": 1 }
+  }
+}

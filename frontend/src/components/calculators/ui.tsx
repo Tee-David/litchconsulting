@@ -230,6 +230,56 @@ export function Disclaimer({ children }: { children: ReactNode }) {
   );
 }
 
+/* ------------------------------- InfoSection ------------------------------ */
+export function InfoSection({
+  title,
+  children,
+  references,
+}: {
+  title?: string;
+  children: ReactNode;
+  references?: { label: string; url: string }[];
+}) {
+  return (
+    <details className="group mt-5 rounded-xl border border-hairline bg-surface/50 open:bg-surface/80">
+      <summary className="flex cursor-pointer items-center gap-2 px-4 py-3 text-xs font-semibold text-ink select-none [&::-webkit-details-marker]:hidden">
+        <svg
+          className="size-3.5 shrink-0 text-muted transition-transform group-open:rotate-90"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.5"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </svg>
+        {title ?? "Official information & references"}
+      </summary>
+      <div className="space-y-3 border-t border-hairline px-4 pb-4 pt-3 text-xs leading-relaxed text-body">
+        {children}
+        {references && references.length > 0 && (
+          <div className="space-y-1.5 border-t border-hairline pt-3">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted">References & downloads</p>
+            {references.map((ref) => (
+              <a
+                key={ref.url}
+                href={ref.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1.5 text-brand hover:underline dark:text-highlight"
+              >
+                <svg className="size-3 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3" />
+                </svg>
+                {ref.label}
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
 /* -------------------------------- Layout ---------------------------------- */
 export function TwoPane({ form, results }: { form: ReactNode; results: ReactNode }) {
   return (
@@ -255,6 +305,159 @@ export function Headline({ label, value }: { label: string; value: string }) {
       <p className="font-display text-3xl font-bold tabular-nums text-ink md:text-[2.5rem] md:leading-tight">
         {value}
       </p>
+    </div>
+  );
+}
+
+/* ------------------------------ SliderInput ------------------------------- */
+export function SliderInput({
+  value,
+  onChange,
+  min = 0,
+  max = 100,
+  step = 1,
+  suffix,
+  label,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  suffix?: string;
+  label?: string;
+}) {
+  return (
+    <div className="space-y-2">
+      {label && (
+        <div className="flex items-center justify-between text-xs font-medium text-body">
+          <span>{label}</span>
+          <span className="tabular-nums text-ink">
+            {value.toLocaleString("en-NG")}
+            {suffix}
+          </span>
+        </div>
+      )}
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full cursor-pointer accent-brand"
+      />
+      <div className="flex justify-between text-[10px] text-muted">
+        <span>
+          {min.toLocaleString("en-NG")}
+          {suffix}
+        </span>
+        <span>
+          {max.toLocaleString("en-NG")}
+          {suffix}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/* ----------------------------- PresetButtons ------------------------------ */
+export function PresetButtons({
+  presets,
+  onSelect,
+  active,
+  prefix,
+}: {
+  presets: number[];
+  onSelect: (v: number) => void;
+  active?: number;
+  prefix?: string;
+}) {
+  const fmt = (n: number) => {
+    if (n >= 1_000_000) return `${n / 1_000_000}M`;
+    if (n >= 1_000) return `${n / 1_000}K`;
+    return String(n);
+  };
+  return (
+    <div className="flex flex-wrap gap-2">
+      {presets.map((p) => (
+        <button
+          key={p}
+          type="button"
+          onClick={() => onSelect(p)}
+          className={cn(
+            "rounded-lg border px-3 py-1.5 text-xs font-medium tabular-nums transition-colors",
+            active === p
+              ? "border-brand bg-brand/10 text-brand dark:text-highlight"
+              : "border-hairline text-body hover:border-brand/40 hover:text-ink",
+          )}
+        >
+          {prefix}
+          {fmt(p)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/* -------------------------------- Select ---------------------------------- */
+export function Select<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { value: T; label: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value as T)}
+      className={cn(inputCls, "cursor-pointer appearance-none bg-[length:16px] bg-[right_0.75rem_center] bg-no-repeat pr-9")}
+      style={{ backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='none' viewBox='0 0 24 24' stroke='%238a92a6' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")` }}
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/* ----------------------------- StepperInput ------------------------------- */
+export function StepperInput({
+  value,
+  onChange,
+  min = 0,
+  max = Infinity,
+  step = 1,
+  suffix,
+}: {
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  suffix?: string;
+}) {
+  const dec = () => onChange(Math.max(min, value - step));
+  const inc = () => onChange(Math.min(max, value + step));
+  const btnCls =
+    "grid size-9 place-items-center rounded-lg border border-hairline text-body transition-colors hover:bg-surface hover:text-ink active:bg-brand/10 active:text-brand";
+  return (
+    <div className="flex items-center gap-2">
+      <button type="button" onClick={dec} className={btnCls} aria-label="Decrease">
+        −
+      </button>
+      <span className="min-w-[4rem] text-center font-display text-lg font-bold tabular-nums text-ink">
+        {value.toLocaleString("en-NG")}
+        {suffix && <span className="ml-0.5 text-sm font-medium text-muted">{suffix}</span>}
+      </span>
+      <button type="button" onClick={inc} className={btnCls} aria-label="Increase">
+        +
+      </button>
     </div>
   );
 }

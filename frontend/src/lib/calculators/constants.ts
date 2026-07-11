@@ -1,38 +1,37 @@
 /**
  * Nigerian tax & finance constants — 2026.
  *
- * Primary source: Joint Revenue Board of Nigeria, "Personal Income Tax
- * Guidelines 2026" (under the Nigeria Tax Act 2025), Appendix 1. Non-PIT rates
- * are noted with their sources and are user-editable in the UI.
+ * All statutory rates are read from lib/tax/nigeria-tax-config.json — the
+ * shared, versioned source of truth for the site calculators and the LitchAI
+ * template compilers (plans/prd.md §12). Change rates there, not here.
  */
+import taxConfig from "@/lib/tax/nigeria-tax-config.json";
 
 /** Progressive PAYE/PIT bands (annual chargeable income). JRB 2026 Appendix 1. */
-export const PIT_BANDS_2026: { width: number; rate: number; label: string }[] = [
-  { width: 800_000, rate: 0, label: "First ₦800,000" },
-  { width: 2_200_000, rate: 0.15, label: "Next ₦2,200,000" },
-  { width: 9_000_000, rate: 0.18, label: "Next ₦9,000,000" },
-  { width: 13_000_000, rate: 0.21, label: "Next ₦13,000,000" },
-  { width: 25_000_000, rate: 0.23, label: "Next ₦25,000,000" },
-  { width: Infinity, rate: 0.25, label: "Above ₦50,000,000" },
-];
+export const PIT_BANDS_2026: { width: number; rate: number; label: string }[] =
+  taxConfig.paye.bands.map((b) => ({
+    width: b.width ?? Infinity,
+    rate: b.ratePct / 100,
+    label: b.label,
+  }));
 
 /** Rent relief: 20% of annual rent, capped at ₦500,000 (JRB §9). */
-export const RENT_RELIEF_RATE = 0.2;
-export const RENT_RELIEF_CAP = 500_000;
+export const RENT_RELIEF_RATE = taxConfig.paye.rentRelief.ratePct / 100;
+export const RENT_RELIEF_CAP = taxConfig.paye.rentRelief.cap;
 
 /** Pension (Pension Reform Act 2014): employee 8%, employer 10%. */
-export const PENSION_EMPLOYEE_RATE = 0.08;
-export const PENSION_EMPLOYER_RATE = 0.1;
-export const PENSION_EMPLOYER_ONLY_RATE = 0.2;
+export const PENSION_EMPLOYEE_RATE = taxConfig.payroll.pension.employeePct / 100;
+export const PENSION_EMPLOYER_RATE = taxConfig.payroll.pension.employerPct / 100;
+export const PENSION_EMPLOYER_ONLY_RATE = taxConfig.payroll.pension.employerOnlyPct / 100;
 
 /** National Housing Fund: 2.5% of basic salary. */
-export const NHF_RATE = 0.025;
+export const NHF_RATE = taxConfig.payroll.nhf.employeePct / 100;
 
 /** VAT (Nigeria Tax Act 2025). */
-export const VAT_RATE = 7.5;
+export const VAT_RATE = taxConfig.vat.standardRatePct;
 
 /** National minimum wage (monthly) — earners at/below are PAYE-exempt. */
-export const MINIMUM_WAGE_MONTHLY = 70_000;
+export const MINIMUM_WAGE_MONTHLY = taxConfig.paye.minimumWageMonthly;
 
 /**
  * Import duty components (Nigeria Customs / ECOWAS CET). Duty rate itself is

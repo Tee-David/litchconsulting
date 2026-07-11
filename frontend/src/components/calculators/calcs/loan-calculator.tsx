@@ -8,12 +8,17 @@ import {
   Disclaimer,
   Field,
   Headline,
+  InfoSection,
   MoneyInput,
   NumberInput,
+  PresetButtons,
   ResultRow,
   ResultsPanel,
+  SliderInput,
   TwoPane,
 } from "@/components/calculators/ui";
+
+const LOAN_PRESETS = [1_000_000, 2_000_000, 5_000_000, 10_000_000, 20_000_000, 50_000_000];
 
 export function LoanCalculator() {
   const [principal, setPrincipal] = useState("5000000");
@@ -30,14 +35,30 @@ export function LoanCalculator() {
       <Field label="Loan amount">
         <MoneyInput value={principal} onChange={setPrincipal} />
       </Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Annual interest rate">
-          <NumberInput value={rate} onChange={setRate} suffix="%" step="0.5" />
-        </Field>
-        <Field label="Term">
-          <NumberInput value={months} onChange={setMonths} suffix="mo" />
-        </Field>
-      </div>
+      <PresetButtons
+        presets={LOAN_PRESETS}
+        onSelect={(v) => setPrincipal(String(v))}
+        active={num(principal)}
+        prefix="₦"
+      />
+      <SliderInput
+        label="Annual interest rate"
+        value={num(rate)}
+        onChange={(v) => setRate(String(v))}
+        min={1}
+        max={50}
+        step={0.5}
+        suffix="%"
+      />
+      <SliderInput
+        label="Loan term"
+        value={num(months)}
+        onChange={(v) => setMonths(String(v))}
+        min={1}
+        max={120}
+        step={1}
+        suffix=" months"
+      />
       <div className="overflow-hidden rounded-xl border border-hairline">
         <table className="w-full text-xs">
           <thead className="bg-surface text-muted">
@@ -81,6 +102,15 @@ export function LoanCalculator() {
         <ResultRow label="Total payable" value={f(l.totalPayable)} strong />
       </div>
       <Disclaimer>Assumes a fixed rate and equal monthly instalments (reducing balance).</Disclaimer>
+      <InfoSection
+        references={[
+          { label: "CBN — Monetary Policy Rate", url: "https://www.cbn.gov.ng/rates/mnymktind.asp" },
+          { label: "Consumer credit regulations", url: "https://www.cbn.gov.ng/out/2010/publications/bsd/consumercredit.pdf" },
+        ]}
+      >
+        <p>Nigerian lending rates are influenced by the CBN Monetary Policy Rate (MPR). Commercial loan rates typically range from 18–35% per annum. This calculator uses a reducing-balance (amortisation) method.</p>
+        <p className="mt-2"><strong>Tip:</strong> Compare the total interest against the principal to understand the true cost of borrowing. Shorter terms mean higher monthly payments but significantly less total interest.</p>
+      </InfoSection>
     </ResultsPanel>
   );
 

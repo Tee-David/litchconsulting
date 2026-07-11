@@ -13,7 +13,7 @@ import { CalculatorShell } from "./calculator-shell";
  * the calculator hub (cards) → individual calculators. Rendered via a portal so
  * the header's backdrop-blur doesn't trap the fixed overlay.
  */
-export function CalculatorButton({ className, tone = "dark" }: { className?: string; tone?: "dark" | "light" }) {
+export function CalculatorButton({ className, tone = "dark", isAdmin = false }: { className?: string; tone?: "dark" | "light"; isAdmin?: boolean }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
@@ -91,7 +91,7 @@ export function CalculatorButton({ className, tone = "dark" }: { className?: str
                     {active ? (
                       <CalculatorShell calcKey={active} onBack={() => setActive(null)} />
                     ) : (
-                      <CalculatorHub onSelect={setActive} />
+                      <CalculatorHub onSelect={setActive} isAdmin={isAdmin} />
                     )}
                     </div>
                   </div>
