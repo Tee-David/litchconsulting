@@ -10,7 +10,10 @@ A polished marketing site **and** a role-gated admin dashboard with an invoicing
 
 - Live: https://www.litchconsulting.com (Vercel, auto-deploys `main`)
 - Repo: https://github.com/Tee-David/litchconsulting (`main`)
-- The whole app lives in **`frontend/`** (Next.js full-stack). `backend/` is an empty placeholder.
+- The web app lives in **`frontend/`** (Next.js full-stack). **`backend/`** is **LitchAI** — a
+  separate Python pipeline that compiles client financial documents into formula-driven Excel
+  files (spec: `plans/prd.md`, progress: `plans/checklist.md`; `plans/` is gitignored). It
+  deploys to its own OCI VM, never to Vercel.
 
 ## Stack
 
@@ -21,13 +24,19 @@ nodemailer (SMTP) + Resend · @react-pdf/renderer · @tanstack/react-table · Do
 ## Data & services
 
 - **Reads:** admin pages are RSCs querying **Drizzle** directly (`lib/db/queries/*`).
-  Better Auth's `user` table is read via the `pg` Pool, never added to the Drizzle schema.
+  Better Auth **owns and creates** the `user` table; `schema.ts` carries a read/admin
+  **mapping** of it (used by settings user management) — never create/migrate it via
+  `apply-schema.ts`, and let Better Auth handle signup/password flows.
 - **Writes:** **server actions** (`app/admin/**/actions.ts`), each guarded by `isAdmin()`.
   Money totals are always recomputed server-side (`lib/invoice/money.ts`).
 - **Auth:** Better Auth (`lib/auth.ts`), roles `admin | client` on the session user.
   `lib/server-user.ts` has `getSessionUser/isAdmin`. Admin gate in `app/admin/layout.tsx`;
   `/dashboard` redirects admins → `/admin`.
-- **Schema:** `lib/db/schema.ts` — `lead, client, invoice, invoice_item, org_settings`.
+- **Schema:** `lib/db/schema.ts` — `lead, client, invoice, invoice_item, org_settings`,
+  tickets, templates, posts + the Better Auth `user` mapping (see Reads above).
+- **Tax rates:** `lib/tax/nigeria-tax-config.json` is the **single versioned source** of
+  Nigerian tax rates (NTA 2025: PAYE bands, VAT, WHT, CIT + Development Levy, pension/NHF).
+  `lib/calculators/*` and the LitchAI compilers both read it — never hardcode a rate.
 - **Invoicing:** builder (`components/admin/invoice/invoice-builder.tsx`) → live HTML preview
   (`invoice-preview.tsx`) → branded PDF (`lib/invoice/pdf/InvoiceDocument.tsx`, `render.ts`) →
   SMTP send + public `/i/[token]` pay page. Receipts reuse the PDF with `variant="receipt"`.
@@ -62,6 +71,11 @@ npm run db:generate                                             # generate migra
 node --env-file=.env.local --import tsx scripts/apply-schema.ts # apply schema (NOT db:push)
 node --env-file=.env.local --import tsx scripts/seed-users.ts   # seed users
 node --env-file=.env.local scripts/vercel-sync-env.mjs          # push env to Vercel
+
+cd backend                                                       # LitchAI (Python)
+python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"       # one-time setup
+.venv/bin/pytest                                                 # golden-fixture suite (needs LibreOffice)
+.venv/bin/ruff check src tests
 ```
 
 ## Deploy
