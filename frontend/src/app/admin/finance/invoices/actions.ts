@@ -2,6 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { inArray } from "drizzle-orm";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { invoice, invoiceItem, client } from "@/lib/db/schema";
@@ -292,3 +293,43 @@ export async function createClientAction(input: BillTo): Promise<ActionResult & 
   revalidatePath("/admin/clients");
   return { ok: true, id: row.id, client: row };
 }
+
+/** Bulk delete invoices/quotes by IDs. */
+export async function bulkDeleteInvoicesAction(ids: string[]): Promise<ActionResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
+  if (!ids || ids.length === 0) return { ok: true };
+
+  try {
+    await db.transaction(async (tx) => {
+      await tx.delete(invoiceItem).where(inArray(invoiceItem.invoiceId, ids));
+      await tx.delete(invoice).where(inArray(invoice.id, ids));
+    });
+    revalidatePath("/admin/finance/invoices");
+    revalidatePath("/admin/finance/quotes");
+    revalidatePath("/admin/finance/receipts");
+    revalidatePath("/admin");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not delete invoices" };
+  }
+}
+
+/** Bulk set status on invoices/quotes. */
+export async function bulkSetInvoiceStatusAction(ids: string[], status: string): Promise<ActionResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
+  if (!ids || ids.length === 0) return { ok: true };
+
+  try {
+    const patch: Record<string, unknown> = { status, updatedAt: new Date() };
+    if (status === "paid") patch.paidAt = new Date();
+    await db.update(invoice).set(patch).where(inArray(invoice.id, ids));
+    revalidatePath("/admin/finance/invoices");
+    revalidatePath("/admin/finance/quotes");
+    revalidatePath("/admin/finance/receipts");
+    revalidatePath("/admin");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not update status" };
+  }
+}
+

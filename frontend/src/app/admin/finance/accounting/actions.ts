@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { expense } from "@/lib/db/schema";
 import { isAdmin, getCurrentUserId } from "@/lib/server-user";
@@ -63,3 +63,18 @@ export async function deleteExpenseAction(id: string): Promise<ActionResult> {
   revalidatePath("/admin/finance/accounting");
   return { ok: true };
 }
+
+export async function bulkDeleteExpensesAction(ids: string[]): Promise<ActionResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
+  if (!ids || ids.length === 0) return { ok: true };
+
+  try {
+    await db.delete(expense).where(inArray(expense.id, ids));
+    revalidatePath("/admin/finance/accounting");
+    revalidatePath("/admin");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not bulk delete expenses" };
+  }
+}
+

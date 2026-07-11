@@ -30,6 +30,9 @@ import {
   setTicketPriorityAction,
   assignTicketAction,
   deleteTicketAction,
+  bulkDeleteTicketsAction,
+  bulkSetTicketStatusAction,
+  bulkSetTicketPriorityAction,
   type NewTicketInput,
 } from "@/app/admin/help-desk/actions";
 import type { TicketRow, TicketMessageRow } from "@/lib/db/queries/tickets";
@@ -80,6 +83,30 @@ export function HelpDeskView({ tickets, messages }: { tickets: TicketRow[]; mess
   const [newOpen, setNewOpen] = useState(false);
   const [draft, setDraft] = useState<NewTicketInput>(EMPTY_TICKET);
   const [showThreadMobile, setShowThreadMobile] = useState(false);
+  const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
+
+  function toggleTicketSelect(id: string) {
+    setSelectedTicketIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+
+  function toggleAllTickets(filteredTickets: TicketRow[]) {
+    const allFilteredIds = filteredTickets.map((t) => t.id);
+    const areAllSelected = allFilteredIds.length > 0 && allFilteredIds.every((id) => selectedTicketIds.includes(id));
+    if (areAllSelected) {
+      setSelectedTicketIds((prev) => prev.filter((id) => !allFilteredIds.includes(id)));
+    } else {
+      setSelectedTicketIds((prev) => {
+        const next = [...prev];
+        for (const id of allFilteredIds) {
+          if (!next.includes(id)) next.push(id);
+        }
+        return next;
+      });
+    }
+  }
+
 
   const msgByTicket = useMemo(() => {
     const m = new Map<string, TicketMessageRow[]>();
@@ -347,16 +374,103 @@ export function HelpDeskView({ tickets, messages }: { tickets: TicketRow[]; mess
       ) : (
         /* ================= TABLE ================= */
         <div className="space-y-3">
+          {selectedTicketIds.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-brand/20 bg-brand/5 px-4 py-3 text-sm animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center gap-2 font-semibold text-ink">
+                <LifeBuoy className="size-4 text-brand" />
+                <span>{selectedTicketIds.length} tickets selected</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  defaultValue=""
+                  disabled={busy === "bulk"}
+                  onChange={async (e) => {
+                    const val = e.target.value;
+                    if (val) {
+                      setBusy("bulk");
+                      const res = await bulkSetTicketStatusAction(selectedTicketIds, val);
+                      setBusy(null);
+                      if (res.ok) {
+                        toast.success("Statuses updated.");
+                        setSelectedTicketIds([]);
+                        router.refresh();
+                      } else {
+                        toast.error(res.error || "Failed to update statuses.");
+                      }
+                    }
+                    e.target.value = "";
+                  }}
+                  className="rounded-lg border border-hairline bg-paper px-3 py-1.5 text-xs font-semibold text-ink outline-none cursor-pointer"
+                >
+                  <option value="" disabled>Change Status...</option>
+                  {TICKET_STATUSES.map((s) => (
+                    <option key={s.key} value={s.key}>{s.label}</option>
+                  ))}
+                </select>
+
+                <select
+                  defaultValue=""
+                  disabled={busy === "bulk"}
+                  onChange={async (e) => {
+                    const val = e.target.value;
+                    if (val) {
+                      setBusy("bulk");
+                      const res = await bulkSetTicketPriorityAction(selectedTicketIds, val);
+                      setBusy(null);
+                      if (res.ok) {
+                        toast.success("Priorities updated.");
+                        setSelectedTicketIds([]);
+                        router.refresh();
+                      } else {
+                        toast.error(res.error || "Failed to update priorities.");
+                      }
+                    }
+                    e.target.value = "";
+                  }}
+                  className="rounded-lg border border-hairline bg-paper px-3 py-1.5 text-xs font-semibold text-ink outline-none cursor-pointer"
+                >
+                  <option value="" disabled>Change Priority...</option>
+                  {TICKET_PRIORITIES.map((p) => (
+                    <option key={p.key} value={p.key}>{p.label}</option>
+                  ))}
+                </select>
+
+                <button
+                  type="button"
+                  disabled={busy === "bulk"}
+                  onClick={async () => {
+                    if (confirm(`Delete ${selectedTicketIds.length} selected tickets?`)) {
+                      setBusy("bulk");
+                      const res = await bulkDeleteTicketsAction(selectedTicketIds);
+                      setBusy(null);
+                      if (res.ok) {
+                        toast.success("Tickets deleted.");
+                        setSelectedTicketIds([]);
+                        router.refresh();
+                      } else {
+                        toast.error(res.error || "Failed to delete tickets.");
+                      }
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50/50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100/50 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-400 cursor-pointer"
+                >
+                  {busy === "bulk" ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                  Delete Selected
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex flex-wrap items-center gap-2">
             {StatusTabs}
             <div className="ml-auto flex items-center gap-2">
-              <select value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)} className={cn(selectCls, "h-9")}>
+              <select value={priorityFilter} onChange={(e) => { setQ(""); setPriorityFilter(e.target.value); }} className={cn(selectCls, "h-9")}>
                 <option value="all">All priorities</option>
                 {TICKET_PRIORITIES.map((p) => (
                   <option key={p.key} value={p.key}>{p.label}</option>
                 ))}
               </select>
-              <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} className={cn(selectCls, "h-9")}>
+              <select value={categoryFilter} onChange={(e) => { setQ(""); setCategoryFilter(e.target.value); }} className={cn(selectCls, "h-9")}>
                 <option value="all">All categories</option>
                 {TICKET_CATEGORIES.map((c) => (
                   <option key={c.key} value={c.key}>{c.label}</option>
@@ -368,6 +482,14 @@ export function HelpDeskView({ tickets, messages }: { tickets: TicketRow[]; mess
             <table className="w-full min-w-[760px] text-sm">
               <thead>
                 <tr className="border-b border-hairline text-left text-xs uppercase tracking-wide text-muted">
+                  <th className="px-4 py-3 w-10">
+                    <input
+                      type="checkbox"
+                      checked={filtered.length > 0 && filtered.every((t) => selectedTicketIds.includes(t.id))}
+                      onChange={() => toggleAllTickets(filtered)}
+                      className="size-4 rounded border-hairline text-brand accent-brand cursor-pointer focus:ring-brand"
+                    />
+                  </th>
                   <th className="px-4 py-3 font-semibold">Ticket</th>
                   <th className="px-4 py-3 font-semibold">Priority</th>
                   <th className="px-4 py-3 font-semibold">Category</th>
@@ -380,7 +502,7 @@ export function HelpDeskView({ tickets, messages }: { tickets: TicketRow[]; mess
               <tbody className="divide-y divide-hairline">
                 {filtered.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-sm text-body">No tickets match.</td>
+                    <td colSpan={8} className="px-4 py-10 text-center text-sm text-body">No tickets match.</td>
                   </tr>
                 ) : (
                   filtered.map((t) => {
@@ -395,6 +517,14 @@ export function HelpDeskView({ tickets, messages }: { tickets: TicketRow[]; mess
                         }}
                         className="cursor-pointer transition-colors hover:bg-surface/50"
                       >
+                        <td className="px-4 py-3 w-10" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={selectedTicketIds.includes(t.id)}
+                            onChange={() => toggleTicketSelect(t.id)}
+                            className="size-4 rounded border-hairline text-brand accent-brand cursor-pointer focus:ring-brand"
+                          />
+                        </td>
                         <td className="px-4 py-3">
                           <p className="font-medium text-ink">{t.subject}</p>
                           <p className="text-xs text-muted">{t.number}</p>

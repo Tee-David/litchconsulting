@@ -27,6 +27,22 @@ const updatedAt = () =>
   timestamp("updated_at", { withTimezone: true }).defaultNow().notNull();
 
 /**
+ * Better Auth User table definition for internal queries & administration.
+ */
+import { boolean } from "drizzle-orm/pg-core";
+export const user = pgTable("user", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  emailVerified: boolean("email_verified").default(false).notNull(),
+  image: text("image"),
+  role: text("role").default("client"),
+  banned: boolean("banned").default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }),
+});
+
+/**
  * CRM leads captured across the site: newsletter signups, email-gated
  * calculator results, template downloads, and contact/booking enquiries.
  */
@@ -275,3 +291,4 @@ export type Template = typeof template.$inferSelect;
 export type Ticket = typeof ticket.$inferSelect;
 export type TicketMessage = typeof ticketMessage.$inferSelect;
 export type OrgSettings = typeof orgSettings.$inferSelect;
+export type User = typeof user.$inferSelect;

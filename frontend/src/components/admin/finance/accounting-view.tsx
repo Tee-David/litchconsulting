@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useEffect } from "react";
 import {
   Wallet,
   TrendingDown,
@@ -20,7 +20,7 @@ import { Modal } from "@/components/admin/ui/modal";
 import { useToast } from "@/components/admin/ui/toaster";
 import { formatMoney, num, CURRENCIES } from "@/lib/invoice/money";
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS, categoryMeta } from "@/lib/accounting/categories";
-import { saveExpenseAction, deleteExpenseAction, type ExpenseInput } from "@/app/admin/finance/accounting/actions";
+import { saveExpenseAction, deleteExpenseAction, bulkDeleteExpensesAction, type ExpenseInput } from "@/app/admin/finance/accounting/actions";
 import type { ExpenseRow } from "@/lib/db/queries/expenses";
 import type { InvoiceRow } from "@/lib/db/queries/invoices";
 import { cn } from "@/lib/utils";
@@ -48,6 +48,28 @@ export function AccountingView({ expenses, invoices }: { expenses: ExpenseRow[];
   const [editing, setEditing] = useState<ExpenseInput>(EMPTY);
   const [busy, setBusy] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+  const [selectedExpenseIds, setSelectedExpenseIds] = useState<string[]>([]);
+
+  function toggleExpenseSelect(id: string) {
+    setSelectedExpenseIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  }
+
+  function toggleAllExpenses(rows: ExpenseRow[]) {
+    const ids = rows.map((e) => e.id);
+    const allSelected = ids.length > 0 && ids.every((id) => selectedExpenseIds.includes(id));
+    if (allSelected) {
+      setSelectedExpenseIds((prev) => prev.filter((id) => !ids.includes(id)));
+    } else {
+      setSelectedExpenseIds((prev) => {
+        const next = [...prev];
+        for (const id of ids) if (!next.includes(id)) next.push(id);
+        return next;
+      });
+    }
+  }
+
 
   const currencies = useMemo(() => {
     const set = new Set<string>([...invoices.map((i) => i.currency || "NGN"), ...expenses.map((e) => e.currency || "NGN")]);
@@ -240,80 +262,128 @@ export function AccountingView({ expenses, invoices }: { expenses: ExpenseRow[];
       </div>
 
       {/* Ledger */}
-      <div className="rounded-card border border-hairline bg-paper">
-        <div className="flex items-center justify-between border-b border-hairline px-5 py-4">
-          <h3 className="font-display text-sm font-bold text-ink">Expense ledger</h3>
-          <span className="text-xs text-muted">{expenseRows.length} entries</span>
-        </div>
-        {expenseRows.length === 0 ? (
-          <div className="px-5 py-14 text-center">
-            <div className="mx-auto mb-4 grid size-12 place-items-center rounded-full bg-brand-tint text-brand">
-              <BookOpen className="size-6" />
+      <div className="space-y-3">
+        {selectedExpenseIds.length > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-brand/20 bg-brand/5 px-4 py-3 text-sm animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="flex items-center gap-2 font-semibold text-ink">
+              <BookOpen className="size-4 text-brand" />
+              <span>{selectedExpenseIds.length} expenses selected</span>
             </div>
-            <h3 className="font-display text-lg font-semibold text-ink">No expenses logged yet</h3>
-            <p className="mx-auto mt-1.5 max-w-sm text-sm text-body">
-              Track outgoings — rent, salaries, software, taxes — and your net profit and margin update automatically.
-            </p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead>
-                <tr className="border-b border-hairline text-left text-xs uppercase tracking-wide text-muted">
-                  <th className="px-5 py-3 font-semibold">Date</th>
-                  <th className="px-5 py-3 font-semibold">Category</th>
-                  <th className="px-5 py-3 font-semibold">Vendor / description</th>
-                  <th className="px-5 py-3 font-semibold">Method</th>
-                  <th className="px-5 py-3 text-right font-semibold">Amount</th>
-                  <th className="px-5 py-3 text-right font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-hairline">
-                {expenseRows.map((e) => {
-                  const meta = categoryMeta(e.category);
-                  return (
-                    <tr key={e.id} className="transition-colors hover:bg-surface/50">
-                      <td className="whitespace-nowrap px-5 py-3 text-body">{e.date}</td>
-                      <td className="px-5 py-3">
-                        <span className="inline-flex items-center gap-1.5 text-ink">
-                          <span className="size-2.5 rounded-full" style={{ background: meta.color }} />
-                          {meta.label}
-                        </span>
-                      </td>
-                      <td className="max-w-[240px] px-5 py-3">
-                        <p className="truncate font-medium text-ink">{e.vendor || e.description || "—"}</p>
-                        {e.vendor && e.description && <p className="truncate text-xs text-muted">{e.description}</p>}
-                      </td>
-                      <td className="px-5 py-3 capitalize text-body">{e.method || "—"}</td>
-                      <td className="whitespace-nowrap px-5 py-3 text-right font-semibold tabular-nums text-ink">{formatMoney(num(e.amount), e.currency)}</td>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            type="button"
-                            onClick={() => openEdit(e)}
-                            className="grid size-8 place-items-center rounded-lg text-muted transition-colors hover:bg-surface hover:text-ink"
-                            aria-label="Edit"
-                          >
-                            <PenLine className="size-4" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => remove(e.id)}
-                            disabled={deleting === e.id}
-                            className="grid size-8 place-items-center rounded-lg text-muted transition-colors hover:bg-danger/10 hover:text-danger"
-                            aria-label="Delete"
-                          >
-                            {deleting === e.id ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={async () => {
+                if (confirm(`Delete ${selectedExpenseIds.length} selected expenses?`)) {
+                  setBusy(true);
+                  const res = await bulkDeleteExpensesAction(selectedExpenseIds);
+                  setBusy(false);
+                  if (res.ok) {
+                    toast.success("Expenses deleted.");
+                    setSelectedExpenseIds([]);
+                  } else {
+                    toast.error(res.error || "Failed to delete expenses.");
+                  }
+                }
+              }}
+              className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50/50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100/50 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-400 cursor-pointer"
+            >
+              {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+              Delete Selected
+            </button>
           </div>
         )}
+
+        <div className="rounded-card border border-hairline bg-paper">
+          <div className="flex items-center justify-between border-b border-hairline px-5 py-4">
+            <h3 className="font-display text-sm font-bold text-ink">Expense ledger</h3>
+            <span className="text-xs text-muted">{expenseRows.length} entries</span>
+          </div>
+          {expenseRows.length === 0 ? (
+            <div className="px-5 py-14 text-center">
+              <div className="mx-auto mb-4 grid size-12 place-items-center rounded-full bg-brand-tint text-brand">
+                <BookOpen className="size-6" />
+              </div>
+              <h3 className="font-display text-lg font-semibold text-ink">No expenses logged yet</h3>
+              <p className="mx-auto mt-1.5 max-w-sm text-sm text-body">
+                Track outgoings — rent, salaries, software, taxes — and your net profit and margin update automatically.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[720px] text-sm">
+                <thead>
+                  <tr className="border-b border-hairline text-left text-xs uppercase tracking-wide text-muted">
+                    <th className="px-5 py-3 w-10">
+                      <input
+                        type="checkbox"
+                        checked={expenseRows.length > 0 && expenseRows.every((e) => selectedExpenseIds.includes(e.id))}
+                        onChange={() => toggleAllExpenses(expenseRows)}
+                        className="size-4 rounded border-hairline text-brand accent-brand cursor-pointer focus:ring-brand"
+                      />
+                    </th>
+                    <th className="px-5 py-3 font-semibold">Date</th>
+                    <th className="px-5 py-3 font-semibold">Category</th>
+                    <th className="px-5 py-3 font-semibold">Vendor / description</th>
+                    <th className="px-5 py-3 font-semibold">Method</th>
+                    <th className="px-5 py-3 text-right font-semibold">Amount</th>
+                    <th className="px-5 py-3 text-right font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-hairline">
+                  {expenseRows.map((e) => {
+                    const meta = categoryMeta(e.category);
+                    return (
+                      <tr key={e.id} className="transition-colors hover:bg-surface/50">
+                        <td className="px-5 py-3 w-10">
+                          <input
+                            type="checkbox"
+                            checked={selectedExpenseIds.includes(e.id)}
+                            onChange={() => toggleExpenseSelect(e.id)}
+                            className="size-4 rounded border-hairline text-brand accent-brand cursor-pointer focus:ring-brand"
+                          />
+                        </td>
+                        <td className="whitespace-nowrap px-5 py-3 text-body">{e.date}</td>
+                        <td className="px-5 py-3">
+                          <span className="inline-flex items-center gap-1.5 text-ink">
+                            <span className="size-2.5 rounded-full" style={{ background: meta.color }} />
+                            {meta.label}
+                          </span>
+                        </td>
+                        <td className="max-w-[240px] px-5 py-3">
+                          <p className="truncate font-medium text-ink">{e.vendor || e.description || "—"}</p>
+                          {e.vendor && e.description && <p className="truncate text-xs text-muted">{e.description}</p>}
+                        </td>
+                        <td className="px-5 py-3 capitalize text-body">{e.method || "—"}</td>
+                        <td className="whitespace-nowrap px-5 py-3 text-right font-semibold tabular-nums text-ink">{formatMoney(num(e.amount), e.currency)}</td>
+                        <td className="px-5 py-3">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              type="button"
+                              onClick={() => openEdit(e)}
+                              className="grid size-8 place-items-center rounded-lg text-muted transition-colors hover:bg-surface hover:text-ink"
+                              aria-label="Edit"
+                            >
+                              <PenLine className="size-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => remove(e.id)}
+                              disabled={deleting === e.id}
+                              className="grid size-8 place-items-center rounded-lg text-muted transition-colors hover:bg-danger/10 hover:text-danger"
+                              aria-label="Delete"
+                            >
+                              {deleting === e.id ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Add / edit modal */}

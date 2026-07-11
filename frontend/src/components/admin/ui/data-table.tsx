@@ -5,6 +5,7 @@ import {
   type ColumnDef,
   type SortingState,
   type VisibilityState,
+  type RowSelectionState,
   flexRender,
   getCoreRowModel,
   getFilteredRowModel,
@@ -22,6 +23,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useMemo } from "react";
 
 const PAGE_SIZES = [10, 15, 25, 50];
 
@@ -33,6 +35,9 @@ export function DataTable<T>({
   initialPageSize = 10,
   onRowClick,
   emptyState,
+  enableSelection = false,
+  onSelectionChange,
+  getRowId,
 }: {
   columns: ColumnDef<T, unknown>[];
   data: T[];
@@ -41,10 +46,14 @@ export function DataTable<T>({
   initialPageSize?: number;
   onRowClick?: (row: T) => void;
   emptyState?: ReactNode;
+  enableSelection?: boolean;
+  onSelectionChange?: (selectedRows: T[]) => void;
+  getRowId?: (row: T) => string;
 }) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [showCols, setShowCols] = useState(false);
   const colsRef = useRef<HTMLDivElement>(null);
 
@@ -56,19 +65,62 @@ export function DataTable<T>({
     return () => document.removeEventListener("mousedown", onDoc);
   }, []);
 
+  const columnsToUse = useMemo(() => {
+    if (!enableSelection) return columns;
+    const selectionCol: ColumnDef<T, unknown> = {
+      id: "select",
+      header: ({ table }) => (
+        <input
+          type="checkbox"
+          checked={table.getIsAllPageRowsSelected()}
+          onChange={table.getToggleAllPageRowsSelectedHandler()}
+          className="size-4 rounded border-hairline text-brand outline-none focus:ring-brand accent-brand cursor-pointer"
+        />
+      ),
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          checked={row.getIsSelected()}
+          disabled={!row.getCanSelect()}
+          onChange={row.getToggleSelectedHandler()}
+          onClick={(e) => e.stopPropagation()}
+          className="size-4 rounded border-hairline text-brand outline-none focus:ring-brand accent-brand cursor-pointer"
+        />
+      ),
+      enableSorting: false,
+      enableHiding: false,
+    };
+    return [selectionCol, ...columns];
+  }, [columns, enableSelection]);
+
   const table = useReactTable({
     data,
-    columns,
-    state: { sorting, globalFilter, columnVisibility },
+    columns: columnsToUse,
+    state: { sorting, globalFilter, columnVisibility, rowSelection },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
     onColumnVisibilityChange: setColumnVisibility,
+    onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    getRowId,
     initialState: { pagination: { pageSize: initialPageSize } },
   });
+
+  // Call onSelectionChange when selection changes
+  useEffect(() => {
+    if (onSelectionChange) {
+      const selected = table.getSelectedRowModel().flatRows.map((r) => r.original);
+      onSelectionChange(selected);
+    }
+  }, [rowSelection, table, onSelectionChange]);
+
+  // Reset selection when data changes
+  useEffect(() => {
+    setRowSelection({});
+  }, [data]);
 
   const hideable = table.getAllLeafColumns().filter((c) => c.getCanHide() && typeof c.columnDef.header === "string");
   const rows = table.getRowModel().rows;
@@ -76,6 +128,7 @@ export function DataTable<T>({
   const { pageIndex, pageSize } = table.getState().pagination;
   const from = total === 0 ? 0 : pageIndex * pageSize + 1;
   const to = Math.min((pageIndex + 1) * pageSize, total);
+
 
   return (
     <div className="flex flex-col gap-4">

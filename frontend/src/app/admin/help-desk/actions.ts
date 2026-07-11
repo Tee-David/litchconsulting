@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { ticket, ticketMessage } from "@/lib/db/schema";
 import { isAdmin, getCurrentUserId } from "@/lib/server-user";
@@ -125,3 +125,46 @@ export async function deleteTicketAction(id: string): Promise<ActionResult> {
   revalidate();
   return { ok: true };
 }
+
+export async function bulkDeleteTicketsAction(ids: string[]): Promise<ActionResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
+  if (!ids || ids.length === 0) return { ok: true };
+
+  try {
+    await db.transaction(async (tx) => {
+      await tx.delete(ticketMessage).where(inArray(ticketMessage.ticketId, ids));
+      await tx.delete(ticket).where(inArray(ticket.id, ids));
+    });
+    revalidate();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not delete tickets" };
+  }
+}
+
+export async function bulkSetTicketStatusAction(ids: string[], status: string): Promise<ActionResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
+  if (!ids || ids.length === 0) return { ok: true };
+
+  try {
+    await db.update(ticket).set({ status, updatedAt: new Date() }).where(inArray(ticket.id, ids));
+    revalidate();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not update tickets status" };
+  }
+}
+
+export async function bulkSetTicketPriorityAction(ids: string[], priority: string): Promise<ActionResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
+  if (!ids || ids.length === 0) return { ok: true };
+
+  try {
+    await db.update(ticket).set({ priority, updatedAt: new Date() }).where(inArray(ticket.id, ids));
+    revalidate();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not update tickets priority" };
+  }
+}
+

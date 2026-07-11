@@ -242,7 +242,7 @@ export function AdminTopbar({
             )}
           />
         </div>
-        <CalculatorButton tone="dark" className="size-9 border border-hairline" />
+        <CalculatorButton isAdmin={true} tone="dark" className="size-9 border border-hairline" />
         <ThemeToggle />
         <NotificationBell notifications={notifications} />
         <AccountDropdown user={user} />

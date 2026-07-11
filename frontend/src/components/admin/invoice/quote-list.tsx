@@ -19,8 +19,10 @@ import {
   sendInvoiceAction,
   setInvoiceStatusAction,
   convertQuoteToInvoiceAction,
+  bulkDeleteInvoicesAction,
+  bulkSetInvoiceStatusAction,
 } from "@/app/admin/finance/invoices/actions";
-import { FileSignature, BadgeCheck, Send as SendIcon, FileEdit } from "lucide-react";
+import { FileSignature, BadgeCheck, Send as SendIcon, FileEdit, Loader2 } from "lucide-react";
 
 function RowActions({ row }: { row: InvoiceRow }) {
   const [open, setOpen] = useState(false);
@@ -97,7 +99,10 @@ function RowActions({ row }: { row: InvoiceRow }) {
 
 export function QuoteList({ quotes }: { quotes: InvoiceRow[] }) {
   const router = useRouter();
+  const toast = useToast();
   const [status, setStatus] = useState("all");
+  const [selected, setSelected] = useState<InvoiceRow[]>([]);
+  const [busy, setBusy] = useState(false);
 
   const filtered = useMemo(() => (status === "all" ? quotes : quotes.filter((q) => q.status === status)), [quotes, status]);
 
@@ -159,25 +164,91 @@ export function QuoteList({ quotes }: { quotes: InvoiceRow[] }) {
           }
         />
       ) : (
-        <DataTable
-          columns={columns}
-          data={filtered}
-          searchPlaceholder="Search quotes…"
-          onRowClick={(r) => router.push(`/admin/finance/quotes/${r.id}`)}
-          toolbar={
-            <>
-              <select value={status} onChange={(e) => setStatus(e.target.value)} className="h-9 rounded-lg border border-hairline bg-paper px-3 text-sm capitalize text-ink outline-none focus:border-brand">
-                {["all", "draft", "sent", "accepted", "declined"].map((s) => (
-                  <option key={s} value={s} className="capitalize">
-                    {s === "all" ? "All statuses" : s}
-                  </option>
-                ))}
-              </select>
-              <ExportMenu rows={filtered} columns={exportColumns} filename="quotes" title="Quotes" />
-            </>
-          }
-        />
+        <div className="space-y-4">
+          {selected.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-brand/20 bg-brand/5 px-4 py-3 text-sm animate-in fade-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center gap-2 font-semibold text-ink">
+                <FileSignature className="size-4 text-brand" />
+                <span>{selected.length} quotes selected</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  defaultValue=""
+                  disabled={busy}
+                  onChange={async (e) => {
+                    const val = e.target.value;
+                    if (val) {
+                      setBusy(true);
+                      const ids = selected.map((q) => q.id);
+                      const res = await bulkSetInvoiceStatusAction(ids, val);
+                      setBusy(false);
+                      if (res.ok) {
+                        toast.success("Statuses updated.");
+                        router.refresh();
+                      } else {
+                        toast.error(res.error || "Failed to update statuses.");
+                      }
+                    }
+                    e.target.value = "";
+                  }}
+                  className="rounded-lg border border-hairline bg-paper px-3 py-1.5 text-xs font-semibold text-ink outline-none cursor-pointer"
+                >
+                  <option value="" disabled>Change Status...</option>
+                  <option value="draft">Mark as Draft</option>
+                  <option value="sent">Mark as Sent</option>
+                  <option value="accepted">Mark as Accepted</option>
+                  <option value="declined">Mark as Declined</option>
+                </select>
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={async () => {
+                    if (confirm(`Delete ${selected.length} selected quotes?`)) {
+                      setBusy(true);
+                      const ids = selected.map((q) => q.id);
+                      const res = await bulkDeleteInvoicesAction(ids);
+                      setBusy(false);
+                      if (res.ok) {
+                        toast.success("Quotes deleted.");
+                        router.refresh();
+                      } else {
+                        toast.error(res.error || "Failed to delete quotes.");
+                      }
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50/50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100/50 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-400 cursor-pointer"
+                >
+                  {busy ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+                  Delete Selected
+                </button>
+              </div>
+            </div>
+          )}
+
+          <DataTable
+            columns={columns}
+            data={filtered}
+            searchPlaceholder="Search quotes…"
+            onRowClick={(r) => router.push(`/admin/finance/quotes/${r.id}`)}
+            enableSelection={true}
+            onSelectionChange={setSelected}
+            getRowId={(r) => r.id}
+            toolbar={
+              <>
+                <select value={status} onChange={(e) => setStatus(e.target.value)} className="h-9 rounded-lg border border-hairline bg-paper px-3 text-sm capitalize text-ink outline-none focus:border-brand">
+                  {["all", "draft", "sent", "accepted", "declined"].map((s) => (
+                    <option key={s} value={s} className="capitalize">
+                      {s === "all" ? "All statuses" : s}
+                    </option>
+                  ))}
+                </select>
+                <ExportMenu rows={filtered} columns={exportColumns} filename="quotes" title="Quotes" />
+              </>
+            }
+          />
+        </div>
       )}
     </div>
   );
 }
+

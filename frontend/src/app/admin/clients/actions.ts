@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { client } from "@/lib/db/schema";
 import { isAdmin } from "@/lib/server-user";
@@ -52,3 +52,12 @@ export async function deleteClient(id: string): Promise<Result> {
   revalidatePath("/admin/clients");
   return { ok: true };
 }
+
+export async function bulkDeleteClients(ids: string[]): Promise<Result> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
+  if (!ids || ids.length === 0) return { ok: true };
+  await db.delete(client).where(inArray(client.id, ids));
+  revalidatePath("/admin/clients");
+  return { ok: true };
+}
+
