@@ -1,0 +1,11 @@
+{
+  "client_name": "Adigwe Trading Ltd",
+  "period_label": "FY 2026",
+  "employees": [
+    { "name": "Chidi Okeke", "gross_annual": 1200000, "pension": true, "nhf": false },
+    { "name": "Amaka Nwosu", "gross_annual": 3600000, "pension": true, "nhf": true },
+    { "name": "Bola Ade", "gross_annual": 7200000, "pension": true, "nhf": false },
+    { "name": "Emeka Obi", "gross_annual": 15000000, "pension": true, "nhf": true },
+    { "name": "Fatima Sani", "gross_annual": 600000, "pension": false, "nhf": false }
+  ]
+}

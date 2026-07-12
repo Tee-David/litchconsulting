@@ -1,0 +1,20 @@
+{
+  "client_name": "Adigwe Trading Ltd",
+  "period_label": "As at 31 January 2026",
+  "balance_per_bank": 2000000,
+  "deposits_in_transit": [
+    { "label": "Lodgement 30/01 not yet credited", "amount": 350000 }
+  ],
+  "outstanding_cheques": [
+    { "label": "Cheque 000123 - supplier A", "amount": 220000 },
+    { "label": "Cheque 000124 - landlord", "amount": 130000 }
+  ],
+  "balance_per_books": 2015000,
+  "add_to_books": [
+    { "label": "Direct credit - customer transfer", "amount": 30000 }
+  ],
+  "less_from_books": [
+    { "label": "Bank charges & COT", "amount": 12500 },
+    { "label": "Unrecorded standing order", "amount": 32500 }
+  ]
+}

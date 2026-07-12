@@ -1,0 +1,7 @@
+{
+  "client_name": "Bluepeak Consulting Ltd",
+  "period_label": "FY 2026",
+  "employees": [
+    { "name": "Ngozi Eze", "gross_annual": 60000000, "pension": true, "nhf": true }
+  ]
+}

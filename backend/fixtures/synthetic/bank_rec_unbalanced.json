@@ -1,0 +1,19 @@
+{
+  "client_name": "Okafor & Sons Ventures",
+  "period_label": "As at 29 February 2026",
+  "balance_per_bank": 2000000,
+  "deposits_in_transit": [
+    { "label": "Lodgement 28/02 not yet credited", "amount": 350000 }
+  ],
+  "outstanding_cheques": [
+    { "label": "Cheque 000201 - supplier", "amount": 220000 },
+    { "label": "Cheque 000202 - rent", "amount": 130000 }
+  ],
+  "balance_per_books": 2015000,
+  "add_to_books": [
+    { "label": "Direct credit - customer transfer", "amount": 30000 }
+  ],
+  "less_from_books": [
+    { "label": "Bank charges & COT", "amount": 12500 }
+  ]
+}

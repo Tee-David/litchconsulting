@@ -7,11 +7,17 @@ on the recompute gate, not on this code's arithmetic.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 from openpyxl import Workbook
-from openpyxl.styles import Border, Font, Side
 
+from litchai.compilers._common import (
+    BOLD,
+    DOUBLE_TOP,
+    NAIRA_FMT,
+    TITLE,
+    TOP_BORDER,
+    CompiledTemplate,
+    write_footer,
+)
 from litchai.contracts.pnl import LineItem, PnLContract
 from litchai.taxconfig import load_tax_config
 
@@ -19,22 +25,6 @@ COMPILER_VERSION = "pnl-1.0.0"
 
 LABEL_COL = "B"
 AMOUNT_COL = "C"
-NAIRA_FMT = '"₦"#,##0.00'
-
-_TITLE = Font(bold=True, size=14)
-_BOLD = Font(bold=True)
-_SUBTLE = Font(size=9, color="777777")
-_TOP_BORDER = Border(top=Side(style="thin"))
-_DOUBLE_TOP = Border(top=Side(style="double"))
-
-
-@dataclass
-class CompiledTemplate:
-    workbook: Workbook
-    # Named refs ("total_revenue" -> "C10") so validation can locate results
-    # without re-deriving the layout.
-    key_cells: dict[str, str]
-    compiler_version: str
 
 
 def compile_pnl(contract: PnLContract) -> CompiledTemplate:
@@ -48,9 +38,9 @@ def compile_pnl(contract: PnLContract) -> CompiledTemplate:
     ws.column_dimensions[AMOUNT_COL].width = 20
 
     ws[f"{LABEL_COL}1"] = contract.client_name
-    ws[f"{LABEL_COL}1"].font = _TITLE
+    ws[f"{LABEL_COL}1"].font = TITLE
     ws[f"{LABEL_COL}2"] = "Statement of Profit or Loss"
-    ws[f"{LABEL_COL}2"].font = _BOLD
+    ws[f"{LABEL_COL}2"].font = BOLD
     ws[f"{LABEL_COL}3"] = contract.period_label
 
     key: dict[str, str] = {}
@@ -59,7 +49,7 @@ def compile_pnl(contract: PnLContract) -> CompiledTemplate:
     def items_section(title: str, items: list[LineItem], total_label: str) -> str:
         nonlocal row
         ws[f"{LABEL_COL}{row}"] = title
-        ws[f"{LABEL_COL}{row}"].font = _BOLD
+        ws[f"{LABEL_COL}{row}"].font = BOLD
         row += 1
         first = row
         for item in items:
@@ -70,12 +60,12 @@ def compile_pnl(contract: PnLContract) -> CompiledTemplate:
             row += 1
         total_ref = f"{AMOUNT_COL}{row}"
         ws[f"{LABEL_COL}{row}"] = total_label
-        ws[f"{LABEL_COL}{row}"].font = _BOLD
+        ws[f"{LABEL_COL}{row}"].font = BOLD
         total = ws[total_ref]
         total.value = f"=SUM({AMOUNT_COL}{first}:{AMOUNT_COL}{row - 1})"
-        total.font = _BOLD
+        total.font = BOLD
         total.number_format = NAIRA_FMT
-        total.border = _TOP_BORDER
+        total.border = TOP_BORDER
         row += 2
         return total_ref
 
@@ -83,12 +73,12 @@ def compile_pnl(contract: PnLContract) -> CompiledTemplate:
         nonlocal row
         ref = f"{AMOUNT_COL}{row}"
         ws[f"{LABEL_COL}{row}"] = label
-        ws[f"{LABEL_COL}{row}"].font = _BOLD
+        ws[f"{LABEL_COL}{row}"].font = BOLD
         cell = ws[ref]
         cell.value = formula
-        cell.font = _BOLD
+        cell.font = BOLD
         cell.number_format = NAIRA_FMT
-        cell.border = _DOUBLE_TOP if double else _TOP_BORDER
+        cell.border = DOUBLE_TOP if double else TOP_BORDER
         row += 2
         return ref
 
@@ -124,11 +114,6 @@ def compile_pnl(contract: PnLContract) -> CompiledTemplate:
     else:
         key["net_profit"] = result_row("Net profit", f"={key['operating_profit']}", double=True)
 
-    footer = ws[f"{LABEL_COL}{row + 1}"]
-    footer.value = (
-        f"LitchAI · compiler {COMPILER_VERSION} · tax config {cfg['version']} · "
-        "all computed cells are formulas"
-    )
-    footer.font = _SUBTLE
+    write_footer(ws, f"{LABEL_COL}{row + 1}", COMPILER_VERSION, cfg["version"])
 
     return CompiledTemplate(workbook=wb, key_cells=key, compiler_version=COMPILER_VERSION)

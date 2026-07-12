@@ -1,0 +1,28 @@
+{
+  "client_name": "Adigwe Trading Ltd",
+  "period_label": "Year ended 31 December 2026",
+  "opening_cash": 1500000,
+  "operating_receipts": [
+    { "label": "Cash from customers", "amount": 42000000 },
+    { "label": "Other operating receipts", "amount": 1200000 }
+  ],
+  "operating_payments": [
+    { "label": "Payments to suppliers", "amount": 24500000 },
+    { "label": "Salaries & wages", "amount": 8400000 },
+    { "label": "Rent & utilities", "amount": 3100000 },
+    { "label": "Taxes paid", "amount": 1900000 }
+  ],
+  "investing_receipts": [
+    { "label": "Proceeds from sale of equipment", "amount": 650000 }
+  ],
+  "investing_payments": [
+    { "label": "Purchase of delivery van", "amount": 5200000 }
+  ],
+  "financing_receipts": [
+    { "label": "Bank loan drawdown", "amount": 4000000 }
+  ],
+  "financing_payments": [
+    { "label": "Loan repayments", "amount": 1800000 },
+    { "label": "Drawings", "amount": 2400000 }
+  ]
+}

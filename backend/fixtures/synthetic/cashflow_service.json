@@ -1,0 +1,13 @@
+{
+  "client_name": "Bluepeak Consulting Ltd",
+  "period_label": "Year ended 31 December 2026",
+  "opening_cash": 800000,
+  "operating_receipts": [
+    { "label": "Advisory fees received", "amount": 18500000.75 }
+  ],
+  "operating_payments": [
+    { "label": "Salaries", "amount": 9600000 },
+    { "label": "Office & software costs", "amount": 2350000.25 },
+    { "label": "Taxes paid", "amount": 1100000 }
+  ]
+}

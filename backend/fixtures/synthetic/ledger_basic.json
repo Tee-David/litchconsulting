@@ -1,0 +1,14 @@
+{
+  "client_name": "Adigwe Trading Ltd",
+  "period_label": "January 2026",
+  "transactions": [
+    { "date": "2026-01-03", "description": "POS sales settlement", "category": "Sales", "direction": "in", "amount": 1250000 },
+    { "date": "2026-01-05", "description": "Bank transfer from customer", "category": "Sales", "direction": "in", "amount": 480000 },
+    { "date": "2026-01-08", "description": "Stock purchase - supplier A", "category": "Purchases", "direction": "out", "amount": 620000 },
+    { "date": "2026-01-12", "description": "Diesel for generator", "category": "Utilities", "direction": "out", "amount": 95000 },
+    { "date": "2026-01-15", "description": "Staff salary", "category": "Salaries", "direction": "out", "amount": 350000 },
+    { "date": "2026-01-20", "description": "POS sales settlement", "category": "Sales", "direction": "in", "amount": 890000 },
+    { "date": "2026-01-25", "description": "Shop rent", "category": "Rent", "direction": "out", "amount": 250000 },
+    { "date": "2026-01-28", "description": "Bank charges", "category": "Bank Charges", "direction": "out", "amount": 12500 }
+  ]
+}

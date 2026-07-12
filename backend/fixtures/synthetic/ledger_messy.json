@@ -1,0 +1,20 @@
+{
+  "client_name": "Okafor & Sons Ventures",
+  "period_label": "Q1 2026",
+  "transactions": [
+    { "date": "2026-01-02", "description": "Paystack settlement", "category": "Sales", "direction": "in", "amount": 3452041.55 },
+    { "date": "2026-01-09", "description": "Refund to customer (returned goods)", "category": "Sales", "direction": "out", "amount": 128500.5 },
+    { "date": "2026-01-14", "description": "Wholesale order payment", "category": "Sales", "direction": "in", "amount": 810000 },
+    { "date": "2026-01-18", "description": "Stock purchases", "category": "Purchases", "direction": "out", "amount": 1420800.75 },
+    { "date": "2026-01-22", "description": "Import duty & clearing", "category": "Purchases", "direction": "out", "amount": 287412.4 },
+    { "date": "2026-02-01", "description": "Generator diesel", "category": "Utilities", "direction": "out", "amount": 189345.25 },
+    { "date": "2026-02-05", "description": "PHCN prepaid units", "category": "Utilities", "direction": "out", "amount": 75000 },
+    { "date": "2026-02-11", "description": "Staff salaries", "category": "Salaries", "direction": "out", "amount": 742000 },
+    { "date": "2026-02-16", "description": "POS charges", "category": "Bank Charges", "direction": "out", "amount": 43210.11 },
+    { "date": "2026-02-20", "description": "COT & maintenance", "category": "Bank Charges", "direction": "out", "amount": 18750 },
+    { "date": "2026-02-27", "description": "Transport & logistics", "category": "Transport", "direction": "out", "amount": 120500 },
+    { "date": "2026-03-03", "description": "POS sales settlement", "category": "Sales", "direction": "in", "amount": 1987654.32 },
+    { "date": "2026-03-10", "description": "Bank interest earned", "category": "Other Income", "direction": "in", "amount": 8400 },
+    { "date": "2026-03-18", "description": "Shop rent (2 locations)", "category": "Rent", "direction": "out", "amount": 600000 }
+  ]
+}
