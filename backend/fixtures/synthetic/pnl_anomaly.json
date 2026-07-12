@@ -1,0 +1,17 @@
+{
+  "client_name": "Suspect Books Ltd",
+  "period_label": "FY 2026",
+  "revenue": [
+    { "label": "Product sales", "amount": 8000000 },
+    { "label": "Mispost — negative revenue", "amount": -500000 }
+  ],
+  "cost_of_sales": [
+    { "label": "Purchases", "amount": 3000000 }
+  ],
+  "operating_expenses": [
+    { "label": "Rent (looks doubled)", "amount": 4800000 },
+    { "label": "Salaries", "amount": 1200000 },
+    { "label": "Utilities", "amount": 600000 }
+  ],
+  "other_income": []
+}
