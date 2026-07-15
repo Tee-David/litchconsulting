@@ -57,6 +57,7 @@ def save_workbook_deterministic(wb: Workbook, path: Path | str) -> None:
             info = zipfile.ZipInfo(item.filename, date_time=(1980, 1, 1, 0, 0, 0))
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = item.external_attr
+            info.create_system = 3  # pin (varies by platform default)
             dst.writestr(info, src.read(item.filename))
 
 
