@@ -12,6 +12,7 @@ dependencies = [
   "pydantic>=2.7",
   "fastapi>=0.115",
   "procrastinate>=3.0",
+  "psycopg[binary]>=3.1",
   "uvicorn>=0.30",
 ]
 
