@@ -23,3 +23,32 @@ queue = App(
 def ping(payload: str = "pong") -> str:
     """Smoke-test task: proves defer → store → worker → result end-to-end."""
     return payload
+
+
+@queue.task(name="litchai.ingest_document")
+def ingest_document(document_id: int) -> str:
+    """Scan → (Phase 2b) extract a received document. Constructs the production
+    seams from the VM environment: psycopg repo, ClamAV scanner, blind-relay
+    decryptor. Returns the resulting document status.
+
+    Imports are local so the module stays importable without a database/VM.
+    """
+    from litchai.crypto import build_decryptor
+    from litchai.db.pg import PostgresRepository, connect
+    from litchai.pipeline import ingest_document as run_ingest
+    from litchai.scanning import build_scanner
+    from litchai.storage import Storage
+
+    conn = connect()
+    try:
+        repo = PostgresRepository(conn)
+        doc = run_ingest(
+            repo,
+            Storage(),
+            document_id,
+            scanner=build_scanner(),
+            decrypt=build_decryptor(),
+        )
+        return doc.status
+    finally:
+        conn.close()
