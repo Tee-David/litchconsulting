@@ -1,0 +1,16 @@
+# LitchAI Procrastinate worker — install: sudo cp to /etc/systemd/system/, daemon-reload, enable --now
+# Queue state lives in Postgres (survives restarts); one worker on the 2-OCPU box.
+[Unit]
+Description=LitchAI Procrastinate worker
+After=network.target docker.service
+
+[Service]
+User=ubuntu
+EnvironmentFile=/etc/litchai/env
+WorkingDirectory=/home/ubuntu/litchconsulting/backend
+ExecStart=/home/ubuntu/litchai/venv/bin/procrastinate --app=litchai.queue.queue worker
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

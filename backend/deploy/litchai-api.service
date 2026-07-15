@@ -1,0 +1,16 @@
+# LitchAI API — install: sudo cp to /etc/systemd/system/, daemon-reload, enable --now
+# Loopback bind only: the Cloudflare tunnel is the sole ingress (PRD §12.5).
+[Unit]
+Description=LitchAI API (FastAPI, loopback only)
+After=network.target docker.service
+
+[Service]
+User=ubuntu
+EnvironmentFile=/etc/litchai/env
+WorkingDirectory=/home/ubuntu/litchconsulting/backend
+ExecStart=/home/ubuntu/litchai/venv/bin/uvicorn litchai.api:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
