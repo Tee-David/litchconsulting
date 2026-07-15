@@ -36,6 +36,8 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "litchai.taxonomy" = ["*.json"]
+"litchai.categorize" = ["seeds/*.json"]
+"litchai.ai" = ["prompts/*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
