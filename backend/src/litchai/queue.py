@@ -35,20 +35,19 @@ def ingest_document(document_id: int) -> str:
     """
     from litchai.crypto import build_decryptor
     from litchai.db.pg import PostgresRepository, connect
-    from litchai.pipeline import ingest_document as run_ingest
+    from litchai.documents.state import DocumentStatus
+    from litchai.pipeline import extract_document, ingest_document as run_ingest
     from litchai.scanning import build_scanner
     from litchai.storage import Storage
 
     conn = connect()
     try:
         repo = PostgresRepository(conn)
-        doc = run_ingest(
-            repo,
-            Storage(),
-            document_id,
-            scanner=build_scanner(),
-            decrypt=build_decryptor(),
-        )
+        storage = Storage()
+        decrypt = build_decryptor()
+        doc = run_ingest(repo, storage, document_id, scanner=build_scanner(), decrypt=decrypt)
+        if doc.status == DocumentStatus.EXTRACTING.value:
+            doc = extract_document(repo, storage, document_id, decrypt=decrypt)
         return doc.status
     finally:
         conn.close()

@@ -143,6 +143,40 @@ def to_csv(statement: Statement, path: Path) -> None:
             ])
 
 
+def build_workbook(
+    statement: Statement,
+    *,
+    header: tuple[str, ...] = ("Date", "Description", "Money In", "Money Out", "Balance"),
+    opening_row: bool = True,
+    sheet_title: str = "Transactions",
+):
+    """Render a statement to an openpyxl workbook (Phase 2b extraction fixture)."""
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = sheet_title
+    ws.append(list(header))
+    if opening_row:
+        ws.append(["", "Opening Balance", None, None, round(statement.opening_balance, 2)])
+    for r in statement.rows:
+        ws.append([r.date, r.description, r.money_in or None, r.money_out or None, r.balance])
+    return wb
+
+
+def to_xlsx(statement: Statement, path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    build_workbook(statement).save(path)
+
+
+def workbook_bytes(statement: Statement, **kwargs) -> bytes:
+    import io
+
+    buf = io.BytesIO()
+    build_workbook(statement, **kwargs).save(buf)
+    return buf.getvalue()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate a synthetic Nigerian bank statement.")
     parser.add_argument("--seed", type=int, default=1)
