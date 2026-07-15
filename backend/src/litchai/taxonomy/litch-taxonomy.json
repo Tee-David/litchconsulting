@@ -1,0 +1,93 @@
+{
+  "version": "2026.07.0",
+  "derived_from": [
+    "IAS 1 SME Annual Reporting Template.xlsx",
+    "IFRS 18 Annual Report Template.xlsx"
+  ],
+  "categories": [
+    {"code": "revenue", "label": "Revenue", "postable": false, "nature": "income"},
+    {"code": "revenue.goods", "label": "Sale of goods", "parent": "revenue", "postable": true, "nature": "income", "template_labels": ["Sale of goods"], "keywords": ["SALES", "POS", "INVOICE", "SUPPLY"]},
+    {"code": "revenue.services", "label": "Rendering of services", "parent": "revenue", "postable": true, "nature": "income", "template_labels": ["Rendering of services"], "keywords": ["SERVICE", "CONSULT", "FEE INCOME", "CONTRACT"]},
+    {"code": "revenue.rental", "label": "Rental/lease income", "parent": "revenue", "postable": true, "nature": "income", "template_labels": ["Rental/lease income (if not investment property)"], "keywords": ["RENT", "LEASE"]},
+    {"code": "revenue.other", "label": "Other revenue streams", "parent": "revenue", "postable": true, "nature": "income", "template_labels": ["Other revenue streams"]},
+
+    {"code": "cos", "label": "Cost of sales", "postable": false, "nature": "expense"},
+    {"code": "cos.opening_inventory", "label": "Opening inventory", "parent": "cos", "postable": false, "nature": "expense", "source": "aux", "template_labels": ["Opening inventory"]},
+    {"code": "cos.purchases", "label": "Purchases/production costs", "parent": "cos", "postable": true, "nature": "expense", "template_labels": ["Purchases/production costs"], "keywords": ["PURCHASE", "SUPPLIER", "RAW MATERIAL", "FEED", "STOCK"]},
+    {"code": "cos.direct_labour", "label": "Direct labour", "parent": "cos", "postable": true, "nature": "expense", "template_labels": ["Direct labour"], "keywords": ["WAGES", "CASUAL", "LABOUR"]},
+    {"code": "cos.direct_overheads", "label": "Direct overheads", "parent": "cos", "postable": true, "nature": "expense", "template_labels": ["Direct overheads"], "keywords": ["DIESEL", "GENERATOR", "FACTORY"]},
+    {"code": "cos.closing_inventory", "label": "Less: Closing inventory", "parent": "cos", "postable": false, "nature": "expense", "source": "aux", "template_labels": ["Less: Closing inventory"]},
+
+    {"code": "dist", "label": "Distribution costs", "postable": false, "nature": "expense"},
+    {"code": "dist.freight", "label": "Freight and logistics", "parent": "dist", "postable": true, "nature": "expense", "template_labels": ["Freight and logistics"], "keywords": ["FREIGHT", "HAULAGE", "LOGISTICS", "DISPATCH", "GIG", "TRUCK", "WAYBILL"]},
+    {"code": "dist.commissions", "label": "Sales commissions", "parent": "dist", "postable": true, "nature": "expense", "template_labels": ["Sales commissions"], "keywords": ["COMMISSION", "AGENT"]},
+    {"code": "dist.marketing", "label": "Marketing and advertising", "parent": "dist", "postable": true, "nature": "expense", "template_labels": ["Marketing and advertising"], "keywords": ["ADVERT", "MARKETING", "PROMO", "FACEBOOK", "INSTAGRAM", "META ADS"]},
+    {"code": "dist.sales_staff", "label": "Sales staff costs", "parent": "dist", "postable": true, "nature": "expense", "template_labels": ["Sales staff costs"]},
+
+    {"code": "admin", "label": "Administrative expenses", "postable": false, "nature": "expense"},
+    {"code": "admin.staff_salaries", "label": "Staff salaries and benefits", "parent": "admin", "postable": true, "nature": "expense", "template_labels": ["Staff salaries and benefits"], "keywords": ["SALARY", "PAYROLL", "STAFF", "PENSION", "NHF", "PAYE"]},
+    {"code": "admin.rent_utilities", "label": "Rent and utilities (non-lease)", "parent": "admin", "postable": true, "nature": "expense", "template_labels": ["Rent and utilities (non-lease)"], "keywords": ["RENT", "ELECTRICITY", "PHCN", "IKEDC", "WATER", "UTILITY"]},
+    {"code": "admin.depreciation", "label": "Depreciation and amortisation", "parent": "admin", "postable": false, "nature": "expense", "source": "aux", "template_labels": ["Depreciation and amortisation"]},
+    {"code": "admin.professional_fees", "label": "Professional/legal/audit fees", "parent": "admin", "postable": true, "nature": "expense", "template_labels": ["Professional/legal/audit fees"], "keywords": ["AUDIT", "LEGAL", "PROFESSIONAL", "CONSULTANCY", "ACCOUNTANT"]},
+    {"code": "admin.it_comm", "label": "IT and communication", "parent": "admin", "postable": true, "nature": "expense", "template_labels": ["IT and communication"], "keywords": ["AIRTIME", "DATA", "MTN", "GLO", "AIRTEL", "INTERNET", "SOFTWARE", "SUBSCRIPTION"]},
+    {"code": "admin.office_general", "label": "Office and general admin", "parent": "admin", "postable": true, "nature": "expense", "template_labels": ["Office and general admin"], "keywords": ["STATIONERY", "OFFICE", "CLEANING", "SECURITY"]},
+    {"code": "admin.statutory_fees", "label": "Statutory/regulatory fees", "parent": "admin", "postable": true, "nature": "expense", "template_labels": ["Statutory/regulatory fees"], "keywords": ["CAC", "FIRS", "NRS", "LIRS", "LEVY", "PERMIT", "LICENSE"]},
+
+    {"code": "other_income", "label": "Other income", "postable": false, "nature": "income"},
+    {"code": "other_income.operating", "label": "Other operating income", "parent": "other_income", "postable": true, "nature": "income", "keywords": ["REFUND", "REBATE", "GRANT"]},
+    {"code": "other_expenses", "label": "Other expenses", "postable": false, "nature": "expense"},
+    {"code": "other_expenses.operating", "label": "Other operating expenses", "parent": "other_expenses", "postable": true, "nature": "expense"},
+
+    {"code": "finance", "label": "Finance items", "postable": false, "nature": "income"},
+    {"code": "finance.income", "label": "Finance/interest income", "parent": "finance", "postable": true, "nature": "income", "keywords": ["INTEREST", "TREASURY", "FIXED DEPOSIT"]},
+    {"code": "finance.costs", "label": "Finance costs", "parent": "finance", "postable": false, "nature": "expense"},
+    {"code": "finance.costs.interest", "label": "Interest expense on borrowings", "parent": "finance.costs", "postable": true, "nature": "expense", "keywords": ["LOAN INTEREST", "INTEREST ON", "FACILITY"]},
+    {"code": "finance.costs.lease", "label": "Interest on lease liabilities", "parent": "finance.costs", "postable": true, "nature": "expense"},
+
+    {"code": "tax", "label": "Taxation", "postable": false, "nature": "expense"},
+    {"code": "tax.income_tax", "label": "Income tax paid", "parent": "tax", "postable": true, "nature": "expense", "keywords": ["CIT", "INCOME TAX", "TAX PAYMENT"]},
+
+    {"code": "capex", "label": "Capital expenditure", "postable": false, "nature": "cash_movement"},
+    {"code": "capex.ppe.additions", "label": "PPE additions", "parent": "capex", "postable": true, "nature": "cash_movement", "keywords": ["EQUIPMENT", "VEHICLE", "TRACTOR", "BUILDING", "CONSTRUCTION"]},
+    {"code": "capex.ppe.disposal_proceeds", "label": "Proceeds from PPE disposals", "parent": "capex", "postable": true, "nature": "cash_movement"},
+    {"code": "capex.intangibles", "label": "Purchase of intangible assets", "parent": "capex", "postable": true, "nature": "cash_movement"},
+    {"code": "capex.short_term_investments", "label": "Short-term investment movements", "parent": "capex", "postable": true, "nature": "cash_movement", "keywords": ["TREASURY BILL", "T-BILL", "MUTUAL FUND"]},
+
+    {"code": "fin_activity", "label": "Financing activities", "postable": false, "nature": "cash_movement"},
+    {"code": "fin_activity.borrow_proceeds", "label": "Proceeds from borrowings", "parent": "fin_activity", "postable": true, "nature": "cash_movement", "keywords": ["LOAN DISBURSEMENT", "FACILITY CREDIT"]},
+    {"code": "fin_activity.borrow_repayment", "label": "Repayment of borrowings", "parent": "fin_activity", "postable": true, "nature": "cash_movement", "keywords": ["LOAN REPAYMENT"]},
+    {"code": "fin_activity.lease_principal", "label": "Lease principal payments", "parent": "fin_activity", "postable": true, "nature": "cash_movement"},
+    {"code": "fin_activity.share_issue", "label": "Proceeds from share issue", "parent": "fin_activity", "postable": true, "nature": "cash_movement"},
+    {"code": "fin_activity.dividends_paid", "label": "Dividends paid", "parent": "fin_activity", "postable": true, "nature": "cash_movement", "keywords": ["DIVIDEND"]},
+
+    {"code": "bank", "label": "Bank items", "postable": false, "nature": "expense"},
+    {"code": "bank.charges", "label": "Bank charges (COT/SMS/stamp duty/maintenance)", "parent": "bank", "postable": true, "nature": "expense", "keywords": ["COT", "SMS ALERT", "STAMP DUTY", "MAINTENANCE FEE", "NIP CHARGE", "TRANSFER FEE", "EMTL"]},
+
+    {"code": "transfers", "label": "Transfers", "postable": false, "nature": "cash_movement"},
+    {"code": "transfers.internal", "label": "Own-account transfers (excluded from P&L)", "parent": "transfers", "postable": true, "nature": "cash_movement", "keywords": ["OWN ACCOUNT", "SELF", "INTERBANK OWN"]},
+
+    {"code": "suspense", "label": "Suspense", "postable": false, "nature": "expense"},
+    {"code": "suspense.uncategorized", "label": "Unclassified — needs review", "parent": "suspense", "postable": true, "nature": "expense"},
+
+    {"code": "inv", "label": "Inventories", "postable": false, "nature": "asset", "source": "aux"},
+    {"code": "inv.raw_materials", "label": "Raw materials", "parent": "inv", "postable": false, "nature": "asset", "source": "aux", "template_labels": ["Raw materials"]},
+    {"code": "inv.wip", "label": "Work in progress", "parent": "inv", "postable": false, "nature": "asset", "source": "aux", "template_labels": ["Work in progress"]},
+    {"code": "inv.finished_goods", "label": "Finished goods", "parent": "inv", "postable": false, "nature": "asset", "source": "aux", "template_labels": ["Finished goods"]},
+    {"code": "inv.in_transit", "label": "Goods in transit", "parent": "inv", "postable": false, "nature": "asset", "source": "aux", "template_labels": ["Goods in transit"]},
+    {"code": "inv.provision", "label": "Provision for slow-moving/obsolete inventory", "parent": "inv", "postable": false, "nature": "asset", "source": "aux", "template_labels": ["Less: Provision for slow-moving/obsolete inventory"]},
+
+    {"code": "recv", "label": "Trade and other receivables", "postable": false, "nature": "asset", "source": "aux"},
+    {"code": "recv.trade_gross", "label": "Trade receivables — gross", "parent": "recv", "postable": false, "nature": "asset", "source": "aux", "template_labels": ["Trade receivables — gross"]},
+    {"code": "recv.ecl_allowance", "label": "Expected credit loss allowance", "parent": "recv", "postable": false, "nature": "asset", "source": "aux", "template_labels": ["Less: Expected credit loss allowance (IFRS 9)"]},
+    {"code": "recv.staff_other", "label": "Staff/other receivables", "parent": "recv", "postable": false, "nature": "asset", "source": "aux", "template_labels": ["Staff/other receivables"]},
+    {"code": "recv.vat_wht", "label": "VAT/WHT recoverable", "parent": "recv", "postable": false, "nature": "asset", "source": "aux", "template_labels": ["VAT/WHT recoverable"]},
+
+    {"code": "pay", "label": "Trade and other payables", "postable": false, "nature": "liability", "source": "aux"},
+    {"code": "pay.trade", "label": "Trade payables", "parent": "pay", "postable": false, "nature": "liability", "source": "aux", "template_labels": ["Trade payables"]},
+    {"code": "pay.accruals", "label": "Accrued expenses", "parent": "pay", "postable": false, "nature": "liability", "source": "aux", "template_labels": ["Accrued expenses"]},
+    {"code": "pay.staff_statutory", "label": "Staff-related payables (PAYE/pension/NHF)", "parent": "pay", "postable": false, "nature": "liability", "source": "aux", "template_labels": ["Staff-related payables (PAYE/pension/NHF)"]},
+    {"code": "pay.vat_wht", "label": "VAT/WHT payable", "parent": "pay", "postable": false, "nature": "liability", "source": "aux", "template_labels": ["VAT/WHT payable"]},
+    {"code": "pay.other", "label": "Other payables", "parent": "pay", "postable": false, "nature": "liability", "source": "aux", "template_labels": ["Other payables"]}
+  ],
+  "migrations": []
+}

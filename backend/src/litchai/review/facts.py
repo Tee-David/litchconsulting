@@ -19,11 +19,15 @@ from __future__ import annotations
 import re
 import statistics
 from dataclasses import asdict, dataclass, field
+from typing import Callable
 
-from litchai.compilers._common import CompiledTemplate
+from litchai.compilers._common import CompiledTemplate, sheet_ref, split_sheet_ref
 from litchai.validation import recompute
 
-_CELL_REF = re.compile(r"\$?([A-Z]{1,3})\$?(\d+)")
+# Optionally sheet-qualified: `Schedules!D12`, `'Bank Recon'!F55`, or bare
+# `D12`. Without the qualifier group, a cross-sheet formula's refs would be
+# mistaken for cells on the formula's own sheet.
+_CELL_REF = re.compile(r"(?:('[^']+'|[A-Za-z_][A-Za-z0-9_]*)!)?\$?([A-Z]{1,3})\$?(\d+)")
 
 
 @dataclass
@@ -64,14 +68,44 @@ class ReviewPack:
         return asdict(self)
 
 
-def _extract_refs(formula: str) -> list[str]:
-    """Cell refs a formula depends on (range endpoints included, $ stripped)."""
+def _extract_refs(formula: str, default_sheet: str | None = None) -> list[str]:
+    """Cell refs a formula depends on (range endpoints included, $ stripped).
+
+    With `default_sheet`, every ref comes back sheet-qualified — explicit
+    qualifiers win, bare refs belong to the formula's own sheet. Without it
+    (the single-sheet compilers), refs stay bare.
+    """
     seen: list[str] = []
-    for col, row in _CELL_REF.findall(formula):
+    for sheet, col, row in _CELL_REF.findall(formula):
         ref = f"{col}{row}"
+        if default_sheet is not None:
+            owner = sheet.strip("'").replace("''", "'") if sheet else default_sheet
+            ref = sheet_ref(owner, ref)
         if ref not in seen:
             seen.append(ref)
     return seen
+
+
+def explain_workbook_cells(
+    compiled: CompiledTemplate, grids: dict[str, list[list[str]]]
+) -> list[CellExplanation]:
+    """Multi-sheet variant of explain_cells: key_cells carry sheet-qualified
+    refs, and every input_ref comes back qualified so an explanation chain can
+    cross sheets ("SOFP cash ← 'Bank Recon'!F55 ← D50…")."""
+    out: list[CellExplanation] = []
+    for name, qualified in compiled.key_cells.items():
+        sheet, ref = split_sheet_ref(qualified)
+        raw = compiled.workbook[sheet][ref].value if sheet else None
+        if isinstance(raw, str) and raw.startswith("="):
+            kind, formula, refs = "computed", raw, _extract_refs(raw, default_sheet=sheet)
+        else:
+            kind, formula, refs = "input", None, []
+        try:
+            value = recompute.value_at_ref(grids, qualified)
+        except recompute.RecomputeError:
+            value = float("nan")
+        out.append(CellExplanation(name, qualified, kind, formula, refs, value))
+    return out
 
 
 def explain_cells(compiled: CompiledTemplate, grid: list[list[str]]) -> list[CellExplanation]:
@@ -220,6 +254,185 @@ def detect_cashflow_anomalies(contract, grid, key_cells) -> list[Anomaly]:
             )
         ]
     return []
+
+
+# --- Annual-report rules (rules as data, not inline ifs) ---------------------
+
+@dataclass(frozen=True)
+class WorkbookRuleContext:
+    contract: object
+    grids: dict[str, list[list[str]]]
+    key_cells: dict[str, str]
+
+    def value(self, key: str) -> float:
+        return recompute.value_at_ref(self.grids, self.key_cells[key])
+
+
+@dataclass(frozen=True)
+class Rule:
+    id: str
+    severity: str
+    check: Callable[[WorkbookRuleContext], list[Anomaly]]
+
+
+def _rule_checks_zero(ctx: WorkbookRuleContext) -> list[Anomaly]:
+    """The generic sweep: any key cell named *_check must recompute to 0."""
+    out = []
+    for name, qualified in ctx.key_cells.items():
+        if not name.split(":")[1].endswith("_check"):
+            continue
+        value = ctx.value(name)
+        if abs(value) > 0.005:
+            out.append(
+                Anomaly(
+                    "high",
+                    "check_not_zero",
+                    f"Check cell {name} is ₦{value:,.2f} — must equal zero",
+                    refs=[qualified],
+                    amount=value,
+                )
+            )
+    return out
+
+
+def _rule_negative_cash(ctx: WorkbookRuleContext) -> list[Anomaly]:
+    closing = ctx.value("socf:closing_cash")
+    if closing < 0:
+        return [
+            Anomaly(
+                "high",
+                "negative_closing_cash",
+                f"Closing cash is negative (₦{closing:,.2f})",
+                refs=[ctx.key_cells["socf:closing_cash"]],
+                amount=closing,
+            )
+        ]
+    return []
+
+
+def _rule_ecl_vs_gross(ctx: WorkbookRuleContext) -> list[Anomaly]:
+    lines = ctx.contract.schedules.receivables
+    if not lines:
+        return []
+    gross = lines[0].current
+    ecl = next(
+        (line.current for line in lines if "credit loss" in line.label.lower()), None
+    )
+    if ecl is not None and gross > 0 and abs(ecl) >= gross:
+        return [
+            Anomaly(
+                "warning",
+                "ecl_exceeds_gross",
+                f"ECL allowance (₦{abs(ecl):,.2f}) ≥ gross trade receivables (₦{gross:,.2f})",
+                amount=ecl,
+            )
+        ]
+    return []
+
+
+def _rule_retained_earnings_flip(ctx: WorkbookRuleContext) -> list[Anomaly]:
+    re_pair = ctx.contract.sofp.retained_earnings
+    if re_pair.prior > 0 > re_pair.current or re_pair.prior < 0 < re_pair.current:
+        return [
+            Anomaly(
+                "warning",
+                "retained_earnings_sign_flip",
+                f"Retained earnings flipped sign: ₦{re_pair.prior:,.2f} → ₦{re_pair.current:,.2f}",
+                amount=re_pair.current,
+            )
+        ]
+    return []
+
+
+def _rule_negative_revenue(ctx: WorkbookRuleContext) -> list[Anomaly]:
+    return [
+        Anomaly(
+            "warning",
+            "negative_revenue",
+            f"Revenue line '{line.label}' is negative (₦{line.current:,.2f})",
+            amount=line.current,
+        )
+        for line in ctx.contract.schedules.revenue
+        if line.current < 0
+    ]
+
+
+@dataclass(frozen=True)
+class _SectionItem:
+    label: str
+    amount: float
+
+
+def _rule_schedule_outliers(ctx: WorkbookRuleContext) -> list[Anomaly]:
+    schedules = ctx.contract.schedules
+    out: list[Anomaly] = []
+    for section_label, lines in (
+        ("cost of sales", schedules.cost_of_sales),
+        ("distribution costs", schedules.distribution_costs),
+        ("administrative expenses", schedules.admin_expenses),
+    ):
+        out += _outliers(
+            section_label, [_SectionItem(line.label, line.current) for line in lines]
+        )
+    return out
+
+
+ANNUAL_REPORT_RULES: tuple[Rule, ...] = (
+    Rule("check_cells_zero", "high", _rule_checks_zero),
+    Rule("negative_closing_cash", "high", _rule_negative_cash),
+    Rule("ecl_exceeds_gross", "warning", _rule_ecl_vs_gross),
+    Rule("retained_earnings_sign_flip", "warning", _rule_retained_earnings_flip),
+    Rule("negative_revenue", "warning", _rule_negative_revenue),
+    Rule("schedule_outliers", "info", _rule_schedule_outliers),
+)
+
+
+def detect_annual_report_anomalies(
+    contract, grids: dict[str, list[list[str]]], key_cells: dict[str, str]
+) -> list[Anomaly]:
+    ctx = WorkbookRuleContext(contract=contract, grids=grids, key_cells=key_cells)
+    out: list[Anomaly] = []
+    for rule in ANNUAL_REPORT_RULES:
+        out += rule.check(ctx)
+    return out
+
+
+def _summarize_annual_report(ctx: WorkbookRuleContext) -> list[SectionSummary]:
+    revenue = ctx.value("schedules:revenue_total")
+    rows = [SectionSummary("Revenue", revenue)]
+    for label, key in (
+        ("Gross profit", "pnl:gross_profit"),
+        ("Operating profit", "pnl:operating_profit"),
+        ("Profit for the year", "pnl:profit"),
+    ):
+        rows.append(SectionSummary(label, ctx.value(key), _pct(ctx.value(key), revenue)))
+    for label, key in (
+        ("Total assets", "sofp:total_assets"),
+        ("Total equity", "sofp:total_equity"),
+        ("Closing cash", "socf:closing_cash"),
+    ):
+        rows.append(SectionSummary(label, ctx.value(key)))
+    return rows
+
+
+def build_workbook_review_pack(
+    kind: str,
+    compiled: CompiledTemplate,
+    grids: dict[str, list[list[str]]],
+    contract,
+) -> ReviewPack:
+    """Multi-sheet entry point (the annual-report compilers); the single-grid
+    build_review_pack keeps serving the five single-sheet kinds unchanged."""
+    if kind != "annual_report":
+        raise ValueError(f"unknown workbook template kind: {kind!r}")
+    ctx = WorkbookRuleContext(contract=contract, grids=grids, key_cells=compiled.key_cells)
+    return ReviewPack(
+        template=kind,
+        compiler_version=compiled.compiler_version,
+        explanations=explain_workbook_cells(compiled, grids),
+        anomalies=detect_annual_report_anomalies(contract, grids, compiled.key_cells),
+        summaries=_summarize_annual_report(ctx),
+    )
 
 
 # --- Section summaries -------------------------------------------------------

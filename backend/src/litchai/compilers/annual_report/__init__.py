@@ -20,6 +20,7 @@ from litchai.compilers.annual_report.cover import build_cover
 from litchai.compilers.annual_report.mpm import build_mpm
 from litchai.compilers.annual_report.pnl_ias1 import build_pnl_ias1
 from litchai.compilers.annual_report.pnl_ifrs18 import build_pnl_ifrs18
+from litchai.compilers.annual_report.provenance import build_provenance
 from litchai.compilers.annual_report.schedules import build_schedules
 from litchai.compilers.annual_report.socf import build_socf
 from litchai.compilers.annual_report.sofp import build_sofp
@@ -29,7 +30,7 @@ from litchai.taxconfig import load_tax_config
 COMPILER_VERSION = "annual-report-1.0.0"
 CONTRACT_SCHEMA_VERSION = "annual-report-contract-1"
 
-SHEETS_IAS1 = ("Instructions", "P&L", "SOFP", "SOCF", "Bank Recon", "Schedules")
+SHEETS_IAS1 = ("Instructions", "P&L", "SOFP", "SOCF", "Bank Recon", "Schedules", "Provenance")
 SHEETS_IFRS18 = (
     "Cover Page",
     "P&L (IFRS 18)",
@@ -38,6 +39,7 @@ SHEETS_IFRS18 = (
     "Bank Recon",
     "Schedules",
     "MPM Disclosure Note",
+    "Provenance",
 )
 
 
@@ -111,6 +113,17 @@ def compile_annual_report(contract: AnnualReportContract) -> CompiledTemplate:
 
     if not ias1:
         build_mpm(wb["MPM Disclosure Note"], contract, key_cells)
+
+    build_provenance(
+        wb["Provenance"],
+        contract,
+        key_cells,
+        versions={
+            "Compiler": COMPILER_VERSION,
+            "Contract schema": CONTRACT_SCHEMA_VERSION,
+            "Tax config": str(cfg["version"]),
+        },
+    )
 
     cover_ws = wb[sheet_names[0]]
     build_cover(cover_ws, contract)

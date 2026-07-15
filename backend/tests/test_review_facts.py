@@ -96,3 +96,77 @@ def test_review_pack_serializes(tmp_path):
     assert d["template"] == "pnl"
     assert d["summaries"][0]["label"] == "Revenue"
     assert isinstance(json.dumps(d), str)  # JSON-serializable for the future API/LLM
+
+
+# --- Annual-report (multi-sheet) pack ----------------------------------------
+
+def _annual_pack(tmp_path, **overrides):
+    from annual_report_helpers import fixture_annual_report
+    from litchai.compilers.annual_report import compile_annual_report
+
+    contract = fixture_annual_report(**overrides)
+    compiled = compile_annual_report(contract)
+    path = tmp_path / "annual.xlsx"
+    compiled.workbook.save(path)
+    grids = recompute.recompute_workbook(path)
+    return facts.build_workbook_review_pack("annual_report", compiled, grids, contract)
+
+
+def test_extract_refs_keeps_sheet_qualifiers():
+    refs = facts._extract_refs("='Bank Recon'!F55+Schedules!D12-D24", default_sheet="SOFP")
+    assert refs == ["'Bank Recon'!F55", "Schedules!D12", "SOFP!D24"]
+    # Single-sheet callers keep the bare behaviour.
+    assert facts._extract_refs("=SUM(C5:C9)") == ["C5", "C9"]
+
+
+def test_annual_pack_explanations_cross_sheets(tmp_path):
+    pack = _annual_pack(tmp_path)
+    by_name = {e.name: e for e in pack.explanations}
+
+    cash = by_name["sofp:cash"]
+    assert cash.kind == "computed"
+    # SOFP cash chains to the recon's feed cell, wherever the layout put it.
+    assert cash.input_refs == [by_name["bank_recon:feed"].ref]
+    assert cash.input_refs[0].startswith("'Bank Recon'!")
+    assert cash.value == pytest.approx(2450)
+
+    balance = by_name["sofp:balance_check"]
+    assert balance.value == pytest.approx(0)
+
+    labels = {s.label: s.total for s in pack.summaries}
+    assert labels["Total assets"] == pytest.approx(176550)
+    assert labels["Revenue"] == pytest.approx(227000)
+    # A clean workbook may still carry info-level eyeball hints (e.g.
+    # purchases legitimately dominating cost of sales) — but nothing above.
+    assert [a for a in pack.anomalies if a.severity != "info"] == []
+
+
+def test_annual_pack_flags_unbalanced_sofp(tmp_path):
+    pack = _annual_pack(
+        tmp_path, sofp={"retained_earnings": {"current": 68050, "prior": 62650}}
+    )
+    checks = [a for a in pack.anomalies if a.code == "check_not_zero"]
+    assert checks and all(a.severity == "high" for a in checks)
+    assert any(abs(a.amount + 500) < 0.01 for a in checks)
+
+
+def test_annual_pack_flags_ecl_and_negative_revenue(tmp_path):
+    pack = _annual_pack(
+        tmp_path,
+        schedules={
+            "revenue": [
+                {"label": "Sale of goods", "current": -5, "prior": 10},
+            ],
+            "receivables": [
+                {"label": "Trade receivables — gross", "current": 100, "prior": 100},
+                {
+                    "label": "Less: Expected credit loss allowance (IFRS 9)",
+                    "current": -150,
+                    "prior": -10,
+                },
+            ],
+        },
+    )
+    codes = {a.code for a in pack.anomalies}
+    assert "negative_revenue" in codes
+    assert "ecl_exceeds_gross" in codes
