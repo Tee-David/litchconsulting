@@ -1,0 +1,163 @@
+{
+  "standard": "ias1",
+  "client_name": "Mustan Integrated Farm Limited",
+  "period_label": "For the year ended 31 December 2025",
+  "as_at_label": "As at 31 December 2025",
+  "schedules": {
+    "revenue": [
+      {"label": "Sale of goods", "current": 210000, "prior": 178000},
+      {"label": "Rendering of services", "current": 9000, "prior": 7000},
+      {"label": "Rental/lease income (if not investment property)", "current": 3500, "prior": 3000},
+      {"label": "Other revenue streams", "current": 4500, "prior": 3500}
+    ],
+    "cost_of_sales": [
+      {"label": "Opening inventory", "current": 18500, "prior": 14200},
+      {"label": "Purchases/production costs", "current": 148000, "prior": 122000},
+      {"label": "Direct labour", "current": 23000, "prior": 19000},
+      {"label": "Direct overheads", "current": 10500, "prior": 8800},
+      {"label": "Less: Closing inventory", "current": -24800, "prior": -18500}
+    ],
+    "distribution_costs": [
+      {"label": "Freight and logistics", "current": 4800, "prior": 4000},
+      {"label": "Sales commissions", "current": 2000, "prior": 1700},
+      {"label": "Marketing and advertising", "current": 1500, "prior": 1200},
+      {"label": "Sales staff costs", "current": 3200, "prior": 2900}
+    ],
+    "admin_expenses": [
+      {"label": "Staff salaries and benefits", "current": 15000, "prior": 13200},
+      {"label": "Rent and utilities (non-lease)", "current": 2400, "prior": 2000},
+      {"label": "Depreciation and amortisation", "current": 7500, "prior": 6300},
+      {"label": "Professional/legal/audit fees", "current": 2800, "prior": 2300},
+      {"label": "IT and communication", "current": 1000, "prior": 800},
+      {"label": "Office and general admin", "current": 2100, "prior": 1700},
+      {"label": "Statutory/regulatory fees", "current": 1200, "prior": 1200}
+    ],
+    "ppe_classes": [
+      {
+        "label": "Land, buildings & farm structures",
+        "cost_opening": 85000, "additions": 12000, "disposals": 0,
+        "dep_opening": 18500, "dep_charge": 3200, "dep_disposals": 0
+      },
+      {
+        "label": "Motor vehicles & tractors",
+        "cost_opening": 22000, "additions": 8500, "disposals": -3000,
+        "dep_opening": 9800, "dep_charge": 4100, "dep_disposals": -2200
+      },
+      {
+        "label": "Poultry equipment & fittings",
+        "cost_opening": 14500, "additions": 3800, "disposals": 0,
+        "dep_opening": 6200, "dep_charge": 2500, "dep_disposals": 0
+      }
+    ],
+    "inventories": [
+      {"label": "Raw materials", "current": 12500, "prior": 9800},
+      {"label": "Work in progress", "current": 8200, "prior": 6500},
+      {"label": "Finished goods", "current": 9800, "prior": 7200},
+      {"label": "Goods in transit", "current": 1200, "prior": 900},
+      {"label": "Less: Provision for slow-moving/obsolete inventory", "current": -1500, "prior": -1200}
+    ],
+    "receivables": [
+      {"label": "Trade receivables — gross", "current": 18500, "prior": 14200},
+      {"label": "Less: Expected credit loss allowance (IFRS 9)", "current": -900, "prior": -700},
+      {"label": "Staff/other receivables", "current": 1800, "prior": 1400},
+      {"label": "VAT/WHT recoverable", "current": 2200, "prior": 1600}
+    ],
+    "receivables_ageing": {"not_due": 9800, "d1_30": 5200, "d31_90": 2500, "over_90": 1000},
+    "payables": [
+      {"label": "Trade payables", "current": 14200, "prior": 11500},
+      {"label": "Accrued expenses", "current": 3800, "prior": 3200},
+      {"label": "Staff-related payables (PAYE/pension/NHF)", "current": 2100, "prior": 1800},
+      {"label": "VAT/WHT payable", "current": 1600, "prior": 1200},
+      {"label": "Other payables", "current": 900, "prior": 700}
+    ],
+    "payables_ageing": {"not_due": 8500, "d1_30": 3800, "d31_90": 1400, "over_90": 500}
+  },
+  "sofp": {
+    "ppe_prior": 87000,
+    "right_of_use": {"current": 8500, "prior": 6200},
+    "intangibles": {"current": 1200, "prior": 1500},
+    "investment_property": {"current": 0, "prior": 0},
+    "associates": {"current": 0, "prior": 0},
+    "deferred_tax_assets": {"current": 600, "prior": 450},
+    "other_non_current": {"current": 3500, "prior": 2800},
+    "prepayments": {"current": 2800, "prior": 2100},
+    "short_term_investments": {"current": 5000, "prior": 3500},
+    "cash_prior": 11200,
+    "share_capital": {"current": 25000, "prior": 25000},
+    "share_premium": {"current": 5000, "prior": 5000},
+    "retained_earnings": {"current": 67550, "prior": 62650},
+    "other_reserves": {"current": 1200, "prior": 0},
+    "long_term_borrowings": {"current": 35000, "prior": 28000},
+    "lease_liabilities_non_current": {"current": 5200, "prior": 3800},
+    "deferred_tax_liabilities": {"current": 1800, "prior": 1500},
+    "provisions_non_current": {"current": 800, "prior": 600},
+    "short_term_borrowings": {"current": 8500, "prior": 6200},
+    "lease_liabilities_current": {"current": 1800, "prior": 1400},
+    "current_tax_payable": {"current": 1600, "prior": 1500},
+    "provisions_current": {"current": 500, "prior": 400}
+  },
+  "bank_recon": {
+    "account_label": "Zenith Bank Plc - Current A/C 1012345678   |   Month/Year: December 2025",
+    "statement_balance": 3100,
+    "deposits_in_transit": [
+      {"date": "28-Dec-2025", "description": "Cash deposit - egg sales, Ikorodu outlet", "amount": 300},
+      {"date": "30-Dec-2025", "description": "POS settlement - broiler sales", "amount": 350},
+      {"date": "31-Dec-2025", "description": "Transfer from Shoprite Ikeja (trade debtor)", "amount": 200}
+    ],
+    "outstanding_cheques": [
+      {"date": "18-Dec-2025", "description": "Chq #001122 - Vital Feeds Ltd (feed supply)", "amount": 900},
+      {"date": "22-Dec-2025", "description": "Chq #001123 - Agro-vet Nigeria Ltd (drugs/vaccines)", "amount": 600}
+    ],
+    "book_balance": 2300,
+    "unrecorded_credits": [
+      {"date": "31-Dec-2025", "description": "Interest earned on current account", "amount": 200},
+      {"date": "31-Dec-2025", "description": "Direct debit collection - Justrite Superstores", "amount": 150}
+    ],
+    "unrecorded_debits": [
+      {"date": "31-Dec-2025", "description": "Bank charges (COT/SMS alert)", "amount": 120},
+      {"date": "31-Dec-2025", "description": "Stamp duty on transfers", "amount": 80}
+    ],
+    "prepared_by": "Saheed Adenuga, FCA",
+    "prepared_date": "08-Jan-2026",
+    "reviewed_by": "Group Financial Controller",
+    "reviewed_date": "10-Jan-2026"
+  },
+  "pnl": {
+    "other_income": {"current": 3000, "prior": 2000},
+    "other_expenses": {"current": -1200, "prior": -1400},
+    "finance_income": {"current": 600, "prior": 400},
+    "finance_costs": {"current": -4200, "prior": -3600},
+    "share_of_associates": {"current": 0, "prior": 0},
+    "income_tax_expense": {"current": -1600, "prior": -1500},
+    "oci_not_reclassified": {"current": 1200, "prior": 0},
+    "oci_reclassifiable": {"current": 0, "prior": 0}
+  },
+  "socf": {
+    "dep_ppe": {"current": 9800, "prior": 8200},
+    "amort_intangibles": {"current": 600, "prior": 500},
+    "dep_right_of_use": {"current": 1200, "prior": 900},
+    "finance_costs_addback": {"current": 4200, "prior": 3600},
+    "finance_income_addback": {"current": -600, "prior": -400},
+    "share_of_associates_addback": {"current": 0, "prior": 0},
+    "disposal_gain_loss": {"current": -100, "prior": 0},
+    "impairments": {"current": 200, "prior": 150},
+    "delta_inventories": {"current": -7000, "prior": -3700},
+    "delta_receivables": {"current": -5800, "prior": -3800},
+    "delta_payables": {"current": 4200, "prior": 3200},
+    "tax_paid": {"current": -1500, "prior": -1200},
+    "ppe_purchases": {"current": -24300, "prior": -18000},
+    "ppe_disposal_proceeds": {"current": 900, "prior": 400},
+    "intangibles_purchases": {"current": -300, "prior": -250},
+    "interest_received": {"current": 600, "prior": 400},
+    "dividends_received": {"current": 0, "prior": 0},
+    "short_term_investments_movement": {"current": -1500, "prior": -900},
+    "borrowings_proceeds": {"current": 12000, "prior": 14000},
+    "borrowings_repaid": {"current": -1950, "prior": -1700},
+    "lease_principal_paid": {"current": -1700, "prior": -1200},
+    "interest_paid": {"current": -4200, "prior": -3600},
+    "share_issue_proceeds": {"current": 0, "prior": 0},
+    "dividends_paid": {"current": 0, "prior": 0},
+    "opening_cash": {"current": 11200, "prior": 8500},
+    "fx_effect": {"current": 0, "prior": 0}
+  }
+}

@@ -13,6 +13,10 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from openpyxl import load_workbook
+
+from litchai.compilers._common import split_sheet_ref
+
 ERROR_TOKEN = re.compile(r"#(?:REF|NAME|VALUE|DIV/0|NUM|NULL|N/A)[!?]?|Err:\d+")
 
 
@@ -44,6 +48,68 @@ def recompute_to_grid(xlsx_path: Path, timeout: int = 120) -> list[list[str]]:
             )
         with out_csv.open(newline="", encoding="utf-8") as fh:
             return list(csv.reader(fh))
+
+
+def recompute_workbook(xlsx_path: Path, timeout: int = 180) -> dict[str, list[list[str]]]:
+    """Round-trip the workbook through headless LibreOffice (xlsx -> xlsx),
+    forcing every formula on every sheet to recompute, and return each sheet as
+    a grid of strings keyed by sheet name.
+
+    CSV conversion (recompute_to_grid) only exports the first sheet; the xlsx
+    round-trip keeps sheet names intact and writes a cached value for every
+    formula cell. Compiler-fresh workbooks carry no cached values, so every
+    number in the round-tripped file was necessarily computed by LibreOffice.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        profile = Path(tmp) / "profile"
+        cmd = [
+            "soffice",
+            "--headless",
+            "--norestore",
+            f"-env:UserInstallation=file://{profile}",
+            "--convert-to",
+            "xlsx:Calc MS Excel 2007 XML",
+            "--outdir",
+            tmp,
+            str(xlsx_path),
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        out_xlsx = Path(tmp) / (xlsx_path.stem + ".xlsx")
+        if proc.returncode != 0 or not out_xlsx.exists():
+            raise RecomputeError(
+                f"LibreOffice conversion failed (rc={proc.returncode}): {proc.stderr.strip()}"
+            )
+        wb = load_workbook(out_xlsx, data_only=True, read_only=True)
+        try:
+            return {
+                ws.title: [
+                    ["" if v is None else str(v) for v in row]
+                    for row in ws.iter_rows(values_only=True)
+                ]
+                for ws in wb.worksheets
+            }
+        finally:
+            wb.close()
+
+
+def value_at_ref(grids: dict[str, list[list[str]]], qualified: str) -> float:
+    """Read a numeric value at a sheet-qualified ref ("SOFP!D26",
+    "'Bank Recon'!F55") from a recompute_workbook result."""
+    sheet, ref = split_sheet_ref(qualified)
+    if sheet is None:
+        raise RecomputeError(f"ref {qualified!r} carries no sheet qualifier")
+    if sheet not in grids:
+        raise RecomputeError(f"sheet {sheet!r} not in workbook (has {sorted(grids)})")
+    return value_at(grids[sheet], ref)
+
+
+def find_workbook_errors(grids: dict[str, list[list[str]]]) -> list[tuple[str, int, int, str]]:
+    """(sheet, row, col, content) for every error-token cell across all sheets."""
+    return [
+        (name, r, c, content)
+        for name, grid in grids.items()
+        for r, c, content in find_error_cells(grid)
+    ]
 
 
 def find_error_cells(grid: list[list[str]]) -> list[tuple[int, int, str]]:
