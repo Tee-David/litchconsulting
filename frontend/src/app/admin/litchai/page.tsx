@@ -1,4 +1,5 @@
-import { Bot } from "lucide-react";
+import Link from "next/link";
+import { Bot, Activity } from "lucide-react";
 import { PageHeader } from "@/components/admin/ui/page-header";
 import { EmptyState } from "@/components/admin/ui/empty-state";
 import { DocumentList } from "@/components/admin/litchai/document-list";
@@ -20,7 +21,14 @@ export default async function LitchaiPage() {
       <PageHeader
         title="LitchAI"
         description="Client documents compiled into formula-driven workbooks, awaiting your review."
-      />
+      >
+        <Link
+          href="/admin/litchai/observability"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-hairline px-3 py-2 text-sm font-semibold text-body hover:bg-cloud"
+        >
+          <Activity className="size-4" /> Observability
+        </Link>
+      </PageHeader>
 
       {error ? (
         <EmptyState icon={Bot} title="Backend unreachable" description={error} />
