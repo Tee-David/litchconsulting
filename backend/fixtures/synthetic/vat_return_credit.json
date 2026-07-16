@@ -1,0 +1,7 @@
+{
+  "client_name": "Startup Ltd",
+  "period_label": "VAT period: March 2026",
+  "standard_rated_sales": [{"label": "First sales", "net_amount": 400000}],
+  "standard_rated_purchases": [{"label": "Launch capex", "net_amount": 1000000}],
+  "vat_credit_brought_forward": 0
+}

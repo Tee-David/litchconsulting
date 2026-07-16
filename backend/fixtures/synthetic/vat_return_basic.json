@@ -1,0 +1,16 @@
+{
+  "client_name": "Acme Trading Ltd",
+  "period_label": "VAT period: March 2026",
+  "tin": "01234567-0001",
+  "standard_rated_sales": [
+    {"label": "Sale of goods — GTBank POS", "net_amount": 2000000},
+    {"label": "Consulting services", "net_amount": 500000}
+  ],
+  "zero_rated_sales": [{"label": "Exported goods", "net_amount": 300000}],
+  "exempt_sales": [{"label": "Basic food items (VAT-exempt)", "net_amount": 150000}],
+  "standard_rated_purchases": [
+    {"label": "Inventory purchases", "net_amount": 1200000},
+    {"label": "Office equipment", "net_amount": 300000}
+  ],
+  "vat_credit_brought_forward": 25000
+}
