@@ -1,0 +1,13 @@
+{
+  "client_name": "Acme Trading Ltd",
+  "period_label": "Debtors as at 31 March 2026",
+  "as_at": "2026-03-31",
+  "kind": "receivables",
+  "items": [
+    {"party": "Alpha Ltd", "reference": "INV-1", "amount": 100000, "due_date": "2026-04-15"},
+    {"party": "Beta Ltd", "reference": "INV-2", "amount": 200000, "due_date": "2026-03-20"},
+    {"party": "Gamma Ltd", "reference": "INV-3", "amount": 150000, "due_date": "2026-02-15"},
+    {"party": "Delta Ltd", "reference": "INV-4", "amount": 300000, "due_date": "2026-01-10"},
+    {"party": "Epsilon Ltd", "reference": "INV-5", "amount": 50000, "due_date": "2025-12-01"}
+  ]
+}

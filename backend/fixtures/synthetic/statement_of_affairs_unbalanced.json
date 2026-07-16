@@ -1,0 +1,15 @@
+{
+  "client_name": "Startup Ltd",
+  "as_at_label": "As at 31 December 2025",
+  "non_current_assets": [{"label": "Property, plant & equipment", "amount": 500000}],
+  "current_assets": [
+    {"label": "Inventory", "amount": 100000},
+    {"label": "Cash & bank", "amount": 50000}
+  ],
+  "current_liabilities": [{"label": "Trade payables", "amount": 80000}],
+  "non_current_liabilities": [{"label": "Bank loan", "amount": 200000}],
+  "equity": [
+    {"label": "Share capital", "amount": 300000},
+    {"label": "Retained earnings", "amount": 50000}
+  ]
+}

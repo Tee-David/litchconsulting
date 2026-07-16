@@ -1,0 +1,14 @@
+{
+  "client_name": "Acme Trading Ltd",
+  "period_label": "Compliance status FY2025",
+  "as_at": "2026-06-30",
+  "rc_number": "1234567",
+  "tin": "01234567-0001",
+  "items": [
+    {"requirement": "CAC Annual Return 2025", "authority": "CAC", "due_date": "2026-06-30", "completed": true, "fee": 10000},
+    {"requirement": "TIN validation", "authority": "NRS", "due_date": "2026-03-31", "completed": true, "fee": 0},
+    {"requirement": "VAT filing Q1", "authority": "NRS", "due_date": "2026-04-21", "completed": false, "fee": 5000},
+    {"requirement": "e-invoicing readiness", "authority": "NRS", "due_date": "2026-12-31", "completed": false, "fee": 0},
+    {"requirement": "PAYE remittance May", "authority": "NRS", "due_date": "2026-06-10", "completed": false, "fee": 3000}
+  ]
+}
