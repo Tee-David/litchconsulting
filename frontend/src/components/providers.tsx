@@ -5,6 +5,7 @@ import { ThemeProvider } from "next-themes";
 import { PagePreloader } from "@/components/ui/page-preloader";
 import { RouteProgress } from "@/components/ui/route-progress";
 import { Toaster } from "@/components/admin/ui/toaster";
+import { ConfirmProvider } from "@/components/ui/confirm-dialog";
 
 export function Providers({ children }: PropsWithChildren) {
   useEffect(() => {
@@ -16,9 +17,11 @@ export function Providers({ children }: PropsWithChildren) {
   return (
     <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
       <Toaster>
-        <RouteProgress />
-        <PagePreloader />
-        {children}
+        <ConfirmProvider>
+          <RouteProgress />
+          <PagePreloader />
+          {children}
+        </ConfirmProvider>
       </Toaster>
     </ThemeProvider>
   );

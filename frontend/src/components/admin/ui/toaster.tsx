@@ -6,12 +6,15 @@ import { CheckCircle2, AlertCircle, Info, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ToastKind = "success" | "error" | "info";
-type Toast = { id: number; kind: ToastKind; message: string };
+type ToastAction = { label: string; onAction: () => void };
+type Toast = { id: number; kind: ToastKind; message: string; action?: ToastAction };
 
 type ToastCtx = {
   toast: (message: string, kind?: ToastKind) => void;
   success: (message: string) => void;
   error: (message: string) => void;
+  /** Toast with an action button (e.g. Undo). Stays longer; auto-dismiss after timeoutMs. */
+  action: (message: string, opts: { label: string; onAction: () => void; timeoutMs?: number }) => void;
 };
 
 const Ctx = createContext<ToastCtx | null>(null);
@@ -43,13 +46,26 @@ export function Toaster({ children }: { children: ReactNode }) {
     [remove],
   );
 
+  const action = useCallback(
+    (message: string, opts: { label: string; onAction: () => void; timeoutMs?: number }) => {
+      const id = Date.now() + Math.random();
+      setToasts((t) => [
+        ...t,
+        { id, kind: "info", message, action: { label: opts.label, onAction: opts.onAction } },
+      ]);
+      setTimeout(() => remove(id), opts.timeoutMs ?? 8000);
+    },
+    [remove],
+  );
+
   const api = useMemo<ToastCtx>(
     () => ({
       toast,
       success: (m: string) => toast(m, "success"),
       error: (m: string) => toast(m, "error"),
+      action,
     }),
-    [toast],
+    [toast, action],
   );
 
   return (
@@ -71,6 +87,18 @@ export function Toaster({ children }: { children: ReactNode }) {
               >
                 <Icon className={cn("mt-0.5 size-5 shrink-0", ACCENT[t.kind])} />
                 <p className="flex-1 text-sm text-ink">{t.message}</p>
+                {t.action && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      t.action!.onAction();
+                      remove(t.id);
+                    }}
+                    className="shrink-0 rounded-full px-2.5 py-1 text-xs font-bold text-brand transition-colors hover:bg-brand-tint keep-brand"
+                  >
+                    {t.action.label}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => remove(t.id)}
