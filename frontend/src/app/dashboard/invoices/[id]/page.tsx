@@ -32,7 +32,7 @@ export default async function ClientInvoiceDetailPage({
   const issuer = await getIssuer();
   const invoiceData = toInvoiceData(data.invoice, data.items);
 
-  const { status, kind, number, issueDate, dueDate, paymentUrl } = data.invoice;
+  const { status, kind, number, issueDate, dueDate, publicToken } = data.invoice;
 
   // Status timeline data
   const isQuote = kind === "quote";
@@ -77,7 +77,7 @@ export default async function ClientInvoiceDetailPage({
           invoiceId={id}
           kind={kind as "invoice" | "quote"}
           status={status}
-          paymentUrl={paymentUrl}
+          publicToken={publicToken}
           invoiceNumber={number}
         />
       </div>

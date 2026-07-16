@@ -26,12 +26,15 @@ export function InvoiceBuilder({
   defaultNumber,
   issuer = defaultIssuer,
   kind = "invoice",
+  requestId,
 }: {
   initial?: InvoiceInput;
   clients: ClientRow[];
   defaultNumber: string;
   issuer?: Issuer;
   kind?: "invoice" | "quote";
+  /** service_request to auto-link on save (prefilled from /admin/requests). */
+  requestId?: string;
 }) {
   const isQuote = kind === "quote";
   const noun = isQuote ? "quote" : "invoice";
@@ -51,7 +54,6 @@ export function InvoiceBuilder({
   const [items, setItems] = useState<InvoiceItemData[]>(initial?.items?.length ? initial.items : [emptyItem()]);
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [terms, setTerms] = useState(initial?.terms ?? DEFAULT_TERMS);
-  const [paymentUrl, setPaymentUrl] = useState(initial?.paymentUrl ?? "");
   const [busy, setBusy] = useState<"save" | "send" | null>(null);
   const [mobileView, setMobileView] = useState<"form" | "preview">("form");
   const [dragIndex, setDragIndex] = useState<number | null>(null);
@@ -70,11 +72,10 @@ export function InvoiceBuilder({
     items,
     notes: notes || null,
     terms: terms || null,
-    paymentUrl: paymentUrl || null,
   };
 
   function payload(status?: string): InvoiceInput {
-    return { id, kind, number, status, clientId: clientId || null, billTo, projectTitle, currency, issueDate, dueDate, notes, terms, paymentUrl, items };
+    return { id, kind, number, status, clientId: clientId || null, billTo, projectTitle, currency, issueDate, dueDate, notes, terms, items, requestId };
   }
 
   function pickClient(cid: string) {
@@ -307,12 +308,9 @@ export function InvoiceBuilder({
             </div>
           </div>
 
-          {/* Notes / payment */}
+          {/* Notes & terms — the Pay button always targets the public invoice
+              page (Paystack checkout + bank transfer), no manual links. */}
           <div className="rounded-card border border-hairline bg-paper p-5 space-y-3">
-            <div>
-              <label className={labelCls}>Payment link (Pay button target)</label>
-              <input className={inputCls} placeholder="https://paystack.com/pay/…" value={paymentUrl} onChange={(e) => setPaymentUrl(e.target.value)} />
-            </div>
             <div>
               <label className={labelCls}>Notes</label>
               <textarea rows={2} className={inputCls} value={notes} onChange={(e) => setNotes(e.target.value)} />

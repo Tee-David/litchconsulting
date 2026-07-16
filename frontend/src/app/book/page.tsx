@@ -3,14 +3,19 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { BookingSteps } from "@/components/sections/booking-steps";
 import { BookingForm } from "@/components/sections/booking-form";
+import { CalBooking } from "@/components/sections/cal-booking";
 
 export const metadata: Metadata = {
   title: "Book a Consultation",
   description:
-    "Book a free 30-minute consultation with Litch Consulting. Pick a date and time, share a few details, and meet your advisor over Google Meet or phone.",
+    "Book a free 30-minute consultation with Litch Consulting. Pick a real available slot, share a few details, and meet your advisor over Google Meet or phone.",
 };
 
 export default function BookPage() {
+  // Cal.com drives real availability; the legacy request-a-time form remains
+  // the fallback until NEXT_PUBLIC_CALCOM_LINK is configured.
+  const calLink = process.env.NEXT_PUBLIC_CALCOM_LINK;
+
   return (
     <>
       <Header />
@@ -33,7 +38,7 @@ export default function BookPage() {
 
         <section className="container-page py-12 md:py-16">
           <div className="mx-auto max-w-4xl">
-            <BookingForm />
+            {calLink ? <CalBooking calLink={calLink} /> : <BookingForm />}
           </div>
         </section>
       </main>

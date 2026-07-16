@@ -1,6 +1,7 @@
 import type { LucideIcon } from "lucide-react";
 import {
   LayoutGrid,
+  Briefcase,
   Wallet,
   FileStack,
   LifeBuoy,
@@ -16,7 +17,8 @@ export type ClientNavItem = {
 
 export const CLIENT_NAV_ITEMS: ClientNavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutGrid, group: "main" },
-  { label: "Invoices & Quotes", href: "/dashboard/invoices", icon: Wallet, group: "main" },
+  { label: "My Services", href: "/dashboard/requests", icon: Briefcase, group: "main" },
+  { label: "Billing", href: "/dashboard/invoices", icon: Wallet, group: "main" },
   { label: "Templates", href: "/dashboard/templates", icon: FileStack, group: "main" },
   { label: "Support Desk", href: "/dashboard/support", icon: LifeBuoy, group: "general" },
   { label: "Profile Settings", href: "/dashboard/settings", icon: Settings, group: "general" },

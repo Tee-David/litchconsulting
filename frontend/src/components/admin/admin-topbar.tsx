@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, Search, LogOut, Home, Bell, UserPlus, Send, CheckCircle2, LifeBuoy, MessageSquare } from "lucide-react";
+import { Menu, Search, LogOut, Home, Bell, UserPlus, Send, CheckCircle2, LifeBuoy, MessageSquare, Inbox, AlertTriangle, CalendarClock } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { CalculatorButton } from "@/components/calculators/calculator-launcher";
 import { signOut } from "@/lib/auth-client";
@@ -41,7 +41,10 @@ const NOTIF_ICON = {
   invoice_sent: Send, 
   invoice_paid: CheckCircle2,
   ticket_created: LifeBuoy,
-  ticket_replied: MessageSquare
+  ticket_replied: MessageSquare,
+  request: Inbox,
+  payment_flagged: AlertTriangle,
+  consultation: CalendarClock
 } as const;
 
 

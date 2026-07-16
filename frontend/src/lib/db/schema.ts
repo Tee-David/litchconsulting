@@ -7,6 +7,7 @@ import {
   integer,
   date,
   index,
+  jsonb,
 } from "drizzle-orm/pg-core";
 
 /**
@@ -245,6 +246,7 @@ export const ticket = pgTable(
     priority: text("priority").notNull().default("normal"),
     category: text("category").notNull().default("general"),
     assignee: text("assignee"),
+    requestId: uuid("request_id"), // optional soft ref → service_request.id
     createdByUserId: text("created_by_user_id"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
@@ -284,6 +286,202 @@ export const orgSettings = pgTable("org_settings", {
   updatedAt: updatedAt(),
 });
 
+/**
+ * Commercial config per catalog service. Marketing copy (name, tagline,
+ * overview, useCases, faqs) stays in `lib/content.ts`, keyed by the same slug;
+ * this row carries what the admin edits without a deploy: pricing, required
+ * documents, and per-step display overrides. Merged via lib/services/catalog.
+ */
+export const serviceOffering = pgTable("service_offering", {
+  slug: text("slug").primaryKey(), // must match content.ts services[].slug
+  active: boolean("active").notNull().default(true),
+  pricingMode: text("pricing_mode").notNull().default("quote"), // fixed | quote
+  priceNgn: numeric("price_ngn", { precision: 14, scale: 2 }), // VAT-exclusive; null when quote
+  taxRate: numeric("tax_rate", { precision: 6, scale: 2 }).notNull().default("7.5"),
+  // [{ key, label, description?, required }]
+  requiredDocuments: jsonb("required_documents").notNull().default([]),
+  // { [status]: { label?, description?, turnaround? } } display overrides
+  stepLabels: jsonb("step_labels").notNull().default({}),
+  turnaround: text("turnaround"), // headline estimate, e.g. "3–5 business days"
+  sortOrder: integer("sort_order").notNull().default(0),
+  updatedAt: updatedAt(),
+});
+
+/**
+ * A client's service request. The invoice owns the money; the request owns the
+ * work. `invoiceId` is the single canonical link (no back-pointer on invoice).
+ * Pricing/checklist/step-label fields are SNAPSHOTS taken at submit time so
+ * catalog edits never mutate an in-flight request.
+ */
+export const serviceRequest = pgTable(
+  "service_request",
+  {
+    id: id(),
+    number: text("number").notNull().unique(), // REQ-YYYY-NNN
+    clientId: uuid("client_id").notNull(), // soft ref → client.id
+    userId: text("user_id").notNull(), // Better Auth user.id (ownership checks)
+    serviceSlug: text("service_slug").notNull(),
+    serviceName: text("service_name").notNull(), // snapshot
+    pricingMode: text("pricing_mode").notNull(), // fixed | quote (snapshot)
+    priceSnapshot: numeric("price_snapshot", { precision: 14, scale: 2 }),
+    currency: text("currency").notNull().default("NGN"),
+    // quote_requested | pending_payment | awaiting_documents | in_progress |
+    // in_review | delivered | completed | cancelled | declined | refunded
+    status: text("status").notNull(),
+    details: text("details"), // client brief
+    intake: jsonb("intake"), // structured stepper answers
+    requiredDocuments: jsonb("required_documents").notNull().default([]), // snapshot
+    stepLabels: jsonb("step_labels").notNull().default({}), // snapshot
+    invoiceId: uuid("invoice_id"), // soft ref → invoice.id (canonical link)
+    assignee: text("assignee"),
+    cancelReason: text("cancel_reason"),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("service_request_client_idx").on(t.clientId),
+    index("service_request_status_idx").on(t.status),
+    index("service_request_created_idx").on(t.createdAt),
+    index("service_request_invoice_idx").on(t.invoiceId),
+  ]
+);
+
+/**
+ * Timeline entries for a request: the client-visible progress feed AND the
+ * internal audit trail, separated by `visibility`.
+ */
+export const serviceRequestEvent = pgTable(
+  "service_request_event",
+  {
+    id: id(),
+    requestId: uuid("request_id").notNull(), // soft ref → service_request.id
+    // created | quote_sent | payment_received | status_changed |
+    // document_uploaded | documents_complete | deliverable_uploaded | note |
+    // ai_analysis_started | ai_analysis_completed | invoice_linked |
+    // cancelled | declined | refunded
+    type: text("type").notNull(),
+    fromStatus: text("from_status"),
+    toStatus: text("to_status"),
+    message: text("message"),
+    visibility: text("visibility").notNull().default("client"), // client | internal
+    actorRole: text("actor_role").notNull().default("system"), // client | admin | system
+    actorName: text("actor_name"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("sre_request_idx").on(t.requestId),
+    index("sre_created_idx").on(t.createdAt),
+  ]
+);
+
+/**
+ * Files attached to a request: client uploads against the required-documents
+ * checklist, and admin deliverables. Stored in the PRIVATE R2 bucket only —
+ * access is via ownership-checked presigned GETs, never public URLs.
+ * Re-uploads supersede (history kept; newest = current).
+ */
+export const serviceRequestDocument = pgTable(
+  "service_request_document",
+  {
+    id: id(),
+    requestId: uuid("request_id").notNull(), // soft ref → service_request.id
+    kind: text("kind").notNull().default("client_upload"), // client_upload | deliverable
+    checklistKey: text("checklist_key"), // required-doc slot; null = extra/deliverable
+    fileName: text("file_name").notNull(),
+    contentType: text("content_type"),
+    sizeBytes: integer("size_bytes").notNull().default(0),
+    r2Key: text("r2_key").notNull(), // PRIVATE bucket key
+    scanStatus: text("scan_status").notNull().default("unscanned"), // unscanned | clean | infected
+    uploadedByRole: text("uploaded_by_role").notNull().default("client"), // client | admin
+    uploadedByName: text("uploaded_by_name"),
+    supersededById: uuid("superseded_by_id"), // newer version of this doc
+    litchaiDocumentId: text("litchai_document_id"),
+    litchaiStatus: text("litchai_status"), // queued | processing | ready | failed | published
+    // for deliverables published from the AI Studio: verified | manual_override
+    publishVariant: text("publish_variant"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("srd_request_idx").on(t.requestId),
+    index("srd_litchai_idx").on(t.litchaiDocumentId),
+  ]
+);
+
+/**
+ * Paystack transactions. One row per checkout attempt; `reference` is OURS
+ * (unique, sent to Paystack) so idempotency never depends on Paystack ids.
+ * The invoice is the money source of truth — this is the provider ledger.
+ */
+export const payment = pgTable(
+  "payment",
+  {
+    id: id(),
+    reference: text("reference").notNull().unique(), // LC-{invNumber}-{6hex}
+    provider: text("provider").notNull().default("paystack"),
+    invoiceId: uuid("invoice_id").notNull(), // soft ref → invoice.id
+    requestId: uuid("request_id"), // soft ref → service_request.id
+    clientId: uuid("client_id"), // soft ref → client.id
+    // initialized | success | failed | abandoned | flagged_amount_mismatch | duplicate_success
+    status: text("status").notNull().default("initialized"),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(), // Naira requested
+    amountSettled: numeric("amount_settled", { precision: 14, scale: 2 }), // Paystack kobo/100
+    currency: text("currency").notNull().default("NGN"),
+    channel: text("channel"), // card | bank | ussd | bank_transfer …
+    paystackId: text("paystack_id"), // Paystack numeric transaction id
+    accessCode: text("access_code"),
+    authorizationUrl: text("authorization_url"), // resume-payment target
+    rawEvent: jsonb("raw_event"), // last webhook/verify payload
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    index("payment_invoice_idx").on(t.invoiceId),
+    index("payment_status_idx").on(t.status),
+    index("payment_created_idx").on(t.createdAt),
+  ]
+);
+
+/**
+ * Consultation bookings mirrored from Cal.com via webhook. The Cal.com booking
+ * uid is the idempotency key; reschedules/cancellations update in place.
+ */
+export const consultation = pgTable(
+  "consultation",
+  {
+    id: id(),
+    calBookingUid: text("cal_booking_uid").notNull().unique(),
+    name: text("name"),
+    email: text("email").notNull(),
+    clientId: uuid("client_id"), // matched by email when possible
+    startsAt: timestamp("starts_at", { withTimezone: true }),
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+    status: text("status").notNull().default("confirmed"), // confirmed | rescheduled | cancelled
+    meetingUrl: text("meeting_url"),
+    notes: jsonb("notes"), // Cal.com responses payload
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("consultation_starts_idx").on(t.startsAt)]
+);
+
+/** Web-push subscriptions (admin alerting in v1). One row per browser. */
+export const pushSubscription = pgTable(
+  "push_subscription",
+  {
+    id: id(),
+    userId: text("user_id").notNull(), // Better Auth user.id
+    endpoint: text("endpoint").notNull().unique(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("push_subscription_user_idx").on(t.userId)]
+);
+
 export type Client = typeof client.$inferSelect;
 export type Invoice = typeof invoice.$inferSelect;
 export type InvoiceItem = typeof invoiceItem.$inferSelect;
@@ -294,3 +492,10 @@ export type Ticket = typeof ticket.$inferSelect;
 export type TicketMessage = typeof ticketMessage.$inferSelect;
 export type OrgSettings = typeof orgSettings.$inferSelect;
 export type User = typeof user.$inferSelect;
+export type ServiceOffering = typeof serviceOffering.$inferSelect;
+export type ServiceRequest = typeof serviceRequest.$inferSelect;
+export type ServiceRequestEvent = typeof serviceRequestEvent.$inferSelect;
+export type ServiceRequestDocument = typeof serviceRequestDocument.$inferSelect;
+export type Payment = typeof payment.$inferSelect;
+export type Consultation = typeof consultation.$inferSelect;
+export type PushSubscription = typeof pushSubscription.$inferSelect;

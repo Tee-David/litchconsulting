@@ -3,6 +3,8 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, Mail, Phone, MapPin, Hash, FileText, Plus } from "lucide-react";
 import { getClient } from "@/lib/db/queries/clients";
 import { listInvoices } from "@/lib/db/queries/invoices";
+import { listClientRequests } from "@/lib/db/queries/requests";
+import { requestStatusTone, STATUS_LABELS, type RequestStatus } from "@/lib/requests/status";
 import { EditClientButton } from "@/components/admin/client/edit-client-button";
 import { Badge, invoiceStatusTone } from "@/components/admin/ui/badge";
 import { StatCard } from "@/components/admin/ui/stat-card";
@@ -12,7 +14,11 @@ export const dynamic = "force-dynamic";
 
 export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const [client, allInvoices] = await Promise.all([getClient(id), listInvoices()]);
+  const [client, allInvoices, requests] = await Promise.all([
+    getClient(id),
+    listInvoices(),
+    listClientRequests(id),
+  ]);
   if (!client) notFound();
 
   const invoices = allInvoices.filter((i) => i.clientId === id);
@@ -78,8 +84,41 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
           </div>
         </div>
 
-        {/* Invoices */}
-        <div className="lg:col-span-2">
+        {/* Requests + Invoices */}
+        <div className="space-y-6 lg:col-span-2">
+          {requests.length > 0 && (
+            <div className="rounded-card border border-hairline bg-paper">
+              <div className="flex items-center justify-between border-b border-hairline px-5 py-4">
+                <h3 className="font-display text-sm font-bold text-ink">Service requests</h3>
+                <Link href="/admin/requests" className="text-sm font-medium text-brand hover:underline">
+                  All requests
+                </Link>
+              </div>
+              <div className="divide-y divide-hairline">
+                {requests.map((req) => (
+                  <Link
+                    key={req.id}
+                    href={`/admin/requests/${req.id}`}
+                    className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-surface"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-ink">{req.serviceName}</p>
+                      <p className="text-xs text-muted">{req.number}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm font-medium tabular-nums text-ink">
+                        {req.priceSnapshot ? formatMoney(num(req.priceSnapshot), req.currency) : "Quote"}
+                      </span>
+                      <Badge tone={requestStatusTone(req.status)}>
+                        {STATUS_LABELS[req.status as RequestStatus] ?? req.status}
+                      </Badge>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="rounded-card border border-hairline bg-paper">
             <div className="flex items-center justify-between border-b border-hairline px-5 py-4">
               <h3 className="font-display text-sm font-bold text-ink">Invoices</h3>

@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { desc } from "drizzle-orm";
-import { Plus, Wallet, BadgeCheck, Clock, AlertTriangle, Users, FileText, BarChart3, Receipt } from "lucide-react";
+import { Plus, Wallet, BadgeCheck, Clock, AlertTriangle, Users, FileText, BarChart3, Receipt, Inbox } from "lucide-react";
 import { db } from "@/lib/db/client";
 import { lead } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/server-user";
 import { invoiceStats, listInvoices } from "@/lib/db/queries/invoices";
+import { requestStats } from "@/lib/db/queries/requests";
 import { formatMoney, num } from "@/lib/invoice/money";
 import { StatCard } from "@/components/admin/ui/stat-card";
 import { Badge, invoiceStatusTone } from "@/components/admin/ui/badge";
@@ -30,11 +31,12 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default async function AdminDashboard() {
-  const [user, stats, invoices, leads] = await Promise.all([
+  const [user, stats, invoices, leads, reqStats] = await Promise.all([
     getSessionUser(),
     invoiceStats(),
     listInvoices(),
     db.select().from(lead).orderBy(desc(lead.createdAt)).limit(50),
+    requestStats(),
   ]);
 
   const monthly = last6Months().map((m) => ({
@@ -75,7 +77,8 @@ export default async function AdminDashboard() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <StatCard label="Open requests" value={reqStats.open} icon={Inbox} hint={`${reqStats.pendingPayment} awaiting quote/pay`} />
         <StatCard label="Total invoiced" value={formatMoney(stats.invoiced)} icon={Wallet} hint={`${stats.count} invoices`} />
         <StatCard label="Paid" value={formatMoney(stats.paid)} icon={BadgeCheck} />
         <StatCard label="Outstanding" value={formatMoney(stats.outstanding)} icon={Clock} />

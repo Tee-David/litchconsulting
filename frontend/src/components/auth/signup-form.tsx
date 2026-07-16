@@ -33,7 +33,14 @@ export function SignupForm() {
 
     setLoading(true);
     // role is omitted → Better Auth applies the default ("client").
-    const { error } = await signUp.email({ name: name.trim(), email, password });
+    // callbackURL rides inside the verification link, so verifying lands the
+    // user back where they were headed (e.g. a half-finished service request).
+    const { error } = await signUp.email({
+      name: name.trim(),
+      email,
+      password,
+      callbackURL: redirectTo,
+    });
     setLoading(false);
     if (error) {
       const msg = error.message || "Could not create your account.";
@@ -42,7 +49,7 @@ export function SignupForm() {
       return;
     }
     toast.success("Account created — check your email to verify.");
-    window.location.href = "/verify-email";
+    window.location.href = `/verify-email?redirect=${encodeURIComponent(redirectTo)}`;
   }
 
   function google() {

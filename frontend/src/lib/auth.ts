@@ -54,22 +54,40 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     minPasswordLength: 8,
-    // Verification email not required to sign in yet. SMTP (Truehost) is wired
-    // for password reset below via lib/email.
-    requireEmailVerification: false,
+    // The whole request/payment lifecycle is email-borne (receipts, quotes,
+    // deliverable notices), so an unreachable inbox is worse than one verify
+    // round-trip. Existing accounts were backfilled as verified before this
+    // flipped (scripts/apply-schema.ts one-off).
+    requireEmailVerification: true,
     sendResetPassword: async ({ user, url }) => {
       const { sendPasswordResetEmail } = await import("./email");
       await sendPasswordResetEmail(user.email, url);
     },
   },
   emailVerification: {
-    // A verification email is sent on sign-up, but verification is not required
-    // to log in (so existing/seeded accounts aren't locked out).
     sendOnSignUp: true,
     autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url }) => {
       const { sendVerificationEmail } = await import("./email");
       await sendVerificationEmail(user.email, url);
+    },
+    afterEmailVerification: async (user) => {
+      // First verified session → welcome them into the portal. Best-effort.
+      try {
+        const { sendEmail, emailLayout } = await import("./email");
+        await sendEmail({
+          to: user.email,
+          subject: "Welcome to Litch Consulting",
+          html: emailLayout(`
+            <p style="margin:0 0 14px;">Hi ${user.name?.split(" ")[0] || "there"},</p>
+            <p style="margin:0 0 18px;">Your account is verified — welcome aboard. From your dashboard you can request a service, track progress, pay invoices, download deliverables, and reach us any time.</p>
+            <p style="margin:0 0 20px;"><a href="${(process.env.BETTER_AUTH_URL || "https://litchconsulting.com").replace(/\/$/, "")}/dashboard" style="display:inline-block;background:#0a196d;color:#fff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:9999px;">Open your dashboard</a></p>
+            <p style="margin:0;color:#5b6474;font-size:13px;">Questions? Just reply to this email — a real person reads it.</p>
+          `),
+        });
+      } catch (err) {
+        console.error("[auth] welcome email failed:", err);
+      }
     },
   },
   socialProviders: googleEnabled

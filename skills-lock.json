@@ -18,6 +18,12 @@
       "sourceType": "github",
       "skillPath": "skills/gsap-framer-scroll-animation/SKILL.md",
       "computedHash": "e6a4caf23b818ffc5185d51339e941ca783944b6693da877fc1206693b2dff66"
+    },
+    "paystack": {
+      "source": "membranedev/application-skills",
+      "sourceType": "github",
+      "skillPath": "skills/paystack/SKILL.md",
+      "computedHash": "0cf2fea016a696d6eed61301cfc1ce9669ee6366f1a4afa8b611090ac2977fb4"
     }
   }
 }

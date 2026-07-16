@@ -53,3 +53,38 @@ self.addEventListener("fetch", (event) => {
     );
   }
 });
+
+/* ---- Web push (admin alerts) ---- */
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    data = { title: event.data ? event.data.text() : "Litch Consulting" };
+  }
+  const title = data.title || "Litch Consulting";
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: data.body || "",
+      icon: "/app-icon.svg",
+      badge: "/app-icon.svg",
+      data: { url: data.url || "/admin" },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || "/admin";
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((wins) => {
+      for (const win of wins) {
+        if ("focus" in win) {
+          win.navigate(url);
+          return win.focus();
+        }
+      }
+      return self.clients.openWindow(url);
+    }),
+  );
+});

@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { inArray } from "drizzle-orm";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { invoice, invoiceItem, client } from "@/lib/db/schema";
+import { invoice, invoiceItem, client, serviceRequest, serviceRequestEvent, payment } from "@/lib/db/schema";
 import { isAdmin, getCurrentUserId } from "@/lib/server-user";
 import { computeTotals } from "@/lib/invoice/money";
 import { nextInvoiceNumber, getInvoice } from "@/lib/db/queries/invoices";
@@ -56,7 +56,6 @@ export async function saveInvoiceAction(input: InvoiceInput): Promise<ActionResu
     dueDate: input.dueDate || null,
     notes: input.notes || null,
     terms: input.terms || null,
-    paymentUrl: input.paymentUrl || null,
     subtotal: String(totals.subtotal),
     taxTotal: String(totals.taxTotal),
     total: String(totals.total),
@@ -80,13 +79,54 @@ export async function saveInvoiceAction(input: InvoiceInput): Promise<ActionResu
     return row.id;
   });
 
+  // Auto-link to the service request this invoice was created for (first link
+  // wins — re-pointing a request goes through the admin request panel).
+  if (input.requestId) {
+    const [req] = await db
+      .select({ id: serviceRequest.id, invoiceId: serviceRequest.invoiceId, number: serviceRequest.number })
+      .from(serviceRequest)
+      .where(eq(serviceRequest.id, input.requestId));
+    if (req && !req.invoiceId) {
+      await db
+        .update(serviceRequest)
+        .set({ invoiceId: id, updatedAt: new Date() })
+        .where(eq(serviceRequest.id, req.id));
+      await db.insert(serviceRequestEvent).values({
+        requestId: req.id,
+        type: "invoice_linked",
+        message: `Invoice created for this request.`,
+        visibility: "internal",
+        actorRole: "admin",
+      });
+      revalidatePath(`/admin/requests/${req.id}`);
+      revalidatePath("/admin/requests");
+    }
+  }
+
   revalidatePath("/admin/finance/invoices");
   revalidatePath("/admin");
   return { ok: true, id };
 }
 
+/** True when the invoice is referenced by a service request or payment row. */
+async function invoiceIsLinked(ids: string[]): Promise<string | null> {
+  const [reqs, pays] = await Promise.all([
+    db
+      .select({ id: serviceRequest.id, number: serviceRequest.number })
+      .from(serviceRequest)
+      .where(inArray(serviceRequest.invoiceId, ids))
+      .limit(1),
+    db.select({ id: payment.id }).from(payment).where(inArray(payment.invoiceId, ids)).limit(1),
+  ]);
+  if (reqs.length) return `linked to service request ${reqs[0].number}`;
+  if (pays.length) return "it has payment records";
+  return null;
+}
+
 export async function deleteInvoiceAction(id: string): Promise<ActionResult> {
   if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
+  const linked = await invoiceIsLinked([id]);
+  if (linked) return { ok: false, error: `Can't delete — ${linked}. Void it instead.` };
   await db.transaction(async (tx) => {
     await tx.delete(invoiceItem).where(eq(invoiceItem.invoiceId, id));
     await tx.delete(invoice).where(eq(invoice.id, id));
@@ -97,9 +137,43 @@ export async function deleteInvoiceAction(id: string): Promise<ActionResult> {
 
 export async function setInvoiceStatusAction(id: string, status: string): Promise<ActionResult> {
   if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
-  const patch: Record<string, unknown> = { status, updatedAt: new Date() };
-  if (status === "paid") patch.paidAt = new Date();
-  await db.update(invoice).set(patch).where(eq(invoice.id, id));
+  if (status === "paid") {
+    // Manual mark-as-paid runs the same pipeline as a Paystack success:
+    // amountPaid + paidAt + linked-request advance + receipt + admin alert.
+    const [inv] = await db.select().from(invoice).where(eq(invoice.id, id));
+    if (!inv) return { ok: false, error: "Not found" };
+    if (inv.status !== "paid") {
+      const { applyInvoicePaid } = await import("@/lib/payments/apply");
+      await applyInvoicePaid(inv, { via: "manual" });
+    }
+  } else {
+    const patch: Record<string, unknown> = { status, updatedAt: new Date() };
+    await db.update(invoice).set(patch).where(eq(invoice.id, id));
+    // Voiding an invoice that a request is waiting on reverts the request.
+    if (status === "void") {
+      const reqs = await db
+        .select()
+        .from(serviceRequest)
+        .where(eq(serviceRequest.invoiceId, id));
+      const req = reqs[0];
+      if (req && req.status === "pending_payment") {
+        const toStatus = req.pricingMode === "quote" ? "quote_requested" : "cancelled";
+        await db
+          .update(serviceRequest)
+          .set({ status: toStatus, updatedAt: new Date() })
+          .where(eq(serviceRequest.id, req.id));
+        await db.insert(serviceRequestEvent).values({
+          requestId: req.id,
+          type: "status_changed",
+          fromStatus: "pending_payment",
+          toStatus,
+          message: "The linked invoice was voided.",
+          visibility: "client",
+          actorRole: "admin",
+        });
+      }
+    }
+  }
   revalidatePath("/admin/finance/invoices");
   revalidatePath(`/admin/finance/invoices/${id}`);
   return { ok: true };
@@ -130,7 +204,6 @@ export async function duplicateInvoiceAction(id: string): Promise<ActionResult> 
         dueDate: inv.dueDate,
         notes: inv.notes,
         terms: inv.terms,
-        paymentUrl: inv.paymentUrl,
         subtotal: inv.subtotal,
         taxTotal: inv.taxTotal,
         total: inv.total,
@@ -189,7 +262,7 @@ export async function sendInvoiceAction(id: string): Promise<ActionResult> {
     })),
     notes: inv.notes,
     terms: inv.terms,
-    paymentUrl: inv.paymentUrl || publicLink,
+    paymentUrl: publicLink,
   };
 
   const { renderInvoicePdf } = await import("@/lib/invoice/pdf/render");
@@ -197,7 +270,7 @@ export async function sendInvoiceAction(id: string): Promise<ActionResult> {
   const { getIssuer } = await import("@/lib/invoice/get-issuer");
   const pdf = await renderInvoicePdf(invoiceData, "invoice", await getIssuer());
 
-  const payHref = inv.paymentUrl || publicLink;
+  const payHref = publicLink;
   const html = emailLayout(`
     <p style="margin:0 0 14px;">Hi ${inv.billToName || "there"},</p>
     <p style="margin:0 0 18px;">Please find attached invoice <strong>${inv.number}</strong>${
@@ -215,6 +288,22 @@ export async function sendInvoiceAction(id: string): Promise<ActionResult> {
   });
 
   await db.update(invoice).set({ status: "sent", sentAt: new Date(), updatedAt: new Date() }).where(eq(invoice.id, id));
+
+  // Quote-based service request waiting on this invoice → the quote is out.
+  const linkedRequests = await db
+    .select({ id: serviceRequest.id, status: serviceRequest.status })
+    .from(serviceRequest)
+    .where(eq(serviceRequest.invoiceId, id));
+  for (const req of linkedRequests) {
+    if (req.status === "quote_requested") {
+      const { markQuoteSent } = await import("@/lib/requests/quote");
+      await markQuoteSent(req.id, inv.number);
+      revalidatePath("/admin/requests");
+      revalidatePath(`/admin/requests/${req.id}`);
+      revalidatePath(`/dashboard/requests/${req.id}`);
+    }
+  }
+
   revalidatePath("/admin/finance/invoices");
   revalidatePath(`/admin/finance/invoices/${id}`);
   return { ok: true, error: delivered ? undefined : "Invoice marked sent (email not configured)." };
@@ -247,7 +336,6 @@ export async function convertQuoteToInvoiceAction(id: string): Promise<ActionRes
         dueDate: q.dueDate,
         notes: q.notes,
         terms: q.terms,
-        paymentUrl: q.paymentUrl,
         subtotal: q.subtotal,
         taxTotal: q.taxTotal,
         total: q.total,
@@ -300,6 +388,8 @@ export async function bulkDeleteInvoicesAction(ids: string[]): Promise<ActionRes
   if (!ids || ids.length === 0) return { ok: true };
 
   try {
+    const linked = await invoiceIsLinked(ids);
+    if (linked) return { ok: false, error: `Can't delete — one is ${linked}. Void it instead.` };
     await db.transaction(async (tx) => {
       await tx.delete(invoiceItem).where(inArray(invoiceItem.invoiceId, ids));
       await tx.delete(invoice).where(inArray(invoice.id, ids));
@@ -320,9 +410,19 @@ export async function bulkSetInvoiceStatusAction(ids: string[], status: string):
   if (!ids || ids.length === 0) return { ok: true };
 
   try {
-    const patch: Record<string, unknown> = { status, updatedAt: new Date() };
-    if (status === "paid") patch.paidAt = new Date();
-    await db.update(invoice).set(patch).where(inArray(invoice.id, ids));
+    if (status === "paid") {
+      // Route each through the shared payment pipeline (idempotent per invoice).
+      const { applyInvoicePaid } = await import("@/lib/payments/apply");
+      const rows = await db.select().from(invoice).where(inArray(invoice.id, ids));
+      for (const inv of rows) {
+        if (inv.status !== "paid") await applyInvoicePaid(inv, { via: "manual" });
+      }
+    } else {
+      await db
+        .update(invoice)
+        .set({ status, updatedAt: new Date() })
+        .where(inArray(invoice.id, ids));
+    }
     revalidatePath("/admin/finance/invoices");
     revalidatePath("/admin/finance/quotes");
     revalidatePath("/admin/finance/receipts");

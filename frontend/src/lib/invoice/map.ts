@@ -19,7 +19,15 @@ const itemsOf = (items: InvoiceItem[]) =>
     taxRate: num(it.taxRate),
   }));
 
-/** DB row + items → on-screen / PDF invoice shape. */
+const SITE_BASE = (
+  process.env.NEXT_PUBLIC_SITE_URL || "https://www.litchconsulting.com"
+).replace(/\/$/, "");
+
+/**
+ * DB row + items → on-screen / PDF invoice shape. The pay-button target is
+ * always our public invoice page (Paystack + bank transfer live there) —
+ * manual payment links are retired.
+ */
 export function toInvoiceData(inv: Invoice, items: InvoiceItem[]): InvoiceData {
   return {
     number: inv.number,
@@ -32,7 +40,7 @@ export function toInvoiceData(inv: Invoice, items: InvoiceItem[]): InvoiceData {
     items: itemsOf(items),
     notes: inv.notes,
     terms: inv.terms,
-    paymentUrl: inv.paymentUrl,
+    paymentUrl: inv.publicToken ? `${SITE_BASE}/i/${inv.publicToken}` : null,
     publicToken: inv.publicToken,
   };
 }
@@ -51,7 +59,6 @@ export function toInvoiceInput(inv: Invoice, items: InvoiceItem[]): InvoiceInput
     dueDate: inv.dueDate || undefined,
     notes: inv.notes || undefined,
     terms: inv.terms || undefined,
-    paymentUrl: inv.paymentUrl || undefined,
     items: itemsOf(items),
   };
 }

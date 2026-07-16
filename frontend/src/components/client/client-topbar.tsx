@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, LogOut, Home, Bell, Send, CheckCircle2, MessageSquare, User, Settings } from "lucide-react";
+import { Menu, LogOut, Home, Bell, Send, CheckCircle2, MessageSquare, User, Settings, Briefcase } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { CalculatorButton } from "@/components/calculators/calculator-launcher";
 import { signOut } from "@/lib/auth-client";
@@ -39,7 +39,8 @@ function timeAgo(iso: string) {
 const NOTIF_ICON = { 
   invoice_sent: Send, 
   invoice_paid: CheckCircle2,
-  ticket_replied: MessageSquare
+  ticket_replied: MessageSquare,
+  request: Briefcase
 } as const;
 
 const SEEN_KEY = "litch:client-notif-seen";

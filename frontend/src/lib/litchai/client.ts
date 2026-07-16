@@ -118,6 +118,40 @@ export function listDocuments(clientId?: string): Promise<{ documents: LitchaiDo
   return litchai(`/documents${qs}`);
 }
 
+/** Single-document status/progress — the polling surface for relayed uploads. */
+export function getDocument(documentId: number): Promise<{
+  document_id: number;
+  engagement_id: number | null;
+  status: string;
+  progress: Record<string, unknown> | null;
+  filename: string;
+}> {
+  return litchai(`/documents/${documentId}`);
+}
+
+/**
+ * Approved, gate-verified workbook bytes (backend Phase 4 endpoint). Until it
+ * lands on the VM this throws with the backend's 404 — callers surface that
+ * as "not ready yet".
+ */
+export async function getResultXlsx(documentId: number): Promise<Buffer> {
+  const res = await fetch(new URL(`/documents/${documentId}/result.xlsx`, requireEnv("LITCHAI_API_URL")), {
+    headers: {
+      "CF-Access-Client-Id": requireEnv("LITCHAI_ACCESS_CLIENT_ID"),
+      "CF-Access-Client-Secret": requireEnv("LITCHAI_ACCESS_CLIENT_SECRET"),
+    },
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    throw new Error(
+      res.status === 404
+        ? "The compiled workbook isn't available yet — approve the engagement first (or the backend result endpoint hasn't shipped)."
+        : `LitchAI result → ${res.status}`
+    );
+  }
+  return Buffer.from(await res.arrayBuffer());
+}
+
 export function getReview(documentId: number): Promise<ReviewData> {
   return litchai(`/documents/${documentId}/review`);
 }

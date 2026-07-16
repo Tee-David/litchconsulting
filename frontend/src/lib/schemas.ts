@@ -14,11 +14,7 @@ export const newsletterSchema = z.object({
 });
 export type NewsletterInput = z.infer<typeof newsletterSchema>;
 
-export const serviceOptions = [
-  "Financial Reporting",
-  "Financial Modelling",
-  "Taxation Planning & Management",
-  "Forensic Accounting",
-  "Data Analytics",
-  "General Advisory",
-];
+import { services } from "@/lib/content";
+
+/** Derived from the service catalog (lib/content.ts) — never hand-maintain. */
+export const serviceOptions: string[] = services.map((s) => s.name);

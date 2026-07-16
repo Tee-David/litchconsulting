@@ -55,8 +55,11 @@ export default async function ServiceDetailPage({
             <div>
               <SectionHeading eyebrow="Overview" title="How we help." />
               <p className="mt-6 text-lg leading-relaxed text-body">{service.overview}</p>
-              <div className="mt-8">
-                <Button href="/book" withArrow>
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <Button href={`/request/${service.slug}`} withArrow>
+                  Request this service
+                </Button>
+                <Button href="/book" variant="outline" withArrow>
                   Book a consultation
                 </Button>
               </div>

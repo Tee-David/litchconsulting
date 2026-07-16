@@ -51,6 +51,15 @@ nodemailer (SMTP) + Resend · @react-pdf/renderer · @tanstack/react-table · Do
   Next reads `frontend/.env*`, so local dev uses `frontend/.env.local` (a copy of `.env`).
   Sync to Vercel with `scripts/vercel-sync-env.mjs`. Don't sync `BETTER_AUTH_URL` (localhost)
   — Better Auth infers the URL from the request host in prod.
+- **Localhost logins:** if sign-in "succeeds" but you land back on /login, check
+  `frontend/.env.local` has `BETTER_AUTH_URL=http://localhost:3000`. With an `https://…`
+  value, Better Auth issues **Secure** cookies that the browser drops on plain-HTTP
+  localhost, so no session ever sticks (the middleware cookie check then bounces you).
+  After editing env, restart `npm run dev`. Also: email verification is required to log in
+  (`requireEmailVerification: true`) — for local signups without SMTP configured, grab the
+  verification link from the dev-server terminal (lib/email logs unsent mail), or verify
+  the row manually: `UPDATE "user" SET "emailVerified"=true WHERE email='…'`. Google OAuth
+  works locally only if the Google console lists `http://localhost:3000` as a redirect origin.
 - **PDF ₦ glyph:** Helvetica lacks the Naira sign, so the PDF registers **Noto Sans** from
   `lib/invoice/pdf/fonts/*.ttf`. `next.config.ts` `outputFileTracingIncludes` ships those
   fonts with the PDF serverless functions.
@@ -65,8 +74,13 @@ nodemailer (SMTP) + Resend · @react-pdf/renderer · @tanstack/react-table · Do
 ## Commands
 
 ```bash
+# Start localhost dev server (runs on port 3000)
 cd frontend
-npm run dev | build | start | lint
+npm run dev
+
+# Other frontend commands
+cd frontend
+npm run build | start | lint
 npm run db:generate                                             # generate migration SQL
 node --env-file=.env.local --import tsx scripts/apply-schema.ts # apply schema (NOT db:push)
 node --env-file=.env.local --import tsx scripts/seed-users.ts   # seed users

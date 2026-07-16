@@ -2,14 +2,15 @@
 
 import { useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Download, CreditCard, Check, X, Loader2 } from "lucide-react";
+import { Download, Check, X, Loader2 } from "lucide-react";
+import { PayButton } from "@/components/pay/pay-button";
 import { acceptQuoteAction, declineQuoteAction } from "../actions";
 
 type InvoiceDetailClientProps = {
   invoiceId: string;
   kind: "invoice" | "quote";
   status: string;
-  paymentUrl?: string | null;
+  publicToken?: string | null;
   invoiceNumber: string;
 };
 
@@ -17,7 +18,7 @@ export function InvoiceDetailClient({
   invoiceId,
   kind,
   status,
-  paymentUrl,
+  publicToken,
   invoiceNumber,
 }: InvoiceDetailClientProps) {
   const router = useRouter();
@@ -85,17 +86,9 @@ export function InvoiceDetailClient({
           </>
         )}
 
-        {/* Invoice Payment Action */}
-        {kind === "invoice" && status !== "paid" && paymentUrl && (
-          <a
-            href={paymentUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
-          >
-            <CreditCard className="size-4" />
-            Pay Now
-          </a>
+        {/* Invoice Payment Action — Paystack checkout via the public token */}
+        {kind === "invoice" && ["sent", "overdue"].includes(status) && publicToken && (
+          <PayButton token={publicToken} label="Pay Now" />
         )}
 
         {/* PDF Download Action */}

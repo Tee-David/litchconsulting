@@ -48,7 +48,8 @@ export type InvoiceInput = {
   dueDate?: string;
   notes?: string;
   terms?: string;
-  paymentUrl?: string;
   items: InvoiceItemData[];
+  /** service_request to auto-link on save (from /admin/requests "Create quote"). */
+  requestId?: string;
 };
 

@@ -101,11 +101,11 @@ export function Hero() {
           </AnimatePresence>
 
           <div className="mt-8 flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:items-center">
-            <Button href="/book" withArrow className="w-full sm:w-auto">
-              Book a Consultation
+            <Button href="/get-started" withArrow className="w-full sm:w-auto">
+              Get Started
             </Button>
-            <Button href="/#services" variant="light" withArrow className="w-full sm:w-auto">
-              Explore Services
+            <Button href="/book" variant="light" withArrow className="w-full sm:w-auto">
+              Book a Consultation
             </Button>
           </div>
         </div>

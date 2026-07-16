@@ -198,8 +198,8 @@ export function Header({ overlay = false }: { overlay?: boolean }) {
                   Log in
                 </Button>
               )}
-              <Button href="/book" withArrow variant={solid ? "outline" : "light"}>
-                Book a Consultation
+              <Button href="/get-started" withArrow variant={solid ? "outline" : "light"}>
+                Get Started
               </Button>
             </div>
           </div>
