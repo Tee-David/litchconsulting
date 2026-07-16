@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, PlugZap } from "lucide-react";
 import { PageHeader } from "@/components/admin/ui/page-header";
+import { EmptyState } from "@/components/admin/ui/empty-state";
 import { ReviewGrid } from "@/components/admin/litchai/review-grid";
 import { EngagementPanel } from "@/components/admin/litchai/engagement-panel";
-import { getReview, getTaxonomy } from "@/lib/litchai/client";
+import { getReview, getTaxonomy, type ReviewData, type TaxonomyCategory } from "@/lib/litchai/client";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,17 @@ export default async function ReviewPage({
 }) {
   const { documentId } = await params;
   const id = Number(documentId);
-  const [review, taxonomy] = await Promise.all([getReview(id), getTaxonomy()]);
+
+  let review: ReviewData | null = null;
+  let categories: TaxonomyCategory[] = [];
+  let error: string | null = null;
+  try {
+    const [r, t] = await Promise.all([getReview(id), getTaxonomy()]);
+    review = r;
+    categories = t.categories;
+  } catch (e) {
+    error = e instanceof Error ? e.message : "LitchAI backend unreachable";
+  }
 
   return (
     <div className="space-y-6">
@@ -22,25 +33,38 @@ export default async function ReviewPage({
         href="/admin/litchai"
         className="inline-flex items-center gap-1 text-sm text-body hover:text-ink"
       >
-        <ArrowLeft className="size-4" /> Back to documents
+        <ArrowLeft className="size-4" /> Back to AI Studio
       </Link>
 
-      <PageHeader
-        title={review.document.filename}
-        description={`Status: ${review.document.status} · risk-ordered — biggest, least-certain lines first`}
-      />
+      {!review ? (
+        <EmptyState
+          icon={PlugZap}
+          title="Review workspace unavailable"
+          description={
+            error ||
+            "The LitchAI backend isn't reachable — check LITCHAI_API_URL and the Cloudflare tunnel, then reload."
+          }
+        />
+      ) : (
+        <>
+          <PageHeader
+            title={review.document.filename}
+            description={`Status: ${review.document.status} · risk-ordered — biggest, least-certain lines first`}
+          />
 
-      {review.document.engagement_id !== null && (
-        <EngagementPanel documentId={id} engagementId={review.document.engagement_id} />
+          {review.document.engagement_id !== null && (
+            <EngagementPanel documentId={id} engagementId={review.document.engagement_id} />
+          )}
+
+          <ReviewGrid
+            documentId={id}
+            lineItems={review.line_items}
+            queue={review.queue}
+            lineage={review.lineage}
+            categories={categories}
+          />
+        </>
       )}
-
-      <ReviewGrid
-        documentId={id}
-        lineItems={review.line_items}
-        queue={review.queue}
-        lineage={review.lineage}
-        categories={taxonomy.categories}
-      />
     </div>
   );
 }

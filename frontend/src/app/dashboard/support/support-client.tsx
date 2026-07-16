@@ -11,9 +11,11 @@ import type { TicketRow } from "@/lib/db/queries/tickets";
 
 type SupportClientProps = {
   tickets: TicketRow[];
+  /** the client's service requests, for the optional "related request" link */
+  requests?: { id: string; number: string; serviceName: string }[];
 };
 
-export function SupportClient({ tickets }: SupportClientProps) {
+export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
@@ -25,11 +27,15 @@ export function SupportClient({ tickets }: SupportClientProps) {
   const [subject, setSubject] = useState("");
   const [category, setCategory] = useState("general");
   const [message, setMessage] = useState("");
+  const [requestId, setRequestId] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  // Check search params for ?new=true to open the modal
+  // ?new=true opens the modal; ?request=<id> pre-links a service request
+  // (e.g. the "Contact support" button on a request workspace).
   useEffect(() => {
     if (searchParams.get("new") === "true") {
+      const linked = searchParams.get("request");
+      if (linked) setRequestId(linked);
       setIsModalOpen(true);
       // Clean up search params
       router.replace("/dashboard/support");
@@ -65,6 +71,7 @@ export function SupportClient({ tickets }: SupportClientProps) {
         subject: subject.trim(),
         category,
         message: message.trim(),
+        requestId: requestId || null,
       });
 
       if (res.ok && res.id) {
@@ -277,6 +284,28 @@ export function SupportClient({ tickets }: SupportClientProps) {
                   <option value="technical">Technical Support</option>
                 </select>
               </div>
+
+              {requests.length > 0 && (
+                <div>
+                  <label htmlFor="related-request" className="block text-xs font-semibold text-muted uppercase tracking-wider mb-1.5">
+                    Related service request (optional)
+                  </label>
+                  <select
+                    id="related-request"
+                    value={requestId}
+                    onChange={(e) => setRequestId(e.target.value)}
+                    disabled={isPending}
+                    className="w-full rounded-xl border border-hairline bg-paper px-3.5 py-2.5 text-sm font-semibold text-ink focus:border-brand focus:outline-none"
+                  >
+                    <option value="">Not about a specific request</option>
+                    {requests.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.number} — {r.serviceName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label htmlFor="message" className="block text-xs font-semibold text-muted uppercase tracking-wider mb-1.5">

@@ -123,7 +123,7 @@ export function RequestActions({
         )}
         {paidStage && (
           <Link
-            href={`/dashboard/support?new=true&request=${encodeURIComponent(requestNumber)}`}
+            href={`/dashboard/support?new=true&request=${encodeURIComponent(requestId)}`}
             className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-paper px-4 py-2.5 text-sm font-semibold text-body transition-colors hover:bg-surface"
           >
             <LifeBuoy className="size-4 text-muted" /> Contact support

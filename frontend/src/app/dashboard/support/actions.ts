@@ -17,6 +17,8 @@ export async function createClientTicketAction(input: {
   subject: string;
   category: string;
   message: string;
+  /** optional service_request this ticket is about (ownership-checked) */
+  requestId?: string | null;
 }): Promise<ActionResult> {
   const user = await getSessionUser();
   if (!user || user.role !== "client") return { ok: false, error: "Unauthorized" };
@@ -25,6 +27,19 @@ export async function createClientTicketAction(input: {
   if (!input.message.trim()) return { ok: false, error: "Initial message is required." };
 
   const clientRow = await getClientForUser(user.id, user.email, user.name);
+
+  // Only link a request the client actually owns.
+  let requestId: string | null = null;
+  if (input.requestId) {
+    const { serviceRequest } = await import("@/lib/db/schema");
+    const { and: andOp, eq: eqOp } = await import("drizzle-orm");
+    const [own] = await db
+      .select({ id: serviceRequest.id })
+      .from(serviceRequest)
+      .where(andOp(eqOp(serviceRequest.id, input.requestId), eqOp(serviceRequest.clientId, clientRow.id)));
+    requestId = own?.id ?? null;
+  }
+
   const number = await nextTicketNumber();
   const now = new Date();
 
@@ -39,6 +54,7 @@ export async function createClientTicketAction(input: {
         clientId: clientRow.id,
         priority: "normal",
         category: input.category || "general",
+        requestId,
         status: "open",
         createdByUserId: user.id,
         lastReplyAt: now,
