@@ -58,6 +58,34 @@ class InMemoryRepository:
     def get_engagement(self, engagement_id: int) -> Engagement | None:
         return self._engagements.get(engagement_id)
 
+    def transition_engagement(
+        self, engagement_id: int, to_status: str, detail: dict[str, Any] | None = None
+    ) -> Engagement:
+        from litchai.documents.engagement_state import transition as eng_transition
+
+        eng = self._engagements.get(engagement_id)
+        if eng is None:
+            raise RepositoryError(f"unknown engagement {engagement_id}")
+        entry = eng_transition(engagement_id, eng.status, to_status, detail)  # raises on illegal move
+        self._audit.append(entry)
+        updated = Engagement(**{**eng.__dict__, "status": entry.to_state})
+        self._engagements[engagement_id] = updated
+        return updated
+
+    def set_generated_file_hitl_status(self, generated_file_id: int, hitl_status: str) -> None:
+        gen = self._generated.get(generated_file_id)
+        if gen is None:
+            raise RepositoryError(f"unknown generated file {generated_file_id}")
+        gen["hitl_status"] = hitl_status
+
+    def mark_engagement_deliverable(self, engagement_id: int) -> int:
+        n = 0
+        for gen in self._generated.values():
+            if gen.get("engagement_id") == engagement_id:
+                gen["hitl_status"] = "approved"
+                n += 1
+        return n
+
     # --- documents ---------------------------------------------------------
     def create_document(
         self,

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@/components/admin/ui/page-header";
 import { ReviewGrid } from "@/components/admin/litchai/review-grid";
+import { EngagementPanel } from "@/components/admin/litchai/engagement-panel";
 import { getReview, getTaxonomy } from "@/lib/litchai/client";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,10 @@ export default async function ReviewPage({
         title={review.document.filename}
         description={`Status: ${review.document.status} · risk-ordered — biggest, least-certain lines first`}
       />
+
+      {review.document.engagement_id !== null && (
+        <EngagementPanel documentId={id} engagementId={review.document.engagement_id} />
+      )}
 
       <ReviewGrid
         documentId={id}

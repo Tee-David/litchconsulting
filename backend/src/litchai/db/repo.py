@@ -98,6 +98,24 @@ class Repository(Protocol):
 
     def get_engagement(self, engagement_id: int) -> Engagement | None: ...
 
+    def transition_engagement(
+        self,
+        engagement_id: int,
+        to_status: str,
+        detail: dict[str, Any] | None = None,
+    ) -> Engagement:
+        """Advance ``engagements.status`` through the engagement state machine and
+        append the matching ``audit_log`` row. Raises
+        :class:`~litchai.documents.state.IllegalTransition` on an illegal move."""
+        ...
+
+    def set_generated_file_hitl_status(self, generated_file_id: int, hitl_status: str) -> None: ...
+
+    def mark_engagement_deliverable(self, engagement_id: int) -> int:
+        """Set every generated file of the engagement to ``hitl_status='approved'``
+        (the deliverable mark). Returns the number of files updated."""
+        ...
+
     # --- documents ---------------------------------------------------------
     def create_document(
         self,

@@ -96,6 +96,45 @@ class PostgresRepository:
             row = cur.fetchone()
             return _engagement(row) if row else None
 
+    def transition_engagement(
+        self, engagement_id: int, to_status: str, detail: dict[str, Any] | None = None
+    ) -> Engagement:
+        from litchai.documents.engagement_state import transition as eng_transition
+
+        with self.conn.transaction(), self.conn.cursor() as cur:
+            cur.execute("SELECT status FROM engagements WHERE id = %s FOR UPDATE", (engagement_id,))
+            row = cur.fetchone()
+            if row is None:
+                raise RepositoryError(f"unknown engagement {engagement_id}")
+            entry = eng_transition(engagement_id, row["status"], to_status, detail)
+            cur.execute("UPDATE engagements SET status = %s WHERE id = %s", (entry.to_state, engagement_id))
+            cur.execute(
+                "INSERT INTO audit_log (entity, entity_id, from_state, to_state, detail) "
+                "VALUES ('engagement', %s, %s, %s, %s)",
+                (engagement_id, entry.from_state, entry.to_state, Jsonb(entry.detail)),
+            )
+            cur.execute(
+                "SELECT id, client_id, period_label, template, aux_inputs, materiality, status, created_at "
+                "FROM engagements WHERE id = %s",
+                (engagement_id,),
+            )
+            return _engagement(cur.fetchone())
+
+    def set_generated_file_hitl_status(self, generated_file_id: int, hitl_status: str) -> None:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "UPDATE generated_files SET hitl_status = %s WHERE id = %s",
+                (hitl_status, generated_file_id),
+            )
+
+    def mark_engagement_deliverable(self, engagement_id: int) -> int:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "UPDATE generated_files SET hitl_status = 'approved' WHERE engagement_id = %s",
+                (engagement_id,),
+            )
+            return cur.rowcount
+
     # --- documents ---------------------------------------------------------
     def create_document(
         self,

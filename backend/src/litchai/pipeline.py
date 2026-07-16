@@ -8,7 +8,11 @@ so the audit trail (FR9) is complete by construction.
 """
 from __future__ import annotations
 
+import hashlib
+import tempfile
 from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
 
 from litchai.categorize import NORMALIZER_VERSION, normalize_narration
 from litchai.categorize.ladder import DEFAULT_CONFIG, LadderConfig, LlmClassify, classify
@@ -196,3 +200,82 @@ def categorize_document(
         DocumentStatus.CATEGORIZED,
         {"distinct": len(decisions), "needs_review": review_count},
     )
+
+
+# --- engagement compile (Phase 4) ------------------------------------------
+
+_VARIANT_FOR_TEMPLATE = {"annual_report_ias1": "ias1", "annual_report_ifrs18": "ifrs18"}
+
+
+@dataclass(frozen=True)
+class CompileResult:
+    ok: bool
+    generated_file_id: int
+    errors: list[tuple]          # (sheet, row, col, token) from find_workbook_errors
+    review_pack: object          # litchai.review.facts.ReviewPack
+    lineage: object              # mapping LineageEntry list
+
+
+def compile_engagement(
+    repo: Repository,
+    engagement_id: int,
+    *,
+    taxonomy: Taxonomy,
+    workdir: str | Path | None = None,
+) -> CompileResult:
+    """Compile one engagement's categorized line items into its deliverable
+    workbook and gate it (LibreOffice recompute). Aggregates across every
+    document in the engagement → mapping contract → compiler → recompute →
+    ReviewPack. Records the generated file and moves ``open → in_review``.
+
+    Only the annual-report templates compile to a full workbook today; the five
+    single-sheet compilers reach here as they gain an engagement contract."""
+    from litchai.compilers.annual_report import compile_annual_report
+    from litchai.mapping import LineItemRow, aggregate, build_annual_report_contract
+    from litchai.review.facts import build_workbook_review_pack
+    from litchai.validation import recompute
+
+    eng = repo.get_engagement(engagement_id)
+    if eng is None:
+        raise ValueError(f"unknown engagement {engagement_id}")
+    variant = _VARIANT_FOR_TEMPLATE.get(eng.template)
+    if variant is None:
+        raise ValueError(f"engagement template {eng.template!r} has no workbook compiler")
+
+    rows: list = []
+    for doc in repo.list_documents(eng.client_id):
+        if doc.engagement_id != engagement_id:
+            continue
+        for li in repo.get_line_items(doc.id):
+            if li.category_code and li.direction in ("in", "out"):
+                rows.append(LineItemRow(li.id, li.category_code, li.direction, li.amount))
+
+    totals = aggregate(rows, taxonomy)
+    contract, lineage = build_annual_report_contract(totals, eng.aux_inputs or {}, variant, taxonomy)
+    compiled = compile_annual_report(contract)
+
+    ctx = tempfile.TemporaryDirectory() if workdir is None else None
+    base = Path(workdir) if workdir is not None else Path(ctx.name)  # type: ignore[union-attr]
+    try:
+        path = base / f"engagement_{engagement_id}.xlsx"
+        compiled.workbook.save(path)
+        grids = recompute.recompute_workbook(path)
+        errors = recompute.find_workbook_errors(grids)
+        pack = build_workbook_review_pack("annual_report", compiled, grids, contract)
+        sha = hashlib.sha256(path.read_bytes()).hexdigest()
+    finally:
+        if ctx is not None:
+            ctx.cleanup()
+
+    gid = repo.record_generated_file(
+        engagement_id,
+        eng.template,
+        compiled.compiler_version,
+        "passed" if not errors else "failed",
+        sha256=sha,
+        recompute_engine="libreoffice",
+        taxonomy_version=taxonomy.version,
+    )
+    if not errors and eng.status == "open":
+        repo.transition_engagement(engagement_id, "in_review", {"generated_file_id": gid})
+    return CompileResult(ok=not errors, generated_file_id=gid, errors=errors, review_pack=pack, lineage=lineage)

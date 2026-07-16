@@ -67,11 +67,32 @@ export type FigureLineage = {
 };
 
 export type ReviewData = {
-  document: { document_id: number; status: string; filename: string };
+  document: { document_id: number; status: string; filename: string; engagement_id: number | null };
   line_items: LineItem[];
   queue: QueueEntry[];
   lineage: FigureLineage[];
 };
+
+export type AssistantResponse = {
+  intent: string;
+  answer: string | null;
+  proposed_correction: { kind: string; target: string; new_value: string } | null;
+  grounded_refs: string[];
+  needs_review: boolean;
+};
+
+export function transitionEngagement(
+  engagementId: number,
+  action: "submit" | "approve" | "reject" | "lock" | "reopen",
+): Promise<{ engagement_id: number; status: string }> {
+  return litchai(`/engagements/${engagementId}/${action}`, { method: "POST" });
+}
+
+export function askEngagement(engagementId: number, question: string): Promise<AssistantResponse> {
+  return litchai(`/engagements/${engagementId}/ask?question=${encodeURIComponent(question)}`, {
+    method: "POST",
+  });
+}
 
 export type TaxonomyCategory = { code: string; label: string };
 

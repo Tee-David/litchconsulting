@@ -3,7 +3,12 @@
 import { revalidatePath } from "next/cache";
 import { isAdmin } from "@/lib/server-user";
 import { postEncryptedDocument } from "@/lib/litchai/blind-relay";
-import { recategorizeLine } from "@/lib/litchai/client";
+import {
+  askEngagement,
+  recategorizeLine,
+  transitionEngagement,
+  type AssistantResponse,
+} from "@/lib/litchai/client";
 
 type Result<T = unknown> = { ok: boolean; error?: string } & Partial<T>;
 
@@ -58,5 +63,33 @@ export async function recategorize(
     return { ok: true, categoryCode: res.category_code };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Recategorize failed" };
+  }
+}
+
+export async function engagementAction(
+  engagementId: number,
+  action: "submit" | "approve" | "reject" | "lock" | "reopen",
+  documentId: number,
+): Promise<Result<{ status: string }>> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
+  try {
+    const res = await transitionEngagement(engagementId, action);
+    revalidatePath(`/admin/litchai/${documentId}`);
+    return { ok: true, status: res.status };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Action failed" };
+  }
+}
+
+/** Ask the review assistant (explain-only; edits come back as proposals). */
+export async function askAssistant(
+  engagementId: number,
+  question: string,
+): Promise<Result<{ response: AssistantResponse }>> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
+  try {
+    return { ok: true, response: await askEngagement(engagementId, question) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Assistant unavailable" };
   }
 }

@@ -30,6 +30,13 @@ API_VERSION = "0.3.0"
 
 RepoProvider = Callable[[], ContextManager[Repository]]
 StoreProvider = Callable[[], ContextManager[MemoryStore]]
+ProviderFactory = Callable[[], Any]  # returns an ai.provider.Provider
+
+
+def _default_provider() -> Any:
+    from litchai.ai.provider import OllamaProvider
+
+    return OllamaProvider()
 
 # Upload guardrails (FR1). The blind-relay envelope adds a little overhead, so
 # the ciphertext cap is generous relative to the ~80-page scan worst case.
@@ -94,10 +101,12 @@ def create_app(
     repo_provider: RepoProvider | None = None,
     storage: Storage | None = None,
     store_provider: StoreProvider | None = None,
+    provider_factory: ProviderFactory | None = None,
 ) -> FastAPI:
     app = FastAPI(title="LitchAI", version=API_VERSION, lifespan=_lifespan)
     app.state.repo_provider = repo_provider or _pg_provider
     app.state.store_provider = store_provider or _pg_store_provider
+    app.state.provider_factory = provider_factory or _default_provider
     app.state.storage = storage or Storage()
 
     def get_repo() -> Iterator[Repository]:
@@ -234,7 +243,12 @@ def create_app(
         lineage = [rollup_figure(cat, lines).__dict__ for cat, lines in sorted(by_cat.items())]
 
         return {
-            "document": {"document_id": doc.id, "status": doc.status, "filename": doc.filename},
+            "document": {
+                "document_id": doc.id,
+                "status": doc.status,
+                "filename": doc.filename,
+                "engagement_id": doc.engagement_id,
+            },
             "line_items": [_line_item_dict(li) for li in items],
             "queue": [
                 {"line_item_id": r.item.line_item_id, "risk": r.risk, "novelty": r.novelty}
@@ -254,9 +268,15 @@ def create_app(
         from litchai.review.corrections import CorrectionError, apply_category_correction
         from litchai.taxonomy import load_taxonomy
 
+        from litchai.documents.engagement_state import is_frozen
+
         doc = repo.get_document(document_id)
         if doc is None:
             raise HTTPException(404, "document not found")
+        if doc.engagement_id is not None:
+            eng = repo.get_engagement(doc.engagement_id)
+            if eng is not None and is_frozen(eng.status):
+                raise HTTPException(409, "engagement is locked — reopen it to make corrections")
         li = next((x for x in repo.get_line_items(document_id) if x.id == line_item_id), None)
         if li is None:
             raise HTTPException(404, "line item not found")
@@ -268,6 +288,81 @@ def create_app(
         except CorrectionError as exc:
             raise HTTPException(400, str(exc)) from exc
         return {"ok": True, "line_item_id": line_item_id, "category_code": new_code}
+
+    def _engagement_transition(engagement_id: int, to_status: str, repo: Repository,
+                               detail: dict[str, Any] | None = None) -> dict[str, Any]:
+        from litchai.documents.state import IllegalTransition
+
+        if repo.get_engagement(engagement_id) is None:
+            raise HTTPException(404, "engagement not found")
+        try:
+            eng = repo.transition_engagement(engagement_id, to_status, detail)
+        except IllegalTransition as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return {"engagement_id": eng.id, "status": eng.status}
+
+    @app.post("/engagements/{engagement_id}/submit")
+    async def submit_engagement(engagement_id: int, repo: Repository = Depends(get_repo)) -> dict[str, Any]:
+        return _engagement_transition(engagement_id, "in_review", repo)
+
+    @app.post("/engagements/{engagement_id}/approve")
+    async def approve_engagement(engagement_id: int, repo: Repository = Depends(get_repo)) -> dict[str, Any]:
+        result = _engagement_transition(engagement_id, "approved", repo)
+        result["deliverables"] = repo.mark_engagement_deliverable(engagement_id)  # freeze → deliverable
+        return result
+
+    @app.post("/engagements/{engagement_id}/reject")
+    async def reject_engagement(
+        engagement_id: int, notes: str | None = None, repo: Repository = Depends(get_repo)
+    ) -> dict[str, Any]:
+        return _engagement_transition(engagement_id, "open", repo, {"notes": notes} if notes else None)
+
+    @app.post("/engagements/{engagement_id}/lock")
+    async def lock_engagement(engagement_id: int, repo: Repository = Depends(get_repo)) -> dict[str, Any]:
+        return _engagement_transition(engagement_id, "locked", repo)
+
+    @app.post("/engagements/{engagement_id}/reopen")
+    async def reopen_engagement(engagement_id: int, repo: Repository = Depends(get_repo)) -> dict[str, Any]:
+        return _engagement_transition(engagement_id, "reopened", repo)
+
+    @app.post("/engagements/{engagement_id}/compile")
+    async def compile_engagement_endpoint(
+        engagement_id: int, repo: Repository = Depends(get_repo)
+    ) -> dict[str, Any]:
+        from litchai.mapping import MappingError
+        from litchai.pipeline import compile_engagement
+        from litchai.taxonomy import load_taxonomy
+
+        if repo.get_engagement(engagement_id) is None:
+            raise HTTPException(404, "engagement not found")
+        try:
+            result = compile_engagement(repo, engagement_id, taxonomy=load_taxonomy())
+        except (MappingError, ValueError) as exc:
+            raise HTTPException(422, str(exc)) from exc
+        pack = result.review_pack.to_dict()
+        return {
+            "ok": result.ok,
+            "generated_file_id": result.generated_file_id,
+            "errors": result.errors,
+            "anomalies": pack["anomalies"],
+            "summaries": pack["summaries"],
+        }
+
+    @app.post("/engagements/{engagement_id}/ask")
+    async def ask_engagement(
+        engagement_id: int, question: str, repo: Repository = Depends(get_repo)
+    ) -> dict[str, Any]:
+        from dataclasses import asdict
+
+        from litchai.pipeline import compile_engagement
+        from litchai.review.assistant import answer
+        from litchai.taxonomy import load_taxonomy
+
+        if repo.get_engagement(engagement_id) is None:
+            raise HTTPException(404, "engagement not found")
+        result = compile_engagement(repo, engagement_id, taxonomy=load_taxonomy())
+        response = answer(question, result.review_pack, provider=app.state.provider_factory())
+        return asdict(response)
 
     return app
 
