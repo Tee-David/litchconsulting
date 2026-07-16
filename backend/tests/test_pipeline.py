@@ -85,3 +85,35 @@ def test_extract_stage_produces_normalized_line_items(tmp_path):
     assert items[0].sheet_ref.startswith("Transactions!")
     trail = [e.to_state for e in repo.audit_trail("document", doc.id)]
     assert trail == ["received", "scanning", "extracting", "extracted"]
+
+
+def test_categorize_stage_routes_and_logs_events(tmp_path):
+    from litchai.categorize.memory_store import InMemoryStore, MemoryRecord
+    from litchai.pipeline import categorize_document
+    from litchai.taxonomy import load_taxonomy
+
+    taxo = load_taxonomy()
+    store = InMemoryStore()
+    for text, code in [("cot charge", "bank.charges"), ("sms alert charge", "bank.charges")]:
+        store.add(MemoryRecord(id=0, normalized_text=text, category_code=code, source="seed_template"))
+
+    repo = InMemoryRepository()
+    storage = Storage(root=tmp_path)
+    data = workbook_bytes(generate_statement(seed=7))
+    doc = repo.create_document(CLIENT, "s.xlsx", XLSX_MIME, "h7", len(data))
+    storage.store(CLIENT, "h7", data)
+    ingest_document(repo, storage, doc.id)
+    extract_document(repo, storage, doc.id)
+
+    result = categorize_document(repo, doc.id, store=store, taxonomy=taxo)
+    assert result.status == "categorized"
+    assert result.progress["distinct_narrations"] >= 1
+
+    items = repo.get_line_items(doc.id)
+    assert all(it.category_code for it in items)
+    charged = [it for it in items if it.normalized_text in ("cot charge", "sms alert charge")]
+    if charged:
+        assert charged[0].category_code == "bank.charges"
+        assert repo.categorization_events(charged[0].id)
+    trail = [e.to_state for e in repo.audit_trail("document", doc.id)]
+    assert trail == ["received", "scanning", "extracting", "extracted", "categorizing", "categorized"]

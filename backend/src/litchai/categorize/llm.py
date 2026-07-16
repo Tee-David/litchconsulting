@@ -47,6 +47,18 @@ def _format_examples(examples: list[tuple[str, str]]) -> str:
     return "\n".join(f'- "{narration}" → {code}' for narration, code in examples)
 
 
+# Prompt-input hygiene: the normalizer already stripped control chars (only
+# [a-z0-9 ] survive), so the remaining risk is length. The prompt-injection blast
+# radius is bounded by design — the enum shortlist + `needs_review=true` mean the
+# worst a hostile narration can do is name another *valid* category, which a human
+# then reviews. Capping length is defense in depth against prompt stuffing.
+NARRATION_CAP = 200
+
+
+def _hygiene(text: str) -> str:
+    return "".join(ch for ch in text if ch == " " or ch.isalnum())[:NARRATION_CAP].strip()
+
+
 def build_llm_classifier(
     provider: Provider,
     taxonomy: Taxonomy,
@@ -65,7 +77,7 @@ def build_llm_classifier(
             policy=TaskPolicy(),
         )
         inputs = {
-            "narration": normalized_text,
+            "narration": _hygiene(normalized_text),
             "shortlist": _format_shortlist(shortlist, taxonomy),
             "examples": _format_examples(examples),
         }

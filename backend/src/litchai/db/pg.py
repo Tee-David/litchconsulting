@@ -227,6 +227,78 @@ class PostgresRepository:
                 for r in cur.fetchall()
             ]
 
+    def set_line_item_category(
+        self,
+        line_item_id: int,
+        *,
+        category_code: str,
+        category_source: str | None,
+        confidence: float | None,
+        taxonomy_version: str | None,
+        needs_review: bool,
+    ) -> None:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "UPDATE line_items SET category_code = %s, category_source = %s, confidence = %s, "
+                "taxonomy_version = %s, needs_review = %s WHERE id = %s",
+                (category_code, category_source, confidence, taxonomy_version, needs_review, line_item_id),
+            )
+
+    def add_categorization_event(
+        self,
+        *,
+        line_item_id: int,
+        normalized_text: str,
+        rung: int,
+        candidates: list[dict[str, Any]],
+        threshold: float | None,
+        accepted: bool,
+        chosen_code: str | None,
+        taxonomy_version: str,
+    ) -> None:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO categorization_events (line_item_id, normalized_text, rung, candidates, "
+                "threshold, accepted, chosen_code, taxonomy_version) VALUES (%s,%s,%s,%s,%s,%s,%s,%s)",
+                (line_item_id, normalized_text, rung, Jsonb(candidates), threshold, accepted,
+                 chosen_code, taxonomy_version),
+            )
+
+    def categorization_events(self, line_item_id: int) -> list[dict[str, Any]]:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT line_item_id, normalized_text, rung, candidates, threshold, accepted, "
+                "chosen_code, taxonomy_version FROM categorization_events WHERE line_item_id = %s "
+                "ORDER BY id",
+                (line_item_id,),
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+    def add_correction(
+        self,
+        *,
+        line_item_id: int | None,
+        field_changed: str,
+        old_value: str | None,
+        new_value: str | None,
+        normalized_text: str | None,
+    ) -> None:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO corrections (line_item_id, field_changed, old_value, new_value, "
+                "normalized_text) VALUES (%s, %s, %s, %s, %s)",
+                (line_item_id, field_changed, old_value, new_value, normalized_text),
+            )
+
+    def get_corrections(self, line_item_id: int) -> list[dict[str, Any]]:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT line_item_id, field_changed, old_value, new_value, normalized_text "
+                "FROM corrections WHERE line_item_id = %s ORDER BY id",
+                (line_item_id,),
+            )
+            return [dict(r) for r in cur.fetchall()]
+
     # --- audit -------------------------------------------------------------
     def append_audit(self, entry: AuditEntry) -> None:
         with self.conn.cursor() as cur:

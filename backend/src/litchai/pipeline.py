@@ -11,12 +11,16 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from litchai.categorize import NORMALIZER_VERSION, normalize_narration
+from litchai.categorize.ladder import DEFAULT_CONFIG, LadderConfig, LlmClassify, classify
+from litchai.categorize.memory_store import MemoryStore
 from litchai.db.repo import Document, LineItem, Repository
 from litchai.documents.state import DocumentStatus
+from litchai.embeddings import Embedder
 from litchai.extraction import engine_for
 from litchai.extraction.balance import check_continuity
 from litchai.scanning import NoopScanner, Scanner
 from litchai.storage import Storage
+from litchai.taxonomy import Taxonomy
 
 Decryptor = Callable[[bytes], bytes]
 
@@ -120,4 +124,75 @@ def extract_document(
         document_id,
         DocumentStatus.EXTRACTED,
         {"engine": engine.name, "rows": len(items), "continuity_ok": continuity.ok},
+    )
+
+
+def categorize_document(
+    repo: Repository,
+    document_id: int,
+    *,
+    store: MemoryStore,
+    taxonomy: Taxonomy,
+    embedder: Embedder | None = None,
+    llm_classify: LlmClassify | None = None,
+    config: LadderConfig = DEFAULT_CONFIG,
+) -> Document:
+    """Categorize stage (Phase 3): extracted → categorizing → categorized.
+
+    Runs the ladder once per **distinct** normalized narration (the 80-page ≈
+    ~300-distinct dedupe) and applies the decision to every line item sharing it,
+    logging one ``categorization_events`` row per item. The client's own memory +
+    firm-global memory are both in scope."""
+    doc = repo.get_document(document_id)
+    if doc is None:
+        raise ValueError(f"unknown document {document_id}")
+
+    repo.transition_document(document_id, DocumentStatus.CATEGORIZING, {})
+    items = repo.get_line_items(document_id)
+
+    decisions = {}
+    for text in {li.normalized_text for li in items}:
+        decisions[text] = classify(
+            text, client_id=doc.client_id, store=store, taxonomy=taxonomy,
+            embedder=embedder, llm_classify=llm_classify, config=config,
+        )
+
+    review_count = 0
+    for li in items:
+        decision = decisions[li.normalized_text]
+        needs_review = decision.needs_review or bool(li.flags)  # keep extraction flags
+        review_count += int(needs_review)
+        repo.set_line_item_category(
+            li.id,
+            category_code=decision.category_code,
+            category_source=decision.source,
+            confidence=decision.confidence,
+            taxonomy_version=taxonomy.version,
+            needs_review=needs_review,
+        )
+        for event in decision.events:
+            repo.add_categorization_event(
+                line_item_id=li.id,
+                normalized_text=decision.normalized_text,
+                rung=event.rung,
+                candidates=[c.__dict__ for c in event.candidates],
+                threshold=event.threshold,
+                accepted=event.accepted,
+                chosen_code=event.chosen_code,
+                taxonomy_version=taxonomy.version,
+            )
+
+    repo.set_document_progress(
+        document_id,
+        {
+            "stage": "categorized",
+            "distinct_narrations": len(decisions),
+            "needs_review": review_count,
+            "taxonomy_version": taxonomy.version,
+        },
+    )
+    return repo.transition_document(
+        document_id,
+        DocumentStatus.CATEGORIZED,
+        {"distinct": len(decisions), "needs_review": review_count},
     )

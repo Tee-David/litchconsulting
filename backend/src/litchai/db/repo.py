@@ -134,6 +134,45 @@ class Repository(Protocol):
 
     def get_line_items(self, document_id: int) -> list[LineItem]: ...
 
+    def set_line_item_category(
+        self,
+        line_item_id: int,
+        *,
+        category_code: str,
+        category_source: str | None,
+        confidence: float | None,
+        taxonomy_version: str | None,
+        needs_review: bool,
+    ) -> None: ...
+
+    def add_categorization_event(
+        self,
+        *,
+        line_item_id: int,
+        normalized_text: str,
+        rung: int,
+        candidates: list[dict[str, Any]],
+        threshold: float | None,
+        accepted: bool,
+        chosen_code: str | None,
+        taxonomy_version: str,
+    ) -> None: ...
+
+    def categorization_events(self, line_item_id: int) -> list[dict[str, Any]]: ...
+
+    # --- corrections (HITL audit trail; retrieval copy is dual-written) -----
+    def add_correction(
+        self,
+        *,
+        line_item_id: int | None,
+        field_changed: str,
+        old_value: str | None,
+        new_value: str | None,
+        normalized_text: str | None,
+    ) -> None: ...
+
+    def get_corrections(self, line_item_id: int) -> list[dict[str, Any]]: ...
+
     # --- audit -------------------------------------------------------------
     def append_audit(self, entry: AuditEntry) -> None: ...
 

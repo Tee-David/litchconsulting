@@ -23,6 +23,8 @@ class InMemoryRepository:
         self._engagements: dict[int, Engagement] = {}
         self._documents: dict[int, Document] = {}
         self._line_items: dict[int, LineItem] = {}
+        self._events: list[dict[str, Any]] = []
+        self._corrections: list[dict[str, Any]] = []
         self._audit: list[AuditEntry] = []
         self._generated: dict[int, dict[str, Any]] = {}
         self._seq = 0
@@ -141,6 +143,72 @@ class InMemoryRepository:
 
     def get_line_items(self, document_id: int) -> list[LineItem]:
         return [li for li in self._line_items.values() if li.document_id == document_id]
+
+    def set_line_item_category(
+        self,
+        line_item_id: int,
+        *,
+        category_code: str,
+        category_source: str | None,
+        confidence: float | None,
+        taxonomy_version: str | None,
+        needs_review: bool,
+    ) -> None:
+        item = self._line_items.get(line_item_id)
+        if item is None:
+            raise RepositoryError(f"unknown line item {line_item_id}")
+        self._line_items[line_item_id] = LineItem(
+            **{
+                **item.__dict__,
+                "category_code": category_code,
+                "category_source": category_source,
+                "confidence": confidence,
+                "taxonomy_version": taxonomy_version,
+                "needs_review": needs_review,
+            }
+        )
+
+    def add_categorization_event(
+        self,
+        *,
+        line_item_id: int,
+        normalized_text: str,
+        rung: int,
+        candidates: list[dict[str, Any]],
+        threshold: float | None,
+        accepted: bool,
+        chosen_code: str | None,
+        taxonomy_version: str,
+    ) -> None:
+        self._events.append(
+            {
+                "line_item_id": line_item_id, "normalized_text": normalized_text, "rung": rung,
+                "candidates": candidates, "threshold": threshold, "accepted": accepted,
+                "chosen_code": chosen_code, "taxonomy_version": taxonomy_version,
+            }
+        )
+
+    def categorization_events(self, line_item_id: int) -> list[dict[str, Any]]:
+        return [e for e in self._events if e["line_item_id"] == line_item_id]
+
+    def add_correction(
+        self,
+        *,
+        line_item_id: int | None,
+        field_changed: str,
+        old_value: str | None,
+        new_value: str | None,
+        normalized_text: str | None,
+    ) -> None:
+        self._corrections.append(
+            {
+                "line_item_id": line_item_id, "field_changed": field_changed,
+                "old_value": old_value, "new_value": new_value, "normalized_text": normalized_text,
+            }
+        )
+
+    def get_corrections(self, line_item_id: int) -> list[dict[str, Any]]:
+        return [c for c in self._corrections if c["line_item_id"] == line_item_id]
 
     # --- audit -------------------------------------------------------------
     def append_audit(self, entry: AuditEntry) -> None:
