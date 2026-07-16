@@ -16,6 +16,7 @@ interface SelectProps {
   options: SelectOption[];
   placeholder?: string;
   searchable?: boolean;
+  disabled?: boolean;
   className?: string;
   "aria-label"?: string;
 }
@@ -30,6 +31,7 @@ export function Select({
   options,
   placeholder = "Select…",
   searchable = false,
+  disabled = false,
   className,
   "aria-label": ariaLabel,
 }: SelectProps) {
@@ -70,6 +72,7 @@ export function Select({
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
+    if (disabled) return;
     if (!open && (e.key === "Enter" || e.key === " " || e.key === "ArrowDown")) {
       e.preventDefault();
       setOpen(true);
@@ -96,11 +99,15 @@ export function Select({
         aria-label={ariaLabel}
         aria-haspopup="listbox"
         aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
+        disabled={disabled}
+        onClick={() => {
+          if (!disabled) setOpen((o) => !o);
+        }}
         onKeyDown={onKeyDown}
         className={cn(
           "flex w-full items-center justify-between gap-2 rounded-xl border border-hairline bg-paper px-3.5 py-2.5 text-left text-sm text-ink outline-none transition-colors",
           open ? "border-brand ring-2 ring-brand/15" : "hover:border-brand/60",
+          disabled && "cursor-not-allowed opacity-50 hover:border-hairline",
         )}
       >
         <span className={cn("truncate", !selected && "text-muted")}>

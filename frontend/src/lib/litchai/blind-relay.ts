@@ -78,7 +78,9 @@ export async function postEncryptedDocument(
   plaintext: Buffer,
   meta: UploadMeta,
 ): Promise<UploadResult & { ciphertextSha256: string; bytes: number }> {
-  const envelope = encryptEnvelope(plaintext, requireEnv("LITCHAI_PUBLIC_KEY"));
+  // The PEM is stored \n-escaped in env (portable across .env/Doppler/Vercel);
+  // Node's crypto needs real newlines.
+  const envelope = encryptEnvelope(plaintext, requireEnv("LITCHAI_PUBLIC_KEY").replace(/\\n/g, "\n"));
   const ciphertextSha256 = createHash("sha256").update(envelope).digest("hex");
 
   const url = new URL("/documents", requireEnv("LITCHAI_API_URL"));

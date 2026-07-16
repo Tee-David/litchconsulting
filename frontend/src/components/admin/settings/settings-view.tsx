@@ -26,6 +26,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useToast } from "@/components/admin/ui/toaster";
+import { Select } from "@/components/ui/select";
 import { CURRENCIES } from "@/lib/invoice/money";
 import {
   saveOrgSettingsAction,
@@ -398,17 +399,16 @@ export function SettingsView({
                 </div>
                 <div>
                   <label className={labelCls}>Default currency</label>
-                  <select
+                  <Select
                     value={form.defaultCurrency || "NGN"}
-                    onChange={(e) => set("defaultCurrency", e.target.value)}
-                    className={inputCls}
-                  >
-                    {CURRENCIES.map((c) => (
-                      <option key={c.code} value={c.code}>
-                        {c.symbol} {c.code} — {c.label}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(v) => set("defaultCurrency", v)}
+                    searchable
+                    aria-label="Default currency"
+                    options={CURRENCIES.map((c) => ({
+                      value: c.code,
+                      label: `${c.symbol} ${c.code} — ${c.label}`,
+                    }))}
+                  />
                 </div>
               </div>
             </Section>
@@ -564,25 +564,29 @@ export function SettingsView({
               </div>
 
               <div className="flex gap-2">
-                <select
+                <Select
                   value={roleFilter}
-                  onChange={(e) => setRoleFilter(e.target.value as typeof roleFilter)}
-                  className="rounded-lg border border-hairline bg-paper px-3 py-2 text-xs font-semibold text-ink outline-none"
-                >
-                  <option value="all">All Roles</option>
-                  <option value="admin">Administrators</option>
-                  <option value="client">Clients</option>
-                </select>
+                  onChange={(v) => setRoleFilter(v as typeof roleFilter)}
+                  aria-label="Filter by role"
+                  className="w-40"
+                  options={[
+                    { value: "all", label: "All Roles" },
+                    { value: "admin", label: "Administrators" },
+                    { value: "client", label: "Clients" },
+                  ]}
+                />
 
-                <select
+                <Select
                   value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-                  className="rounded-lg border border-hairline bg-paper px-3 py-2 text-xs font-semibold text-ink outline-none"
-                >
-                  <option value="all">All Statuses</option>
-                  <option value="active">Active Only</option>
-                  <option value="banned">Banned Only</option>
-                </select>
+                  onChange={(v) => setStatusFilter(v as typeof statusFilter)}
+                  aria-label="Filter by status"
+                  className="w-40"
+                  options={[
+                    { value: "all", label: "All Statuses" },
+                    { value: "active", label: "Active Only" },
+                    { value: "banned", label: "Banned Only" },
+                  ]}
+                />
               </div>
             </div>
 
