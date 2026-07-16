@@ -97,3 +97,19 @@ class PgMemoryStore:
         with self.conn.cursor() as cur:
             cur.execute(f"SELECT {_COLS} FROM category_memory")
             return [_record(r) for r in cur.fetchall()]
+
+    def delete_client(self, client_id: str) -> int:
+        with self.conn.cursor() as cur:
+            cur.execute("DELETE FROM category_memory WHERE client_id = %s", (client_id,))
+            return cur.rowcount
+
+    def mark_stale_by_text(self, texts: set[str]) -> int:
+        if not texts:
+            return 0
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "UPDATE category_memory SET stale = true "
+                "WHERE client_id IS NULL AND NOT stale AND normalized_text = ANY(%s)",
+                (list(texts),),
+            )
+            return cur.rowcount

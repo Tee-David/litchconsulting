@@ -188,6 +188,26 @@ class PostgresRepository:
                 )
             return [_document(r) for r in cur.fetchall()]
 
+    def delete_client_data(self, client_id: str) -> dict[str, int]:
+        with self.conn.transaction(), self.conn.cursor() as cur:
+            # line_items/extraction_chunks/categorization_events cascade from documents (ON DELETE CASCADE);
+            # corrections keep line_item_id but SET NULL — delete them explicitly for this client.
+            cur.execute(
+                "DELETE FROM corrections WHERE line_item_id IN (SELECT li.id FROM line_items li "
+                "JOIN documents d ON d.id = li.document_id WHERE d.client_id = %s)",
+                (client_id,),
+            )
+            cur.execute("DELETE FROM documents WHERE client_id = %s", (client_id,))
+            documents = cur.rowcount
+            cur.execute(
+                "DELETE FROM generated_files WHERE engagement_id IN "
+                "(SELECT id FROM engagements WHERE client_id = %s)",
+                (client_id,),
+            )
+            cur.execute("DELETE FROM engagements WHERE client_id = %s", (client_id,))
+            engagements = cur.rowcount
+            return {"documents": documents, "engagements": engagements}
+
     def transition_document(
         self,
         document_id: int,
@@ -321,6 +341,15 @@ class PostgresRepository:
                 "chosen_code, taxonomy_version FROM categorization_events WHERE line_item_id = %s "
                 "ORDER BY id",
                 (line_item_id,),
+            )
+            return [dict(r) for r in cur.fetchall()]
+
+    def all_categorization_events(self, limit: int = 5000) -> list[dict[str, Any]]:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT line_item_id, normalized_text, rung, accepted, chosen_code "
+                "FROM categorization_events ORDER BY id DESC LIMIT %s",
+                (limit,),
             )
             return [dict(r) for r in cur.fetchall()]
 

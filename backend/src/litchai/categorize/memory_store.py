@@ -52,6 +52,10 @@ class MemoryStore(Protocol):
 
     def all_records(self) -> list[MemoryRecord]: ...
 
+    def delete_client(self, client_id: str) -> int: ...
+
+    def mark_stale_by_text(self, texts: set[str]) -> int: ...
+
 
 # --- trigram similarity (pg_trgm-compatible enough for routing) -------------
 
@@ -118,3 +122,20 @@ class InMemoryStore:
 
     def all_records(self) -> list[MemoryRecord]:
         return list(self._records.values())
+
+    def delete_client(self, client_id: str) -> int:
+        to_delete = [i for i, r in self._records.items() if r.client_id == client_id]
+        for i in to_delete:
+            del self._records[i]
+        return len(to_delete)
+
+    def mark_stale_by_text(self, texts: set[str]) -> int:
+        """Flag firm-global rows (client_id IS NULL) whose narration matches an
+        erased client's — NDPA: a client's personal data may have promoted into
+        global memory, so it's marked stale for review/purge."""
+        n = 0
+        for i, r in self._records.items():
+            if r.client_id is None and not r.stale and r.normalized_text in texts:
+                self._records[i] = MemoryRecord(**{**r.__dict__, "stale": True})
+                n += 1
+        return n

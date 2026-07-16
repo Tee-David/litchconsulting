@@ -325,6 +325,22 @@ def create_app(
     async def reopen_engagement(engagement_id: int, repo: Repository = Depends(get_repo)) -> dict[str, Any]:
         return _engagement_transition(engagement_id, "reopened", repo)
 
+    @app.get("/observability")
+    async def observability(repo: Repository = Depends(get_repo)) -> dict[str, Any]:
+        from litchai.ops.observability import summarize
+
+        return summarize(repo.list_documents(limit=5000), repo.all_categorization_events())
+
+    @app.post("/clients/{client_id}/erase")
+    async def erase_client_endpoint(
+        client_id: str, repo: Repository = Depends(get_repo), store: MemoryStore = Depends(get_store)
+    ) -> dict[str, Any]:
+        from dataclasses import asdict
+
+        from litchai.ops.erasure import erase_client
+
+        return asdict(erase_client(repo, store, client_id))
+
     @app.post("/engagements/{engagement_id}/compile")
     async def compile_engagement_endpoint(
         engagement_id: int, repo: Repository = Depends(get_repo)

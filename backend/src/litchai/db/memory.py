@@ -138,6 +138,19 @@ class InMemoryRepository:
         docs.sort(key=lambda d: d.id, reverse=True)
         return docs[:limit]
 
+    def delete_client_data(self, client_id: str) -> dict[str, int]:
+        doc_ids = {d.id for d in self._documents.values() if d.client_id == client_id}
+        line_ids = {li.id for li in self._line_items.values() if li.document_id in doc_ids}
+        eng_ids = {e.id for e in self._engagements.values() if e.client_id == client_id}
+        counts = {"documents": len(doc_ids), "line_items": len(line_ids), "engagements": len(eng_ids)}
+        self._documents = {i: d for i, d in self._documents.items() if i not in doc_ids}
+        self._line_items = {i: li for i, li in self._line_items.items() if li.id not in line_ids}
+        self._events = [e for e in self._events if e["line_item_id"] not in line_ids]
+        self._corrections = [c for c in self._corrections if c["line_item_id"] not in line_ids]
+        self._engagements = {i: e for i, e in self._engagements.items() if i not in eng_ids}
+        self._generated = {i: g for i, g in self._generated.items() if g.get("engagement_id") not in eng_ids}
+        return counts
+
     def _replace_document(self, doc: Document, **changes: Any) -> Document:
         updated = Document(**{**doc.__dict__, **changes})
         self._documents[doc.id] = updated
@@ -226,6 +239,9 @@ class InMemoryRepository:
 
     def categorization_events(self, line_item_id: int) -> list[dict[str, Any]]:
         return [e for e in self._events if e["line_item_id"] == line_item_id]
+
+    def all_categorization_events(self, limit: int = 5000) -> list[dict[str, Any]]:
+        return self._events[-limit:]
 
     def add_correction(
         self,

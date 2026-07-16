@@ -100,6 +100,19 @@ export function getTaxonomy(): Promise<{ version: string; categories: TaxonomyCa
   return litchai("/taxonomy");
 }
 
+export type Observability = {
+  documents_total: number;
+  documents_by_status: Record<string, number>;
+  documents_rejected: number;
+  needs_review_total: number;
+  rung_hit_rates: { rung: number; seen: number; accepted: number; hit_rate: number }[];
+  rung4_fallback_rate: number;
+};
+
+export function getObservability(): Promise<Observability> {
+  return litchai("/observability");
+}
+
 export function listDocuments(clientId?: string): Promise<{ documents: LitchaiDocument[] }> {
   const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : "";
   return litchai(`/documents${qs}`);

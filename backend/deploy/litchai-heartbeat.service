@@ -1,0 +1,9 @@
+[Unit]
+Description=LitchAI idle-reclaim heartbeat (defers litchai.heartbeat)
+After=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/litchai/env
+ExecStart=/home/ubuntu/litchconsulting/backend/.venv/bin/python -c "from litchai.queue import heartbeat; heartbeat.defer()"
+User=ubuntu

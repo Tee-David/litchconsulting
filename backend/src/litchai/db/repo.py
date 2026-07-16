@@ -134,6 +134,12 @@ class Repository(Protocol):
 
     def list_documents(self, client_id: str | None = None, limit: int = 100) -> list[Document]: ...
 
+    def delete_client_data(self, client_id: str) -> dict[str, int]:
+        """NDPA erasure: delete a client's documents (cascading line_items,
+        events, corrections), engagements and generated files. Returns per-entity
+        counts. Category memory is erased separately via the store."""
+        ...
+
     def transition_document(
         self,
         document_id: int,
@@ -179,6 +185,8 @@ class Repository(Protocol):
     ) -> None: ...
 
     def categorization_events(self, line_item_id: int) -> list[dict[str, Any]]: ...
+
+    def all_categorization_events(self, limit: int = 5000) -> list[dict[str, Any]]: ...
 
     # --- corrections (HITL audit trail; retrieval copy is dual-written) -----
     def add_correction(

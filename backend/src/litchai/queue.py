@@ -25,6 +25,24 @@ def ping(payload: str = "pong") -> str:
     return payload
 
 
+@queue.task(name="litchai.heartbeat")
+def heartbeat() -> int:
+    """Idle-reclaim heartbeat (Phase 6): a bounded CPU burst + a DB round-trip so
+    OCI doesn't reclaim the VM. Deferred by a systemd timer."""
+    from litchai.db.pg import connect
+    from litchai.ops.heartbeat import heartbeat_burst
+
+    iterations = heartbeat_burst()
+    conn = connect()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+            cur.fetchone()
+    finally:
+        conn.close()
+    return iterations
+
+
 @queue.task(name="litchai.ingest_document")
 def ingest_document(document_id: int) -> str:
     """Scan → (Phase 2b) extract a received document. Constructs the production
