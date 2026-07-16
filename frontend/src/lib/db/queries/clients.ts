@@ -1,12 +1,26 @@
 import "server-only";
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, isNotNull, ne, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { client } from "@/lib/db/schema";
 
 export type ClientRow = typeof client.$inferSelect;
 
+/** Live clients only (Trash excluded). */
 export async function listClients(): Promise<ClientRow[]> {
-  return db.select().from(client).orderBy(desc(client.createdAt));
+  return db
+    .select()
+    .from(client)
+    .where(isNull(client.deletedAt))
+    .orderBy(desc(client.createdAt));
+}
+
+/** Soft-deleted clients (the Trash view). */
+export async function listTrashedClients(): Promise<ClientRow[]> {
+  return db
+    .select()
+    .from(client)
+    .where(isNotNull(client.deletedAt))
+    .orderBy(desc(client.deletedAt));
 }
 
 export async function getClient(id: string): Promise<ClientRow | null> {
@@ -52,7 +66,11 @@ export async function findDuplicateClients(
     .select()
     .from(client)
     .where(
-      and(sql`lower(${client.email}) = ${email.toLowerCase()}`, ne(client.id, excludeId))
+      and(
+        sql`lower(${client.email}) = ${email.toLowerCase()}`,
+        ne(client.id, excludeId),
+        isNull(client.deletedAt)
+      )
     )
     .orderBy(desc(client.createdAt));
 }

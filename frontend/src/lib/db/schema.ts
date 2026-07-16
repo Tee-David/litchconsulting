@@ -26,6 +26,8 @@ const createdAt = () =>
   timestamp("created_at", { withTimezone: true }).defaultNow().notNull();
 const updatedAt = () =>
   timestamp("updated_at", { withTimezone: true }).defaultNow().notNull();
+/** Soft-delete marker — null = live, set = in Trash (30-day purge cron). */
+const deletedAt = () => timestamp("deleted_at", { withTimezone: true });
 
 /**
  * Better Auth User table definition for internal queries & administration.
@@ -78,6 +80,7 @@ export const client = pgTable(
     notes: text("notes"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
+    deletedAt: deletedAt(),
   },
   (t) => [index("client_email_idx").on(t.email)]
 );
@@ -123,6 +126,7 @@ export const invoice = pgTable(
     createdByUserId: text("created_by_user_id"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
+    deletedAt: deletedAt(),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     paidAt: timestamp("paid_at", { withTimezone: true }),
   },
@@ -246,10 +250,14 @@ export const ticket = pgTable(
     priority: text("priority").notNull().default("normal"),
     category: text("category").notNull().default("general"),
     assignee: text("assignee"),
+    team: text("team"), // Support | Finance | Advisory (admin 3-pane inbox)
+    type: text("type"), // question | problem | request | billing
+    tags: jsonb("tags"), // string[] labels
     requestId: uuid("request_id"), // optional soft ref → service_request.id
     createdByUserId: text("created_by_user_id"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
+    deletedAt: deletedAt(),
     lastReplyAt: timestamp("last_reply_at", { withTimezone: true }),
   },
   (t) => [index("ticket_status_idx").on(t.status), index("ticket_created_idx").on(t.createdAt)]
@@ -339,6 +347,7 @@ export const serviceRequest = pgTable(
     completedAt: timestamp("completed_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
+    deletedAt: deletedAt(),
   },
   (t) => [
     index("service_request_client_idx").on(t.clientId),

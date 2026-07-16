@@ -32,6 +32,7 @@ export function SidebarNav({
         key={item.href}
         href={item.href}
         onClick={onNavigate}
+        data-tour={`nav-${item.tourKey}`}
         title={collapsed ? item.label : undefined}
         aria-current={active ? "page" : undefined}
         className={cn(

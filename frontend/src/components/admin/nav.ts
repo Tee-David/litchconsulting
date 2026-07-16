@@ -22,20 +22,22 @@ export type NavItem = {
   href: string;
   icon: LucideIcon;
   group: "main" | "general";
+  /** Stable key for `data-tour="nav-<tourKey>"` anchors used by the guided tour. */
+  tourKey: string;
 };
 
 export const NAV_ITEMS: NavItem[] = [
-  { label: "Dashboard", href: "/admin", icon: LayoutGrid, group: "main" },
-  { label: "Requests", href: "/admin/requests", icon: Inbox, group: "main" },
-  { label: "Clients", href: "/admin/clients", icon: Users, group: "main" },
-  { label: "Reports", href: "/admin/reports", icon: BarChart3, group: "main" },
-  { label: "Finance", href: "/admin/finance", icon: Wallet, group: "main" },
-  { label: "Blog", href: "/admin/blog", icon: PenSquare, group: "main" },
-  { label: "Templates", href: "/admin/templates", icon: FileStack, group: "main" },
-  { label: "LitchAI", href: "/admin/litchai", icon: Bot, group: "main" },
-  { label: "Settings", href: "/admin/settings", icon: Settings, group: "general" },
-  { label: "Integrations", href: "/admin/integrations", icon: Cable, group: "general" },
-  { label: "Help Desk", href: "/admin/help-desk", icon: LifeBuoy, group: "general" },
+  { label: "Dashboard", href: "/admin", icon: LayoutGrid, group: "main", tourKey: "dashboard" },
+  { label: "Requests", href: "/admin/requests", icon: Inbox, group: "main", tourKey: "requests" },
+  { label: "Clients", href: "/admin/clients", icon: Users, group: "main", tourKey: "clients" },
+  { label: "Reports", href: "/admin/reports", icon: BarChart3, group: "main", tourKey: "reports" },
+  { label: "Finance", href: "/admin/finance", icon: Wallet, group: "main", tourKey: "finance" },
+  { label: "Blog", href: "/admin/blog", icon: PenSquare, group: "main", tourKey: "blog" },
+  { label: "Templates", href: "/admin/templates", icon: FileStack, group: "main", tourKey: "templates" },
+  { label: "LitchAI", href: "/admin/litchai", icon: Bot, group: "main", tourKey: "litchai" },
+  { label: "Settings", href: "/admin/settings", icon: Settings, group: "general", tourKey: "settings" },
+  { label: "Integrations", href: "/admin/integrations", icon: Cable, group: "general", tourKey: "integrations" },
+  { label: "Help Desk", href: "/admin/help-desk", icon: LifeBuoy, group: "general", tourKey: "help-desk" },
 ];
 
 /** Whether a nav item is active for the given pathname. */

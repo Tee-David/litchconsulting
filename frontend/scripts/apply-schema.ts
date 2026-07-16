@@ -197,6 +197,19 @@ const STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS "ticket_client_idx" ON "ticket" ("client_id")`,
   `CREATE INDEX IF NOT EXISTS "consultation_client_idx" ON "consultation" ("client_id")`,
   `CREATE INDEX IF NOT EXISTS "consultation_email_idx" ON "consultation" ("email")`,
+  // ---- Soft delete (Trash + 30-day purge) ----
+  `ALTER TABLE "client" ADD COLUMN IF NOT EXISTS "deleted_at" timestamp with time zone`,
+  `ALTER TABLE "invoice" ADD COLUMN IF NOT EXISTS "deleted_at" timestamp with time zone`,
+  `ALTER TABLE "ticket" ADD COLUMN IF NOT EXISTS "deleted_at" timestamp with time zone`,
+  `ALTER TABLE "service_request" ADD COLUMN IF NOT EXISTS "deleted_at" timestamp with time zone`,
+  `CREATE INDEX IF NOT EXISTS "client_deleted_idx" ON "client" ("deleted_at")`,
+  `CREATE INDEX IF NOT EXISTS "invoice_deleted_idx" ON "invoice" ("deleted_at")`,
+  `CREATE INDEX IF NOT EXISTS "ticket_deleted_idx" ON "ticket" ("deleted_at")`,
+  `CREATE INDEX IF NOT EXISTS "service_request_deleted_idx" ON "service_request" ("deleted_at")`,
+  // ---- Support: 3-pane help-desk fields ----
+  `ALTER TABLE "ticket" ADD COLUMN IF NOT EXISTS "team" text`,
+  `ALTER TABLE "ticket" ADD COLUMN IF NOT EXISTS "type" text`,
+  `ALTER TABLE "ticket" ADD COLUMN IF NOT EXISTS "tags" jsonb`,
 ];
 
 /**

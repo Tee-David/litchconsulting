@@ -54,18 +54,46 @@ export async function updateClient(id: string, input: ClientInput): Promise<Resu
   return { ok: true };
 }
 
+/** Soft delete → Trash (recoverable; purged after 30 days). */
 export async function deleteClient(id: string): Promise<Result> {
   if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
-  await db.delete(client).where(eq(client.id, id));
+  await db.update(client).set({ deletedAt: new Date(), updatedAt: new Date() }).where(eq(client.id, id));
   revalidatePath("/admin/clients");
-  return { ok: true };
+  revalidatePath("/admin/trash");
+  return { ok: true, id };
 }
 
 export async function bulkDeleteClients(ids: string[]): Promise<Result> {
   if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
   if (!ids || ids.length === 0) return { ok: true };
-  await db.delete(client).where(inArray(client.id, ids));
+  await db
+    .update(client)
+    .set({ deletedAt: new Date(), updatedAt: new Date() })
+    .where(inArray(client.id, ids));
   revalidatePath("/admin/clients");
+  revalidatePath("/admin/trash");
+  return { ok: true };
+}
+
+/** Restore from Trash. */
+export async function restoreClients(ids: string[]): Promise<Result> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
+  if (!ids || ids.length === 0) return { ok: true };
+  await db
+    .update(client)
+    .set({ deletedAt: null, updatedAt: new Date() })
+    .where(inArray(client.id, ids));
+  revalidatePath("/admin/clients");
+  revalidatePath("/admin/trash");
+  return { ok: true };
+}
+
+/** Permanently delete (from Trash only). */
+export async function purgeClients(ids: string[]): Promise<Result> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
+  if (!ids || ids.length === 0) return { ok: true };
+  await db.delete(client).where(inArray(client.id, ids));
+  revalidatePath("/admin/trash");
   return { ok: true };
 }
 
