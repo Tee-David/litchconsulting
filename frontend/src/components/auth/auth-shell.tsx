@@ -1,4 +1,6 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { BrandPanel } from "./brand-panel";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { InstallPrompt } from "@/components/admin/install-prompt";
@@ -13,7 +15,15 @@ export function AuthShell({ children }: { children: ReactNode }) {
         <div className="absolute right-5 top-5 lg:hidden">
           <ThemeToggle />
         </div>
-        <div className="w-full max-w-sm">{children}</div>
+        <div className="w-full max-w-sm">
+          <Link
+            href="/"
+            className="mb-6 inline-flex items-center gap-1.5 text-sm font-semibold text-muted transition-colors hover:text-ink"
+          >
+            <ArrowLeft className="size-4" /> Back to site
+          </Link>
+          {children}
+        </div>
       </div>
       <InstallPrompt />
     </div>

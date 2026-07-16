@@ -28,7 +28,7 @@ import { agingBuckets } from "@/lib/invoice/aging";
 import { formatMoney, num } from "@/lib/invoice/money";
 import { StatCard } from "@/components/admin/ui/stat-card";
 import { Badge, invoiceStatusTone } from "@/components/admin/ui/badge";
-import { BarChart, DonutChart } from "@/components/admin/ui/charts";
+import { GroupedBars, Donut } from "@/components/charts";
 import { EmptyState } from "@/components/admin/ui/empty-state";
 import { AttentionList } from "@/components/admin/dashboard/attention-list";
 import { PipelineStrip } from "@/components/admin/dashboard/pipeline-strip";
@@ -78,10 +78,10 @@ export default async function AdminDashboard() {
   // Billed by issue month vs collected by paid month — same fetch, two series.
   const monthly = last6Months().map((m) => ({
     label: m.label,
-    value: invoices
+    billed: invoices
       .filter((i) => i.kind === "invoice" && (i.issueDate || "").startsWith(m.key))
       .reduce((s, i) => s + num(i.total), 0),
-    value2: invoices
+    collected: invoices
       .filter(
         (i) => i.kind === "invoice" && i.paidAt && (i.paidAt as Date).toISOString().startsWith(m.key)
       )
@@ -163,7 +163,14 @@ export default async function AdminDashboard() {
                 Billed vs collected — last 6 months
               </h3>
             </div>
-            <BarChart data={monthly} legend={["Billed", "Collected"]} />
+            <GroupedBars
+              data={monthly}
+              series={[
+                { key: "billed", label: "Billed" },
+                { key: "collected", label: "Collected" },
+              ]}
+              fmt={(v) => formatMoney(v)}
+            />
           </div>
 
           <PaymentsFeed rows={payments} />
@@ -247,18 +254,11 @@ export default async function AdminDashboard() {
               <p className="py-8 text-center text-sm text-body">No data yet.</p>
             ) : (
               <>
-                <DonutChart segments={byStatus} centerValue={String(stats.count)} centerLabel="total invoices" />
-                <div className="mt-4 space-y-2">
-                  {byStatus.map((s) => (
-                    <div key={s.label} className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2 capitalize text-body">
-                        <span className="size-2.5 rounded-full" style={{ background: s.color }} />
-                        {s.label}
-                      </span>
-                      <span className="font-medium tabular-nums text-ink">{s.value}</span>
-                    </div>
-                  ))}
-                </div>
+                <Donut
+                  data={byStatus.map((s) => ({ label: s.label, value: s.value }))}
+                  centerValue={String(stats.count)}
+                  centerLabel="total invoices"
+                />
               </>
             )}
           </div>
@@ -267,22 +267,11 @@ export default async function AdminDashboard() {
           {mixSegments.length > 0 && (
             <div className="rounded-card border border-hairline bg-paper p-5">
               <h3 className="mb-4 font-display text-sm font-bold text-ink">Service mix — this year</h3>
-              <DonutChart
-                segments={mixSegments}
+              <Donut
+                data={mixSegments.map((s) => ({ label: s.label, value: s.value }))}
                 centerValue={String(mixTotal)}
                 centerLabel="requests YTD"
               />
-              <div className="mt-4 space-y-2">
-                {mixSegments.map((s) => (
-                  <div key={s.label} className="flex items-center justify-between text-sm">
-                    <span className="flex min-w-0 items-center gap-2 text-body">
-                      <span className="size-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
-                      <span className="truncate">{s.label}</span>
-                    </span>
-                    <span className="font-medium tabular-nums text-ink">{s.value}</span>
-                  </div>
-                ))}
-              </div>
             </div>
           )}
 
