@@ -1,0 +1,17 @@
+{
+  "client_name": "Acme Manufacturing Ltd",
+  "period_label": "Year ended 31 December 2025",
+  "net_profit_per_accounts": 50000000,
+  "disallowable_addbacks": [
+    {"label": "Depreciation", "amount": 8000000},
+    {"label": "Donations (non-deductible)", "amount": 2000000}
+  ],
+  "other_deductions": [],
+  "turnover": 150000000,
+  "total_fixed_assets": 30000000,
+  "professional_services": false,
+  "capital_allowance_assets": [
+    {"description": "Plant & machinery", "cost": 20000000, "allowance_rate_pct": 25},
+    {"description": "Motor vehicles", "cost": 10000000, "allowance_rate_pct": 25}
+  ]
+}

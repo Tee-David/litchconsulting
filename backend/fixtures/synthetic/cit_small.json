@@ -1,0 +1,12 @@
+{
+  "client_name": "Corner Shop Ltd",
+  "period_label": "Year ended 31 December 2025",
+  "net_profit_per_accounts": 8000000,
+  "disallowable_addbacks": [{"label": "Depreciation", "amount": 1000000}],
+  "turnover": 60000000,
+  "total_fixed_assets": 40000000,
+  "professional_services": false,
+  "capital_allowance_assets": [
+    {"description": "Equipment", "cost": 2000000, "allowance_rate_pct": 25}
+  ]
+}

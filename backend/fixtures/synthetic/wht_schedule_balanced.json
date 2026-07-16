@@ -1,0 +1,14 @@
+{
+  "client_name": "Acme Trading Ltd",
+  "period_label": "WHT period: March 2026",
+  "deductions": [
+    {"vendor": "Consulting Partners Ltd", "category": "consultancy", "payee_type": "corporate", "gross_amount": 1000000},
+    {"vendor": "Supplies Co", "category": "supply", "payee_type": "corporate", "gross_amount": 500000},
+    {"vendor": "Landlord Estates Ltd", "category": "rent", "payee_type": "corporate", "gross_amount": 2000000}
+  ],
+  "credit_notes": [
+    {"reference": "CN-001", "vendor": "Consulting Partners Ltd", "amount": 100000},
+    {"reference": "CN-002", "vendor": "Supplies Co", "amount": 25000},
+    {"reference": "CN-003", "vendor": "Landlord Estates Ltd", "amount": 200000}
+  ]
+}

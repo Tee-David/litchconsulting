@@ -1,0 +1,11 @@
+{
+  "client_name": "Startup Ltd",
+  "period_label": "WHT period: March 2026",
+  "deductions": [
+    {"vendor": "Consulting Partners Ltd", "category": "consultancy", "payee_type": "corporate", "gross_amount": 1000000},
+    {"vendor": "Small Supplier", "category": "supply", "payee_type": "corporate", "gross_amount": 1500000, "exempt": true}
+  ],
+  "credit_notes": [
+    {"reference": "CN-010", "vendor": "Consulting Partners Ltd", "amount": 60000}
+  ]
+}
