@@ -20,14 +20,16 @@ from typing import Any, ContextManager
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 
+from litchai.categorize.memory_store import MemoryStore
 from litchai.db.repo import Repository
 from litchai.queue import ingest_document as ingest_task
 from litchai.queue import queue
 from litchai.storage import Storage
 
-API_VERSION = "0.2.0"
+API_VERSION = "0.3.0"
 
 RepoProvider = Callable[[], ContextManager[Repository]]
+StoreProvider = Callable[[], ContextManager[MemoryStore]]
 
 # Upload guardrails (FR1). The blind-relay envelope adds a little overhead, so
 # the ciphertext cap is generous relative to the ~80-page scan worst case.
@@ -53,6 +55,35 @@ def _pg_provider() -> Iterator[Repository]:
         conn.close()
 
 
+@contextmanager
+def _pg_store_provider() -> Iterator[MemoryStore]:
+    from litchai.categorize.pg_memory import PgMemoryStore
+    from litchai.db.pg import connect
+
+    conn = connect()
+    try:
+        yield PgMemoryStore(conn)
+    finally:
+        conn.close()
+
+
+def _line_item_dict(li) -> dict[str, Any]:
+    return {
+        "id": li.id,
+        "raw_text": li.raw_text,
+        "normalized_text": li.normalized_text,
+        "direction": li.direction,
+        "amount": li.amount,
+        "sheet_ref": li.sheet_ref,
+        "page_ref": li.page_ref,
+        "category_code": li.category_code,
+        "category_source": li.category_source,
+        "confidence": li.confidence,
+        "flags": li.flags,
+        "needs_review": li.needs_review,
+    }
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     async with queue.open_async():
@@ -62,14 +93,20 @@ async def _lifespan(app: FastAPI):
 def create_app(
     repo_provider: RepoProvider | None = None,
     storage: Storage | None = None,
+    store_provider: StoreProvider | None = None,
 ) -> FastAPI:
     app = FastAPI(title="LitchAI", version=API_VERSION, lifespan=_lifespan)
     app.state.repo_provider = repo_provider or _pg_provider
+    app.state.store_provider = store_provider or _pg_store_provider
     app.state.storage = storage or Storage()
 
     def get_repo() -> Iterator[Repository]:
         with app.state.repo_provider() as repo:
             yield repo
+
+    def get_store() -> Iterator[MemoryStore]:
+        with app.state.store_provider() as store:
+            yield store
 
     @app.get("/health")
     async def health() -> dict:
@@ -137,6 +174,100 @@ def create_app(
             "extraction_engine": doc.extraction_engine,
             "byte_size": doc.byte_size,
         }
+
+    @app.get("/taxonomy")
+    async def taxonomy() -> dict[str, Any]:
+        from litchai.taxonomy import load_taxonomy
+
+        t = load_taxonomy()
+        return {
+            "version": t.version,
+            "categories": [{"code": c.code, "label": c.label} for c in t.postable_leaves()],
+        }
+
+    @app.get("/documents")
+    async def list_documents(
+        client_id: str | None = None, repo: Repository = Depends(get_repo)
+    ) -> dict[str, Any]:
+        return {
+            "documents": [
+                {
+                    "document_id": d.id,
+                    "client_id": d.client_id,
+                    "filename": d.filename,
+                    "mime": d.mime,
+                    "status": d.status,
+                    "progress": d.progress,
+                    "created_at": d.created_at.isoformat(),
+                }
+                for d in repo.list_documents(client_id)
+            ]
+        }
+
+    @app.get("/documents/{document_id}/review")
+    async def review_document(
+        document_id: int, repo: Repository = Depends(get_repo)
+    ) -> dict[str, Any]:
+        from collections import defaultdict
+
+        from litchai.review.lineage import LineageLine, rollup_figure
+        from litchai.review.queue import ReviewItem, rank_review_queue
+
+        doc = repo.get_document(document_id)
+        if doc is None:
+            raise HTTPException(404, "document not found")
+        items = repo.get_line_items(document_id)
+
+        ranked = rank_review_queue(
+            [
+                ReviewItem(li.id, li.normalized_text, li.amount, li.confidence or 0.0,
+                           li.category_source, li.needs_review)
+                for li in items
+            ],
+            only_flagged=False,
+        )
+        by_cat: dict[str, list] = defaultdict(list)
+        for li in items:
+            by_cat[li.category_code or "uncategorized"].append(
+                LineageLine(li.id, li.category_source, li.confidence)
+            )
+        lineage = [rollup_figure(cat, lines).__dict__ for cat, lines in sorted(by_cat.items())]
+
+        return {
+            "document": {"document_id": doc.id, "status": doc.status, "filename": doc.filename},
+            "line_items": [_line_item_dict(li) for li in items],
+            "queue": [
+                {"line_item_id": r.item.line_item_id, "risk": r.risk, "novelty": r.novelty}
+                for r in ranked
+            ],
+            "lineage": lineage,
+        }
+
+    @app.post("/documents/{document_id}/lines/{line_item_id}/recategorize")
+    async def recategorize(
+        document_id: int,
+        line_item_id: int,
+        new_code: str,
+        repo: Repository = Depends(get_repo),
+        store: MemoryStore = Depends(get_store),
+    ) -> dict[str, Any]:
+        from litchai.review.corrections import CorrectionError, apply_category_correction
+        from litchai.taxonomy import load_taxonomy
+
+        doc = repo.get_document(document_id)
+        if doc is None:
+            raise HTTPException(404, "document not found")
+        li = next((x for x in repo.get_line_items(document_id) if x.id == line_item_id), None)
+        if li is None:
+            raise HTTPException(404, "line item not found")
+        try:
+            apply_category_correction(
+                repo, store, line_item=li, new_code=new_code,
+                taxonomy=load_taxonomy(), client_id=doc.client_id,
+            )
+        except CorrectionError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return {"ok": True, "line_item_id": line_item_id, "category_code": new_code}
 
     return app
 

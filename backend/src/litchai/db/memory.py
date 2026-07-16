@@ -102,6 +102,14 @@ class InMemoryRepository:
                 return doc
         return None
 
+    def list_documents(self, client_id: str | None = None, limit: int = 100) -> list[Document]:
+        docs = [
+            d for d in self._documents.values()
+            if client_id is None or d.client_id == client_id
+        ]
+        docs.sort(key=lambda d: d.id, reverse=True)
+        return docs[:limit]
+
     def _replace_document(self, doc: Document, **changes: Any) -> Document:
         updated = Document(**{**doc.__dict__, **changes})
         self._documents[doc.id] = updated

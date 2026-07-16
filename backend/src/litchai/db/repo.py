@@ -114,6 +114,8 @@ class Repository(Protocol):
 
     def find_document_by_hash(self, client_id: str, source_hash: str) -> Document | None: ...
 
+    def list_documents(self, client_id: str | None = None, limit: int = 100) -> list[Document]: ...
+
     def transition_document(
         self,
         document_id: int,

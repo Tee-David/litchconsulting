@@ -9,6 +9,7 @@ import {
   Settings,
   Cable,
   LifeBuoy,
+  Bot,
 } from "lucide-react";
 
 /**
@@ -29,6 +30,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Finance", href: "/admin/finance", icon: Wallet, group: "main" },
   { label: "Blog", href: "/admin/blog", icon: PenSquare, group: "main" },
   { label: "Templates", href: "/admin/templates", icon: FileStack, group: "main" },
+  { label: "LitchAI", href: "/admin/litchai", icon: Bot, group: "main" },
   { label: "Settings", href: "/admin/settings", icon: Settings, group: "general" },
   { label: "Integrations", href: "/admin/integrations", icon: Cable, group: "general" },
   { label: "Help Desk", href: "/admin/help-desk", icon: LifeBuoy, group: "general" },

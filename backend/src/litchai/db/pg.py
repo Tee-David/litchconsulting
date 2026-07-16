@@ -138,6 +138,17 @@ class PostgresRepository:
             row = cur.fetchone()
             return _document(row) if row else None
 
+    def list_documents(self, client_id: str | None = None, limit: int = 100) -> list[Document]:
+        with self.conn.cursor() as cur:
+            if client_id is None:
+                cur.execute(f"SELECT {_DOC_COLS} FROM documents ORDER BY id DESC LIMIT %s", (limit,))
+            else:
+                cur.execute(
+                    f"SELECT {_DOC_COLS} FROM documents WHERE client_id = %s ORDER BY id DESC LIMIT %s",
+                    (client_id, limit),
+                )
+            return [_document(r) for r in cur.fetchall()]
+
     def transition_document(
         self,
         document_id: int,
