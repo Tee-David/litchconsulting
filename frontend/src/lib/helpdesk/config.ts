@@ -24,6 +24,21 @@ export const TICKET_CATEGORIES = [
   { key: "complaint", label: "Complaint" },
 ] as const;
 
+/** Which desk owns the ticket (`ticket.team`). */
+export const TICKET_TEAMS = [
+  { key: "support", label: "Support", hint: "Portal, access and general help" },
+  { key: "finance", label: "Finance", hint: "Invoices, payments and receipts" },
+  { key: "advisory", label: "Advisory", hint: "Reporting, tax and modelling work" },
+] as const;
+
+/** What kind of request this is (`ticket.type`). */
+export const TICKET_TYPES = [
+  { key: "question", label: "Question", hint: "Wants information or guidance" },
+  { key: "problem", label: "Problem", hint: "Something is broken or wrong" },
+  { key: "request", label: "Request", hint: "Asking for work to be done" },
+  { key: "billing", label: "Billing", hint: "Invoice, payment or refund matter" },
+] as const;
+
 export function statusMeta(key: string) {
   return TICKET_STATUSES.find((s) => s.key === key) ?? TICKET_STATUSES[0];
 }
@@ -32,4 +47,18 @@ export function priorityMeta(key: string) {
 }
 export function categoryLabel(key: string) {
   return TICKET_CATEGORIES.find((c) => c.key === key)?.label ?? key;
+}
+export function teamLabel(key: string | null | undefined) {
+  if (!key) return "Unassigned";
+  return TICKET_TEAMS.find((t) => t.key === key)?.label ?? key;
+}
+export function typeLabel(key: string | null | undefined) {
+  if (!key) return "Untyped";
+  return TICKET_TYPES.find((t) => t.key === key)?.label ?? key;
+}
+
+/** `ticket.tags` is jsonb — narrow it to a string[] defensively. */
+export function parseTags(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((t): t is string => typeof t === "string" && t.trim().length > 0);
 }

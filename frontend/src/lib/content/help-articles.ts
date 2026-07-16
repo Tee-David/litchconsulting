@@ -12,10 +12,17 @@ export type HelpCategoryKey =
   | "documents"
   | "account";
 
+/**
+ * Icon *name* rather than a component — this file stays pure data, and the
+ * support hub maps these onto lucide icons at render time.
+ */
+export type HelpCategoryIcon = "rocket" | "receipt" | "briefcase" | "folder" | "shield";
+
 export type HelpCategory = {
   key: HelpCategoryKey;
   label: string;
   description: string;
+  icon: HelpCategoryIcon;
 };
 
 export type HelpArticle = {
@@ -33,31 +40,51 @@ export const HELP_CATEGORIES: HelpCategory[] = [
     key: "getting-started",
     label: "Getting Started",
     description: "New to the portal? Set up your account and find your way around.",
+    icon: "rocket",
   },
   {
     key: "billing",
     label: "Billing & Payments",
     description: "Invoices, paying securely with Paystack, receipts and refunds.",
+    icon: "receipt",
   },
   {
     key: "services",
     label: "Services & Requests",
     description: "Request a service, get a quote and track engagement progress.",
+    icon: "briefcase",
   },
   {
     key: "documents",
     label: "Documents & Deliverables",
     description: "Upload source files and download your finished reports safely.",
+    icon: "folder",
   },
   {
     key: "account",
     label: "Account & Security",
     description: "Your profile, data privacy under the NDPA and reaching support.",
+    icon: "shield",
   },
 ];
 
 export function categoryMeta(key: string): HelpCategory | undefined {
   return HELP_CATEGORIES.find((c) => c.key === key);
+}
+
+/** Every article filed under a category, in authoring order. */
+export function articlesInCategory(
+  key: HelpCategoryKey,
+  articles: HelpArticle[] = HELP_ARTICLES,
+): HelpArticle[] {
+  return articles.filter((a) => a.category === key);
+}
+
+/** How many articles each category holds — for the category card counts. */
+export function categoryCounts(articles: HelpArticle[] = HELP_ARTICLES): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const a of articles) counts[a.category] = (counts[a.category] ?? 0) + 1;
+  return counts;
 }
 
 export const HELP_ARTICLES: HelpArticle[] = [

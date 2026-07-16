@@ -63,7 +63,7 @@ export default async function GetStartedPage() {
                     <span className="absolute right-3 top-3 rounded-full bg-paper/95 px-3 py-1 text-xs font-bold text-brand shadow-sm backdrop-blur">
                       {s.pricingMode === "fixed" && s.priceNgn
                         ? `From ${formatMoney(Number(s.priceNgn))}`
-                        : "Custom quote"}
+                        : "Get A Quote"}
                     </span>
                   </div>
                   <div className="flex flex-1 flex-col p-5">

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq, inArray } from "drizzle-orm";
+import { asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { ticket, ticketMessage } from "@/lib/db/schema";
 import { isAdmin, getCurrentUserId } from "@/lib/server-user";
@@ -114,6 +114,89 @@ export async function assignTicketAction(id: string, assignee: string): Promise<
   await db.update(ticket).set({ assignee: assignee.trim() || null, updatedAt: new Date() }).where(eq(ticket.id, id));
   revalidate();
   return { ok: true };
+}
+
+/** Which desk owns the ticket — Support / Finance / Advisory. */
+export async function setTicketTeamAction(id: string, team: string): Promise<ActionResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
+  await db.update(ticket).set({ team: team.trim() || null, updatedAt: new Date() }).where(eq(ticket.id, id));
+  revalidate();
+  return { ok: true };
+}
+
+/** What kind of request this is — question / problem / request / billing. */
+export async function setTicketTypeAction(id: string, type: string): Promise<ActionResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
+  await db.update(ticket).set({ type: type.trim() || null, updatedAt: new Date() }).where(eq(ticket.id, id));
+  revalidate();
+  return { ok: true };
+}
+
+/** Replace the ticket's label chips (`tags` jsonb) — de-duped, trimmed, capped. */
+export async function setTicketTagsAction(id: string, tags: string[]): Promise<ActionResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
+  const clean = Array.from(
+    new Set((tags || []).map((t) => t.trim()).filter((t) => t.length > 0 && t.length <= 32)),
+  ).slice(0, 12);
+  await db.update(ticket).set({ tags: clean, updatedAt: new Date() }).where(eq(ticket.id, id));
+  revalidate();
+  return { ok: true };
+}
+
+/**
+ * Ask LitchAI to draft an agent reply from the ticket thread. Gated on
+ * LITCHAI_API_URL — the button is only rendered when it's set. The backend's
+ * support surface isn't live yet, so a failed call surfaces its own error
+ * rather than pretending to have drafted something.
+ */
+export async function draftTicketReplyAction(
+  ticketId: string,
+): Promise<ActionResult & { draft?: string }> {
+  if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
+  if (!process.env.LITCHAI_API_URL) return { ok: false, error: "LitchAI isn't configured." };
+
+  const [t] = await db.select().from(ticket).where(eq(ticket.id, ticketId)).limit(1);
+  if (!t) return { ok: false, error: "Not found" };
+
+  const thread = await db
+    .select()
+    .from(ticketMessage)
+    .where(eq(ticketMessage.ticketId, ticketId))
+    .orderBy(asc(ticketMessage.createdAt));
+  if (thread.length === 0) return { ok: false, error: "Nothing to draft from — the thread is empty." };
+
+  try {
+    const res = await fetch(new URL("/support/draft-reply", process.env.LITCHAI_API_URL), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "CF-Access-Client-Id": process.env.LITCHAI_ACCESS_CLIENT_ID || "",
+        "CF-Access-Client-Secret": process.env.LITCHAI_ACCESS_CLIENT_SECRET || "",
+      },
+      body: JSON.stringify({
+        subject: t.subject,
+        category: t.category,
+        requester_name: t.requesterName,
+        messages: thread.map((m) => ({ role: m.authorRole, body: m.body })),
+      }),
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      return {
+        ok: false,
+        error:
+          res.status === 404
+            ? "The LitchAI support assistant isn't available yet."
+            : `LitchAI draft → ${res.status}`,
+      };
+    }
+    const data = (await res.json()) as { draft?: string; answer?: string };
+    const draft = (data.draft || data.answer || "").trim();
+    if (!draft) return { ok: false, error: "LitchAI returned an empty draft." };
+    return { ok: true, draft };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Assistant unavailable" };
+  }
 }
 
 export async function deleteTicketAction(id: string): Promise<ActionResult> {

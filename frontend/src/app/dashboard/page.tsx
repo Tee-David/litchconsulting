@@ -111,7 +111,7 @@ export default async function ClientDashboardPage() {
               <p className="mt-3 text-xs font-bold text-brand">
                 {s.pricingMode === "fixed" && s.priceNgn
                   ? `From ${formatMoney(Number(s.priceNgn))}`
-                  : "Custom quote"}
+                  : "Get A Quote"}
               </p>
             </Link>
           ))}

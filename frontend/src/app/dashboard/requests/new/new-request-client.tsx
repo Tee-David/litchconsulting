@@ -90,7 +90,7 @@ export function NewRequestClient({ services }: { services: StepperService[] }) {
                 <span className="rounded-full bg-brand-tint px-3 py-1 text-xs font-bold text-brand">
                   {s.pricingMode === "fixed" && s.priceNgn
                     ? `From ${formatMoney(Number(s.priceNgn))}`
-                    : "Custom quote"}
+                    : "Get A Quote"}
                 </span>
                 {s.turnaround && (
                   <span className="inline-flex items-center gap-1 text-xs font-medium text-muted">

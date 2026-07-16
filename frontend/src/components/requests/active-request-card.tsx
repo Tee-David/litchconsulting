@@ -84,7 +84,7 @@ export function ActiveRequestCard({
 
       <div className="mt-4 flex items-center justify-between border-t border-hairline pt-3.5">
         <span className="text-sm font-semibold tabular-nums text-ink">
-          {req.priceSnapshot ? formatMoney(num(req.priceSnapshot), req.currency) : "Custom quote"}
+          {req.priceSnapshot ? formatMoney(num(req.priceSnapshot), req.currency) : "Get A Quote"}
         </span>
         {action && (
           <span className="inline-flex items-center gap-1 text-sm font-semibold text-brand group-hover:underline">

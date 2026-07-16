@@ -177,7 +177,7 @@ export default async function ClientRequestDetailPage({
                 <dd className="font-semibold text-ink">
                   {req.priceSnapshot
                     ? formatMoney(num(req.priceSnapshot), req.currency)
-                    : "Custom quote"}
+                    : "Get A Quote"}
                 </dd>
               </div>
               {req.details && (
