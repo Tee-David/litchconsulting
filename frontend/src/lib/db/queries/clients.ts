@@ -1,5 +1,5 @@
 import "server-only";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { client } from "@/lib/db/schema";
 
@@ -40,5 +40,20 @@ export async function getClientForUser(userId: string, email: string, name?: str
     })
     .returning();
   return newClient;
+}
+
+/** Other client rows sharing this email (drives the hub's merge affordance). */
+export async function findDuplicateClients(
+  email: string | null | undefined,
+  excludeId: string
+): Promise<ClientRow[]> {
+  if (!email) return [];
+  return db
+    .select()
+    .from(client)
+    .where(
+      and(sql`lower(${client.email}) = ${email.toLowerCase()}`, ne(client.id, excludeId))
+    )
+    .orderBy(desc(client.createdAt));
 }
 

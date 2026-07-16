@@ -35,13 +35,20 @@ export function nextAction(status: string): string | null {
  * Progress card for an in-flight request (used on the dashboard home and the
  * My Services list): compact milestone bar + the next action, one tap deep.
  */
-export function ActiveRequestCard({ req }: { req: ServiceRequest }) {
+export function ActiveRequestCard({
+  req,
+  hrefBase = "/dashboard/requests",
+}: {
+  req: ServiceRequest;
+  /** e.g. "/admin/requests" when rendered inside the admin client hub */
+  hrefBase?: string;
+}) {
   const steps = displaySteps(req.status, req.stepLabels as StepLabelOverrides);
   const done = steps.filter((s) => s.state === "done").length;
   const action = nextAction(req.status);
   return (
     <Link
-      href={`/dashboard/requests/${req.id}`}
+      href={`${hrefBase}/${req.id}`}
       className="group flex flex-col rounded-card border border-hairline bg-paper p-5 transition-all hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-lg hover:shadow-brand/5"
     >
       <div className="flex items-start justify-between gap-3">

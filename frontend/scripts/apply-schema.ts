@@ -181,6 +181,22 @@ const STATEMENTS = [
     CONSTRAINT "push_subscription_endpoint_unique" UNIQUE("endpoint"))`,
   `CREATE INDEX IF NOT EXISTS "push_subscription_user_idx" ON "push_subscription" ("user_id")`,
   `ALTER TABLE "ticket" ADD COLUMN IF NOT EXISTS "request_id" uuid`,
+  // ---- Client profile hub (notes/tasks + per-client query indexes) ----
+  `CREATE TABLE IF NOT EXISTS "client_note" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "client_id" uuid NOT NULL,
+    "author_name" text,
+    "kind" text DEFAULT 'note' NOT NULL,
+    "body" text NOT NULL,
+    "done" boolean DEFAULT false NOT NULL,
+    "due_date" date,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS "client_note_client_idx" ON "client_note" ("client_id", "kind", "done")`,
+  `CREATE INDEX IF NOT EXISTS "payment_client_idx" ON "payment" ("client_id")`,
+  `CREATE INDEX IF NOT EXISTS "ticket_client_idx" ON "ticket" ("client_id")`,
+  `CREATE INDEX IF NOT EXISTS "consultation_client_idx" ON "consultation" ("client_id")`,
+  `CREATE INDEX IF NOT EXISTS "consultation_email_idx" ON "consultation" ("email")`,
 ];
 
 /**

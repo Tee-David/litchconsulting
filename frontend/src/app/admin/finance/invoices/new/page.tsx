@@ -14,9 +14,9 @@ export const dynamic = "force-dynamic";
 export default async function NewInvoicePage({
   searchParams,
 }: {
-  searchParams: Promise<{ requestId?: string }>;
+  searchParams: Promise<{ requestId?: string; clientId?: string }>;
 }) {
-  const { requestId } = await searchParams;
+  const { requestId, clientId } = await searchParams;
   const [clients, number, issuer] = await Promise.all([
     listClients(),
     nextInvoiceNumber(),
@@ -53,6 +53,27 @@ export default async function NewInvoicePage({
             taxRate: 7.5,
           },
         ],
+      };
+    }
+  }
+
+  // "New invoice" from a client profile hub → prefill the bill-to only.
+  if (!initial && clientId) {
+    const clientRow = await getClient(clientId);
+    if (clientRow) {
+      initial = {
+        number,
+        clientId,
+        billTo: {
+          name: clientRow.name || undefined,
+          company: clientRow.company || undefined,
+          email: clientRow.email || undefined,
+          address: clientRow.address || undefined,
+          taxId: clientRow.taxId || undefined,
+        },
+        currency: "NGN",
+        issueDate: new Date().toISOString().slice(0, 10),
+        items: [{ description: "", quantity: 1, unitPrice: 0, taxRate: 7.5 }],
       };
     }
   }

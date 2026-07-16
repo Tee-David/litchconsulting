@@ -113,6 +113,15 @@ export function getObservability(): Promise<Observability> {
   return litchai("/observability");
 }
 
+/**
+ * NDPA erasure (backend Phase 6, ops/erasure.py): deletes the client's
+ * documents, line items, engagements and client-scoped category memory on the
+ * VM. Callers must treat a 404 as "not available yet", never as success.
+ */
+export function eraseClient(clientId: string): Promise<{ ok: boolean }> {
+  return litchai(`/clients/${encodeURIComponent(clientId)}/erase`, { method: "POST" });
+}
+
 export function listDocuments(clientId?: string): Promise<{ documents: LitchaiDocument[] }> {
   const qs = clientId ? `?client_id=${encodeURIComponent(clientId)}` : "";
   return litchai(`/documents${qs}`);

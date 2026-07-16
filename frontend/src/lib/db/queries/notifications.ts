@@ -21,6 +21,7 @@ export type NotificationItem = {
     | "ticket_created"
     | "ticket_replied"
     | "request"
+    | "payment"
     | "payment_flagged"
     | "consultation";
   title: string;
@@ -195,6 +196,145 @@ export async function recentNotifications(limit = 20): Promise<NotificationItem[
       description: `${r.authorName || "Client"}: ${r.body.slice(0, 40)}${r.body.length > 40 ? "..." : ""}`,
       href: "/admin/help-desk",
       at: (r.createdAt as Date).toISOString(),
+    });
+  }
+
+  items.sort((a, b) => (a.at < b.at ? 1 : -1));
+  return items.slice(0, limit);
+}
+
+/**
+ * ADMIN-facing activity timeline for one client (the hub's Activity tab):
+ * every request event (internal included), invoices sent/paid, payments
+ * (success + flagged), tickets + replies from both sides, consultations.
+ * Admin hrefs throughout — the portal-facing feed below stays untouched.
+ */
+export async function clientActivity(clientId: string, limit = 50): Promise<NotificationItem[]> {
+  const [requestEvents, invoices, payments, tickets, replies, consults] = await Promise.all([
+    db
+      .select({
+        id: serviceRequestEvent.id,
+        type: serviceRequestEvent.type,
+        message: serviceRequestEvent.message,
+        visibility: serviceRequestEvent.visibility,
+        actorName: serviceRequestEvent.actorName,
+        createdAt: serviceRequestEvent.createdAt,
+        requestId: serviceRequest.id,
+        requestNumber: serviceRequest.number,
+        serviceName: serviceRequest.serviceName,
+      })
+      .from(serviceRequestEvent)
+      .innerJoin(serviceRequest, eq(serviceRequestEvent.requestId, serviceRequest.id))
+      .where(eq(serviceRequest.clientId, clientId))
+      .orderBy(desc(serviceRequestEvent.createdAt))
+      .limit(40),
+    db.select().from(invoice).where(eq(invoice.clientId, clientId)).orderBy(desc(invoice.createdAt)).limit(20),
+    db
+      .select()
+      .from(payment)
+      .where(eq(payment.clientId, clientId))
+      .orderBy(desc(payment.updatedAt))
+      .limit(15),
+    db.select().from(ticket).where(eq(ticket.clientId, clientId)).orderBy(desc(ticket.createdAt)).limit(10),
+    db
+      .select({
+        msgId: ticketMessage.id,
+        authorName: ticketMessage.authorName,
+        authorRole: ticketMessage.authorRole,
+        createdAt: ticketMessage.createdAt,
+        body: ticketMessage.body,
+        ticketNumber: ticket.number,
+      })
+      .from(ticketMessage)
+      .innerJoin(ticket, eq(ticketMessage.ticketId, ticket.id))
+      .where(eq(ticket.clientId, clientId))
+      .orderBy(desc(ticketMessage.createdAt))
+      .limit(15),
+    db
+      .select()
+      .from(consultation)
+      .where(eq(consultation.clientId, clientId))
+      .orderBy(desc(consultation.createdAt))
+      .limit(10),
+  ]);
+
+  const items: NotificationItem[] = [];
+
+  for (const e of requestEvents) {
+    items.push({
+      id: `req-event-${e.id}`,
+      type: "request",
+      title: `${e.requestNumber} — ${e.type.replace(/_/g, " ")}${e.visibility === "internal" ? " (internal)" : ""}`,
+      description: (e.message || e.serviceName).slice(0, 80),
+      href: `/admin/requests/${e.requestId}`,
+      at: (e.createdAt as Date).toISOString(),
+    });
+  }
+  for (const inv of invoices) {
+    const base = inv.kind === "quote" ? "/admin/finance/quotes" : "/admin/finance/invoices";
+    if (inv.paidAt) {
+      items.push({
+        id: `inv-paid-${inv.id}`,
+        type: "invoice_paid",
+        title: `${inv.number} paid`,
+        description: `${inv.currency} ${inv.total}`,
+        href: `${base}/${inv.id}`,
+        at: (inv.paidAt as Date).toISOString(),
+      });
+    }
+    if (inv.sentAt) {
+      items.push({
+        id: `inv-sent-${inv.id}`,
+        type: "invoice_sent",
+        title: `${inv.number} sent`,
+        description: inv.projectTitle || `${inv.currency} ${inv.total}`,
+        href: `${base}/${inv.id}`,
+        at: (inv.sentAt as Date).toISOString(),
+      });
+    }
+  }
+  for (const p of payments) {
+    if (p.status === "initialized" || p.status === "abandoned") continue;
+    const flagged = p.status === "flagged_amount_mismatch" || p.status === "duplicate_success";
+    items.push({
+      id: `pay-${p.id}`,
+      type: flagged ? "payment_flagged" : "payment",
+      title: flagged ? `Payment flagged — ${p.status.replace(/_/g, " ")}` : "Payment received",
+      description: `${p.reference} · ${p.currency} ${p.amountSettled ?? p.amount}`,
+      href: `/admin/finance/invoices/${p.invoiceId}`,
+      at: (p.updatedAt as Date).toISOString(),
+    });
+  }
+  for (const t of tickets) {
+    items.push({
+      id: `ticket-${t.id}`,
+      type: "ticket_created",
+      title: `Ticket ${t.number} opened`,
+      description: t.subject,
+      href: "/admin/help-desk",
+      at: (t.createdAt as Date).toISOString(),
+    });
+  }
+  for (const r of replies) {
+    items.push({
+      id: `reply-${r.msgId}`,
+      type: "ticket_replied",
+      title: `${r.authorRole === "agent" ? "You replied" : "Client replied"} on ${r.ticketNumber}`,
+      description: r.body.slice(0, 60),
+      href: "/admin/help-desk",
+      at: (r.createdAt as Date).toISOString(),
+    });
+  }
+  for (const c of consults) {
+    items.push({
+      id: `consult-${c.id}`,
+      type: "consultation",
+      title: `Consultation ${c.status}`,
+      description: c.startsAt
+        ? (c.startsAt as Date).toLocaleString("en-NG", { timeZone: "Africa/Lagos" })
+        : "unscheduled",
+      href: "/admin/requests?tab=consultations",
+      at: (c.createdAt as Date).toISOString(),
     });
   }
 

@@ -468,6 +468,27 @@ export const consultation = pgTable(
   (t) => [index("consultation_starts_idx").on(t.startsAt)]
 );
 
+/**
+ * Admin annotations on a client: timestamped notes AND lightweight tasks in
+ * one table (kind discriminates; done/dueDate only meaningful for tasks).
+ * Rendered on the client profile hub's Overview rail.
+ */
+export const clientNote = pgTable(
+  "client_note",
+  {
+    id: id(),
+    clientId: uuid("client_id").notNull(), // soft ref → client.id
+    authorName: text("author_name"),
+    kind: text("kind").notNull().default("note"), // note | task
+    body: text("body").notNull(),
+    done: boolean("done").notNull().default(false),
+    dueDate: date("due_date"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("client_note_client_idx").on(t.clientId, t.kind, t.done)]
+);
+
 /** Web-push subscriptions (admin alerting in v1). One row per browser. */
 export const pushSubscription = pgTable(
   "push_subscription",
@@ -499,3 +520,4 @@ export type ServiceRequestDocument = typeof serviceRequestDocument.$inferSelect;
 export type Payment = typeof payment.$inferSelect;
 export type Consultation = typeof consultation.$inferSelect;
 export type PushSubscription = typeof pushSubscription.$inferSelect;
+export type ClientNote = typeof clientNote.$inferSelect;

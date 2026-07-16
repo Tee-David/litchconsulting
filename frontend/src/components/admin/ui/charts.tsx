@@ -1,38 +1,68 @@
 /** Lightweight, dependency-free SVG charts for the dashboard. */
 
+const SERIES2_COLOR = "#10b981"; // emerald-500 — legible on light + dark
+
 export function BarChart({
   data,
   height = 180,
   format = (n: number) => String(n),
+  legend,
 }: {
-  data: { label: string; value: number }[];
+  /** `value2` (optional per-point) renders a paired second bar (brand + emerald). */
+  data: { label: string; value: number; value2?: number }[];
   height?: number;
   format?: (n: number) => string;
+  /** [series1Label, series2Label] — shown only when any point has value2. */
+  legend?: [string, string];
 }) {
-  const max = Math.max(1, ...data.map((d) => d.value));
-  const barW = 100 / (data.length * 1.6);
-  const gap = barW * 0.6;
+  const grouped = data.some((d) => d.value2 != null);
+  const max = Math.max(1, ...data.flatMap((d) => [d.value, d.value2 ?? 0]));
+  const slot = 100 / Math.max(1, data.length);
+  const barW = grouped ? slot * 0.28 : slot * 0.62;
+  void format;
 
   return (
     <div>
+      {grouped && legend && (
+        <div className="mb-2 flex items-center gap-4 text-[11px] text-muted">
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-2.5 rounded-sm bg-brand dark:bg-[var(--color-highlight)]" /> {legend[0]}
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="size-2.5 rounded-sm" style={{ background: SERIES2_COLOR }} /> {legend[1]}
+          </span>
+        </div>
+      )}
       <svg viewBox="0 0 100 60" preserveAspectRatio="none" className="w-full" style={{ height }}>
         {[0.25, 0.5, 0.75].map((g) => (
           <line key={g} x1="0" x2="100" y1={60 * g} y2={60 * g} stroke="var(--color-hairline)" strokeWidth="0.3" />
         ))}
         {data.map((d, i) => {
           const h = (d.value / max) * 52;
-          const x = i * (barW + gap) + gap;
+          const center = i * slot + slot / 2;
+          const x = grouped ? center - barW - 0.4 : center - barW / 2;
           return (
-            <rect
-              key={i}
-              x={x}
-              y={58 - h}
-              width={barW}
-              height={Math.max(h, 0.5)}
-              rx="1"
-              fill="var(--color-brand)"
-              className="dark:[fill:var(--color-highlight)]"
-            />
+            <g key={i}>
+              <rect
+                x={x}
+                y={58 - h}
+                width={barW}
+                height={Math.max(h, 0.5)}
+                rx="1"
+                fill="var(--color-brand)"
+                className="dark:[fill:var(--color-highlight)]"
+              />
+              {grouped && (
+                <rect
+                  x={center + 0.4}
+                  y={58 - ((d.value2 ?? 0) / max) * 52}
+                  width={barW}
+                  height={Math.max(((d.value2 ?? 0) / max) * 52, 0.5)}
+                  rx="1"
+                  fill={SERIES2_COLOR}
+                />
+              )}
+            </g>
           );
         })}
       </svg>

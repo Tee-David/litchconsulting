@@ -1,16 +1,40 @@
 import Link from "next/link";
 import { desc } from "drizzle-orm";
-import { Plus, Wallet, BadgeCheck, Clock, AlertTriangle, Users, FileText, BarChart3, Receipt, Inbox } from "lucide-react";
+import {
+  Plus,
+  Wallet,
+  BadgeCheck,
+  Clock,
+  AlertTriangle,
+  Users,
+  FileText,
+  BarChart3,
+  Receipt,
+  Inbox,
+} from "lucide-react";
 import { db } from "@/lib/db/client";
 import { lead } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/server-user";
 import { invoiceStats, listInvoices } from "@/lib/db/queries/invoices";
-import { requestStats } from "@/lib/db/queries/requests";
+import {
+  requestStats,
+  requestStatusCounts,
+  upcomingConsultations,
+  recentPayments,
+  serviceMix,
+} from "@/lib/db/queries/requests";
+import { needsAttention } from "@/lib/db/queries/attention";
+import { agingBuckets } from "@/lib/invoice/aging";
 import { formatMoney, num } from "@/lib/invoice/money";
 import { StatCard } from "@/components/admin/ui/stat-card";
 import { Badge, invoiceStatusTone } from "@/components/admin/ui/badge";
 import { BarChart, DonutChart } from "@/components/admin/ui/charts";
 import { EmptyState } from "@/components/admin/ui/empty-state";
+import { AttentionList } from "@/components/admin/dashboard/attention-list";
+import { PipelineStrip } from "@/components/admin/dashboard/pipeline-strip";
+import { ArAgingCard } from "@/components/admin/dashboard/ar-aging-card";
+import { PaymentsFeed } from "@/components/admin/dashboard/payments-feed";
+import { ConsultationsCard } from "@/components/admin/dashboard/consultations-card";
 
 export const dynamic = "force-dynamic";
 
@@ -18,7 +42,10 @@ function last6Months() {
   const now = new Date();
   return Array.from({ length: 6 }, (_, idx) => {
     const d = new Date(now.getFullYear(), now.getMonth() - (5 - idx), 1);
-    return { key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`, label: d.toLocaleString("en", { month: "short" }) };
+    return {
+      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
+      label: d.toLocaleString("en", { month: "short" }),
+    };
   });
 }
 
@@ -28,35 +55,73 @@ const STATUS_COLORS: Record<string, string> = {
   draft: "#f5a524",
   overdue: "#e5484d",
   void: "#8a92a6",
+  refunded: "#e5484d",
 };
 
-export default async function AdminDashboard() {
-  const [user, stats, invoices, leads, reqStats] = await Promise.all([
-    getSessionUser(),
-    invoiceStats(),
-    listInvoices(),
-    db.select().from(lead).orderBy(desc(lead.createdAt)).limit(50),
-    requestStats(),
-  ]);
+const MIX_COLORS = ["#0a196d", "#4c6ef5", "#16a34a", "#f5a524", "#e5484d", "#8a92a6"];
 
+export default async function AdminDashboard() {
+  const [user, stats, invoices, leads, reqStats, statusCounts, attention, consults, payments, mix] =
+    await Promise.all([
+      getSessionUser(),
+      invoiceStats(),
+      listInvoices(),
+      db.select().from(lead).orderBy(desc(lead.createdAt)).limit(50),
+      requestStats(),
+      requestStatusCounts(),
+      needsAttention(),
+      upcomingConsultations(7),
+      recentPayments(8),
+      serviceMix(new Date().getFullYear()),
+    ]);
+
+  // Billed by issue month vs collected by paid month — same fetch, two series.
   const monthly = last6Months().map((m) => ({
     label: m.label,
-    value: invoices.filter((i) => (i.issueDate || "").startsWith(m.key)).reduce((s, i) => s + num(i.total), 0),
+    value: invoices
+      .filter((i) => i.kind === "invoice" && (i.issueDate || "").startsWith(m.key))
+      .reduce((s, i) => s + num(i.total), 0),
+    value2: invoices
+      .filter(
+        (i) => i.kind === "invoice" && i.paidAt && (i.paidAt as Date).toISOString().startsWith(m.key)
+      )
+      .reduce((s, i) => s + num(i.amountPaid), 0),
   }));
 
-  const statusOrder = ["paid", "sent", "draft", "overdue", "void"];
+  const statusOrder = ["paid", "sent", "draft", "overdue", "void", "refunded"];
   const byStatus = statusOrder
-    .map((s) => ({ label: s, value: invoices.filter((i) => i.status === s).length, color: STATUS_COLORS[s] }))
+    .map((s) => ({
+      label: s,
+      value: invoices.filter((i) => i.status === s).length,
+      color: STATUS_COLORS[s],
+    }))
     .filter((s) => s.value > 0);
+
+  const aging = agingBuckets(invoices);
+  const mixSegments = mix.slice(0, 6).map((m, i) => ({
+    label: m.serviceName,
+    value: m.n,
+    color: MIX_COLORS[i % MIX_COLORS.length],
+  }));
+  const mixTotal = mix.reduce((s, m) => s + m.n, 0);
 
   const recent = invoices.slice(0, 5);
   const recentLeads = leads.slice(0, 5);
-  const newLeads30 = leads.filter((l) => l.createdAt && new Date(l.createdAt).getTime() > Date.now() - 30 * 864e5).length;
+  const newLeads7 = leads.filter(
+    (l) => l.createdAt && new Date(l.createdAt).getTime() > Date.now() - 7 * 864e5
+  ).length;
   const collectionRate = stats.invoiced ? Math.round((stats.paid / stats.invoiced) * 100) : 0;
   const monthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
-  const thisMonth = invoices.filter((i) => (i.issueDate || "").startsWith(monthKey)).reduce((s, i) => s + num(i.total), 0);
+  const thisMonth = invoices
+    .filter((i) => (i.issueDate || "").startsWith(monthKey))
+    .reduce((s, i) => s + num(i.total), 0);
   const firstName = (user?.name || "there").split(" ")[0];
-  const greeting = new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 18 ? "Good afternoon" : "Good evening";
+  const greeting =
+    new Date().getHours() < 12
+      ? "Good morning"
+      : new Date().getHours() < 18
+        ? "Good afternoon"
+        : "Good evening";
 
   return (
     <div className="space-y-6">
@@ -85,16 +150,23 @@ export default async function AdminDashboard() {
         <StatCard label="Overdue" value={stats.overdueCount} icon={AlertTriangle} hint="invoices" />
       </div>
 
-      {/* Charts + recent */}
+      {/* Main grid */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Left: bar + recent invoices */}
+        {/* Left column */}
         <div className="space-y-6 lg:col-span-2">
+          <AttentionList items={attention} />
+          <PipelineStrip counts={statusCounts} />
+
           <div className="rounded-card border border-hairline bg-paper p-5">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="font-display text-sm font-bold text-ink">Invoiced — last 6 months</h3>
+              <h3 className="font-display text-sm font-bold text-ink">
+                Billed vs collected — last 6 months
+              </h3>
             </div>
-            <BarChart data={monthly} format={(n) => formatMoney(n)} />
+            <BarChart data={monthly} legend={["Billed", "Collected"]} />
           </div>
+
+          <PaymentsFeed rows={payments} />
 
           <div className="rounded-card border border-hairline bg-paper">
             <div className="flex items-center justify-between border-b border-hairline px-5 py-4">
@@ -130,7 +202,7 @@ export default async function AdminDashboard() {
           </div>
         </div>
 
-        {/* Right: quick actions + collection + donut + recent leads */}
+        {/* Right rail */}
         <div className="space-y-6">
           {/* Quick actions */}
           <div className="rounded-card border border-hairline bg-paper p-5">
@@ -153,6 +225,9 @@ export default async function AdminDashboard() {
               ))}
             </div>
           </div>
+
+          <ConsultationsCard rows={consults} />
+          <ArAgingCard aging={aging} />
 
           {/* Collection rate */}
           <div className="rounded-card border border-hairline bg-paper p-5">
@@ -188,11 +263,34 @@ export default async function AdminDashboard() {
             )}
           </div>
 
+          {/* Service mix */}
+          {mixSegments.length > 0 && (
+            <div className="rounded-card border border-hairline bg-paper p-5">
+              <h3 className="mb-4 font-display text-sm font-bold text-ink">Service mix — this year</h3>
+              <DonutChart
+                segments={mixSegments}
+                centerValue={String(mixTotal)}
+                centerLabel="requests YTD"
+              />
+              <div className="mt-4 space-y-2">
+                {mixSegments.map((s) => (
+                  <div key={s.label} className="flex items-center justify-between text-sm">
+                    <span className="flex min-w-0 items-center gap-2 text-body">
+                      <span className="size-2.5 shrink-0 rounded-full" style={{ background: s.color }} />
+                      <span className="truncate">{s.label}</span>
+                    </span>
+                    <span className="font-medium tabular-nums text-ink">{s.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="rounded-card border border-hairline bg-paper">
             <div className="flex items-center justify-between border-b border-hairline px-5 py-4">
               <div>
                 <h3 className="font-display text-sm font-bold text-ink">Recent leads</h3>
-                <p className="text-xs text-muted">{newLeads30} new in 30 days</p>
+                <p className="text-xs text-muted">{newLeads7} new this week</p>
               </div>
               <Users className="size-4 text-muted" />
             </div>

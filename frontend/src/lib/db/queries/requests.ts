@@ -1,5 +1,5 @@
 import "server-only";
-import { and, desc, eq, inArray, isNull, like } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, isNull, like, lte, ne, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   serviceRequest,
@@ -157,6 +157,81 @@ export async function listClientPayments(clientId: string) {
 /** Cal.com bookings, upcoming first (admin Consultations tab). */
 export async function listConsultations(): Promise<Consultation[]> {
   return db.select().from(consultation).orderBy(desc(consultation.startsAt));
+}
+
+/** A client's consultations — matched by clientId OR email (pre-link bookings). */
+export async function listClientConsultations(
+  clientId: string,
+  email?: string | null
+): Promise<Consultation[]> {
+  const match = email
+    ? or(eq(consultation.clientId, clientId), sql`lower(${consultation.email}) = ${email.toLowerCase()}`)
+    : eq(consultation.clientId, clientId);
+  return db.select().from(consultation).where(match).orderBy(desc(consultation.startsAt));
+}
+
+/** Confirmed/rescheduled bookings in the next N days, soonest first. */
+export async function upcomingConsultations(days = 7): Promise<Consultation[]> {
+  const now = new Date();
+  const horizon = new Date(now.getTime() + days * 86_400_000);
+  return db
+    .select()
+    .from(consultation)
+    .where(
+      and(
+        ne(consultation.status, "cancelled"),
+        gte(consultation.startsAt, now),
+        lte(consultation.startsAt, horizon)
+      )
+    )
+    .orderBy(asc(consultation.startsAt));
+}
+
+/** Every current-version document across a client's requests (hub Documents tab). */
+export async function listClientDocuments(clientId: string) {
+  return db
+    .select({
+      document: serviceRequestDocument,
+      requestId: serviceRequest.id,
+      requestNumber: serviceRequest.number,
+      serviceName: serviceRequest.serviceName,
+    })
+    .from(serviceRequestDocument)
+    .innerJoin(serviceRequest, eq(serviceRequestDocument.requestId, serviceRequest.id))
+    .where(and(eq(serviceRequest.clientId, clientId), isNull(serviceRequestDocument.supersededById)))
+    .orderBy(desc(serviceRequestDocument.createdAt));
+}
+
+/** Request counts per status (dashboard pipeline strip). */
+export async function requestStatusCounts(): Promise<Record<string, number>> {
+  const rows = await db
+    .select({ status: serviceRequest.status, n: count() })
+    .from(serviceRequest)
+    .groupBy(serviceRequest.status);
+  return Object.fromEntries(rows.map((r) => [r.status, Number(r.n)]));
+}
+
+/** Requests per service this year (dashboard service-mix donut). */
+export async function serviceMix(year: number): Promise<{ serviceName: string; n: number }[]> {
+  const from = new Date(Date.UTC(year, 0, 1));
+  const rows = await db
+    .select({ serviceName: serviceRequest.serviceName, n: count() })
+    .from(serviceRequest)
+    .where(gte(serviceRequest.createdAt, from))
+    .groupBy(serviceRequest.serviceName)
+    .orderBy(desc(count()));
+  return rows.map((r) => ({ serviceName: r.serviceName, n: Number(r.n) }));
+}
+
+/** Latest terminal-ish payments with their invoice number (dashboard feed). */
+export async function recentPayments(limit = 8) {
+  return db
+    .select({ payment: payment, invoiceNumber: invoice.number })
+    .from(payment)
+    .innerJoin(invoice, eq(payment.invoiceId, invoice.id))
+    .where(ne(payment.status, "initialized"))
+    .orderBy(desc(payment.updatedAt))
+    .limit(limit);
 }
 
 /** Requests list joined with the client's name for the admin table. */

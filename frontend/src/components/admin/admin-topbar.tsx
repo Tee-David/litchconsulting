@@ -10,6 +10,7 @@ import { signOut } from "@/lib/auth-client";
 import { activeNavItem } from "./nav";
 import type { NotificationItem } from "@/lib/db/queries/notifications";
 import { cn } from "@/lib/utils";
+import { initialsOf, timeAgo } from "@/components/ui/avatar";
 
 export type AdminUser = {
   name?: string | null;
@@ -18,24 +19,6 @@ export type AdminUser = {
   role?: string | null;
 };
 
-function initialsOf(name?: string | null, email?: string | null) {
-  const src = (name || email || "").trim();
-  if (!src) return "A";
-  const parts = src.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return src.slice(0, 2).toUpperCase();
-}
-
-function timeAgo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
-}
-
 const NOTIF_ICON = { 
   lead: UserPlus, 
   invoice_sent: Send, 
@@ -43,6 +26,7 @@ const NOTIF_ICON = {
   ticket_created: LifeBuoy,
   ticket_replied: MessageSquare,
   request: Inbox,
+  payment: CheckCircle2,
   payment_flagged: AlertTriangle,
   consultation: CalendarClock
 } as const;

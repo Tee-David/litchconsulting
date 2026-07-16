@@ -14,6 +14,7 @@ import {
   requestStatusTone,
   STATUS_LABELS,
   ACTIVE_STATUSES,
+  REQUEST_STATUSES,
   type RequestStatus,
 } from "@/lib/requests/status";
 import { formatDate, formatDateTime } from "@/lib/format-date";
@@ -35,7 +36,13 @@ export default async function AdminRequestsPage({
 }) {
   const params = await searchParams;
   const tab = params.tab === "consultations" ? "consultations" : "requests";
-  const filter = FILTERS.some((f) => f.key === params.filter) ? params.filter! : "open";
+  // Named views (open/action/all) or any single status (dashboard pipeline chips).
+  const isStatusFilter = REQUEST_STATUSES.includes(params.filter as RequestStatus);
+  const filter = isStatusFilter
+    ? params.filter!
+    : FILTERS.some((f) => f.key === params.filter)
+      ? params.filter!
+      : "open";
 
   const [rows, consultations, stats] = await Promise.all([
     listRequestsWithClients(),
@@ -44,6 +51,7 @@ export default async function AdminRequestsPage({
   ]);
 
   const filtered = rows.filter(({ request: r }) => {
+    if (isStatusFilter) return r.status === filter;
     if (filter === "all") return true;
     if (filter === "action")
       return ["quote_requested", "in_review", "delivered"].includes(r.status);
