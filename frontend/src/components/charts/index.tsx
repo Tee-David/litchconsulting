@@ -16,6 +16,7 @@ import {
   YAxis,
 } from "recharts";
 import { CATEGORICAL, SERIES, categorical } from "./palette";
+import { formatMoney } from "@/lib/invoice/money";
 
 /**
  * Brand-tokened, interactive Recharts wrappers (hover tooltips, legends,
@@ -26,16 +27,30 @@ import { CATEGORICAL, SERIES, categorical } from "./palette";
 const AXIS = { stroke: "var(--color-muted)", fontSize: 11 };
 const GRID = "var(--color-hairline)";
 
+/**
+ * Value formatting is a serializable token, not a function — these charts are
+ * client components rendered from RSC pages, and functions can't cross that
+ * boundary. Resolved to a real formatter here on the client.
+ */
+export type ValueFormat = "money" | "number" | "percent";
+
+function resolveFormat(format: ValueFormat = "number"): (v: number) => string {
+  if (format === "money") return (v) => formatMoney(v);
+  if (format === "percent") return (v) => `${Math.round(v)}%`;
+  return (v) => v.toLocaleString("en-NG");
+}
+
 type TipEntry = { name?: string; value?: number | string; color?: string };
 type TipProps = {
   active?: boolean;
   payload?: TipEntry[];
   label?: string | number;
-  fmt?: (v: number) => string;
+  format?: ValueFormat;
 };
 
-/** Shared branded tooltip. `fmt` formats each value (money, count, etc.). */
-function ChartTooltip({ active, payload, label, fmt = (v: number) => String(v) }: TipProps) {
+/** Shared branded tooltip. `format` picks how each value renders. */
+function ChartTooltip({ active, payload, label, format }: TipProps) {
+  const fmt = resolveFormat(format);
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-xl border border-hairline bg-paper px-3 py-2 text-xs shadow-xl shadow-black/10">
@@ -62,12 +77,12 @@ export function AreaTrend({
   data,
   series,
   height = 240,
-  fmt,
+  format,
 }: {
   data: Record<string, number | string>[];
   series: SeriesDef[];
   height?: number;
-  fmt?: (v: number) => string;
+  format?: ValueFormat;
 }) {
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -86,7 +101,7 @@ export function AreaTrend({
         <CartesianGrid vertical={false} stroke={GRID} strokeDasharray="3 3" />
         <XAxis dataKey="label" tickLine={false} axisLine={false} tick={AXIS} />
         <YAxis tickLine={false} axisLine={false} tick={AXIS} width={44} />
-        <Tooltip content={<ChartTooltip fmt={fmt} />} cursor={{ stroke: GRID }} />
+        <Tooltip content={<ChartTooltip format={format} />} cursor={{ stroke: GRID }} />
         {series.length > 1 && <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />}
         {series.map((s, i) => {
           const c = i === 1 ? SERIES.secondary : categorical(i);
@@ -114,12 +129,12 @@ export function GroupedBars({
   data,
   series,
   height = 240,
-  fmt,
+  format,
 }: {
   data: Record<string, number | string>[];
   series: SeriesDef[];
   height?: number;
-  fmt?: (v: number) => string;
+  format?: ValueFormat;
 }) {
   return (
     <ResponsiveContainer width="100%" height={height}>
@@ -127,7 +142,7 @@ export function GroupedBars({
         <CartesianGrid vertical={false} stroke={GRID} strokeDasharray="3 3" />
         <XAxis dataKey="label" tickLine={false} axisLine={false} tick={AXIS} />
         <YAxis tickLine={false} axisLine={false} tick={AXIS} width={44} />
-        <Tooltip content={<ChartTooltip fmt={fmt} />} cursor={{ fill: "var(--color-surface)" }} />
+        <Tooltip content={<ChartTooltip format={format} />} cursor={{ fill: "var(--color-surface)" }} />
         {series.length > 1 && <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />}
         {series.map((s, i) => (
           <Bar
@@ -150,19 +165,19 @@ export function Donut({
   height = 240,
   centerLabel,
   centerValue,
-  fmt,
+  format,
 }: {
   data: { label: string; value: number }[];
   height?: number;
   centerLabel?: string;
   centerValue?: string;
-  fmt?: (v: number) => string;
+  format?: ValueFormat;
 }) {
   return (
     <div className="relative" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
-          <Tooltip content={<ChartTooltip fmt={fmt} />} />
+          <Tooltip content={<ChartTooltip format={format} />} />
           <Pie
             data={data}
             dataKey="value"

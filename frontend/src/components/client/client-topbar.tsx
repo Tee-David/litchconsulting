@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Menu, LogOut, Home, Bell, Send, CheckCircle2, MessageSquare, User, Settings, Briefcase } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { CalculatorButton } from "@/components/calculators/calculator-launcher";
+import { TourLauncher } from "@/components/tour/tour-launcher";
 import { signOut } from "@/lib/auth-client";
 import { activeClientNavItem } from "./client-nav";
 import type { NotificationItem } from "@/lib/db/queries/notifications";
@@ -231,6 +232,7 @@ export function ClientTopbar({
         type="button"
         onClick={onMenuClick}
         aria-label="Open menu"
+        data-tour="mobile-menu"
         className="grid size-9 shrink-0 place-items-center rounded-lg text-body transition-colors hover:bg-surface hover:text-ink lg:hidden"
       >
         <Menu className="size-5" />
@@ -239,6 +241,7 @@ export function ClientTopbar({
       <h1 className="truncate font-display text-base font-bold tracking-tight text-ink sm:text-lg">{title}</h1>
 
       <div className="ml-auto flex items-center gap-2 sm:gap-3">
+        <TourLauncher />
         <CalculatorButton tone="dark" className="size-9 border border-hairline" />
         <ThemeToggle />
         <ClientNotificationBell notifications={notifications} />

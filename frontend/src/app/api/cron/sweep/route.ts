@@ -1,7 +1,14 @@
 import { NextResponse } from "next/server";
-import { and, eq, inArray, lt } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, lt } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { payment, serviceRequest, client, serviceRequestEvent } from "@/lib/db/schema";
+import {
+  payment,
+  serviceRequest,
+  client,
+  serviceRequestEvent,
+  invoice,
+  ticket,
+} from "@/lib/db/schema";
 import { sendEmail, emailLayout } from "@/lib/email";
 import { notifyAdmin } from "@/lib/notify";
 
@@ -14,6 +21,7 @@ export const dynamic = "force-dynamic";
  * 2. `pending_payment` requests stalled >24h → one nudge email to the client
  *    (tracked by a `note` event so it never repeats).
  * 3. `quote_requested` older than 48h → admin reminder (their SLA is 2 days).
+ * 4. Trash purge — rows soft-deleted more than 30 days ago are hard-deleted.
  */
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
@@ -25,7 +33,8 @@ export async function GET(req: Request) {
   const now = Date.now();
   const dayAgo = new Date(now - 24 * 60 * 60 * 1000);
   const twoDaysAgo = new Date(now - 48 * 60 * 60 * 1000);
-  const summary = { abandoned: 0, nudged: 0, quoteReminders: 0 };
+  const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
+  const summary = { abandoned: 0, nudged: 0, quoteReminders: 0, purged: 0 };
 
   // 1. Stale checkout attempts.
   const stale = await db
@@ -100,6 +109,26 @@ export async function GET(req: Request) {
     });
     summary.quoteReminders = owedQuotes.length;
   }
+
+  // 4. Trash purge — anything soft-deleted >30 days ago is gone for good.
+  const purgedClients = await db
+    .delete(client)
+    .where(and(isNotNull(client.deletedAt), lt(client.deletedAt, thirtyDaysAgo)))
+    .returning({ id: client.id });
+  const purgedInvoices = await db
+    .delete(invoice)
+    .where(and(isNotNull(invoice.deletedAt), lt(invoice.deletedAt, thirtyDaysAgo)))
+    .returning({ id: invoice.id });
+  const purgedTickets = await db
+    .delete(ticket)
+    .where(and(isNotNull(ticket.deletedAt), lt(ticket.deletedAt, thirtyDaysAgo)))
+    .returning({ id: ticket.id });
+  const purgedRequests = await db
+    .delete(serviceRequest)
+    .where(and(isNotNull(serviceRequest.deletedAt), lt(serviceRequest.deletedAt, thirtyDaysAgo)))
+    .returning({ id: serviceRequest.id });
+  summary.purged =
+    purgedClients.length + purgedInvoices.length + purgedTickets.length + purgedRequests.length;
 
   return NextResponse.json({ ok: true, ...summary });
 }

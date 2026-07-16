@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { Menu, Search, LogOut, Home, Bell, UserPlus, Send, CheckCircle2, LifeBuoy, MessageSquare, Inbox, AlertTriangle, CalendarClock } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { CalculatorButton } from "@/components/calculators/calculator-launcher";
+import { TourLauncher } from "@/components/tour/tour-launcher";
 import { signOut } from "@/lib/auth-client";
 import { activeNavItem } from "./nav";
 import type { NotificationItem } from "@/lib/db/queries/notifications";
@@ -210,6 +211,7 @@ export function AdminTopbar({
         type="button"
         onClick={onMenuClick}
         aria-label="Open menu"
+        data-tour="mobile-menu"
         className="grid size-9 shrink-0 place-items-center rounded-lg text-body transition-colors hover:bg-surface hover:text-ink lg:hidden"
       >
         <Menu className="size-5" />
@@ -229,6 +231,7 @@ export function AdminTopbar({
             )}
           />
         </div>
+        <TourLauncher />
         <CalculatorButton isAdmin={true} tone="dark" className="size-9 border border-hairline" />
         <ThemeToggle />
         <NotificationBell notifications={notifications} />

@@ -81,7 +81,7 @@ export default async function AdminRequestsPage({
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center justify-between gap-3 border-b border-hairline">
+      <div data-tour="requests-status-tabs" className="flex items-center justify-between gap-3 border-b border-hairline">
         <div className="flex gap-1">
           {[
             { key: "requests", label: "Service requests", href: "/admin/requests" },
@@ -177,7 +177,7 @@ export default async function AdminRequestsPage({
           )}
         </div>
       ) : (
-        <div className="rounded-card border border-hairline bg-paper">
+        <div data-tour="requests-table" className="rounded-card border border-hairline bg-paper">
           {filtered.length === 0 ? (
             <div className="p-10">
               <EmptyState

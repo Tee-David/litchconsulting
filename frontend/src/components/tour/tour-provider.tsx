@@ -16,6 +16,7 @@ import { TOURS, type TourAudience, type TourStep } from "./registry";
 import { pageTourIdFor } from "./route-match";
 import { BRAND_OPTIONS, BRAND_STYLES, LOCALE } from "./joyride-theme";
 import { isDesktop, waitForTarget } from "./wait-for-target";
+import { fireConfetti } from "./confetti";
 
 type TourContextValue = {
   /** Which side of the app this provider serves. */
@@ -80,6 +81,9 @@ export function TourProvider({
   useEffect(() => {
     activeTourIdRef.current = activeTourId;
   }, [activeTourId]);
+  // Guards the terminal handler — a finished tour can emit more than one event
+  // carrying the terminal status before the teardown re-render lands.
+  const terminalHandledRef = useRef(false);
 
   const welcomeKey = useMemo(() => `litch:tour:${audience}:welcome`, [audience]);
 
@@ -131,6 +135,7 @@ export function TourProvider({
 
       if (built.length === 0) return;
 
+      terminalHandledRef.current = false;
       setSteps(built);
       setActiveTourId(id);
       setRun(true);
@@ -166,16 +171,22 @@ export function TourProvider({
         return;
       }
       // Terminal states: persist the welcome flag and tear the tour down.
-      if (data.status === STATUS.FINISHED || data.status === STATUS.SKIPPED) {
-        const id = activeTourIdRef.current;
-        const def = id ? TOURS[id] : null;
-        if (def?.kind === "welcome") {
-          try {
-            localStorage.setItem(welcomeKey, "1");
-          } catch {}
-        }
-        stopTour();
+      const finished = data.status === STATUS.FINISHED;
+      const skipped = data.status === STATUS.SKIPPED;
+      if (!finished && !skipped) return;
+      if (terminalHandledRef.current) return;
+      terminalHandledRef.current = true;
+
+      const id = activeTourIdRef.current;
+      const def = id ? TOURS[id] : null;
+      if (def?.kind === "welcome") {
+        try {
+          localStorage.setItem(welcomeKey, "1");
+        } catch {}
       }
+      // Celebrate only when they made it to the end — never on a skip.
+      if (finished) fireConfetti();
+      stopTour();
     },
     [stopTour, welcomeKey],
   );

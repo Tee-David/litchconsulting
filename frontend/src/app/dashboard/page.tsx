@@ -24,7 +24,7 @@ import { StatCard } from "@/components/admin/ui/stat-card";
 import { Badge, invoiceStatusTone } from "@/components/admin/ui/badge";
 import { EmptyState } from "@/components/admin/ui/empty-state";
 import { ActiveRequestCard } from "@/components/requests/active-request-card";
-import { PortalTour } from "@/components/client/portal-tour";
+import { TourWizardButton } from "@/components/tour/tour-wizard-button";
 
 export const dynamic = "force-dynamic";
 
@@ -59,7 +59,6 @@ export default async function ClientDashboardPage() {
 
   return (
     <div className="space-y-6">
-      <PortalTour />
       {/* Greeting */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
@@ -72,13 +71,16 @@ export default async function ClientDashboardPage() {
               : "Here's where everything stands today."}
           </p>
         </div>
-        <Link
-          href="/dashboard/requests/new"
-          data-tour="request-service"
-          className="inline-flex items-center gap-2 self-start rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover keep-brand"
-        >
-          <PlusCircle className="size-4" /> Request a service
-        </Link>
+        <div className="flex flex-wrap items-center gap-2.5 self-start">
+          <TourWizardButton />
+          <Link
+            href="/dashboard/requests/new"
+            data-tour="request-service"
+            className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover keep-brand"
+          >
+            <PlusCircle className="size-4" /> Request a service
+          </Link>
+        </div>
       </div>
 
       {/* What do you need done? */}

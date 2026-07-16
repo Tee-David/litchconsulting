@@ -169,7 +169,7 @@ export default async function AdminDashboard() {
                 { key: "billed", label: "Billed" },
                 { key: "collected", label: "Collected" },
               ]}
-              fmt={(v) => formatMoney(v)}
+              format="money"
             />
           </div>
 
