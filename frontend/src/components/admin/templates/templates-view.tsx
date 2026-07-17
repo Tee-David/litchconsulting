@@ -11,6 +11,8 @@ import { useToast } from "@/components/admin/ui/toaster";
 import { Modal } from "@/components/admin/ui/modal";
 import { saveTemplateAction, deleteTemplateAction } from "@/app/admin/finance/templates/actions";
 import type { TemplateRow } from "@/lib/db/queries/templates";
+import { uploadFile } from "@/lib/upload-client";
+import { formatBytes, extLabel } from "@/lib/files";
 import { cn } from "@/lib/utils";
 
 type Section = { heading: string; content: string };
@@ -51,18 +53,6 @@ const badgeTone: Record<string, string> = {
 const TYPE_COLOR: Record<string, string> = {
   XLSX: "#16a34a", CSV: "#16a34a", DOCX: "#2540c4", PDF: "#e5484d", PPTX: "#f97316", ZIP: "#8a92a6",
 };
-const EXT_TYPE: Record<string, string> = {
-  xlsx: "XLSX", xls: "XLSX", csv: "CSV", docx: "DOCX", doc: "DOCX", pdf: "PDF", pptx: "PPTX", ppt: "PPTX", zip: "ZIP",
-};
-function fileTypeFromName(name: string) {
-  return EXT_TYPE[name.split(".").pop()?.toLowerCase() || ""] || "PDF";
-}
-function fmtSize(bytes: number) {
-  if (!bytes) return "";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1048576) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / 1048576).toFixed(1)} MB`;
-}
 
 const inputCls = "w-full rounded-lg border border-hairline bg-paper px-3 py-2.5 text-sm text-ink outline-none focus:border-brand";
 
@@ -107,29 +97,14 @@ export function TemplatesView({ imported = [] }: { imported?: TemplateRow[] }) {
     }
     setUploading(true);
     try {
-      const presign = await fetch("/api/upload/presign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "template", contentType: file.type, size: file.size }),
-      });
-      const data = await presign.json();
-      if (!presign.ok) {
-        toast.error(data.error || "That file type isn't supported.");
-        return;
-      }
-      const put = await fetch(data.uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
-      if (!put.ok) {
-        toast.error("Upload failed.");
-        return;
-      }
+      const fileUrl = await uploadFile(file, "template");
       const res = await saveTemplateAction({
         title: meta.title,
         description: meta.description,
         category: meta.category,
         badge: meta.badge || undefined,
-        fileType: fileTypeFromName(file.name),
-        fileUrl: data.publicUrl,
-        fileKey: data.key,
+        fileType: extLabel(file.name),
+        fileUrl,
         sizeBytes: file.size,
       });
       if (res.ok) {
@@ -139,8 +114,8 @@ export function TemplatesView({ imported = [] }: { imported?: TemplateRow[] }) {
         setMeta({ title: "", description: "", category: "General", badge: "" });
         router.refresh();
       } else toast.error(res.error || "Could not save.");
-    } catch {
-      toast.error("Upload failed.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed.");
     } finally {
       setUploading(false);
     }
@@ -235,12 +210,12 @@ export function TemplatesView({ imported = [] }: { imported?: TemplateRow[] }) {
                   </h3>
                   <p className="mt-2 flex-1 text-[13px] leading-relaxed text-body">{t.description || "Imported template."}</p>
                   <div className="mt-4 flex items-center justify-between gap-2 border-t border-hairline pt-3.5">
-                    <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-body">{t.category}{t.sizeBytes ? ` · ${fmtSize(t.sizeBytes)}` : ""}</span>
+                    <span className="rounded-full bg-surface px-2.5 py-1 text-[11px] font-medium text-body">{t.category}{t.sizeBytes ? ` · ${formatBytes(t.sizeBytes)}` : ""}</span>
                     <div className="flex items-center gap-1.5">
                       <button onClick={() => share(t)} title="Copy share link" className="grid size-8 place-items-center rounded-lg border border-hairline text-body transition-colors hover:bg-surface hover:text-ink">
                         <Link2 className="size-4" />
                       </button>
-                      <button onClick={() => remove(t)} disabled={busy === t.id} title="Delete" className="grid size-8 place-items-center rounded-lg border border-hairline text-body transition-colors hover:bg-danger/10 hover:text-danger">
+                      <button onClick={() => remove(t)} disabled={busy === t.id} title="Delete" className="grid size-8 place-items-center rounded-lg border border-hairline text-body transition-colors hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400">
                         {busy === t.id ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
                       </button>
                       <a href={t.fileUrl} target="_blank" rel="noopener noreferrer" download className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-brand-hover">
@@ -327,7 +302,7 @@ export function TemplatesView({ imported = [] }: { imported?: TemplateRow[] }) {
           >
             <UploadCloud className="size-8 text-brand" />
             {file ? (
-              <span className="text-sm font-medium text-ink">{file.name} <span className="text-muted">({fmtSize(file.size)})</span></span>
+              <span className="text-sm font-medium text-ink">{file.name} <span className="text-muted">({formatBytes(file.size)})</span></span>
             ) : (
               <>
                 <span className="text-sm font-medium text-ink">Click to choose a file</span>

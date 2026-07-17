@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/components/admin/ui/toaster";
 import { Select } from "@/components/ui/select";
+import { uploadFile } from "@/lib/upload-client";
 import { CURRENCIES } from "@/lib/invoice/money";
 import {
   saveOrgSettingsAction,
@@ -141,29 +142,11 @@ export function SettingsView({
   async function onLogo(file: File) {
     setUploading(true);
     try {
-      const presign = await fetch("/api/upload/presign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "logo", contentType: file.type, size: file.size }),
-      });
-      const data = await presign.json();
-      if (!presign.ok) {
-        toast.error(data.error || "Upload failed.");
-        return;
-      }
-      const put = await fetch(data.uploadUrl, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
-      });
-      if (!put.ok) {
-        toast.error("Upload failed.");
-        return;
-      }
-      set("logoUrl", data.publicUrl);
+      const url = await uploadFile(file, "logo");
+      set("logoUrl", url);
       toast.success("Logo uploaded — click Save to apply.");
-    } catch {
-      toast.error("Upload failed.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed.");
     } finally {
       setUploading(false);
     }
@@ -179,33 +162,15 @@ export function SettingsView({
     } else toast.error(res.error || "Could not save.");
   }
 
-  /** Same presign → PUT → keep the public URL flow as the org logo. */
+  /** Upload the profile picture (shared helper → public URL). */
   async function onAvatar(file: File) {
     setUploadingAvatar(true);
     try {
-      const presign = await fetch("/api/upload/presign", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kind: "avatar", contentType: file.type, size: file.size }),
-      });
-      const data = await presign.json();
-      if (!presign.ok) {
-        toast.error(data.error || "Upload failed.");
-        return;
-      }
-      const put = await fetch(data.uploadUrl, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type },
-      });
-      if (!put.ok) {
-        toast.error("Upload failed.");
-        return;
-      }
-      setProfile((p) => ({ ...p, image: data.publicUrl }));
+      const url = await uploadFile(file, "avatar");
+      setProfile((p) => ({ ...p, image: url }));
       toast.success("Picture uploaded — click Save to apply.");
-    } catch {
-      toast.error("Upload failed.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed.");
     } finally {
       setUploadingAvatar(false);
     }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   ChevronDown,
   Loader2,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/admin/ui/toaster";
+import { Uploader } from "@/components/ui/uploader";
 import { LEGAL_TRANSITIONS, STATUS_LABELS, type RequestStatus } from "@/lib/requests/status";
 import {
   adminSetRequestStatusAction,
@@ -38,6 +40,7 @@ export function AdminRequestPanel({
   hasInvoice: boolean;
 }) {
   const toast = useToast();
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
 
   const targets = LEGAL_TRANSITIONS[status as RequestStatus] ?? [];
@@ -49,8 +52,6 @@ export function AdminRequestPanel({
 
   const [assigneeDraft, setAssigneeDraft] = useState(assignee ?? "");
   const [invoiceNumber, setInvoiceNumber] = useState("");
-  const [uploading, setUploading] = useState(false);
-  const fileRef = useRef<HTMLInputElement>(null);
 
   function applyStatus() {
     if (!toStatus) return;
@@ -88,44 +89,6 @@ export function AdminRequestPanel({
       toast.success("Invoice linked");
       setInvoiceNumber("");
     });
-  }
-
-  async function uploadDeliverable(file: File) {
-    setUploading(true);
-    try {
-      const presign = await fetch(`/api/requests/${requestId}/docs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileName: file.name,
-          contentType: file.type || "application/octet-stream",
-          sizeBytes: file.size,
-        }),
-      }).then((r) => r.json());
-      if (!presign.ok) throw new Error(presign.error || "Could not prepare upload");
-
-      const put = await fetch(presign.uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": file.type || "application/octet-stream" },
-        body: file,
-      });
-      if (!put.ok) throw new Error("Upload failed — try again");
-
-      const rec = await adminRecordDeliverableAction({
-        requestId,
-        fileName: file.name,
-        contentType: file.type || undefined,
-        sizeBytes: file.size,
-        r2Key: presign.key,
-      });
-      if (!rec.ok) throw new Error(rec.error || "Could not record deliverable");
-      toast.success("Deliverable published — client notified");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
-    }
   }
 
   const inputCls =
@@ -185,25 +148,32 @@ export function AdminRequestPanel({
         <p className="mt-1 text-xs text-muted">
           Uploads to the private bucket, marks the request delivered, and emails the client.
         </p>
-        <input
-          ref={fileRef}
-          type="file"
-          accept=".xlsx,.xls,.csv,.pdf,.docx,.png,.jpg,.jpeg"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) void uploadDeliverable(f);
-          }}
-        />
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          disabled={uploading}
-          className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-full border border-hairline px-5 py-2.5 text-sm font-semibold text-body transition-colors hover:border-brand/40 hover:bg-surface disabled:opacity-50"
-        >
-          {uploading ? <Loader2 className="size-4 animate-spin" /> : <PackagePlus className="size-4" />}
-          {uploading ? "Uploading…" : "Choose file & publish"}
-        </button>
+        <div className="mt-3">
+          <Uploader
+            target={{ kind: "request", requestId }}
+            accept=".xlsx,.xls,.csv,.pdf,.docx,.png,.jpg,.jpeg"
+            submitLabel="Publish & notify client"
+            hint="XLSX, XLS, CSV, PDF, DOCX, PNG or JPG · up to 25 MB each"
+            onSubmit={async (results) => {
+              for (const r of results) {
+                if (!r.key) continue;
+                const rec = await adminRecordDeliverableAction({
+                  requestId,
+                  fileName: r.file.name,
+                  contentType: r.file.type || undefined,
+                  sizeBytes: r.file.size,
+                  r2Key: r.key,
+                });
+                if (!rec.ok) return { ok: false, error: rec.error || "Could not record deliverable" };
+              }
+              return { ok: true };
+            }}
+            onDone={() => {
+              toast.success("Deliverable published — client notified");
+              router.refresh();
+            }}
+          />
+        </div>
       </div>
 
       {/* Note composer */}

@@ -15,13 +15,15 @@ import { cn } from "@/lib/utils";
 import type { RequiredDocument } from "@/lib/services/catalog";
 import type { ServiceRequestDocument } from "@/lib/db/schema";
 import { recordRequestDocumentAction } from "@/app/dashboard/requests/actions";
+import { uploadRequestFile } from "@/lib/upload-client";
+import { Uploader } from "@/components/ui/uploader";
 import { formatDateTime } from "@/lib/format-date";
 
 /**
- * Guided required-documents checklist (casap-style inspo): one slot per
- * required doc with upload → progress → done states, re-upload supersedes,
- * plus an "anything else" slot for extra files. Uploads go straight to the
- * PRIVATE bucket via a presigned PUT from /api/requests/[id]/docs.
+ * Guided required-documents checklist: one slot per required doc with
+ * upload → progress → done states (re-upload supersedes), plus a multi-file
+ * "anything else" uploader for extras. Everything goes to the PRIVATE bucket
+ * via /api/requests/[id]/docs (direct presigned PUT, server relay on fallback).
  */
 
 type SlotState =
@@ -43,6 +45,7 @@ export function DocsChecklist({
   documents: ServiceRequestDocument[]; // current (non-superseded) client uploads
   canUpload: boolean;
 }) {
+  const router = useRouter();
   const uploadedByKey = new Map(
     documents.filter((d) => d.checklistKey).map((d) => [d.checklistKey!, d])
   );
@@ -72,23 +75,59 @@ export function DocsChecklist({
           />
         ))}
 
-        {/* Extra files — always available while uploads are open */}
-        <DocSlot
-          requestId={requestId}
-          slot={{
-            key: "",
-            label: "Anything else that might help",
-            description: "Optional — supporting schedules, notes, prior reports…",
-            required: false,
-          }}
-          existing={undefined}
-          canUpload={canUpload}
-          extras={extras}
-        />
+        {/* Extra files — multi-file uploader, available while uploads are open */}
+        <div className="rounded-xl2 border border-hairline bg-surface p-4">
+          <div className="flex items-start gap-3">
+            <div className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full bg-brand-tint text-brand keep-brand">
+              <Paperclip className="size-4" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-ink">Anything else that might help</p>
+              <p className="mt-0.5 text-xs text-body">
+                Optional — supporting schedules, notes, prior reports…
+              </p>
+              {extras.length > 0 && (
+                <ul className="mt-1.5 space-y-1">
+                  {extras.map((d) => (
+                    <li key={d.id} className="truncate text-xs text-body">
+                      <span className="font-medium text-ink">{d.fileName}</span> ·{" "}
+                      {formatDateTime(d.createdAt)}
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {canUpload && (
+                <div className="mt-3">
+                  <Uploader
+                    target={{ kind: "request", requestId }}
+                    accept={ACCEPT}
+                    submitLabel="Attach files"
+                    hint="XLSX, XLS, CSV, PDF, DOCX, PNG or JPG · up to 25 MB each"
+                    onSubmit={async (results) => {
+                      for (const r of results) {
+                        if (!r.key) continue;
+                        const saved = await recordRequestDocumentAction({
+                          requestId,
+                          checklistKey: null,
+                          fileName: r.file.name,
+                          contentType: r.file.type || undefined,
+                          sizeBytes: r.file.size,
+                          r2Key: r.key,
+                        });
+                        if (!saved.ok) return { ok: false, error: saved.error || "Could not save." };
+                      }
+                      return { ok: true };
+                    }}
+                    onDone={() => router.refresh()}
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
       <p className="mt-4 text-xs text-muted">
-        XLSX, XLS, CSV, PDF, DOCX, PNG or JPG · up to 25 MB each · stored privately and shared only
-        with your Litch advisor.
+        Stored privately and shared only with your Litch advisor.
       </p>
     </div>
   );
@@ -99,13 +138,11 @@ function DocSlot({
   slot,
   existing,
   canUpload,
-  extras,
 }: {
   requestId: string;
   slot: RequiredDocument;
   existing?: ServiceRequestDocument;
   canUpload: boolean;
-  extras?: ServiceRequestDocument[];
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -114,41 +151,9 @@ function DocSlot({
   async function upload(file: File) {
     setState({ phase: "uploading", pct: 0 });
     try {
-      const presign = await fetch(`/api/requests/${requestId}/docs`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          fileName: file.name,
-          contentType: file.type || "application/octet-stream",
-          sizeBytes: file.size,
-        }),
-      });
-      const body = (await presign.json()) as {
-        ok: boolean;
-        uploadUrl?: string;
-        key?: string;
-        error?: string;
-      };
-      if (!body.ok || !body.uploadUrl || !body.key) {
-        setState({ phase: "error", message: body.error || "Could not start the upload." });
-        return;
-      }
-
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open("PUT", body.uploadUrl!);
-        xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            setState({ phase: "uploading", pct: Math.round((e.loaded / e.total) * 100) });
-          }
-        };
-        xhr.onload = () =>
-          xhr.status >= 200 && xhr.status < 300 ? resolve() : reject(new Error(`HTTP ${xhr.status}`));
-        xhr.onerror = () => reject(new Error("network"));
-        xhr.send(file);
-      });
-
+      const { key } = await uploadRequestFile(requestId, file, (pct) =>
+        setState({ phase: "uploading", pct })
+      );
       setState({ phase: "saving" });
       const saved = await recordRequestDocumentAction({
         requestId,
@@ -156,7 +161,7 @@ function DocSlot({
         fileName: file.name,
         contentType: file.type || undefined,
         sizeBytes: file.size,
-        r2Key: body.key,
+        r2Key: key,
       });
       if (!saved.ok) {
         setState({ phase: "error", message: saved.error || "Upload could not be saved." });
@@ -164,8 +169,8 @@ function DocSlot({
       }
       setState({ phase: "idle" });
       router.refresh();
-    } catch {
-      setState({ phase: "error", message: "Upload failed — please try again." });
+    } catch (err) {
+      setState({ phase: "error", message: err instanceof Error ? err.message : "Upload failed." });
     }
   }
 
@@ -188,27 +193,19 @@ function DocSlot({
               : "bg-brand-tint text-brand keep-brand"
           )}
         >
-          {done ? (
-            <CheckCircle2 className="size-4.5" />
-          ) : slot.key ? (
-            <CircleDashed className="size-4.5" />
-          ) : (
-            <Paperclip className="size-4" />
-          )}
+          {done ? <CheckCircle2 className="size-4.5" /> : <CircleDashed className="size-4.5" />}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <p className="text-sm font-semibold text-ink">{slot.label}</p>
-            {slot.key && (
-              <span
-                className={cn(
-                  "rounded-full px-2 py-0.5 text-[11px] font-medium",
-                  slot.required ? "bg-brand-tint text-brand keep-brand" : "bg-surface text-muted"
-                )}
-              >
-                {slot.required ? "Required" : "Optional"}
-              </span>
-            )}
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                slot.required ? "bg-brand-tint text-brand keep-brand" : "bg-surface text-muted"
+              )}
+            >
+              {slot.required ? "Required" : "Optional"}
+            </span>
           </div>
           {slot.description && <p className="mt-0.5 text-xs text-body">{slot.description}</p>}
 
@@ -217,16 +214,6 @@ function DocSlot({
               <span className="font-medium text-ink">{existing.fileName}</span> ·{" "}
               {formatDateTime(existing.createdAt)}
             </p>
-          )}
-          {extras && extras.length > 0 && (
-            <ul className="mt-1.5 space-y-1">
-              {extras.map((d) => (
-                <li key={d.id} className="truncate text-xs text-body">
-                  <span className="font-medium text-ink">{d.fileName}</span> ·{" "}
-                  {formatDateTime(d.createdAt)}
-                </li>
-              ))}
-            </ul>
           )}
 
           {state.phase === "uploading" && (
