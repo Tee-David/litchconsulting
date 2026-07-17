@@ -118,9 +118,13 @@ export function emailLayout(bodyHtml: string, opts: { preheader?: string } = {})
     .hair { border-color:#232a3b !important; }
     .tint { background:#1a2140 !important; }
     .foot { background:#0b0e17 !important; }
+    /* Navy mark vanishes on a dark card — swap to the white one. */
+    .logo-light { display:none !important; }
+    .logo-dark { display:inline-block !important; }
+    .brandword { color:#ffffff !important; }
   }
   a { color:${C.brand}; }
-  @media (max-width:600px){ .card{ border-radius:0 !important; } }
+  @media (max-width:600px){ .card{ border-radius:0 !important; } .pad{ padding-left:24px !important; padding-right:24px !important; } }
 </style>
 </head>
 <body class="bg-page" style="margin:0;padding:0;background:${C.page};">
@@ -128,36 +132,32 @@ export function emailLayout(bodyHtml: string, opts: { preheader?: string } = {})
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="bg-page" style="background:${C.page};padding:28px 12px;">
     <tr><td align="center">
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" class="card" style="width:600px;max-width:100%;background:${C.card};border:1px solid ${C.hair};border-radius:18px;overflow:hidden;">
-        <!-- header -->
-        <tr><td style="background:${C.navy};padding:20px 30px;">
-          <table role="presentation" cellpadding="0" cellspacing="0"><tr>
-            <td style="padding-right:12px;vertical-align:middle;">
-              <img src="${ASSETS}/brand/email-mark.png" width="34" height="34" alt="Litch Consulting" style="display:block;border:0;outline:none;">
-            </td>
-            <td style="vertical-align:middle;">
-              <div style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.01em;line-height:1.15;">Litch Consulting</div>
-              <div style="color:#9fb0ff;font-size:11px;font-weight:500;">Clarity in every number</div>
-            </td>
-          </tr></table>
+        <!-- header: logo lockup on the card, centred — no heavy colour bar -->
+        <tr><td align="center" style="padding:38px 30px 10px;">
+          <img src="${ASSETS}/brand/email-mark-navy.png" width="28" height="28" alt="" class="logo-light" style="vertical-align:middle;border:0;outline:none;">
+          <img src="${ASSETS}/brand/email-mark.png" width="28" height="28" alt="" class="logo-dark" style="display:none;vertical-align:middle;border:0;outline:none;mso-hide:all;">
+          <span class="brandword" style="vertical-align:middle;padding-left:9px;font-size:19px;font-weight:700;letter-spacing:-0.01em;color:${C.navy};">Litch Consulting</span>
         </td></tr>
         <!-- body -->
-        <tr><td class="ink" style="padding:30px;font-family:'Segoe UI',Arial,Helvetica,sans-serif;font-size:15px;line-height:1.62;color:${C.ink};">
+        <tr><td class="ink pad" style="padding:22px 40px 36px;font-family:'Segoe UI',Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:${C.ink};">
           ${bodyHtml}
         </td></tr>
-        <!-- footer -->
-        <tr><td class="foot hair" style="padding:22px 30px;border-top:1px solid ${C.hair};background:${C.card};">
-          <p class="ink" style="margin:0 0 6px;font-size:13px;font-weight:700;color:${C.ink};">${site.legalName}</p>
-          <p class="muted" style="margin:0 0 12px;font-size:12px;line-height:1.6;color:${C.muted};">
-            Financial reporting · Modelling · Taxation · Forensic accounting · Advisory
+        <!-- footer: quiet, centred, generous — the references keep this light -->
+        <tr><td class="foot hair pad" align="center" style="padding:24px 40px 30px;border-top:1px solid ${C.hair};background:${C.card};">
+          <p class="muted" style="margin:0 0 12px;font-size:12px;line-height:1.7;color:${C.muted};">
+            ${site.legalName} · ${site.location}<br>
+            <a href="mailto:${site.email}" style="color:${C.brand};text-decoration:none;">${site.email}</a>
           </p>
-          <p class="muted" style="margin:0 0 12px;font-size:12px;line-height:1.8;color:${C.muted};">
-            📍 ${site.location}
-            &nbsp;·&nbsp; ✉️ <a href="mailto:${site.email}" style="color:${C.brand};text-decoration:none;">${site.email}</a>
-            &nbsp;·&nbsp; 🌐 <a href="${ASSETS}" style="color:${C.brand};text-decoration:none;">litchconsulting.com</a>
+          <p class="muted" style="margin:0 0 12px;font-size:12px;color:${C.muted};">
+            <a href="${ASSETS}/legal/privacy-policy" style="color:${C.muted};text-decoration:underline;">Privacy policy</a>
+            &nbsp;|&nbsp;
+            <a href="${ASSETS}/legal/terms-and-conditions" style="color:${C.muted};text-decoration:underline;">Terms</a>
+            &nbsp;|&nbsp;
+            <a href="${ASSETS}/contact" style="color:${C.muted};text-decoration:underline;">Contact</a>
           </p>
           <p class="muted" style="margin:0;font-size:11px;line-height:1.6;color:${C.muted};">
-            © ${year} ${site.legalName}. All rights reserved.<br>
-            You're receiving this because you have a Litch Consulting account.
+            You received this because you have a Litch Consulting account.<br>
+            © ${year} ${site.legalName}. All rights reserved.
           </p>
         </td></tr>
       </table>
@@ -170,7 +170,6 @@ export function emailLayout(bodyHtml: string, opts: { preheader?: string } = {})
 export async function sendVerificationEmail(to: string, url: string) {
   const html = emailLayout(
     `
-    ${emailIconBadge("✅")}
     <p style="margin:0 0 6px;font-size:20px;font-weight:700;">Welcome to Litch Consulting 👋</p>
     <p class="body" style="margin:0 0 22px;color:${C.body};">Confirm your email to secure your account and unlock your client portal — request services, track progress, pay invoices and download deliverables.</p>
     <p style="margin:0 0 24px;">${emailButton(url, "Verify email")}</p>
@@ -191,7 +190,6 @@ export async function sendVerificationEmail(to: string, url: string) {
 export async function sendPasswordResetEmail(to: string, url: string) {
   const html = emailLayout(
     `
-    ${emailIconBadge("🔑")}
     <p style="margin:0 0 6px;font-size:20px;font-weight:700;">Reset your password</p>
     <p class="body" style="margin:0 0 22px;color:${C.body};">We received a request to reset your Litch Consulting password. Choose a new one below — the link expires in 1 hour.</p>
     <p style="margin:0 0 24px;">${emailButton(url, "Reset password")}</p>

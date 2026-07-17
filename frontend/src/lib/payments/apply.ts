@@ -252,7 +252,6 @@ export async function applyInvoicePaid(
           subject: `Payment received — receipt for ${inv.number}`,
           html: emailLayout(
             `
-            ${emailIconBadge("✅")}
             <p style="margin:0 0 6px;font-size:20px;font-weight:700;">Payment received</p>
             <p class="body" style="margin:0 0 18px;color:#41485a;">Thank you, ${inv.billToName || "there"} — we've received your payment for <strong>${inv.number}</strong>. Your receipt is attached as a PDF.</p>
             ${emailDetailRows([

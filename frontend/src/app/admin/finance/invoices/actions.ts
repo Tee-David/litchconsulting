@@ -287,7 +287,6 @@ export async function sendInvoiceAction(id: string): Promise<ActionResult> {
   const payHref = publicLink;
   const html = emailLayout(
     `
-    ${emailIconBadge("📄")}
     <p style="margin:0 0 6px;font-size:20px;font-weight:700;">Invoice ${inv.number}</p>
     <p class="body" style="margin:0 0 18px;color:#41485a;">Hi ${inv.billToName || "there"}, your invoice is attached${
       inv.projectTitle ? ` for <strong>${inv.projectTitle}</strong>` : ""
