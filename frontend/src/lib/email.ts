@@ -69,6 +69,16 @@ const C = {
   emerald: "#0f9d6e",
 };
 
+// Absolute origin for hosted email assets (the logo). Email clients need
+// absolute URLs and mostly can't render inline SVG, so the header uses a PNG.
+const ASSETS = (process.env.NEXT_PUBLIC_SITE_URL || "https://www.litchconsulting.com").replace(/\/$/, "");
+
+/** A round tinted icon badge (emoji) to head an email — renders even when
+ *  images are blocked, and the tint has a dark-mode override. */
+export function emailIconBadge(emoji: string, tint = C.tint): string {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 16px;"><tr><td class="tint" width="46" height="46" align="center" valign="middle" style="background:${tint};border-radius:12px;font-size:22px;line-height:46px;">${emoji}</td></tr></table>`;
+}
+
 /** Brand pill button (bulletproof-ish: padded anchor, no images). */
 export function emailButton(href: string, label: string): string {
   return `<a href="${href}" class="btn" style="display:inline-block;background:${C.navy};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 26px;border-radius:9999px;">${label}</a>`;
@@ -119,22 +129,36 @@ export function emailLayout(bodyHtml: string, opts: { preheader?: string } = {})
     <tr><td align="center">
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" class="card" style="width:600px;max-width:100%;background:${C.card};border:1px solid ${C.hair};border-radius:18px;overflow:hidden;">
         <!-- header -->
-        <tr><td style="background:${C.navy};padding:22px 30px;">
-          <span style="color:#fff;font-size:19px;font-weight:700;letter-spacing:-0.01em;">Litch Consulting</span>
-          <span style="color:#9fb0ff;font-size:12px;font-weight:500;"> &nbsp;·&nbsp; Clarity in every number</span>
+        <tr><td style="background:${C.navy};padding:20px 30px;">
+          <table role="presentation" cellpadding="0" cellspacing="0"><tr>
+            <td style="padding-right:12px;vertical-align:middle;">
+              <img src="${ASSETS}/brand/email-mark.png" width="34" height="34" alt="Litch Consulting" style="display:block;border:0;outline:none;">
+            </td>
+            <td style="vertical-align:middle;">
+              <div style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.01em;line-height:1.15;">Litch Consulting</div>
+              <div style="color:#9fb0ff;font-size:11px;font-weight:500;">Clarity in every number</div>
+            </td>
+          </tr></table>
         </td></tr>
         <!-- body -->
         <tr><td class="ink" style="padding:30px;font-family:'Segoe UI',Arial,Helvetica,sans-serif;font-size:15px;line-height:1.62;color:${C.ink};">
           ${bodyHtml}
         </td></tr>
         <!-- footer -->
-        <tr><td class="foot hair" style="padding:20px 30px;border-top:1px solid ${C.hair};background:${C.card};">
-          <p class="muted" style="margin:0 0 4px;font-size:12px;color:${C.muted};">${site.legalName} · ${site.location}</p>
-          <p class="muted" style="margin:0;font-size:12px;color:${C.muted};">
-            <a href="mailto:${site.email}" style="color:${C.brand};text-decoration:none;">${site.email}</a> ·
-            <a href="https://www.litchconsulting.com" style="color:${C.brand};text-decoration:none;">litchconsulting.com</a>
+        <tr><td class="foot hair" style="padding:22px 30px;border-top:1px solid ${C.hair};background:${C.card};">
+          <p class="ink" style="margin:0 0 6px;font-size:13px;font-weight:700;color:${C.ink};">${site.legalName}</p>
+          <p class="muted" style="margin:0 0 12px;font-size:12px;line-height:1.6;color:${C.muted};">
+            Financial reporting · Modelling · Taxation · Forensic accounting · Advisory
           </p>
-          <p class="muted" style="margin:8px 0 0;font-size:11px;color:${C.muted};">© ${year} ${site.legalName}. All rights reserved.</p>
+          <p class="muted" style="margin:0 0 12px;font-size:12px;line-height:1.8;color:${C.muted};">
+            📍 ${site.location}
+            &nbsp;·&nbsp; ✉️ <a href="mailto:${site.email}" style="color:${C.brand};text-decoration:none;">${site.email}</a>
+            &nbsp;·&nbsp; 🌐 <a href="${ASSETS}" style="color:${C.brand};text-decoration:none;">litchconsulting.com</a>
+          </p>
+          <p class="muted" style="margin:0;font-size:11px;line-height:1.6;color:${C.muted};">
+            © ${year} ${site.legalName}. All rights reserved.<br>
+            You're receiving this because you have a Litch Consulting account.
+          </p>
         </td></tr>
       </table>
     </td></tr>
@@ -146,6 +170,7 @@ export function emailLayout(bodyHtml: string, opts: { preheader?: string } = {})
 export async function sendVerificationEmail(to: string, url: string) {
   const html = emailLayout(
     `
+    ${emailIconBadge("✅")}
     <p style="margin:0 0 6px;font-size:20px;font-weight:700;">Welcome to Litch Consulting 👋</p>
     <p class="body" style="margin:0 0 22px;color:${C.body};">Confirm your email to secure your account and unlock your client portal — request services, track progress, pay invoices and download deliverables.</p>
     <p style="margin:0 0 24px;">${emailButton(url, "Verify email")}</p>
@@ -166,6 +191,7 @@ export async function sendVerificationEmail(to: string, url: string) {
 export async function sendPasswordResetEmail(to: string, url: string) {
   const html = emailLayout(
     `
+    ${emailIconBadge("🔑")}
     <p style="margin:0 0 6px;font-size:20px;font-weight:700;">Reset your password</p>
     <p class="body" style="margin:0 0 22px;color:${C.body};">We received a request to reset your Litch Consulting password. Choose a new one below — the link expires in 1 hour.</p>
     <p style="margin:0 0 24px;">${emailButton(url, "Reset password")}</p>

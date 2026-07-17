@@ -279,19 +279,30 @@ export async function sendInvoiceAction(id: string): Promise<ActionResult> {
   };
 
   const { renderInvoicePdf } = await import("@/lib/invoice/pdf/render");
-  const { sendEmail, emailLayout } = await import("@/lib/email");
+  const { sendEmail, emailLayout, emailButton, emailIconBadge, emailDetailRows } = await import("@/lib/email");
   const { getIssuer } = await import("@/lib/invoice/get-issuer");
+  const { formatMoney } = await import("@/lib/invoice/money");
   const pdf = await renderInvoicePdf(invoiceData, "invoice", await getIssuer());
 
   const payHref = publicLink;
-  const html = emailLayout(`
-    <p style="margin:0 0 14px;">Hi ${inv.billToName || "there"},</p>
-    <p style="margin:0 0 18px;">Please find attached invoice <strong>${inv.number}</strong>${
+  const html = emailLayout(
+    `
+    ${emailIconBadge("📄")}
+    <p style="margin:0 0 6px;font-size:20px;font-weight:700;">Invoice ${inv.number}</p>
+    <p class="body" style="margin:0 0 18px;color:#41485a;">Hi ${inv.billToName || "there"}, your invoice is attached${
       inv.projectTitle ? ` for <strong>${inv.projectTitle}</strong>` : ""
-    }. You can view it online or pay using the button below.</p>
-    <p style="margin:0 0 20px;"><a href="${payHref}" style="display:inline-block;background:#0a196d;color:#fff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:9999px;">View &amp; pay invoice</a></p>
-    <p style="margin:0;color:#5b6474;font-size:13px;">Or open the invoice here: <a href="${publicLink}" style="color:#2540c4;">${publicLink}</a></p>
-  `);
+    }. View it online or pay with the button below.</p>
+    ${emailDetailRows([
+      { label: "Invoice", value: inv.number },
+      ...(inv.projectTitle ? [{ label: "Project", value: inv.projectTitle }] : []),
+      ...(inv.dueDate ? [{ label: "Due", value: String(inv.dueDate) }] : []),
+      { label: "Amount due", value: formatMoney(Number(inv.total), inv.currency), strong: true },
+    ])}
+    <p style="margin:18px 0 12px;">${emailButton(payHref, "View & pay invoice")}</p>
+    <p class="muted" style="margin:0;color:#8a92a6;font-size:13px;">Or open it here: <a href="${publicLink}" style="color:#2540c4;">${publicLink}</a></p>
+  `,
+    { preheader: `Invoice ${inv.number} from Litch Consulting — ${formatMoney(Number(inv.total), inv.currency)} due` },
+  );
 
   const { delivered } = await sendEmail({
     to: inv.billToEmail,

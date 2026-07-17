@@ -209,7 +209,8 @@ export async function applyInvoicePaid(
       if (data) {
         const { renderInvoicePdf } = await import("@/lib/invoice/pdf/render");
         const { getIssuer } = await import("@/lib/invoice/get-issuer");
-        const { sendEmail, emailLayout } = await import("@/lib/email");
+        const { sendEmail, emailLayout, emailButton, emailIconBadge, emailDetailRows } = await import("@/lib/email");
+        const { formatMoney } = await import("@/lib/invoice/money");
         const pdf = await renderInvoicePdf(
           {
             number: inv.number,
@@ -239,22 +240,30 @@ export async function applyInvoicePaid(
           await getIssuer()
         );
         const nextStep = req
-          ? `<p style="margin:0 0 18px;">Next: open your request workspace to ${
+          ? `<p style="margin:18px 0 12px;">${emailButton(
+              `${baseUrl()}/dashboard/requests/${req.id}`,
               ((req.requiredDocuments as RequiredDocument[]) ?? []).some((d) => d.required)
-                ? "upload the documents we need"
-                : "track progress"
-            }.</p>
-             <p style="margin:0 0 20px;"><a href="${baseUrl()}/dashboard/requests/${req.id}" style="display:inline-block;background:#0a196d;color:#fff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:9999px;">Open your request</a></p>`
+                ? "Upload your documents"
+                : "Track your request",
+            )}</p>`
           : "";
         await sendEmail({
           to: inv.billToEmail,
           subject: `Payment received — receipt for ${inv.number}`,
-          html: emailLayout(`
-            <p style="margin:0 0 14px;">Hi ${inv.billToName || "there"},</p>
-            <p style="margin:0 0 18px;">We've received your payment for <strong>${inv.number}</strong>. Your receipt is attached.</p>
+          html: emailLayout(
+            `
+            ${emailIconBadge("✅")}
+            <p style="margin:0 0 6px;font-size:20px;font-weight:700;">Payment received</p>
+            <p class="body" style="margin:0 0 18px;color:#41485a;">Thank you, ${inv.billToName || "there"} — we've received your payment for <strong>${inv.number}</strong>. Your receipt is attached as a PDF.</p>
+            ${emailDetailRows([
+              { label: "Invoice", value: inv.number },
+              ...(inv.projectTitle ? [{ label: "Project", value: inv.projectTitle }] : []),
+              { label: "Amount paid", value: formatMoney(Number(inv.total), inv.currency), strong: true },
+            ])}
             ${nextStep}
-            <p style="margin:0;color:#5b6474;font-size:13px;">Reference: this receipt covers ${inv.currency} ${inv.total}.</p>
-          `),
+          `,
+            { preheader: `Your payment for ${inv.number} was received — receipt attached.` },
+          ),
           attachments: [
             { filename: `${inv.number}-receipt.pdf`, content: pdf, contentType: "application/pdf" },
           ],
