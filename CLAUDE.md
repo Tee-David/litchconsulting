@@ -46,8 +46,17 @@ All mail is nodemailer/SMTP (`lib/email.ts`) — there is **no** Resend integrat
   purges rows soft-deleted >30d ago.
 - **Audit:** `lib/audit.ts` `recordAudit()` → `audit_log`; rendered at `/admin/audit`. Call it
   from destructive/consequential actions (Copilot proposal dispatch already does).
-- **Storage:** R2 public bucket = assets; `R2_PRIVATE_BUCKET` = client documents, deliverables
-  **and DB backups** — private access only via ownership-checked presigned URLs.
+- **Storage:** R2 `litch-consulting` (public) = assets; `litch-consulting-private`
+  (`R2_PRIVATE_BUCKET`) = client documents, deliverables **and DB backups** — private access
+  only via ownership-checked presigned URLs.
+  > ⚠️ **The R2 credentials in `.env` are account-wide.** They can see every bucket on the
+  > Cloudflare account — including other projects (`realtors-practice`, `voca`, `trax`,
+  > `nomarc`, `rp-web`, `swiftlify-storage`, `wendiloveee`). **Use them only for Litch
+  > Consulting**, and only against `litch-consulting` / `litch-consulting-private`. Never
+  > read, write, list or delete another project's bucket from this repo. The same rule
+  > applies to any Cloudflare token added here: Litch scope only. (A `CLOUDFLARE_TOKEN`
+  > scoped to `realtorspractice.com.ng` was removed from `.env` for exactly this reason —
+  > another project's credential has no business in this one.)
 - **Tax rates:** `lib/tax/nigeria-tax-config.json` is the **single versioned source** of
   Nigerian tax rates (NTA 2025: PAYE bands, VAT, WHT, CIT + Development Levy, pension/NHF).
   `lib/calculators/*` and the LitchAI compilers both read it — never hardcode a rate.

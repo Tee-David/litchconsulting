@@ -58,3 +58,6 @@ Thumbs.db
 
 # Ephemeral agent worktrees
 .claude/worktrees/
+
+# Local secret scratch — never commit
+info.txt
