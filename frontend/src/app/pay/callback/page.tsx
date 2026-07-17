@@ -6,6 +6,8 @@ import { verifyTransaction } from "@/lib/paystack";
 import { applySuccessfulPayment } from "@/lib/payments/apply";
 
 export const dynamic = "force-dynamic";
+// Renders the receipt PDF via Chromium on cold start; give it headroom.
+export const maxDuration = 60;
 
 /**
  * Paystack redirects here after checkout (?reference= / ?trxref=). We verify

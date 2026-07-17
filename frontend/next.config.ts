@@ -51,6 +51,15 @@ const nextConfig: NextConfig = {
       "./public/brand/**",
       "./node_modules/@sparticuz/chromium/bin/**",
     ],
+    // The payment-return page renders the receipt PDF (applySuccessfulPayment →
+    // renderInvoicePdf). It lives outside the globs above, so without this the
+    // Chromium binary is absent here and every paid receipt degraded to the
+    // @react-pdf fallback (the grey-circle watermark). Trace the browser in.
+    "/pay/**": [
+      "./src/lib/invoice/pdf/fonts/**",
+      "./public/brand/**",
+      "./node_modules/@sparticuz/chromium/bin/**",
+    ],
     // Pin the CockroachDB CA cert into every function so the DB layer always
     // validates against the committed cert, not just system CAs.
     "/**": ["./certs/cockroach-ca.crt"],

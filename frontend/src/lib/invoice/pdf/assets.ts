@@ -56,3 +56,13 @@ export function signaturePngDataUri(): string | null {
   if (pngUri === undefined) pngUri = dataUri("public/brand/signature.png", "image/png");
   return pngUri;
 }
+
+let markUri: string | null | undefined;
+/** The Litch mark as an SVG data URI — the SAME `public/brand/litch-mark.svg`
+ *  the on-screen preview masks. Used as a CSS mask (not a filled path) so the
+ *  file's `fill-rule="evenodd"` cuts the emblem out cleanly instead of filling a
+ *  solid disc — that mismatch was the grey-circle watermark in the PDF. */
+export function markSvgDataUri(): string | null {
+  if (markUri === undefined) markUri = dataUri("public/brand/litch-mark.svg", "image/svg+xml");
+  return markUri;
+}

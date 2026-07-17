@@ -5,6 +5,8 @@ import { renderInvoicePdf, qrDataUrl } from "@/lib/invoice/pdf/render";
 import { getIssuer } from "@/lib/invoice/get-issuer";
 
 export const runtime = "nodejs";
+// Cold @sparticuz/chromium launch can take >10s; raise the function ceiling.
+export const maxDuration = 60;
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!(await isAdmin())) return new Response("Unauthorized", { status: 401 });
