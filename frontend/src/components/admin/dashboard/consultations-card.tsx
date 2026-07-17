@@ -6,7 +6,7 @@ import type { Consultation } from "@/lib/db/schema";
 /** The week ahead: booked consultations with one-tap join links. */
 export function ConsultationsCard({ rows }: { rows: Consultation[] }) {
   return (
-    <div className="rounded-card border border-hairline bg-paper">
+    <div data-tour="consultations" className="rounded-card border border-hairline bg-paper">
       <div className="flex items-center justify-between border-b border-hairline px-5 py-4">
         <h3 className="font-display text-sm font-bold text-ink">Next 7 days</h3>
         <CalendarClock className="size-4 text-muted" />

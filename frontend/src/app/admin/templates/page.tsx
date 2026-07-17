@@ -9,7 +9,9 @@ export default async function TemplatesPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Templates" description="Import, preview, download and reuse branded finance templates." />
-      <TemplatesView imported={imported} />
+      <div data-tour="templates-view">
+        <TemplatesView imported={imported} />
+      </div>
     </div>
   );
 }

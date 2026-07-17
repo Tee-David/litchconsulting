@@ -116,10 +116,11 @@ export function TemplatesClient({ templates }: TemplatesClientProps) {
         </div>
       </div>
 
-      {/* Grid of Templates */}
+      {/* Grid of Templates — both branches carry the tour anchor so the step
+          resolves even when a filter returns nothing. */}
       <AnimatePresence mode="popLayout">
         {filteredTemplates.length === 0 ? (
-          <div className="rounded-card border border-hairline bg-paper p-12">
+          <div data-tour="templates-list" className="rounded-card border border-hairline bg-paper p-12">
             <EmptyState
               icon={File}
               title="No templates found"
@@ -131,8 +132,9 @@ export function TemplatesClient({ templates }: TemplatesClientProps) {
             />
           </div>
         ) : (
-          <motion.div 
+          <motion.div
             layout
+            data-tour="templates-list"
             className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
           >
             {filteredTemplates.map((t) => (

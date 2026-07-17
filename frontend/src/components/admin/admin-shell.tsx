@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { SidebarNav } from "./admin-sidebar";
 import { AdminTopbar, type AdminUser } from "./admin-topbar";
 import { InstallPrompt } from "./install-prompt";
+import { CommandPalette } from "./command-palette";
 import { TourProvider } from "../tour/tour-provider";
 import type { NotificationItem } from "@/lib/db/queries/notifications";
 import { cn } from "@/lib/utils";
@@ -96,6 +97,7 @@ export function AdminShell({
         </div>
 
         <InstallPrompt />
+        <CommandPalette />
       </div>
     </TourProvider>
   );

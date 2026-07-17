@@ -71,7 +71,7 @@ export function NewRequestClient({ services }: { services: StepperService[] }) {
           initialStep={draft ? 2 : 0}
         />
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div data-tour="service-picker" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {services.map((s) => (
             <button
               key={s.slug}

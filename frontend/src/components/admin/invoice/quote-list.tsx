@@ -152,19 +152,23 @@ export function QuoteList({ quotes }: { quotes: InvoiceRow[] }) {
         <StatCard label="Quotes" value={stats.count} icon={FileEdit} />
       </div>
 
+      {/* Both branches carry the tour anchor so the step resolves even when
+          there are no quotes yet. */}
       {quotes.length === 0 ? (
-        <EmptyState
-          icon={FileText}
-          title="No quotes yet"
-          description="Draft a quote with the same builder as invoices, then convert an accepted quote into an invoice in one click."
-          action={
-            <Link href="/admin/finance/quotes/new" className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover">
-              <Plus className="size-4" /> New quote
-            </Link>
-          }
-        />
+        <div data-tour="quotes-table">
+          <EmptyState
+            icon={FileText}
+            title="No quotes yet"
+            description="Draft a quote with the same builder as invoices, then convert an accepted quote into an invoice in one click."
+            action={
+              <Link href="/admin/finance/quotes/new" className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover">
+                <Plus className="size-4" /> New quote
+              </Link>
+            }
+          />
+        </div>
       ) : (
-        <div className="space-y-4">
+        <div data-tour="quotes-table" className="space-y-4">
           {selected.length > 0 && (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-brand/20 bg-brand/5 px-4 py-3 text-sm animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="flex items-center gap-2 font-semibold text-ink">

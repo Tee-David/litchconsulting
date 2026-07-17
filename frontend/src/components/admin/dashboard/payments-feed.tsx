@@ -12,7 +12,7 @@ export function PaymentsFeed({
   rows: { payment: Payment; invoiceNumber: string }[];
 }) {
   return (
-    <div className="rounded-card border border-hairline bg-paper">
+    <div data-tour="recent-activity" className="rounded-card border border-hairline bg-paper">
       <div className="flex items-center justify-between border-b border-hairline px-5 py-4">
         <h3 className="font-display text-sm font-bold text-ink">Payment activity</h3>
         <CreditCard className="size-4 text-muted" />

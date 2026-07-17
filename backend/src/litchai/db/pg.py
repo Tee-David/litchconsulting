@@ -15,7 +15,14 @@ import psycopg
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
-from litchai.db.repo import Document, Engagement, LineItem, RepositoryError
+from litchai.db.repo import (
+    Document,
+    Engagement,
+    GeneratedFile,
+    KnowledgeChunk,
+    LineItem,
+    RepositoryError,
+)
 from litchai.documents.state import AuditEntry, DocumentStatus, transition
 
 
@@ -63,10 +70,141 @@ _DOC_COLS = (
     "progress, extraction_engine, account_label, period_start, period_end, created_at"
 )
 
+_KNOWLEDGE_COLS = (
+    "id, source_type, source_id, title, section, text, tokens, scope, client_id, "
+    "content_hash, updated_at"
+)
+
+
+def _vec_literal(embedding: list[float]) -> str:
+    return "[" + ",".join(repr(x) for x in embedding) + "]"
+
+
+def _knowledge(row: dict[str, Any], embedding: list[float] | None = None) -> KnowledgeChunk:
+    return KnowledgeChunk(
+        id=row["id"],
+        source_type=row["source_type"],
+        source_id=row["source_id"],
+        title=row["title"],
+        section=row["section"],
+        text=row["text"],
+        tokens=row["tokens"],
+        scope=row["scope"],
+        client_id=str(row["client_id"]) if row["client_id"] is not None else None,
+        content_hash=row["content_hash"],
+        embedding=embedding,
+        updated_at=row["updated_at"],
+    )
+
 
 class PostgresRepository:
     def __init__(self, conn: psycopg.Connection) -> None:
         self.conn = conn
+
+    # --- knowledge chunks (Copilot RAG store, Milestone 8) -----------------
+    def upsert_knowledge_chunk(self, chunk: KnowledgeChunk) -> KnowledgeChunk:
+        emb = _vec_literal(chunk.embedding) if chunk.embedding is not None else None
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO knowledge_chunk (source_type, source_id, title, section, text, "
+                "embedding, tokens, scope, client_id, content_hash) "
+                "VALUES (%s,%s,%s,%s,%s,%s::vector,%s,%s,%s,%s) "
+                "ON CONFLICT (content_hash) DO UPDATE SET "
+                "source_type = EXCLUDED.source_type, source_id = EXCLUDED.source_id, "
+                "title = EXCLUDED.title, section = EXCLUDED.section, text = EXCLUDED.text, "
+                "embedding = EXCLUDED.embedding, tokens = EXCLUDED.tokens, scope = EXCLUDED.scope, "
+                "client_id = EXCLUDED.client_id, updated_at = now() "
+                f"RETURNING {_KNOWLEDGE_COLS}",
+                (
+                    chunk.source_type, chunk.source_id, chunk.title, chunk.section, chunk.text,
+                    emb, chunk.tokens, chunk.scope, chunk.client_id, chunk.content_hash,
+                ),
+            )
+            return _knowledge(cur.fetchone(), chunk.embedding)
+
+    def get_knowledge_chunk(self, chunk_id: int) -> KnowledgeChunk | None:
+        with self.conn.cursor() as cur:
+            cur.execute(f"SELECT {_KNOWLEDGE_COLS} FROM knowledge_chunk WHERE id = %s", (chunk_id,))
+            row = cur.fetchone()
+            return _knowledge(row) if row else None
+
+    def list_knowledge_chunks(
+        self, *, source_type: str | None = None, scope: str | None = None, limit: int = 1000
+    ) -> list[KnowledgeChunk]:
+        clauses, params = [], []
+        if source_type is not None:
+            clauses.append("source_type = %s")
+            params.append(source_type)
+        if scope is not None:
+            clauses.append("scope = %s")
+            params.append(scope)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        params.append(limit)
+        with self.conn.cursor() as cur:
+            cur.execute(
+                f"SELECT {_KNOWLEDGE_COLS} FROM knowledge_chunk {where} ORDER BY id LIMIT %s",
+                tuple(params),
+            )
+            return [_knowledge(r) for r in cur.fetchall()]
+
+    def knowledge_trigram(
+        self, query: str, client_id: str | None, min_sim: float, limit: int = 20
+    ) -> list[tuple[KnowledgeChunk, float]]:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                f"SELECT {_KNOWLEDGE_COLS}, similarity(text, %s) AS sim FROM knowledge_chunk "
+                "WHERE (scope = 'firm' OR client_id = %s) AND similarity(text, %s) >= %s "
+                "ORDER BY sim DESC LIMIT %s",
+                (query, client_id, query, min_sim, limit),
+            )
+            return [(_knowledge(r), float(r["sim"])) for r in cur.fetchall()]
+
+    def knowledge_vector(
+        self, embedding: list[float], client_id: str | None, min_cos: float, limit: int = 20
+    ) -> list[tuple[KnowledgeChunk, float]]:
+        vec = _vec_literal(embedding)
+        with self.conn.cursor() as cur:
+            cur.execute(
+                f"SELECT {_KNOWLEDGE_COLS}, 1 - (embedding <=> %s::vector) AS cos FROM knowledge_chunk "
+                "WHERE embedding IS NOT NULL AND (scope = 'firm' OR client_id = %s) "
+                "AND 1 - (embedding <=> %s::vector) >= %s ORDER BY embedding <=> %s::vector LIMIT %s",
+                (vec, client_id, vec, min_cos, vec, limit),
+            )
+            return [(_knowledge(r), float(r["cos"])) for r in cur.fetchall()]
+
+    def knowledge_section(self, source_id: str, section: str | None) -> list[KnowledgeChunk]:
+        with self.conn.cursor() as cur:
+            if section is None:
+                cur.execute(
+                    f"SELECT {_KNOWLEDGE_COLS} FROM knowledge_chunk "
+                    "WHERE source_id = %s AND section IS NULL ORDER BY id",
+                    (source_id,),
+                )
+            else:
+                cur.execute(
+                    f"SELECT {_KNOWLEDGE_COLS} FROM knowledge_chunk "
+                    "WHERE source_id = %s AND section = %s ORDER BY id",
+                    (source_id, section),
+                )
+            return [_knowledge(r) for r in cur.fetchall()]
+
+    def delete_knowledge(
+        self, *, source_type: str | None = None, scope: str | None = None, client_id: str | None = None
+    ) -> int:
+        clauses, params = [], []
+        if source_type is not None:
+            clauses.append("source_type = %s")
+            params.append(source_type)
+        if scope is not None:
+            clauses.append("scope = %s")
+            params.append(scope)
+        if client_id is not None:
+            clauses.append("client_id = %s")
+            params.append(client_id)
+        where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+        with self.conn.cursor() as cur:
+            cur.execute(f"DELETE FROM knowledge_chunk {where}", tuple(params))
+            return cur.rowcount
 
     # --- engagements -------------------------------------------------------
     def create_engagement(
@@ -119,6 +257,17 @@ class PostgresRepository:
                 (engagement_id,),
             )
             return _engagement(cur.fetchone())
+
+    def latest_generated_file(self, engagement_id: int) -> GeneratedFile | None:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, engagement_id, template, compiler_version, validation_status, "
+                "hitl_status, sha256, created_at FROM generated_files WHERE engagement_id = %s "
+                "ORDER BY created_at DESC, id DESC LIMIT 1",
+                (engagement_id,),
+            )
+            row = cur.fetchone()
+        return GeneratedFile(**row) if row else None
 
     def set_generated_file_hitl_status(self, generated_file_id: int, hitl_status: str) -> None:
         with self.conn.cursor() as cur:

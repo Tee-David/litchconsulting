@@ -8,6 +8,7 @@ import { DataTable } from "@/components/admin/ui/data-table";
 import { useToast } from "@/components/admin/ui/toaster";
 import type { FigureLineage, LineItem, QueueEntry, TaxonomyCategory } from "@/lib/litchai/client";
 import { recategorize } from "@/app/admin/litchai/actions";
+import { formatMoney } from "@/lib/invoice/money";
 
 /**
  * Risk-ordered review grid. Reuses the admin DataTable; the category cell is an
@@ -82,7 +83,7 @@ export function ReviewGrid({
           const sign = li.direction === "out" ? "-" : "";
           return (
             <span className={li.direction === "out" ? "text-body" : "text-emerald-600 dark:text-emerald-400"}>
-              {sign}₦{li.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              {sign}{formatMoney(li.amount)}
             </span>
           );
         },

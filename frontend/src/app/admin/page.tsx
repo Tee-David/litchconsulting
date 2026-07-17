@@ -142,7 +142,7 @@ export default async function AdminDashboard() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div data-tour="kpi-stats" className="grid grid-cols-2 gap-3 lg:grid-cols-5">
         <StatCard label="Open requests" value={reqStats.open} icon={Inbox} hint={`${reqStats.pendingPayment} awaiting quote/pay`} />
         <StatCard label="Total invoiced" value={formatMoney(stats.invoiced)} icon={Wallet} hint={`${stats.count} invoices`} />
         <StatCard label="Paid" value={formatMoney(stats.paid)} icon={BadgeCheck} />
@@ -157,7 +157,7 @@ export default async function AdminDashboard() {
           <AttentionList items={attention} />
           <PipelineStrip counts={statusCounts} />
 
-          <div className="rounded-card border border-hairline bg-paper p-5">
+          <div data-tour="billed-collected" className="rounded-card border border-hairline bg-paper p-5">
             <div className="mb-4 flex items-center justify-between">
               <h3 className="font-display text-sm font-bold text-ink">
                 Billed vs collected — last 6 months
@@ -175,7 +175,7 @@ export default async function AdminDashboard() {
 
           <PaymentsFeed rows={payments} />
 
-          <div className="rounded-card border border-hairline bg-paper">
+          <div data-tour="recent-invoices" className="rounded-card border border-hairline bg-paper">
             <div className="flex items-center justify-between border-b border-hairline px-5 py-4">
               <h3 className="font-display text-sm font-bold text-ink">Recent invoices</h3>
               <Link href="/admin/finance/invoices" className="text-sm font-medium text-brand hover:underline">
@@ -212,7 +212,7 @@ export default async function AdminDashboard() {
         {/* Right rail */}
         <div className="space-y-6">
           {/* Quick actions */}
-          <div className="rounded-card border border-hairline bg-paper p-5">
+          <div data-tour="quick-actions" className="rounded-card border border-hairline bg-paper p-5">
             <h3 className="mb-3 font-display text-sm font-bold text-ink">Quick actions</h3>
             <div className="grid grid-cols-2 gap-2">
               {[
@@ -237,7 +237,7 @@ export default async function AdminDashboard() {
           <ArAgingCard aging={aging} />
 
           {/* Collection rate */}
-          <div className="rounded-card border border-hairline bg-paper p-5">
+          <div data-tour="collection-rate" className="rounded-card border border-hairline bg-paper p-5">
             <div className="flex items-center justify-between">
               <h3 className="font-display text-sm font-bold text-ink">Collection rate</h3>
               <span className="font-display text-lg font-bold text-ink">{collectionRate}%</span>

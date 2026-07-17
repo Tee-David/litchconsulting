@@ -51,8 +51,10 @@ export default async function ClientRequestsPage() {
         </Link>
       </div>
 
+      {/* Both branches carry the tour anchor so the step resolves before the
+          client has requested anything. */}
       {requests.length === 0 ? (
-        <div className="rounded-card border border-hairline bg-paper p-10">
+        <div data-tour="requests-list" className="rounded-card border border-hairline bg-paper p-10">
           <EmptyState
             icon={PackageSearch}
             title="No services yet"
@@ -68,7 +70,7 @@ export default async function ClientRequestsPage() {
           />
         </div>
       ) : (
-        <>
+        <div data-tour="requests-list" className="space-y-6">
           {active.length > 0 && (
             <div className="grid gap-4 md:grid-cols-2">
               {active.map((req) => (
@@ -106,7 +108,7 @@ export default async function ClientRequestsPage() {
               </div>
             </div>
           )}
-        </>
+        </div>
       )}
     </div>
   );

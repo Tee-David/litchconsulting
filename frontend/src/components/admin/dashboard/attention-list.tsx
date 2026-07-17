@@ -7,7 +7,7 @@ import type { AttentionItem } from "@/lib/db/queries/attention";
 /** The operator's worklist — everything currently blocked on you. */
 export function AttentionList({ items }: { items: AttentionItem[] }) {
   return (
-    <div className="rounded-card border border-hairline bg-paper">
+    <div data-tour="needs-action" className="rounded-card border border-hairline bg-paper">
       <div className="border-b border-hairline px-5 py-4">
         <h3 className="font-display text-sm font-bold text-ink">Needs your action</h3>
       </div>

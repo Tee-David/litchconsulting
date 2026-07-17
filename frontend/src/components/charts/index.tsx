@@ -159,19 +159,25 @@ export function GroupedBars({
   );
 }
 
-/** Composition donut with center total. */
+/**
+ * Composition donut with center total. Segment colors come from the categorical
+ * palette (order matches `data`), so a caller that renders its own breakdown can
+ * set `legend={false}` and colour its swatches with `CATEGORICAL[i]` to match.
+ */
 export function Donut({
   data,
   height = 240,
   centerLabel,
   centerValue,
   format,
+  legend = true,
 }: {
   data: { label: string; value: number }[];
   height?: number;
   centerLabel?: string;
   centerValue?: string;
   format?: ValueFormat;
+  legend?: boolean;
 }) {
   return (
     <div className="relative" style={{ height }}>
@@ -192,11 +198,13 @@ export function Donut({
               <Cell key={i} fill={categorical(i)} />
             ))}
           </Pie>
-          <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />
+          {legend && <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />}
         </PieChart>
       </ResponsiveContainer>
       {(centerLabel || centerValue) && (
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center pb-8 text-center">
+        <div
+          className={`pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center ${legend ? "pb-8" : ""}`}
+        >
           {centerValue && (
             <span className="font-display text-xl font-bold text-ink">{centerValue}</span>
           )}

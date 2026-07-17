@@ -57,6 +57,7 @@ export function ClientSidebarNav({
           <button
             type="button"
             onClick={onTogglePin}
+            data-tour="sidebar-pin"
             title={pinnedCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             aria-label={pinnedCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             className="grid size-8 place-items-center rounded-lg text-muted transition-colors hover:bg-surface hover:text-ink"

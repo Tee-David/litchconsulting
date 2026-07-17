@@ -22,6 +22,13 @@ import {
   SiStripe,
   SiClickup,
   SiAirtable,
+  SiPaypal,
+  SiWise,
+  SiCalendly,
+  SiZendesk,
+  SiGooglecalendar,
+  SiRevolut,
+  SiShopify,
 } from "react-icons/si";
 
 /** White chip that houses a work-tool logo, tinted with the brand's colour. */
@@ -112,4 +119,15 @@ export const orbitInner: ReactNode[] = [
   Si(SiIntuit, "#236cff"),
   Si(SiGmail, "#ea4335"),
   Si(SiGooglemeet, "#00897b"),
+];
+
+/** Innermost ring — payments, scheduling & commerce tools. */
+export const orbitCore: ReactNode[] = [
+  Si(SiPaypal, "#003087"),
+  Si(SiWise, "#163300"),
+  Si(SiCalendly, "#006bff"),
+  Si(SiGooglecalendar, "#4285f4"),
+  Si(SiZendesk, "#03363d"),
+  Si(SiRevolut, "#191c1f"),
+  Si(SiShopify, "#5a863e"),
 ];

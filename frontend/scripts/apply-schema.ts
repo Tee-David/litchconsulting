@@ -210,6 +210,17 @@ const STATEMENTS = [
   `ALTER TABLE "ticket" ADD COLUMN IF NOT EXISTS "team" text`,
   `ALTER TABLE "ticket" ADD COLUMN IF NOT EXISTS "type" text`,
   `ALTER TABLE "ticket" ADD COLUMN IF NOT EXISTS "tags" jsonb`,
+  // ---- Milestone 6: audit log + weekly client digest opt-out ----
+  `CREATE TABLE IF NOT EXISTS "audit_log" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "actor_id" text, "actor_name" text,
+    "action" text NOT NULL, "entity" text NOT NULL, "entity_id" text,
+    "meta" jsonb,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS "audit_log_created_idx" ON "audit_log" ("created_at")`,
+  `CREATE INDEX IF NOT EXISTS "audit_log_entity_idx" ON "audit_log" ("entity")`,
+  `CREATE INDEX IF NOT EXISTS "audit_log_action_idx" ON "audit_log" ("action")`,
+  `ALTER TABLE "client" ADD COLUMN IF NOT EXISTS "digest_opt_out" boolean DEFAULT false NOT NULL`,
 ];
 
 /**

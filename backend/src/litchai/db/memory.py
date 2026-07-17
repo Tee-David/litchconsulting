@@ -10,8 +10,17 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any
 
-from litchai.db.repo import Document, Engagement, LineItem, RepositoryError
+from litchai.categorize.memory_store import trigram_similarity
+from litchai.db.repo import (
+    Document,
+    Engagement,
+    GeneratedFile,
+    KnowledgeChunk,
+    LineItem,
+    RepositoryError,
+)
 from litchai.documents.state import AuditEntry, DocumentStatus, transition
+from litchai.embeddings import cosine
 
 
 def _now() -> datetime:
@@ -27,11 +36,88 @@ class InMemoryRepository:
         self._corrections: list[dict[str, Any]] = []
         self._audit: list[AuditEntry] = []
         self._generated: dict[int, dict[str, Any]] = {}
+        self._knowledge: dict[int, KnowledgeChunk] = {}
         self._seq = 0
 
     def _next_id(self) -> int:
         self._seq += 1
         return self._seq
+
+    # --- knowledge chunks (Copilot RAG store, Milestone 8) -----------------
+    def _knowledge_scoped(self, client_id: str | None):
+        # Firm-global rows are always visible; client rows only when the id
+        # matches — a hard filter so one client can never see another's context.
+        for chunk in self._knowledge.values():
+            if chunk.scope == "firm" or chunk.client_id == client_id:
+                yield chunk
+
+    def upsert_knowledge_chunk(self, chunk: KnowledgeChunk) -> KnowledgeChunk:
+        existing = next(
+            (c for c in self._knowledge.values() if c.content_hash == chunk.content_hash), None
+        )
+        if existing is not None:
+            stored = KnowledgeChunk(
+                **{**chunk.__dict__, "id": existing.id, "updated_at": _now()}
+            )
+        else:
+            stored = KnowledgeChunk(**{**chunk.__dict__, "id": self._next_id(), "updated_at": _now()})
+        self._knowledge[stored.id] = stored
+        return stored
+
+    def get_knowledge_chunk(self, chunk_id: int) -> KnowledgeChunk | None:
+        return self._knowledge.get(chunk_id)
+
+    def list_knowledge_chunks(
+        self, *, source_type: str | None = None, scope: str | None = None, limit: int = 1000
+    ) -> list[KnowledgeChunk]:
+        chunks = [
+            c for c in self._knowledge.values()
+            if (source_type is None or c.source_type == source_type)
+            and (scope is None or c.scope == scope)
+        ]
+        chunks.sort(key=lambda c: c.id or 0)
+        return chunks[:limit]
+
+    def knowledge_trigram(
+        self, query: str, client_id: str | None, min_sim: float, limit: int = 20
+    ) -> list[tuple[KnowledgeChunk, float]]:
+        scored = [(c, trigram_similarity(query, c.text)) for c in self._knowledge_scoped(client_id)]
+        hits = [(c, s) for c, s in scored if s >= min_sim]
+        hits.sort(key=lambda cs: cs[1], reverse=True)
+        return hits[:limit]
+
+    def knowledge_vector(
+        self, embedding: list[float], client_id: str | None, min_cos: float, limit: int = 20
+    ) -> list[tuple[KnowledgeChunk, float]]:
+        scored = [
+            (c, cosine(embedding, c.embedding))
+            for c in self._knowledge_scoped(client_id)
+            if c.embedding is not None
+        ]
+        hits = [(c, s) for c, s in scored if s >= min_cos]
+        hits.sort(key=lambda cs: cs[1], reverse=True)
+        return hits[:limit]
+
+    def knowledge_section(self, source_id: str, section: str | None) -> list[KnowledgeChunk]:
+        chunks = [
+            c for c in self._knowledge.values()
+            if c.source_id == source_id and c.section == section
+        ]
+        chunks.sort(key=lambda c: c.id or 0)
+        return chunks
+
+    def delete_knowledge(
+        self, *, source_type: str | None = None, scope: str | None = None, client_id: str | None = None
+    ) -> int:
+        to_delete = [
+            i for i, c in self._knowledge.items()
+            if (source_type is None or c.source_type == source_type)
+            and (scope is None or c.scope == scope)
+            and (client_id is None or c.client_id == client_id)
+        ]
+        for i in to_delete:
+            del self._knowledge[i]
+        return len(to_delete)
 
     # --- engagements -------------------------------------------------------
     def create_engagement(
@@ -77,6 +163,27 @@ class InMemoryRepository:
         if gen is None:
             raise RepositoryError(f"unknown generated file {generated_file_id}")
         gen["hitl_status"] = hitl_status
+
+    def latest_generated_file(self, engagement_id: int) -> GeneratedFile | None:
+        rows = [
+            (gid, gen)
+            for gid, gen in self._generated.items()
+            if gen.get("engagement_id") == engagement_id
+        ]
+        if not rows:
+            return None
+        # Ids are monotonic here, so the highest id is the most recent compile.
+        gid, gen = max(rows, key=lambda r: r[0])
+        return GeneratedFile(
+            id=gid,
+            engagement_id=gen.get("engagement_id"),
+            template=gen["template"],
+            compiler_version=gen["compiler_version"],
+            validation_status=gen["validation_status"],
+            hitl_status=gen["hitl_status"],
+            sha256=gen.get("sha256"),
+            created_at=gen["created_at"],
+        )
 
     def mark_engagement_deliverable(self, engagement_id: int) -> int:
         n = 0

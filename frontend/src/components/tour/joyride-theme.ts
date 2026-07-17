@@ -1,11 +1,15 @@
-import type { Locale, Options, PartialDeep, Styles } from "react-joyride";
+import type { Locale, Options } from "react-joyride";
 
 /**
- * Brand theme for react-joyride, extracted verbatim from the original
- * `portal-tour.tsx` so every tour looks identical. The one deliberate change is
- * `zIndex`, raised to 10000 so the spotlight/tooltip sits above the mobile
- * drawer (z-50) and topbar (z-40). Colors use CSS custom properties so tours
- * stay legible in dark mode.
+ * Brand theme for react-joyride.
+ *
+ * The tooltip itself is a custom component (`tour-tooltip.tsx`) styled with the
+ * usual Tailwind tokens, so the only thing left for joyride to theme is the
+ * chrome around it: the overlay, the spotlight cutout and the arrow. Colors use
+ * CSS custom properties so tours stay legible in dark mode.
+ *
+ * `zIndex` is raised to 10000 so the spotlight/tooltip sit above the mobile
+ * drawer (z-50) and the sticky topbar (z-40).
  */
 export const LOCALE: Locale = {
   back: "Back",
@@ -17,8 +21,6 @@ export const LOCALE: Locale = {
 
 export const BRAND_OPTIONS: Partial<Options> = {
   skipBeacon: true,
-  showProgress: true,
-  scrollOffset: 96,
   zIndex: 10000,
   buttons: ["back", "skip", "primary"],
   primaryColor: "#0a196d",
@@ -27,13 +29,11 @@ export const BRAND_OPTIONS: Partial<Options> = {
   arrowColor: "var(--color-paper, #ffffff)",
   overlayColor: "rgba(10, 15, 40, 0.55)",
   spotlightRadius: 14,
-};
-
-export const BRAND_STYLES: PartialDeep<Styles> = {
-  tooltip: { borderRadius: 16, padding: 18 },
-  tooltipTitle: { fontWeight: 700, fontSize: 15 },
-  tooltipContent: { fontSize: 13.5, lineHeight: 1.55, padding: "10px 0 0" },
-  buttonPrimary: { borderRadius: 9999, padding: "9px 18px", fontWeight: 600, fontSize: 13 },
-  buttonBack: { fontSize: 13 },
-  buttonSkip: { fontSize: 13 },
+  // Interactive steps need clicks to reach the real UI through the cutout.
+  blockTargetInteraction: false,
+  // A stray overlay click shouldn't silently skip a step — the tooltip's own
+  // Back / Skip / Next buttons are the only way through.
+  overlayClickAction: false,
+  // The custom tooltip draws its own progress rail and "Step N of M" line.
+  showProgress: false,
 };

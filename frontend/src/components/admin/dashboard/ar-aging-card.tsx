@@ -6,7 +6,7 @@ import type { AgingBuckets } from "@/lib/invoice/aging";
 export function ArAgingCard({ aging }: { aging: AgingBuckets }) {
   const max = Math.max(1, ...aging.buckets.map((b) => b.amount));
   return (
-    <div className="rounded-card border border-hairline bg-paper p-5">
+    <div data-tour="ar-aging" className="rounded-card border border-hairline bg-paper p-5">
       <div className="flex items-center justify-between">
         <h3 className="font-display text-sm font-bold text-ink">Receivables aging</h3>
         <span className="font-display text-sm font-bold text-ink">

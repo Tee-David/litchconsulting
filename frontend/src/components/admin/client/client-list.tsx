@@ -19,7 +19,11 @@ export function ClientList({ clients }: { clients: Client[] }) {
   const columns = useMemo<ColumnDef<Client, unknown>[]>(
     () => [
       {
-        accessorKey: "name",
+        id: "name",
+        // The cell leads with the company, so the global filter has to see it
+        // too — an `accessorKey: "name"` would search only the contact and
+        // silently miss every client you'd look up by their company name.
+        accessorFn: (c) => [c.company, c.name].filter(Boolean).join(" "),
         header: "Client / Company",
         cell: ({ row }) => {
           const c = row.original;

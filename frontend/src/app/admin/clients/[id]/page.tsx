@@ -34,7 +34,7 @@ import { Badge, invoiceStatusTone, type BadgeTone } from "@/components/admin/ui/
 import { StatCard } from "@/components/admin/ui/stat-card";
 import { QueryTabs } from "@/components/admin/ui/tabs";
 import { EmptyState } from "@/components/admin/ui/empty-state";
-import { BarChart } from "@/components/admin/ui/charts";
+import { GroupedBars } from "@/components/charts";
 import { Avatar } from "@/components/ui/avatar";
 import { ActiveRequestCard } from "@/components/requests/active-request-card";
 import {
@@ -512,7 +512,15 @@ async function BillingTab({
         <h3 className="mb-4 font-display text-sm font-bold text-ink">
           Billed vs collected — last 6 months
         </h3>
-        <BarChart data={chart} height={160} legend={["Billed", "Collected"]} />
+        <GroupedBars
+          data={chart}
+          series={[
+            { key: "value", label: "Billed" },
+            { key: "value2", label: "Collected" },
+          ]}
+          format="money"
+          height={160}
+        />
       </div>
 
       <div className="rounded-card border border-hairline bg-paper">

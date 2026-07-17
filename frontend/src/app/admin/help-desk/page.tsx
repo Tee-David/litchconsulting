@@ -22,13 +22,15 @@ export default async function HelpDeskPage() {
   return (
     <div className="space-y-6">
       <PageHeader title="Help Desk" description="Client support tickets and conversations, all in one inbox." />
-      <HelpDeskView
-        tickets={tickets}
-        messages={messages}
-        assignees={assignees}
-        // env is read here, in the RSC — never in the client component.
-        aiConfigured={Boolean(process.env.LITCHAI_API_URL)}
-      />
+      <div data-tour="helpdesk-view">
+        <HelpDeskView
+          tickets={tickets}
+          messages={messages}
+          assignees={assignees}
+          // env is read here, in the RSC — never in the client component.
+          aiConfigured={Boolean(process.env.LITCHAI_API_URL)}
+        />
+      </div>
     </div>
   );
 }

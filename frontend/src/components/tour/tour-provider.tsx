@@ -14,8 +14,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { Joyride, EVENTS, STATUS, type EventData, type Controls } from "react-joyride";
 import { TOURS, type TourAudience, type TourStep } from "./registry";
 import { pageTourIdFor } from "./route-match";
-import { BRAND_OPTIONS, BRAND_STYLES, LOCALE } from "./joyride-theme";
-import { isDesktop, waitForTarget } from "./wait-for-target";
+import { BRAND_OPTIONS, LOCALE } from "./joyride-theme";
+import { withStepMeta, type TourStepMeta } from "./tour-meta";
+import { TourTooltip } from "./tour-tooltip";
+import { isDesktop, prefersReducedMotion, waitForTarget } from "./wait-for-target";
 import { fireConfetti } from "./confetti";
 
 type TourContextValue = {
@@ -49,9 +51,19 @@ export function useTour(): TourContextValue {
 
 const LEGACY_CLIENT_KEY = "litch:portal-tour-done";
 
-/** Is a step's target present (and, for desktopOnly steps, are we on desktop)? */
+/**
+ * How long a `before` hook waits for a cross-page target to mount. Kept well
+ * under `targetWaitTimeout + beforeTimeout` so a step whose anchor never
+ * arrives fails fast into the skip path instead of stalling the tour.
+ */
+const TARGET_WAIT_MS = 5000;
+
+/** Is a step's target present, and does it apply to this viewport? */
 function isStepPresent(step: TourStep): boolean {
+  // Sidebar anchors are `hidden lg:block` — present in the DOM but invisible —
+  // so a viewport check has to gate them, not just `querySelector`.
   if (step.desktopOnly && !isDesktop()) return false;
+  if (step.mobileOnly && isDesktop()) return false;
   const target = step.target;
   if (typeof target !== "string") return true;
   if (target === "body") return true;
@@ -77,20 +89,45 @@ export function TourProvider({
   const [activeTourId, setActiveTourId] = useState<string | null>(null);
   const [steps, setSteps] = useState<TourStep[]>([]);
   const [run, setRun] = useState(false);
+  const [stepIndex, setStepIndex] = useState(0);
+  const [scrollOffset, setScrollOffset] = useState(96);
+  const [reduced, setReduced] = useState(false);
+
   const activeTourIdRef = useRef<string | null>(null);
   useEffect(() => {
     activeTourIdRef.current = activeTourId;
   }, [activeTourId]);
+  // Joyride hands `controls` to the event handler; stash them so the
+  // interactive-step listener can advance the tour from outside React's tree.
+  const controlsRef = useRef<Controls | null>(null);
   // Guards the terminal handler — a finished tour can emit more than one event
   // carrying the terminal status before the teardown re-render lands.
   const terminalHandledRef = useRef(false);
 
   const welcomeKey = useMemo(() => `litch:tour:${audience}:welcome`, [audience]);
 
+  // Keep the scroll offset clear of the sticky 4rem topbar, and track the
+  // reduced-motion preference live (users flip it mid-session).
+  useEffect(() => {
+    const sync = () => {
+      setScrollOffset(isDesktop() ? 104 : 84);
+      setReduced(prefersReducedMotion());
+    };
+    sync();
+    window.addEventListener("resize", sync);
+    const motion = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    motion?.addEventListener?.("change", sync);
+    return () => {
+      window.removeEventListener("resize", sync);
+      motion?.removeEventListener?.("change", sync);
+    };
+  }, []);
+
   const stopTour = useCallback(() => {
     setRun(false);
     setActiveTourId(null);
     setSteps([]);
+    setStepIndex(0);
   }, []);
 
   /** Poll until the router has actually landed on `route` (or we time out). */
@@ -108,25 +145,32 @@ export function TourProvider({
 
       let built: TourStep[];
       if (def.kind === "walkthrough") {
-        // Cross-page steps: decorate each with a before-hook that navigates to
-        // the step's route and waits for its target to render.
-        built = def.steps.map((step) => {
-          const route = step.route;
-          if (!route) return step;
-          return {
-            ...step,
-            before: async () => {
-              if (pathnameRef.current !== route) {
-                router.push(route);
-                await waitForRoute(route);
-              }
-              const target = typeof step.target === "string" ? step.target : null;
-              if (target && target !== "body") {
-                await waitForTarget(target, 8000);
-              }
-            },
-          };
-        });
+        // Cross-page steps: we can't know whether a target exists until we're on
+        // its page, so viewport-only filtering happens up front and missing
+        // anchors fall through to the TARGET_NOT_FOUND skip path.
+        built = def.steps
+          .filter((step) => {
+            if (step.desktopOnly && !isDesktop()) return false;
+            if (step.mobileOnly && isDesktop()) return false;
+            return true;
+          })
+          .map((step) => {
+            const route = step.route;
+            if (!route) return step;
+            return {
+              ...step,
+              before: async () => {
+                if (pathnameRef.current !== route) {
+                  router.push(route);
+                  await waitForRoute(route);
+                }
+                const target = typeof step.target === "string" ? step.target : null;
+                if (target && target !== "body") {
+                  await waitForTarget(target, TARGET_WAIT_MS);
+                }
+              },
+            };
+          });
       } else {
         // Page / welcome tours run on the current page — drop any step whose
         // target isn't in the DOM so we never spotlight nothing.
@@ -136,8 +180,9 @@ export function TourProvider({
       if (built.length === 0) return;
 
       terminalHandledRef.current = false;
-      setSteps(built);
+      setSteps(withStepMeta(built, def.kind));
       setActiveTourId(id);
+      setStepIndex(0);
       setRun(true);
     },
     [router, waitForRoute],
@@ -165,7 +210,14 @@ export function TourProvider({
 
   const onEvent = useCallback(
     (data: EventData, controls: Controls) => {
-      // A missing target (e.g. an optional anchor) just advances the tour.
+      controlsRef.current = controls;
+
+      // Track the live index so the interactive listener knows which step is up.
+      if (data.type === EVENTS.STEP_BEFORE || data.type === EVENTS.TOOLTIP) {
+        setStepIndex(data.index);
+      }
+      // A missing target (e.g. an optional anchor on an empty table) just
+      // advances the tour rather than stalling on nothing.
       if (data.type === EVENTS.TARGET_NOT_FOUND) {
         controls.next();
         return;
@@ -190,6 +242,45 @@ export function TourProvider({
     },
     [stopTour, welcomeKey],
   );
+
+  /**
+   * Interactive steps: the user clicks the real UI and the tour moves itself on.
+   * Listening on the document in the capture phase means we still fire when the
+   * target is a nav link that unmounts the page out from under us, and it
+   * survives the target re-rendering mid-step.
+   */
+  useEffect(() => {
+    if (!run) return;
+    const meta = steps[stepIndex]?.data as TourStepMeta | undefined;
+    const selector = meta?.interactSelector;
+    if (!selector) return;
+
+    const onClick = (event: MouseEvent) => {
+      const el = event.target as Element | null;
+      if (el?.closest?.(selector)) {
+        // Let the click do its real work (navigate, toggle) before advancing.
+        setTimeout(() => controlsRef.current?.next(), 0);
+      }
+    };
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, [run, stepIndex, steps]);
+
+  /**
+   * `globals.css` sets `html { scroll-behavior: smooth }`, which fights
+   * joyride's rAF scroll tween (every scrollTop write gets re-smoothed by the
+   * browser, so the spotlight lands late and jitters). Neutralise it for the
+   * duration of a tour, then hand it back.
+   */
+  useEffect(() => {
+    if (!run) return;
+    const html = document.documentElement;
+    const previous = html.style.scrollBehavior;
+    html.style.scrollBehavior = "auto";
+    return () => {
+      html.style.scrollBehavior = previous;
+    };
+  }, [run]);
 
   // Auto-run the welcome tour once per audience.
   useEffect(() => {
@@ -239,8 +330,14 @@ export function TourProvider({
         continuous
         scrollToFirstStep
         locale={LOCALE}
-        options={{ ...BRAND_OPTIONS, beforeTimeout: 15000, targetWaitTimeout: 8000 }}
-        styles={BRAND_STYLES}
+        options={{
+          ...BRAND_OPTIONS,
+          beforeTimeout: 12000,
+          targetWaitTimeout: 3000,
+          scrollOffset,
+          scrollDuration: reduced ? 0 : 420,
+        }}
+        tooltipComponent={TourTooltip}
         onEvent={onEvent}
       />
     </TourContext.Provider>

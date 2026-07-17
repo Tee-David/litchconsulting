@@ -1,24 +1,16 @@
 import Link from "next/link";
-import { Inbox, CalendarClock, ChevronRight, SlidersHorizontal } from "lucide-react";
+import { Inbox, SlidersHorizontal } from "lucide-react";
 import { PageHeader } from "@/components/admin/ui/page-header";
 import { PushToggle } from "@/components/admin/push-toggle";
-import { EmptyState } from "@/components/admin/ui/empty-state";
-import { Badge } from "@/components/admin/ui/badge";
 import { StatCard } from "@/components/admin/ui/stat-card";
+import { RequestsTable } from "@/components/admin/requests/requests-table";
+import { ConsultationsList } from "@/components/admin/requests/consultations-list";
 import {
   listRequestsWithClients,
   listConsultations,
   requestStats,
 } from "@/lib/db/queries/requests";
-import {
-  requestStatusTone,
-  STATUS_LABELS,
-  ACTIVE_STATUSES,
-  REQUEST_STATUSES,
-  type RequestStatus,
-} from "@/lib/requests/status";
-import { formatDate, formatDateTime } from "@/lib/format-date";
-import { formatMoney, num } from "@/lib/invoice/money";
+import { ACTIVE_STATUSES, REQUEST_STATUSES, type RequestStatus } from "@/lib/requests/status";
 import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
@@ -67,13 +59,14 @@ export default async function AdminRequestsPage({
         <PushToggle />
         <Link
           href="/admin/services"
+          data-tour="service-catalog"
           className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-3.5 py-2 text-xs font-semibold text-body transition-colors hover:bg-surface"
         >
           <SlidersHorizontal className="size-4" /> Service catalog
         </Link>
       </PageHeader>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div data-tour="requests-stats" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Open requests" value={stats.open} icon={Inbox} />
         <StatCard label="Awaiting quote/payment" value={stats.pendingPayment} icon={Inbox} />
         <StatCard label="Awaiting documents" value={stats.awaitingDocs} icon={Inbox} />
@@ -126,120 +119,10 @@ export default async function AdminRequestsPage({
       </div>
 
       {tab === "consultations" ? (
-        <div className="rounded-card border border-hairline bg-paper">
-          {consultations.length === 0 ? (
-            <div className="p-10">
-              <EmptyState
-                icon={CalendarClock}
-                title="No consultations yet"
-                description="Bookings made through the Cal.com scheduler on /book appear here automatically."
-              />
-            </div>
-          ) : (
-            <div className="divide-y divide-hairline">
-              {consultations.map((c) => (
-                <div key={c.id} className="flex items-center justify-between gap-3 px-5 py-3.5">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-semibold text-ink">
-                      {c.name || c.email}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted">
-                      {c.email}
-                      {c.startsAt ? ` · ${formatDateTime(c.startsAt)}` : ""}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {c.meetingUrl && c.status !== "cancelled" && (
-                      <a
-                        href={c.meetingUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs font-semibold text-brand hover:underline"
-                      >
-                        Join call
-                      </a>
-                    )}
-                    <Badge
-                      tone={
-                        c.status === "cancelled"
-                          ? "danger"
-                          : c.status === "rescheduled"
-                            ? "warning"
-                            : "success"
-                      }
-                    >
-                      {c.status}
-                    </Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+        <ConsultationsList rows={consultations} />
       ) : (
-        <div data-tour="requests-table" className="rounded-card border border-hairline bg-paper">
-          {filtered.length === 0 ? (
-            <div className="p-10">
-              <EmptyState
-                icon={Inbox}
-                title={filter === "open" ? "No open requests" : "Nothing here"}
-                description="New service requests from the portal land here the moment a client submits."
-              />
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] text-sm">
-                <thead>
-                  <tr className="border-b border-hairline text-left text-xs uppercase tracking-wider text-muted">
-                    <th className="px-5 py-3 font-semibold">Request</th>
-                    <th className="px-5 py-3 font-semibold">Client</th>
-                    <th className="px-5 py-3 font-semibold">Service</th>
-                    <th className="px-5 py-3 font-semibold">Amount</th>
-                    <th className="px-5 py-3 font-semibold">Status</th>
-                    <th className="px-5 py-3 font-semibold">Age</th>
-                    <th className="px-5 py-3" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-hairline">
-                  {filtered.map(({ request: r, clientName, clientCompany }) => (
-                    <tr key={r.id} className="group transition-colors hover:bg-surface">
-                      <td className="px-5 py-3.5">
-                        <Link
-                          href={`/admin/requests/${r.id}`}
-                          className="font-semibold text-ink hover:text-brand"
-                        >
-                          {r.number}
-                        </Link>
-                      </td>
-                      <td className="px-5 py-3.5 text-body">
-                        {clientCompany || clientName || "—"}
-                      </td>
-                      <td className="px-5 py-3.5 text-body">{r.serviceName}</td>
-                      <td className="px-5 py-3.5 tabular-nums text-body">
-                        {r.priceSnapshot
-                          ? formatMoney(num(r.priceSnapshot), r.currency)
-                          : "Quote"}
-                      </td>
-                      <td className="px-5 py-3.5">
-                        <Badge tone={requestStatusTone(r.status)}>
-                          {STATUS_LABELS[r.status as RequestStatus] ?? r.status}
-                        </Badge>
-                      </td>
-                      <td className="px-5 py-3.5 text-xs text-muted">{formatDate(r.createdAt)}</td>
-                      <td className="px-5 py-3.5 text-right">
-                        <Link
-                          href={`/admin/requests/${r.id}`}
-                          className="inline-flex items-center gap-0.5 text-xs font-semibold text-brand opacity-0 transition-opacity group-hover:opacity-100"
-                        >
-                          Open <ChevronRight className="size-3.5" />
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+        <div data-tour="requests-table">
+          <RequestsTable rows={filtered} emptyTitle={filter === "open" ? "No open requests" : "Nothing here"} />
         </div>
       )}
     </div>

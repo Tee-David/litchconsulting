@@ -18,20 +18,22 @@ export default async function AdminServicesPage() {
         title="Service catalog"
         description="Pricing, turnaround and required documents per service. In-flight requests are never affected."
       />
-      <ServicesEditor
-        offerings={catalog.map((s) => ({
-          slug: s.slug,
-          name: s.name,
-          tagline: s.tagline,
-          active: s.active,
-          pricingMode: s.pricingMode,
-          priceNgn: s.priceNgn,
-          taxRate: s.taxRate,
-          turnaround: s.turnaround,
-          requiredDocuments: s.requiredDocuments,
-          sortOrder: s.sortOrder,
-        }))}
-      />
+      <div data-tour="services-editor">
+        <ServicesEditor
+          offerings={catalog.map((s) => ({
+            slug: s.slug,
+            name: s.name,
+            tagline: s.tagline,
+            active: s.active,
+            pricingMode: s.pricingMode,
+            priceNgn: s.priceNgn,
+            taxRate: s.taxRate,
+            turnaround: s.turnaround,
+            requiredDocuments: s.requiredDocuments,
+            sortOrder: s.sortOrder,
+          }))}
+        />
+      </div>
     </div>
   );
 }

@@ -36,7 +36,7 @@ export default async function ClientInvoicesPage() {
 
       {/* Payment history — references to quote in support conversations */}
       {shown.length > 0 && (
-        <div className="rounded-card border border-hairline bg-paper">
+        <div data-tour="payment-history" className="rounded-card border border-hairline bg-paper">
           <div className="border-b border-hairline px-5 py-4">
             <h3 className="font-display text-sm font-bold text-ink">Payment history</h3>
             <p className="mt-0.5 text-xs text-muted">

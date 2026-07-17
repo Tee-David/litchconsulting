@@ -7,9 +7,49 @@ import { Star } from "lucide-react";
 import { Button } from "@/components/ui/primitives";
 import { heroSlides, partners } from "@/lib/content";
 import { OrbitingCircles } from "@/components/magicui/orbiting-circles";
-import { orbitOuter, orbitInner } from "@/components/sections/hero-orbit-icons";
+import { orbitOuter, orbitInner, orbitCore } from "@/components/sections/hero-orbit-icons";
 
 const ROTATE_MS = 6000;
+
+const RATING = 4.7;
+
+/** Reviewer faces. Served straight from Unsplash — already sized by query param
+ *  and allow-listed in `next.config.ts` (the optimizer is off site-wide). */
+const reviewerAvatars = [
+  "1494790108377-be9c29b29330",
+  "1500648767791-00dcc994a43e",
+  "1438761681033-6461ffad8d80",
+  "1507003211169-0a1dd7228f2d",
+  "1544005313-94ddf0286df2",
+].map((id) => `https://images.unsplash.com/photo-${id}?w=64&h=64&q=80&fit=crop&crop=faces`);
+
+/**
+ * Renders the true score: whole stars fill completely, the remainder fills a
+ * fractional sliver of the next one (4.7 → four full + 70% of the fifth), so
+ * the badge can't overstate the rating.
+ */
+function StarRating({ rating }: { rating: number }) {
+  return (
+    <span className="flex" role="img" aria-label={`${rating} out of 5 stars`}>
+      {Array.from({ length: 5 }).map((_, i) => {
+        const fill = Math.max(0, Math.min(1, rating - i));
+        return (
+          <span key={i} className="relative inline-flex">
+            <Star className="size-3.5 fill-white/25 text-white/30" />
+            {fill > 0 && (
+              <span
+                className="absolute inset-y-0 left-0 overflow-hidden"
+                style={{ width: `${fill * 100}%` }}
+              >
+                <Star className="size-3.5 max-w-none fill-amber-400 text-amber-400" />
+              </span>
+            )}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
 
 export function Hero() {
   const [index, setIndex] = useState(0);
@@ -64,19 +104,30 @@ export function Hero() {
           <OrbitingCircles iconSize={40} radius={176} duration={34} reverse>
             {orbitInner}
           </OrbitingCircles>
+          <OrbitingCircles iconSize={34} radius={92} duration={26}>
+            {orbitCore}
+          </OrbitingCircles>
         </div>
       </div>
 
       {/* Content */}
       <div className="relative z-10 mx-auto w-full max-w-[1400px] px-6 pb-32 pt-28 md:px-14 md:pb-48">
         <div className="flex flex-col items-center text-center md:items-start md:text-left">
-          <div className="mb-5 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-xs font-medium text-white backdrop-blur-md">
-            <span className="flex">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Star key={i} className="size-3.5 fill-amber-400 text-amber-400" />
+          <div className="mb-5 inline-flex items-center gap-2.5 rounded-full border border-white/20 bg-white/10 py-1.5 pl-2 pr-3.5 text-xs font-medium text-white backdrop-blur-md">
+            <span className="flex -space-x-2">
+              {reviewerAvatars.map((src, i) => (
+                <span
+                  key={i}
+                  className="relative size-6 overflow-hidden rounded-full bg-white/20 ring-2 ring-white/40"
+                >
+                  <Image src={src} alt="" fill sizes="24px" className="object-cover" unoptimized />
+                </span>
               ))}
             </span>
-            4.7 · 1,000+ reviews
+            <span className="flex items-center gap-2">
+              <StarRating rating={RATING} />
+              {RATING} · 1k+ reviews
+            </span>
           </div>
 
           <AnimatePresence mode="wait">

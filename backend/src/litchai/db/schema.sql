@@ -176,6 +176,30 @@ CREATE TABLE IF NOT EXISTS ai_cache (
     hit_count        int NOT NULL DEFAULT 0
 );
 
+-- Copilot RAG store (Milestone 8). Firm-global knowledge (services catalog copy,
+-- FAQs/help articles, NTA-2025 tax config, SOPs) has scope='firm'/client_id NULL;
+-- per-client operational context has scope='client' and is only ever retrieved
+-- under a hard client_id filter. content_hash makes reindex idempotent (upsert),
+-- so re-running the ingestion never duplicates a chunk.
+CREATE TABLE IF NOT EXISTS knowledge_chunk (
+    id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    source_type  text NOT NULL,            -- 'services' | 'faq' | 'tax_config' | 'sop' | 'request' | 'invoice' | 'ticket'
+    source_id    text NOT NULL,            -- stable id within the source (doc slug, config path, entity id)
+    title        text NOT NULL,            -- parent document/section title (citation label)
+    section      text,                     -- markdown-header section this chunk came from
+    text         text NOT NULL,
+    embedding    vector(768),
+    tokens       int NOT NULL DEFAULT 0,
+    scope        text NOT NULL DEFAULT 'firm' CHECK (scope IN ('firm','client')),
+    client_id    uuid,                     -- NULL for firm-global; required for scope='client'
+    content_hash text NOT NULL,
+    updated_at   timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (content_hash)
+);
+CREATE INDEX IF NOT EXISTS knowledge_chunk_trgm_idx ON knowledge_chunk USING gin (text gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS knowledge_chunk_vec_idx ON knowledge_chunk USING hnsw (embedding vector_cosine_ops);
+CREATE INDEX IF NOT EXISTS knowledge_chunk_scope_idx ON knowledge_chunk (scope, client_id);
+
 CREATE TABLE IF NOT EXISTS generated_files (
     id                      bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     engagement_id           bigint REFERENCES engagements(id),

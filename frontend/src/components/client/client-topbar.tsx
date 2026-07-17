@@ -19,13 +19,7 @@ export type ClientUser = {
   role?: string | null;
 };
 
-function initialsOf(name?: string | null, email?: string | null) {
-  const src = (name || email || "").trim();
-  if (!src) return "C";
-  const parts = src.split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return src.slice(0, 2).toUpperCase();
-}
+import { initialsOf } from "@/components/ui/avatar";
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();

@@ -14,12 +14,15 @@ export default async function BlogPage() {
         <PageHeader title="Blog" description="Write, manage and publish SEO-optimised Insights articles." />
         <Link
           href="/admin/blog/new"
+          data-tour="new-post"
           className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
         >
           <Plus className="size-4" /> New post
         </Link>
       </div>
-      <PostList posts={posts} />
+      <div data-tour="posts-list">
+        <PostList posts={posts} />
+      </div>
     </div>
   );
 }

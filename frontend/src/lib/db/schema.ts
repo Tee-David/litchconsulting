@@ -78,6 +78,8 @@ export const client = pgTable(
     address: text("address"),
     taxId: text("tax_id"), // TIN / RC number
     notes: text("notes"),
+    // Weekly client digest email opt-out (client toggles it in portal settings).
+    digestOptOut: boolean("digest_opt_out").notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: deletedAt(),
@@ -498,6 +500,31 @@ export const clientNote = pgTable(
   (t) => [index("client_note_client_idx").on(t.clientId, t.kind, t.done)]
 );
 
+/**
+ * Admin audit log — an append-only trail of destructive / important admin
+ * actions (client delete/merge/erase, request status changes, invoice void /
+ * mark-paid / delete, payments applied). Written best-effort via lib/audit.ts;
+ * a failure to record never blocks the underlying action.
+ */
+export const auditLog = pgTable(
+  "audit_log",
+  {
+    id: id(),
+    actorId: text("actor_id"), // Better Auth user.id, or null for system/webhook
+    actorName: text("actor_name"),
+    action: text("action").notNull(), // e.g. client.deleted, invoice.void, payment.applied
+    entity: text("entity").notNull(), // client | invoice | request | payment | user …
+    entityId: text("entity_id"),
+    meta: jsonb("meta"), // arbitrary structured context (number, count, status …)
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("audit_log_created_idx").on(t.createdAt),
+    index("audit_log_entity_idx").on(t.entity),
+    index("audit_log_action_idx").on(t.action),
+  ]
+);
+
 /** Web-push subscriptions (admin alerting in v1). One row per browser. */
 export const pushSubscription = pgTable(
   "push_subscription",
@@ -530,3 +557,4 @@ export type Payment = typeof payment.$inferSelect;
 export type Consultation = typeof consultation.$inferSelect;
 export type PushSubscription = typeof pushSubscription.$inferSelect;
 export type ClientNote = typeof clientNote.$inferSelect;
+export type AuditLog = typeof auditLog.$inferSelect;

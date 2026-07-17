@@ -14,11 +14,14 @@ Run (VM): ``uvicorn litchai.api:app --host 127.0.0.1 --port 8000``
 from __future__ import annotations
 
 import hashlib
+import os
+import time
 from collections.abc import Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from typing import Any, ContextManager
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from pydantic import BaseModel
 
 from litchai.categorize.memory_store import MemoryStore
 from litchai.db.repo import Repository
@@ -26,17 +29,31 @@ from litchai.queue import ingest_document as ingest_task
 from litchai.queue import queue
 from litchai.storage import Storage
 
-API_VERSION = "0.3.0"
+API_VERSION = "0.4.0"
 
 RepoProvider = Callable[[], ContextManager[Repository]]
 StoreProvider = Callable[[], ContextManager[MemoryStore]]
 ProviderFactory = Callable[[], Any]  # returns an ai.provider.Provider
+EmbedderFactory = Callable[[], Any]  # returns an embeddings.Embedder
 
 
 def _default_provider() -> Any:
     from litchai.ai.provider import OllamaProvider
 
     return OllamaProvider()
+
+
+def _default_embedder() -> Any:
+    from litchai.embeddings import OllamaEmbedder
+
+    return OllamaEmbedder()
+
+
+class AssistantChatRequest(BaseModel):
+    message: str
+    history: list[dict[str, str]] | None = None
+    scope: str = "firm"           # 'firm' | 'client'
+    client_id: str | None = None
 
 # Upload guardrails (FR1). The blind-relay envelope adds a little overhead, so
 # the ciphertext cap is generous relative to the ~80-page scan worst case.
@@ -102,12 +119,16 @@ def create_app(
     storage: Storage | None = None,
     store_provider: StoreProvider | None = None,
     provider_factory: ProviderFactory | None = None,
+    embedder_factory: EmbedderFactory | None = None,
 ) -> FastAPI:
     app = FastAPI(title="LitchAI", version=API_VERSION, lifespan=_lifespan)
     app.state.repo_provider = repo_provider or _pg_provider
     app.state.store_provider = store_provider or _pg_store_provider
     app.state.provider_factory = provider_factory or _default_provider
+    app.state.embedder_factory = embedder_factory or _default_embedder
     app.state.storage = storage or Storage()
+    app.state.embedder = None   # built once on first Copilot call
+    app.state.router = None      # SemanticRouter (tool-utterance index) cached here
 
     def get_repo() -> Iterator[Repository]:
         with app.state.repo_provider() as repo:
@@ -125,6 +146,53 @@ def create_app(
     async def health_queue() -> dict:
         jobs = await queue.job_manager.list_jobs_async()
         return {"status": "ok", "jobs": len(list(jobs))}
+
+    @app.get("/health/model")
+    async def health_model() -> dict:
+        """Liveness of the *local* model behind the provider seam.
+
+        The admin Integrations page can reach this API (tunnel + Access) but can
+        never reach Ollama itself — it's bound to loopback on the VM. So the
+        model's real state has to be reported from in here.
+
+        Cheap on purpose: lists the loaded models rather than generating, so it
+        stays a liveness probe and never occupies the GPU. ``ok`` means the
+        model the pipeline requests is actually present, not merely that Ollama
+        answered.
+        """
+        import httpx  # noqa: PLC0415
+
+        provider = app.state.provider_factory()
+        requested = getattr(provider, "request_model", None)
+        host = os.environ.get("LITCHAI_OLLAMA_HOST", "http://127.0.0.1:11434")
+        base = {
+            "provider": getattr(provider, "name", "unknown"),
+            "model": requested,
+            "digest_pinned": bool(getattr(provider, "model_digest", None)),
+        }
+
+        # A non-Ollama provider (e.g. FakeProvider in tests) has no daemon to poll.
+        if base["provider"] != "ollama":
+            return {**base, "status": "ok", "detail": "non-ollama provider"}
+
+        started = time.monotonic()
+        try:
+            async with httpx.AsyncClient(timeout=3.0) as http:
+                resp = await http.get(f"{host}/api/tags")
+            resp.raise_for_status()
+            tags = resp.json().get("models", [])
+        except Exception as exc:  # noqa: BLE001 — a probe must never 500
+            return {**base, "status": "down", "detail": type(exc).__name__}
+
+        names = [t.get("name") for t in tags if t.get("name")]
+        loaded = requested in names
+        return {
+            **base,
+            "status": "ok" if loaded else "degraded",
+            "detail": None if loaded else f"{requested} not pulled on this host",
+            "latency_ms": int((time.monotonic() - started) * 1000),
+            "models_available": len(names),
+        }
 
     @app.post("/documents", status_code=201)
     async def create_document(
@@ -183,6 +251,41 @@ def create_app(
             "extraction_engine": doc.extraction_engine,
             "byte_size": doc.byte_size,
         }
+
+    @app.get("/documents/{document_id}/result.xlsx")
+    async def get_document_result(
+        document_id: int, repo: Repository = Depends(get_repo)
+    ) -> Response:
+        """Stream the compiled deliverable for the document's engagement.
+
+        Compiles are per-engagement, so this resolves document → engagement →
+        latest generated file, then reads the workbook back out of the artifact
+        store by the sha256 recorded at compile time.
+        """
+        doc = repo.get_document(document_id)
+        if doc is None:
+            raise HTTPException(404, "document not found")
+        if doc.engagement_id is None:
+            raise HTTPException(404, "document is not attached to an engagement")
+
+        gen = repo.latest_generated_file(doc.engagement_id)
+        if gen is None or not gen.sha256:
+            raise HTTPException(409, "engagement has not been compiled yet")
+
+        storage: Storage = app.state.storage
+        if not storage.artifact_exists(gen.sha256):
+            # Metadata outlives the blob (e.g. compiled before artifacts were
+            # persisted, or the disk was cycled) — recompiling repairs it.
+            raise HTTPException(410, "compiled workbook is no longer on disk; recompile")
+
+        filename = f"engagement_{doc.engagement_id}_{gen.template}.xlsx"
+        return Response(
+            content=storage.read_artifact(gen.sha256),
+            media_type=(
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            ),
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
     @app.get("/taxonomy")
     async def taxonomy() -> dict[str, Any]:
@@ -352,7 +455,9 @@ def create_app(
         if repo.get_engagement(engagement_id) is None:
             raise HTTPException(404, "engagement not found")
         try:
-            result = compile_engagement(repo, engagement_id, taxonomy=load_taxonomy())
+            result = compile_engagement(
+                repo, engagement_id, taxonomy=load_taxonomy(), storage=app.state.storage
+            )
         except (MappingError, ValueError) as exc:
             raise HTTPException(422, str(exc)) from exc
         pack = result.review_pack.to_dict()
@@ -376,9 +481,72 @@ def create_app(
 
         if repo.get_engagement(engagement_id) is None:
             raise HTTPException(404, "engagement not found")
-        result = compile_engagement(repo, engagement_id, taxonomy=load_taxonomy())
+        result = compile_engagement(
+            repo, engagement_id, taxonomy=load_taxonomy(), storage=app.state.storage
+        )
         response = answer(question, result.review_pack, provider=app.state.provider_factory())
         return asdict(response)
+
+    def _get_embedder():
+        if app.state.embedder is None:
+            app.state.embedder = app.state.embedder_factory()
+        return app.state.embedder
+
+    def _get_router(embedder):
+        from litchai.ai.assistant import SemanticRouter
+
+        if app.state.router is None:
+            app.state.router = SemanticRouter(embedder)
+        return app.state.router
+
+    @app.post("/assistant/chat")
+    async def assistant_chat(
+        body: AssistantChatRequest, repo: Repository = Depends(get_repo)
+    ) -> dict[str, Any]:
+        """Admin Copilot: semantic tool-routing → grounded RAG answer. READ tools
+        return data, WRITE tools return a proposal only (never executed here)."""
+        from dataclasses import asdict
+
+        from litchai.ai.assistant import answer_chat
+
+        if not body.message.strip():
+            raise HTTPException(400, "message is required")
+        if body.scope == "client" and not body.client_id:
+            raise HTTPException(400, "client_id is required when scope='client'")
+
+        embedder = _get_embedder()
+        router = _get_router(embedder)
+        # Reuse the harness cache + ai_calls telemetry when we're on Postgres.
+        conn = getattr(repo, "conn", None)
+        cache = telemetry = None
+        if conn is not None:
+            from litchai.ai.pg import PgCache, PgTelemetry
+
+            cache, telemetry = PgCache(conn), PgTelemetry(conn)
+
+        result = answer_chat(
+            body.message,
+            repo=repo,
+            embedder=embedder,
+            provider=app.state.provider_factory(),
+            router=router,
+            history=body.history,
+            scope=body.scope,
+            client_id=body.client_id,
+            cache=cache,
+            telemetry=telemetry,
+        )
+        return asdict(result)
+
+    @app.post("/knowledge/reindex")
+    async def knowledge_reindex(repo: Repository = Depends(get_repo)) -> dict[str, Any]:
+        """Rebuild the firm-global RAG store from the seed corpus + tax config."""
+        from dataclasses import asdict
+
+        from litchai.knowledge import reindex
+
+        result = reindex(repo, _get_embedder())
+        return asdict(result)
 
     return app
 

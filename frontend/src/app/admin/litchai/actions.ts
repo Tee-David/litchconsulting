@@ -7,7 +7,7 @@ import {
   askEngagement,
   recategorizeLine,
   transitionEngagement,
-  type AssistantResponse,
+  type EngagementAskResponse,
 } from "@/lib/litchai/client";
 
 type Result<T = unknown> = { ok: boolean; error?: string } & Partial<T>;
@@ -85,7 +85,7 @@ export async function engagementAction(
 export async function askAssistant(
   engagementId: number,
   question: string,
-): Promise<Result<{ response: AssistantResponse }>> {
+): Promise<Result<{ response: EngagementAskResponse }>> {
   if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
   try {
     return { ok: true, response: await askEngagement(engagementId, question) };

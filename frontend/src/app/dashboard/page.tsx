@@ -136,7 +136,7 @@ export default async function ClientDashboardPage() {
       )}
 
       {/* KPI Stats */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div data-tour="client-kpis" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
           label="Active Services"
           value={activeRequests.length}

@@ -3,6 +3,14 @@
     {
       "path": "/api/cron/sweep",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/backup",
+      "schedule": "30 3 * * *"
+    },
+    {
+      "path": "/api/cron/digest",
+      "schedule": "0 8 * * 1"
     }
   ]
 }

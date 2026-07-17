@@ -191,7 +191,10 @@ export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
   return (
     <div className="space-y-8">
       {/* ───────────────── Hero + knowledge-base search ───────────────── */}
-      <section className="rounded-card border border-hairline bg-gradient-to-b from-brand-tint/60 to-paper px-6 py-10 text-center sm:px-10 sm:py-14">
+      <section
+        data-tour="support-kb"
+        className="rounded-card border border-hairline bg-gradient-to-b from-brand-tint/60 to-paper px-6 py-10 text-center sm:px-10 sm:py-14"
+      >
         <div className="mx-auto mb-4 grid size-12 place-items-center rounded-full bg-brand text-white keep-brand">
           <LifeBuoy className="size-6" />
         </div>
@@ -335,7 +338,10 @@ export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
       </section>
 
       {/* ───────────────── Still need help? ───────────────── */}
-      <section className="flex flex-col items-center justify-between gap-4 rounded-card border border-hairline bg-surface px-6 py-6 sm:flex-row">
+      <section
+        data-tour="support-contact"
+        className="flex flex-col items-center justify-between gap-4 rounded-card border border-hairline bg-surface px-6 py-6 sm:flex-row"
+      >
         <div className="flex items-start gap-3.5">
           <span className="grid size-10 shrink-0 place-items-center rounded-full bg-brand-tint text-brand">
             <MessageSquare className="size-5" />
@@ -358,7 +364,7 @@ export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
       </section>
 
       {/* ───────────────── Their tickets ───────────────── */}
-      <section className="space-y-4">
+      <section data-tour="support-view" className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="font-display text-lg font-bold text-ink">Your tickets</h2>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">

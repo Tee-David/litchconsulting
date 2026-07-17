@@ -115,7 +115,7 @@ export function InvoicesClient({ invoices }: InvoicesClientProps) {
       </div>
 
       {/* Document Table/List */}
-      <div className="rounded-card border border-hairline bg-paper overflow-hidden">
+      <div data-tour="invoices-list" className="rounded-card border border-hairline bg-paper overflow-hidden">
         {filteredList.length === 0 ? (
           <div className="p-12">
             <EmptyState

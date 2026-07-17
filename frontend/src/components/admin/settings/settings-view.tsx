@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { initialsOf } from "@/components/ui/avatar";
 import {
   Loader2,
   Save,
@@ -37,6 +38,7 @@ import {
   bulkDeleteUsersAction,
   bulkToggleBanUsersAction,
   bulkChangeRoleUsersAction,
+  updateOwnProfileAction,
   type OrgSettingsInput,
 } from "@/app/admin/settings/actions";
 import type { User } from "@/lib/db/schema";
@@ -97,14 +99,20 @@ export function SettingsView({
   const router = useRouter();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
-  
-  // Tabs: "general" | "users"
-  const [activeTab, setActiveTab] = useState<"general" | "users">("general");
+  const avatarRef = useRef<HTMLInputElement>(null);
+
+  // Tabs: "profile" | "general" | "users"
+  const [activeTab, setActiveTab] = useState<"profile" | "general" | "users">("profile");
 
   // General Settings State
   const [form, setForm] = useState<OrgSettingsInput>(initial);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+
+  // My Profile State — the admin is a user too.
+  const [profile, setProfile] = useState({ name: currentUser?.name || "", image: currentUser?.image || "" });
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // User Management State
   const [userQuery, setUserQuery] = useState("");
@@ -169,6 +177,48 @@ export function SettingsView({
       toast.success("Settings saved.");
       router.refresh();
     } else toast.error(res.error || "Could not save.");
+  }
+
+  /** Same presign → PUT → keep the public URL flow as the org logo. */
+  async function onAvatar(file: File) {
+    setUploadingAvatar(true);
+    try {
+      const presign = await fetch("/api/upload/presign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "avatar", contentType: file.type, size: file.size }),
+      });
+      const data = await presign.json();
+      if (!presign.ok) {
+        toast.error(data.error || "Upload failed.");
+        return;
+      }
+      const put = await fetch(data.uploadUrl, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": file.type },
+      });
+      if (!put.ok) {
+        toast.error("Upload failed.");
+        return;
+      }
+      setProfile((p) => ({ ...p, image: data.publicUrl }));
+      toast.success("Picture uploaded — click Save to apply.");
+    } catch {
+      toast.error("Upload failed.");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }
+
+  async function saveProfile() {
+    setSavingProfile(true);
+    const res = await updateOwnProfileAction({ name: profile.name, image: profile.image });
+    setSavingProfile(false);
+    if (res.ok) {
+      toast.success("Profile saved.");
+      router.refresh();
+    } else toast.error(res.error || "Could not save your profile.");
   }
 
   // User Actions
@@ -342,6 +392,19 @@ export function SettingsView({
       <div className="flex border-b border-hairline">
         <button
           type="button"
+          onClick={() => setActiveTab("profile")}
+          className={cn(
+            "flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-semibold transition-all",
+            activeTab === "profile"
+              ? "border-brand text-brand dark:border-white dark:text-white"
+              : "border-transparent text-body hover:text-ink"
+          )}
+        >
+          <UserCheck className="size-4" />
+          My Profile
+        </button>
+        <button
+          type="button"
           onClick={() => setActiveTab("general")}
           className={cn(
             "flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-semibold transition-all",
@@ -367,6 +430,115 @@ export function SettingsView({
           User Management
         </button>
       </div>
+
+      {activeTab === "profile" && (
+        <div className="max-w-2xl">
+          <Section
+            icon={UserCheck}
+            title="My profile"
+            description="Your name and picture, as teammates and clients see them."
+          >
+            <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
+              <div className="flex flex-col items-center gap-3">
+                <div className="relative grid size-24 shrink-0 place-items-center overflow-hidden rounded-full bg-brand-tint font-display text-2xl font-bold text-brand">
+                  {profile.image ? (
+                    <Image
+                      src={profile.image}
+                      alt=""
+                      fill
+                      sizes="96px"
+                      className="rounded-full object-cover"
+                      unoptimized
+                    />
+                  ) : (
+                    initialsOf(profile.name, currentUser?.email)
+                  )}
+                </div>
+                <input
+                  ref={avatarRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void onAvatar(f);
+                    e.target.value = "";
+                  }}
+                />
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => avatarRef.current?.click()}
+                    disabled={uploadingAvatar}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-hairline px-3 py-1.5 text-xs font-semibold text-ink transition-colors hover:bg-surface disabled:opacity-50"
+                  >
+                    {uploadingAvatar ? (
+                      <Loader2 className="size-3.5 animate-spin" />
+                    ) : (
+                      <Upload className="size-3.5" />
+                    )}
+                    {profile.image ? "Change" : "Upload"}
+                  </button>
+                  {profile.image && (
+                    <button
+                      type="button"
+                      onClick={() => setProfile((p) => ({ ...p, image: "" }))}
+                      aria-label="Remove picture"
+                      className="grid size-7 place-items-center rounded-lg border border-hairline text-body transition-colors hover:text-danger"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex-1 space-y-4">
+                <div>
+                  <label className={labelCls} htmlFor="profile-name">
+                    Full name
+                  </label>
+                  <input
+                    id="profile-name"
+                    className={inputCls}
+                    value={profile.name}
+                    onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
+                    placeholder="Your name"
+                  />
+                </div>
+                <div>
+                  <label className={labelCls} htmlFor="profile-email">
+                    Email
+                  </label>
+                  <input
+                    id="profile-email"
+                    className={cn(inputCls, "cursor-not-allowed opacity-60")}
+                    value={currentUser?.email || ""}
+                    readOnly
+                    disabled
+                  />
+                  <p className="mt-1.5 flex items-center gap-1.5 text-xs text-muted">
+                    <Lock className="size-3" />
+                    Email and password are managed by sign-in security.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={saveProfile}
+                  disabled={savingProfile || !profile.name.trim()}
+                  className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
+                >
+                  {savingProfile ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Save className="size-4" />
+                  )}
+                  Save profile
+                </button>
+              </div>
+            </div>
+          </Section>
+        </div>
+      )}
 
       {activeTab === "general" && (
         <div className="space-y-6">
@@ -785,7 +957,7 @@ export function SettingsView({
                                   unoptimized
                                 />
                               ) : (
-                                u.name.slice(0, 2).toUpperCase()
+                                initialsOf(u.name, u.email)
                               )}
                             </div>
                             <div className="min-w-0">

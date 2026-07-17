@@ -19,6 +19,7 @@ export default async function ClientSettingsPage() {
     address: clientRow.address,
     taxId: clientRow.taxId,
     email: user.email || "",
+    digestOptOut: clientRow.digestOptOut,
   };
 
   return <SettingsForm initialData={initialData} />;

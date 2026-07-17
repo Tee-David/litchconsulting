@@ -11,10 +11,11 @@ import {
   Trash2,
   BookOpen,
   Loader2,
+  Search,
 } from "lucide-react";
 import { DateRangeFilter, type DateRange } from "@/components/admin/ui/date-range-filter";
 import { StatCard } from "@/components/admin/ui/stat-card";
-import { DonutChart } from "@/components/admin/ui/charts";
+import { Donut, CATEGORICAL } from "@/components/charts";
 import { ExportMenu, type ExportColumn } from "@/components/admin/ui/export-menu";
 import { Modal } from "@/components/admin/ui/modal";
 import { useToast } from "@/components/admin/ui/toaster";
@@ -44,6 +45,7 @@ const EMPTY: ExpenseInput = { date: new Date().toISOString().slice(0, 10), categ
 export function AccountingView({ expenses, invoices }: { expenses: ExpenseRow[]; invoices: InvoiceRow[] }) {
   const toast = useToast();
   const [range, setRange] = useState<DateRange>({ from: null, to: null });
+  const [query, setQuery] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ExpenseInput>(EMPTY);
   const [busy, setBusy] = useState(false);
@@ -81,6 +83,21 @@ export function AccountingView({ expenses, invoices }: { expenses: ExpenseRow[];
 
   const inRange = useCallback((d: string) => (!range.from || d >= range.from) && (!range.to || d <= range.to), [range]);
 
+  // Ledger search. Scoped to the ledger only — the P&L cards and charts above
+  // must keep reporting the whole period, or searching "AWS" would silently
+  // restate your net profit.
+  const q = query.trim().toLowerCase();
+  const matchesQuery = useCallback(
+    (e: ExpenseRow) =>
+      !q ||
+      [e.vendor, e.description, e.reference, categoryMeta(e.category).label, e.method]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase()
+        .includes(q),
+    [q]
+  );
+
   // Income = collected (amountPaid) attributed to the paid date, current currency.
   const paidRows = useMemo(
     () =>
@@ -94,6 +111,9 @@ export function AccountingView({ expenses, invoices }: { expenses: ExpenseRow[];
   );
 
   const expenseRows = useMemo(() => expenses.filter((e) => (e.currency || "NGN") === cur && inRange(e.date)), [expenses, cur, inRange]);
+
+  /** What the ledger shows. The P&L above deliberately ignores the search. */
+  const ledgerRows = useMemo(() => expenseRows.filter(matchesQuery), [expenseRows, matchesQuery]);
 
   const income = useMemo(() => paidRows.reduce((s, i) => s + num(i.amountPaid), 0), [paidRows]);
   const totalExpense = useMemo(() => expenseRows.reduce((s, e) => s + num(e.amount), 0), [expenseRows]);
@@ -244,12 +264,19 @@ export function AccountingView({ expenses, invoices }: { expenses: ExpenseRow[];
             <p className="py-8 text-center text-sm text-body">No expenses in this range.</p>
           ) : (
             <>
-              <DonutChart segments={byCategory} centerValue={fmt(totalExpense).replace(/\.00$/, "")} centerLabel="spent" />
+              <Donut
+                data={byCategory.map((c) => ({ label: c.label, value: c.value }))}
+                centerValue={fmt(totalExpense).replace(/\.00$/, "")}
+                centerLabel="spent"
+                format="money"
+                legend={false}
+                height={200}
+              />
               <div className="mt-4 space-y-2">
-                {byCategory.slice(0, 6).map((c) => (
+                {byCategory.slice(0, 6).map((c, i) => (
                   <div key={c.label} className="flex items-center justify-between text-sm">
                     <span className="flex items-center gap-2 text-body">
-                      <span className="size-2.5 rounded-full" style={{ background: c.color }} />
+                      <span className="size-2.5 rounded-full" style={{ background: CATEGORICAL[i % CATEGORICAL.length] }} />
                       {c.label}
                     </span>
                     <span className="font-medium tabular-nums text-ink">{fmt(c.value)}</span>
@@ -294,9 +321,23 @@ export function AccountingView({ expenses, invoices }: { expenses: ExpenseRow[];
         )}
 
         <div className="rounded-card border border-hairline bg-paper">
-          <div className="flex items-center justify-between border-b border-hairline px-5 py-4">
+          <div className="flex flex-col gap-3 border-b border-hairline px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
             <h3 className="font-display text-sm font-bold text-ink">Expense ledger</h3>
-            <span className="text-xs text-muted">{expenseRows.length} entries</span>
+            <div className="flex items-center gap-3">
+              <div className="relative w-full sm:w-64">
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search vendor, description, ref…"
+                  aria-label="Search expense ledger"
+                  className="h-9 w-full rounded-lg border border-hairline bg-paper pl-9 pr-3 text-sm text-ink outline-none transition-colors placeholder:text-muted focus:border-brand"
+                />
+              </div>
+              <span className="shrink-0 whitespace-nowrap text-xs text-muted">
+                {q ? `${ledgerRows.length} of ${expenseRows.length}` : `${expenseRows.length} entries`}
+              </span>
+            </div>
           </div>
           {expenseRows.length === 0 ? (
             <div className="px-5 py-14 text-center">
@@ -316,8 +357,8 @@ export function AccountingView({ expenses, invoices }: { expenses: ExpenseRow[];
                     <th className="px-5 py-3 w-10">
                       <input
                         type="checkbox"
-                        checked={expenseRows.length > 0 && expenseRows.every((e) => selectedExpenseIds.includes(e.id))}
-                        onChange={() => toggleAllExpenses(expenseRows)}
+                        checked={ledgerRows.length > 0 && ledgerRows.every((e) => selectedExpenseIds.includes(e.id))}
+                        onChange={() => toggleAllExpenses(ledgerRows)}
                         className="size-4 rounded border-hairline text-brand accent-brand cursor-pointer focus:ring-brand"
                       />
                     </th>
@@ -330,7 +371,7 @@ export function AccountingView({ expenses, invoices }: { expenses: ExpenseRow[];
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-hairline">
-                  {expenseRows.map((e) => {
+                  {ledgerRows.map((e) => {
                     const meta = categoryMeta(e.category);
                     return (
                       <tr key={e.id} className="transition-colors hover:bg-surface/50">
@@ -381,6 +422,11 @@ export function AccountingView({ expenses, invoices }: { expenses: ExpenseRow[];
                   })}
                 </tbody>
               </table>
+              {ledgerRows.length === 0 && (
+                <p className="px-5 py-10 text-center text-sm text-body">
+                  No expenses match “{query}” in this period.
+                </p>
+              )}
             </div>
           )}
         </div>

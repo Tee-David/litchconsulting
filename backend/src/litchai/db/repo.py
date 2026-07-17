@@ -38,6 +38,21 @@ class Engagement:
 
 
 @dataclass(frozen=True)
+class GeneratedFile:
+    """A compiled deliverable. ``sha256`` content-addresses the workbook bytes
+    in ``Storage.read_artifact`` — there is no path column."""
+
+    id: int
+    engagement_id: int | None
+    template: str
+    compiler_version: str
+    validation_status: str
+    hitl_status: str
+    sha256: str | None
+    created_at: datetime
+
+
+@dataclass(frozen=True)
 class Document:
     id: int
     engagement_id: int | None
@@ -82,9 +97,71 @@ class LineItem:
     needs_review: bool = False
 
 
+@dataclass(frozen=True)
+class KnowledgeChunk:
+    """A retrievable chunk in the Copilot RAG store (Milestone 8).
+
+    ``scope='firm'`` rows are firm-global (``client_id`` is ``None``); ``scope=
+    'client'`` rows carry per-client operational context and are only ever
+    returned under a hard ``client_id`` filter. ``content_hash`` is the upsert
+    key, so reindexing is idempotent. ``id`` is ``None`` before persistence.
+    """
+
+    source_type: str
+    source_id: str
+    title: str
+    text: str
+    content_hash: str
+    section: str | None = None
+    tokens: int = 0
+    scope: str = "firm"
+    client_id: str | None = None
+    embedding: list[float] | None = None
+    id: int | None = None
+    updated_at: datetime | None = None
+
+
 class Repository(Protocol):
     """Everything the pipeline persists. Grown per phase; Phase 2a covers
     engagements, documents, the state machine and generated files."""
+
+    # --- knowledge chunks (Copilot RAG store, Milestone 8) -----------------
+    def upsert_knowledge_chunk(self, chunk: KnowledgeChunk) -> KnowledgeChunk:
+        """Insert or (on ``content_hash`` conflict) refresh a chunk. Idempotent —
+        the reindex CLI relies on this to never duplicate an unchanged chunk."""
+        ...
+
+    def get_knowledge_chunk(self, chunk_id: int) -> KnowledgeChunk | None: ...
+
+    def list_knowledge_chunks(
+        self, *, source_type: str | None = None, scope: str | None = None, limit: int = 1000
+    ) -> list[KnowledgeChunk]: ...
+
+    def knowledge_trigram(
+        self, query: str, client_id: str | None, min_sim: float, limit: int = 20
+    ) -> list[tuple[KnowledgeChunk, float]]:
+        """pg_trgm similarity over ``text``. Scope filter: firm-global rows are
+        always visible; client rows only when ``client_id`` matches (hard filter,
+        so one client can never see another's operational context)."""
+        ...
+
+    def knowledge_vector(
+        self, embedding: list[float], client_id: str | None, min_cos: float, limit: int = 20
+    ) -> list[tuple[KnowledgeChunk, float]]:
+        """pgvector cosine over ``embedding``, same scope filter as
+        :meth:`knowledge_trigram`."""
+        ...
+
+    def knowledge_section(self, source_id: str, section: str | None) -> list[KnowledgeChunk]:
+        """All sibling chunks of a section (parent-section return for citations)."""
+        ...
+
+    def delete_knowledge(
+        self, *, source_type: str | None = None, scope: str | None = None, client_id: str | None = None
+    ) -> int:
+        """Drop a slice of the store (e.g. all firm chunks before a full reindex,
+        or one client's operational context on erasure). Returns rows deleted."""
+        ...
 
     # --- engagements -------------------------------------------------------
     def create_engagement(
@@ -110,6 +187,10 @@ class Repository(Protocol):
         ...
 
     def set_generated_file_hitl_status(self, generated_file_id: int, hitl_status: str) -> None: ...
+
+    def latest_generated_file(self, engagement_id: int) -> GeneratedFile | None:
+        """Most recent compiled deliverable for the engagement, or None."""
+        ...
 
     def mark_engagement_deliverable(self, engagement_id: int) -> int:
         """Set every generated file of the engagement to ``hitl_status='approved'``

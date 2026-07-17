@@ -147,6 +147,7 @@ export function NotesRail({ clientId, notes }: { clientId: string; notes: Client
                   onClick={() => remove(n.id)}
                   className="grid size-6 shrink-0 place-items-center rounded-full text-muted opacity-0 transition-opacity hover:bg-red-500/10 hover:text-red-500 group-hover:opacity-100"
                   title="Delete"
+                  aria-label={`Delete ${n.kind}`}
                 >
                   <Trash2 className="size-3.5" />
                 </button>

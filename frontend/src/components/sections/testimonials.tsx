@@ -1,19 +1,12 @@
 "use client";
 
 import { Quote, Star } from "lucide-react";
+import { initialsOf } from "@/components/ui/avatar";
 import { testimonials } from "@/lib/content";
 
 type Testimonial = (typeof testimonials)[number];
 
 const AVATAR_COLORS = ["#0a196d", "#2540c4", "#4c6ef5", "#1e9df5", "#0f766e", "#7c3aed"];
-
-function initials(name: string) {
-  return name
-    .split(" ")
-    .slice(0, 2)
-    .map((n) => n[0])
-    .join("");
-}
 
 function Card({ t, i }: { t: Testimonial; i: number }) {
   return (
@@ -27,7 +20,7 @@ function Card({ t, i }: { t: Testimonial; i: number }) {
           className="grid size-10 shrink-0 place-items-center rounded-full text-xs font-bold text-white"
           style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}
         >
-          {initials(t.name)}
+          {initialsOf(t.name)}
         </span>
         <span>
           <span className="block text-sm font-semibold text-ink">{t.name}</span>

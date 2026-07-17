@@ -22,7 +22,7 @@ const DOT: Record<string, string> = {
 /** Active-request pipeline as individual small stat cards → filtered requests list. */
 export function PipelineStrip({ counts }: { counts: Record<string, number> }) {
   return (
-    <div>
+    <div data-tour="pipeline">
       <h3 className="mb-3 font-display text-sm font-bold text-ink">Requests pipeline</h3>
       <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-6">
         {PIPELINE.map((status) => {

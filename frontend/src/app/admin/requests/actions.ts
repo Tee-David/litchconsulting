@@ -11,6 +11,7 @@ import {
   serviceRequestDocument,
 } from "@/lib/db/schema";
 import { isAdmin, getSessionUser } from "@/lib/server-user";
+import { recordAudit } from "@/lib/audit";
 import { canTransition, type RequestStatus } from "@/lib/requests/status";
 import { markQuoteSent } from "@/lib/requests/quote";
 import { emailStatusChanged, emailDeliverableReady, emailRequestTerminal } from "@/lib/emails/requests";
@@ -101,6 +102,13 @@ export async function adminSetRequestStatusAction(
         .set({ status: "refunded", updatedAt: now })
         .where(eq(invoice.id, req.invoiceId));
     }
+  });
+
+  await recordAudit({
+    action: negative ? `request.${toStatus}` : "request.status_changed",
+    entity: "request",
+    entityId: requestId,
+    meta: { number: req.number, from: req.status, to: toStatus, reason: negative ? note?.trim() : undefined },
   });
 
   const email = await clientEmailFor(req.clientId);
@@ -217,6 +225,13 @@ export async function adminRecordDeliverableAction(input: {
         actorName: admin?.name || "Litch Consulting",
       });
     }
+  });
+
+  await recordAudit({
+    action: "request.deliverable_published",
+    entity: "request",
+    entityId: req.id,
+    meta: { number: req.number, fileName: input.fileName, variant: input.publishVariant ?? "upload" },
   });
 
   const email = await clientEmailFor(req.clientId);

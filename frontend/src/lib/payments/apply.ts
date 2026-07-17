@@ -10,6 +10,7 @@ import {
 } from "@/lib/db/schema";
 import { koboFromTotal, type PaystackTransaction } from "@/lib/paystack";
 import { notifyAdmin } from "@/lib/notify";
+import { recordAudit } from "@/lib/audit";
 import type { RequiredDocument } from "@/lib/services/catalog";
 
 /**
@@ -263,6 +264,16 @@ export async function applyInvoicePaid(
   } catch (err) {
     console.error("[payments] receipt email failed:", err);
   }
+
+  await recordAudit({
+    // Manual mark-paid runs in a server-action request scope, so recordAudit
+    // resolves the acting admin; Paystack webhook/callback have no session.
+    actorName: opts.via === "manual" ? null : "Paystack",
+    action: "payment.applied",
+    entity: "invoice",
+    entityId: inv.id,
+    meta: { number: inv.number, total: inv.total, currency: inv.currency, via: opts.via },
+  });
 
   await notifyAdmin({
     subject: `₦ Payment received — ${inv.number}${req ? ` (${req.number})` : ""}`,

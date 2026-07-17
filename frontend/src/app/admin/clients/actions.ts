@@ -13,6 +13,7 @@ import {
   consultation,
 } from "@/lib/db/schema";
 import { isAdmin, getSessionUser } from "@/lib/server-user";
+import { recordAudit } from "@/lib/audit";
 
 export type ClientInput = {
   name?: string;
@@ -58,6 +59,7 @@ export async function updateClient(id: string, input: ClientInput): Promise<Resu
 export async function deleteClient(id: string): Promise<Result> {
   if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
   await db.update(client).set({ deletedAt: new Date(), updatedAt: new Date() }).where(eq(client.id, id));
+  await recordAudit({ action: "client.deleted", entity: "client", entityId: id });
   revalidatePath("/admin/clients");
   revalidatePath("/admin/trash");
   return { ok: true, id };
@@ -70,6 +72,7 @@ export async function bulkDeleteClients(ids: string[]): Promise<Result> {
     .update(client)
     .set({ deletedAt: new Date(), updatedAt: new Date() })
     .where(inArray(client.id, ids));
+  await recordAudit({ action: "client.bulk_deleted", entity: "client", meta: { count: ids.length } });
   revalidatePath("/admin/clients");
   revalidatePath("/admin/trash");
   return { ok: true };
@@ -83,6 +86,12 @@ export async function restoreClients(ids: string[]): Promise<Result> {
     .update(client)
     .set({ deletedAt: null, updatedAt: new Date() })
     .where(inArray(client.id, ids));
+  await recordAudit({
+    action: "client.restored",
+    entity: "client",
+    entityId: ids.length === 1 ? ids[0] : null,
+    meta: { count: ids.length },
+  });
   revalidatePath("/admin/clients");
   revalidatePath("/admin/trash");
   return { ok: true };
@@ -93,6 +102,12 @@ export async function purgeClients(ids: string[]): Promise<Result> {
   if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
   if (!ids || ids.length === 0) return { ok: true };
   await db.delete(client).where(inArray(client.id, ids));
+  await recordAudit({
+    action: "client.purged",
+    entity: "client",
+    entityId: ids.length === 1 ? ids[0] : null,
+    meta: { count: ids.length },
+  });
   revalidatePath("/admin/trash");
   return { ok: true };
 }
@@ -207,6 +222,12 @@ export async function mergeClientsAction(
     return { ok: false, error: err instanceof Error ? err.message : "Merge failed" };
   }
 
+  await recordAudit({
+    action: "client.merged",
+    entity: "client",
+    entityId: survivorId,
+    meta: { survivorId, duplicateId },
+  });
   revalidatePath("/admin/clients");
   revalidateHub(survivorId);
   return { ok: true, id: survivorId };
@@ -235,9 +256,16 @@ export async function inviteClientToPortalAction(clientId: string): Promise<Resu
     `),
   }).catch(() => ({ delivered: false as const }));
 
-  return delivered
-    ? { ok: true }
-    : { ok: false, error: "Email isn't configured — invite not sent." };
+  if (delivered) {
+    await recordAudit({
+      action: "client.invited",
+      entity: "client",
+      entityId: clientId,
+      meta: { email: row.email },
+    });
+    return { ok: true };
+  }
+  return { ok: false, error: "Email isn't configured — invite not sent." };
 }
 
 /* -------------------------------- NDPA erase ------------------------------- */
@@ -249,6 +277,7 @@ export async function eraseClientAiDataAction(clientId: string): Promise<Result>
   try {
     const { eraseClient } = await import("@/lib/litchai/client");
     await eraseClient(clientId);
+    await recordAudit({ action: "client.ai_erased", entity: "client", entityId: clientId });
     revalidateHub(clientId);
     return { ok: true };
   } catch (err) {

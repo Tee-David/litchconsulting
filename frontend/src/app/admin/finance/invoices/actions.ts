@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { invoice, invoiceItem, client, serviceRequest, serviceRequestEvent, payment } from "@/lib/db/schema";
 import { isAdmin, getCurrentUserId } from "@/lib/server-user";
+import { recordAudit } from "@/lib/audit";
 import { computeTotals } from "@/lib/invoice/money";
 import { nextInvoiceNumber, getInvoice } from "@/lib/db/queries/invoices";
 import type { InvoiceInput, BillTo } from "@/lib/invoice/types";
@@ -127,9 +128,16 @@ export async function deleteInvoiceAction(id: string): Promise<ActionResult> {
   if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
   const linked = await invoiceIsLinked([id]);
   if (linked) return { ok: false, error: `Can't delete — ${linked}. Void it instead.` };
+  const [inv] = await db.select({ number: invoice.number }).from(invoice).where(eq(invoice.id, id));
   await db.transaction(async (tx) => {
     await tx.delete(invoiceItem).where(eq(invoiceItem.invoiceId, id));
     await tx.delete(invoice).where(eq(invoice.id, id));
+  });
+  await recordAudit({
+    action: "invoice.deleted",
+    entity: "invoice",
+    entityId: id,
+    meta: { number: inv?.number },
   });
   revalidatePath("/admin/finance/invoices");
   return { ok: true };
@@ -173,6 +181,11 @@ export async function setInvoiceStatusAction(id: string, status: string): Promis
         });
       }
     }
+  }
+  // Manual mark-paid flows through applyInvoicePaid → recorded as payment.applied
+  // there; record the other manual status changes (void, sent, overdue…) here.
+  if (status !== "paid") {
+    await recordAudit({ action: "invoice.status_changed", entity: "invoice", entityId: id, meta: { status } });
   }
   revalidatePath("/admin/finance/invoices");
   revalidatePath(`/admin/finance/invoices/${id}`);
@@ -394,6 +407,7 @@ export async function bulkDeleteInvoicesAction(ids: string[]): Promise<ActionRes
       await tx.delete(invoiceItem).where(inArray(invoiceItem.invoiceId, ids));
       await tx.delete(invoice).where(inArray(invoice.id, ids));
     });
+    await recordAudit({ action: "invoice.bulk_deleted", entity: "invoice", meta: { count: ids.length } });
     revalidatePath("/admin/finance/invoices");
     revalidatePath("/admin/finance/quotes");
     revalidatePath("/admin/finance/receipts");
@@ -423,6 +437,11 @@ export async function bulkSetInvoiceStatusAction(ids: string[], status: string):
         .set({ status, updatedAt: new Date() })
         .where(inArray(invoice.id, ids));
     }
+    await recordAudit({
+      action: "invoice.bulk_status_changed",
+      entity: "invoice",
+      meta: { status, count: ids.length },
+    });
     revalidatePath("/admin/finance/invoices");
     revalidatePath("/admin/finance/quotes");
     revalidatePath("/admin/finance/receipts");

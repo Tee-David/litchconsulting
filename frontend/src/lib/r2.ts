@@ -4,6 +4,7 @@ import {
   PutObjectCommand,
   DeleteObjectCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
@@ -116,4 +117,21 @@ export async function uploadPrivateObject(
 export async function deletePrivateObject(key: string): Promise<void> {
   if (!r2PrivateConfigured) throw new Error("Private R2 bucket is not configured");
   await client().send(new DeleteObjectCommand({ Bucket: privateBucket!, Key: key }));
+}
+
+export type PrivateObject = { key: string; size: number; lastModified: string | null };
+
+/** List objects under a prefix in the private bucket (e.g. "backups/"). */
+export async function listPrivateObjects(prefix: string, maxKeys = 1000): Promise<PrivateObject[]> {
+  if (!r2PrivateConfigured) return [];
+  const res = await client().send(
+    new ListObjectsV2Command({ Bucket: privateBucket!, Prefix: prefix, MaxKeys: maxKeys })
+  );
+  return (res.Contents ?? [])
+    .filter((o) => o.Key)
+    .map((o) => ({
+      key: o.Key!,
+      size: o.Size ?? 0,
+      lastModified: o.LastModified ? o.LastModified.toISOString() : null,
+    }));
 }

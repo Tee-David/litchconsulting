@@ -212,29 +212,33 @@ export function InvoiceList({ invoices }: { invoices: InvoiceRow[] }) {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div data-tour="invoice-stats" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Total invoiced" value={formatMoney(stats.invoiced)} icon={Wallet} />
         <StatCard label="Paid" value={formatMoney(stats.paid)} icon={BadgeCheck} />
         <StatCard label="Outstanding" value={formatMoney(stats.outstanding)} icon={Clock} />
         <StatCard label="Overdue" value={stats.overdue} icon={AlertTriangle} />
       </div>
 
+      {/* Both branches carry the tour anchor so the step resolves even when
+          there are no invoices yet. */}
       {invoices.length === 0 ? (
-        <EmptyState
-          icon={FileText}
-          title="No invoices yet"
-          description="Create your first invoice — add line items, preview the branded document, then send it to your client."
-          action={
-            <Link
-              href="/admin/finance/invoices/new"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
-            >
-              <Plus className="size-4" /> New invoice
-            </Link>
-          }
-        />
+        <div data-tour="invoices-table">
+          <EmptyState
+            icon={FileText}
+            title="No invoices yet"
+            description="Create your first invoice — add line items, preview the branded document, then send it to your client."
+            action={
+              <Link
+                href="/admin/finance/invoices/new"
+                className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
+              >
+                <Plus className="size-4" /> New invoice
+              </Link>
+            }
+          />
+        </div>
       ) : (
-        <div className="space-y-4">
+        <div data-tour="invoices-table" className="space-y-4">
           {selected.length > 0 && (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-brand/20 bg-brand/5 px-4 py-3 text-sm animate-in fade-in slide-in-from-top-2 duration-200">
               <div className="flex items-center gap-2 font-semibold text-ink">

@@ -73,7 +73,28 @@ export type ReviewData = {
   lineage: FigureLineage[];
 };
 
+/** A confirm-gated WRITE the backend proposes but never executes itself. */
+export type AssistantProposal = {
+  tool: string;
+  action: string;
+  params: Record<string, unknown>;
+  summary: string;
+  ready: boolean;
+};
+
+/** Mirrors the backend `ChatResult` (litchai.ai.assistant.answer_chat). */
 export type AssistantResponse = {
+  answer: string;
+  citations: string[];
+  tool: string;
+  routed_by: string;
+  can_answer: boolean;
+  tool_result: Record<string, unknown> | null;
+  proposal: AssistantProposal | null;
+};
+
+/** Per-engagement `/engagements/{id}/ask` response (AI Studio review panel). */
+export type EngagementAskResponse = {
   intent: string;
   answer: string | null;
   proposed_correction: { kind: string; target: string; new_value: string } | null;
@@ -88,7 +109,7 @@ export function transitionEngagement(
   return litchai(`/engagements/${engagementId}/${action}`, { method: "POST" });
 }
 
-export function askEngagement(engagementId: number, question: string): Promise<AssistantResponse> {
+export function askEngagement(engagementId: number, question: string): Promise<EngagementAskResponse> {
   return litchai(`/engagements/${engagementId}/ask?question=${encodeURIComponent(question)}`, {
     method: "POST",
   });
@@ -174,4 +195,21 @@ export function recategorizeLine(
   return litchai(`/documents/${documentId}/lines/${lineItemId}/recategorize${qs}`, {
     method: "POST",
   });
+}
+
+export function assistantChat(
+  message: string,
+  history?: { role: string; content: string }[],
+  scope: "firm" | "client" = "firm",
+  clientId?: string
+): Promise<AssistantResponse> {
+  return litchai("/assistant/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message, history, scope, client_id: clientId }),
+  });
+}
+
+export function reindexKnowledge(): Promise<{ ok: boolean; chunks_indexed: number }> {
+  return litchai("/knowledge/reindex", { method: "POST" });
 }

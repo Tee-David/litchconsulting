@@ -13,6 +13,7 @@ export default async function QuotesPage() {
         <p className="text-sm text-body">Draft, send and track quotes — convert accepted quotes into invoices.</p>
         <Link
           href="/admin/finance/quotes/new"
+          data-tour="new-quote"
           className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
         >
           <Plus className="size-4" /> New quote

@@ -38,3 +38,18 @@ export async function updateClientSettingsAction(input: {
   revalidatePath(`/admin/clients/${clientRow.id}`);
   return { ok: true };
 }
+
+/** Client toggle for the weekly summary email (opt-out). */
+export async function updateDigestPreferenceAction(optOut: boolean): Promise<ActionResult> {
+  const user = await getSessionUser();
+  if (!user || user.role !== "client") return { ok: false, error: "Unauthorized" };
+
+  const clientRow = await getClientForUser(user.id, user.email, user.name);
+  await db
+    .update(client)
+    .set({ digestOptOut: optOut, updatedAt: new Date() })
+    .where(eq(client.id, clientRow.id));
+
+  revalidatePath("/dashboard/settings");
+  return { ok: true };
+}

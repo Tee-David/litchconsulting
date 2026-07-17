@@ -13,6 +13,7 @@ export default async function InvoicesPage() {
         <p className="text-sm text-body">Create, send and track invoices.</p>
         <Link
           href="/admin/finance/invoices/new"
+          data-tour="new-invoice"
           className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
         >
           <Plus className="size-4" /> New invoice

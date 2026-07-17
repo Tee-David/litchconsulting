@@ -3,6 +3,7 @@ import { UserPlus, Send, CheckCircle2, Bell } from "lucide-react";
 import { recentNotifications } from "@/lib/db/queries/notifications";
 import { PageHeader } from "@/components/admin/ui/page-header";
 import { EmptyState } from "@/components/admin/ui/empty-state";
+import { formatDateTime } from "@/lib/format-date";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ export default async function NotificationsPage() {
                   <p className="font-medium text-ink">{n.title}</p>
                   <p className="truncate text-sm text-body">{n.description}</p>
                 </div>
-                <span className="shrink-0 text-xs text-muted">{new Date(n.at).toLocaleString()}</span>
+                <span className="shrink-0 text-xs text-muted">{formatDateTime(n.at)}</span>
               </Link>
             );
           })}

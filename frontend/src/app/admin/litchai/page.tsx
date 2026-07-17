@@ -117,7 +117,9 @@ export default async function LitchaiStudioPage() {
         </div>
       )}
 
-      <StudioShell groups={groups} requestLinks={requestLinks} />
+      <div data-tour="litchai-studio">
+        <StudioShell groups={groups} requestLinks={requestLinks} />
+      </div>
     </div>
   );
 }

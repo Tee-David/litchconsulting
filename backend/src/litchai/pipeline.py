@@ -222,6 +222,7 @@ def compile_engagement(
     *,
     taxonomy: Taxonomy,
     workdir: str | Path | None = None,
+    storage: Storage | None = None,
 ) -> CompileResult:
     """Compile one engagement's categorized line items into its deliverable
     workbook and gate it (LibreOffice recompute). Aggregates across every
@@ -262,7 +263,11 @@ def compile_engagement(
         grids = recompute.recompute_workbook(path)
         errors = recompute.find_workbook_errors(grids)
         pack = build_workbook_review_pack("annual_report", compiled, grids, contract)
-        sha = hashlib.sha256(path.read_bytes()).hexdigest()
+        blob = path.read_bytes()
+        sha = hashlib.sha256(blob).hexdigest()
+        # Persist the deliverable before the temp dir evaporates — otherwise the
+        # only trace of a compile is its sha256 and the workbook is unreachable.
+        (storage or Storage()).store_artifact(sha, blob)
     finally:
         if ctx is not None:
             ctx.cleanup()

@@ -13,12 +13,12 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/admin/ui/toaster";
-import type { AssistantResponse } from "@/lib/litchai/client";
+import type { EngagementAskResponse } from "@/lib/litchai/client";
 import { askAssistant, engagementAction } from "@/app/admin/litchai/actions";
 
 type ChatMessage =
   | { role: "user"; text: string }
-  | { role: "assistant"; response: AssistantResponse };
+  | { role: "assistant"; response: EngagementAskResponse };
 
 const TEMPLATE_PROMPTS = [
   "Walk me through net profit",

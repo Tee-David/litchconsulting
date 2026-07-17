@@ -55,3 +55,6 @@ Thumbs.db
 .vscode/*
 !.vscode/extensions.json
 .vercel
+
+# Ephemeral agent worktrees
+.claude/worktrees/

@@ -34,3 +34,26 @@ class Storage:
 
     def exists(self, client_id: str, source_hash: str) -> bool:
         return self.path_for(client_id, source_hash).exists()
+
+    # --- compiled deliverables -------------------------------------------
+    #
+    # Compiled workbooks are OUR output, not client ciphertext, so they live in
+    # a sibling tree. They are content-addressed by the same sha256 already
+    # recorded on ``generated_files``, which is what lets a caller go
+    # generated_file → bytes without another column.
+
+    def artifact_path_for(self, sha256: str) -> Path:
+        return self.root / "artifacts" / f"{sha256}.xlsx"
+
+    def store_artifact(self, sha256: str, data: bytes) -> Path:
+        path = self.artifact_path_for(sha256)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "wb", opener=lambda p, flags: os.open(p, flags, 0o600)) as fh:
+            fh.write(data)
+        return path
+
+    def read_artifact(self, sha256: str) -> bytes:
+        return self.artifact_path_for(sha256).read_bytes()
+
+    def artifact_exists(self, sha256: str) -> bool:
+        return self.artifact_path_for(sha256).exists()

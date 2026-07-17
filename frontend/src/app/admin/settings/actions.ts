@@ -1,10 +1,11 @@
 "use server";
 
+import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { eq, sql, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { orgSettings, user } from "@/lib/db/schema";
-import { isAdmin as checkIsAdmin } from "@/lib/server-user";
+import { isAdmin as checkIsAdmin, getSessionUser } from "@/lib/server-user";
 import { auth } from "@/lib/auth";
 
 type ActionResult = { ok: boolean; error?: string };
@@ -49,6 +50,47 @@ export async function saveOrgSettingsAction(input: OrgSettingsInput): Promise<Ac
   revalidatePath("/admin/finance/invoices");
   revalidatePath("/admin/finance/quotes");
   revalidatePath("/admin/finance/receipts");
+  return { ok: true };
+}
+
+export type MyProfileInput = { name?: string; image?: string | null };
+
+/**
+ * Update the signed-in user's own profile (name + avatar).
+ *
+ * Goes through Better Auth's `updateUser` rather than a direct Drizzle write:
+ * Better Auth owns the `user` table, and its own API is what keeps the live
+ * session in step — write round it and the topbar keeps showing the old name
+ * until the cookie expires.
+ *
+ * Deliberately not admin-gated. It's scoped to *your own* record by the
+ * session, so there's no id to tamper with; the admin gate lives on the route.
+ * Email and role aren't editable here: email changes need a verification
+ * round-trip, and self-promotion is exactly what the role gate exists to stop.
+ */
+export async function updateMyProfileAction(input: MyProfileInput): Promise<ActionResult> {
+  const me = await getSessionUser();
+  if (!me) return { ok: false, error: "Unauthorized" };
+
+  const name = input.name?.trim();
+  if (name !== undefined && name.length === 0) return { ok: false, error: "Name can't be empty" };
+  if (name && name.length > 120) return { ok: false, error: "Name is too long" };
+
+  // Only ever an R2 URL we minted, or "" to clear it.
+  const image = input.image === null || input.image === "" ? null : input.image?.trim();
+  if (image && !/^https:\/\//.test(image)) return { ok: false, error: "Avatar must be an uploaded image" };
+
+  try {
+    await auth.api.updateUser({
+      body: { ...(name ? { name } : {}), ...(input.image !== undefined ? { image } : {}) },
+      headers: await headers(),
+    });
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not save your profile" };
+  }
+
+  revalidatePath("/admin/settings");
+  revalidatePath("/admin", "layout");
   return { ok: true };
 }
 
@@ -131,6 +173,35 @@ export async function changeUserRoleAction(userId: string, role: string): Promis
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Could not update user role" };
+  }
+}
+
+export type ProfileInput = { name?: string; image?: string | null };
+
+/**
+ * Update the signed-in admin's OWN profile — the admin is a user too.
+ *
+ * Scoped to the caller's own row and to display fields only: role, ban state
+ * and credentials are never touched here (Better Auth owns those, and letting
+ * a self-service form near them would be a privilege-escalation path).
+ */
+export async function updateOwnProfileAction(input: ProfileInput): Promise<ActionResult> {
+  const me = await getSessionUser();
+  if (!me) return { ok: false, error: "Unauthorized" };
+
+  const name = clean(input.name);
+  if (!name) return { ok: false, error: "Name is required." };
+
+  try {
+    await db
+      .update(user)
+      .set({ name, image: input.image?.trim() || null })
+      .where(eq(user.id, me.id));
+    revalidatePath("/admin/settings");
+    revalidatePath("/admin");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not save your profile" };
   }
 }
 

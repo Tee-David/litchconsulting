@@ -40,6 +40,7 @@ export function NewClientButton() {
       <button
         type="button"
         onClick={() => setOpen(true)}
+        data-tour="new-client"
         className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
       >
         <Plus className="size-4" /> New client

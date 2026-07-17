@@ -106,6 +106,7 @@ export function ClientQuickActions({
           onClick={() => setOpen((o) => !o)}
           className="grid size-9 place-items-center rounded-full border border-hairline text-body transition-colors hover:bg-surface"
           title="More actions"
+          aria-label="More actions"
         >
           {pending ? <Loader2 className="size-4 animate-spin" /> : <MoreHorizontal className="size-4" />}
         </button>

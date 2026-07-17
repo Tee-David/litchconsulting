@@ -15,10 +15,11 @@ import {
   AlertTriangle,
   Timer,
   FileMinus,
+  Search,
 } from "lucide-react";
 import { DateRangeFilter, type DateRange } from "@/components/admin/ui/date-range-filter";
 import { StatCard } from "@/components/admin/ui/stat-card";
-import { BarChart, DonutChart } from "@/components/admin/ui/charts";
+import { GroupedBars, Donut, CATEGORICAL } from "@/components/charts";
 import { ExportMenu, type ExportColumn } from "@/components/admin/ui/export-menu";
 import { EmptyState } from "@/components/admin/ui/empty-state";
 import { formatMoney, num, CURRENCIES } from "@/lib/invoice/money";
@@ -169,6 +170,7 @@ export function ReportsView({ invoices }: { invoices: InvoiceRow[] }) {
   const [report, setReport] = useState<ReportKey>("overview");
   const [range, setRange] = useState<DateRange>({ from: null, to: null });
   const [statuses, setStatuses] = useState<Set<string>>(new Set());
+  const [query, setQuery] = useState("");
 
   // Currencies present in the data → coherent money math (never mix currencies).
   const currencies = useMemo(() => {
@@ -179,6 +181,13 @@ export function ReportsView({ invoices }: { invoices: InvoiceRow[] }) {
   const cur = currencies.includes(currency) ? currency : currencies[0] || "NGN";
   const fmt = (n: number) => formatMoney(n, cur);
 
+  /**
+   * Search is a *filter on the reporting set*, not a table filter: narrowing to
+   * a client re-runs every figure, chart and export on this page for that
+   * client alone. Matching on the invoice's bill-to (plus number and project)
+   * because that's the name the money was actually billed under.
+   */
+  const q = query.trim().toLowerCase();
   const filtered = useMemo(
     () =>
       invoices.filter((i) => {
@@ -187,9 +196,18 @@ export function ReportsView({ invoices }: { invoices: InvoiceRow[] }) {
         if (range.from && d < range.from) return false;
         if (range.to && d > range.to) return false;
         if (statuses.size > 0 && !statuses.has(i.status)) return false;
+        if (
+          q &&
+          ![i.billToCompany, i.billToName, i.number, i.projectTitle]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase()
+            .includes(q)
+        )
+          return false;
         return true;
       }),
-    [invoices, range, statuses, cur],
+    [invoices, range, statuses, cur, q],
   );
 
   const live = filtered.filter((i) => i.status !== "void");
@@ -353,6 +371,16 @@ export function ReportsView({ invoices }: { invoices: InvoiceRow[] }) {
       {/* Filter bar */}
       <div className="flex flex-col gap-3 rounded-card border border-hairline bg-paper p-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:w-56">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by client…"
+              aria-label="Filter reports by client"
+              className="h-9 w-full rounded-lg border border-hairline bg-paper pl-9 pr-3 text-sm text-ink outline-none transition-colors placeholder:text-muted focus:border-brand"
+            />
+          </div>
           <DateRangeFilter onChange={setRange} />
           {currencies.length > 1 && (
             <select
@@ -421,7 +449,7 @@ export function ReportsView({ invoices }: { invoices: InvoiceRow[] }) {
               action={<ExportMenu rows={monthly} columns={monthCols} filename="monthly-billed" title={`Billed by month (${cur})`} />}
             >
               <div className="p-5">
-                <BarChart data={monthly.map((m) => ({ label: m.short, value: m.billed }))} format={fmt} />
+                <GroupedBars data={monthly.map((m) => ({ label: m.short, value: m.billed }))} series={[{ key: "value", label: "Billed" }]} format="money" />
               </div>
             </Panel>
 
@@ -444,12 +472,18 @@ export function ReportsView({ invoices }: { invoices: InvoiceRow[] }) {
                   <p className="py-8 text-center text-sm text-body">No data.</p>
                 ) : (
                   <>
-                    <DonutChart segments={byStatus} centerValue={String(filtered.length)} centerLabel="invoices" />
+                    <Donut
+                      data={byStatus.map((s) => ({ label: s.label, value: s.value }))}
+                      centerValue={String(filtered.length)}
+                      centerLabel="invoices"
+                      legend={false}
+                      height={200}
+                    />
                     <div className="mt-4 space-y-2">
-                      {byStatus.map((s) => (
+                      {byStatus.map((s, i) => (
                         <div key={s.label} className="flex items-center justify-between text-sm">
                           <span className="flex items-center gap-2 capitalize text-body">
-                            <span className="size-2.5 rounded-full" style={{ background: s.color }} />
+                            <span className="size-2.5 rounded-full" style={{ background: CATEGORICAL[i % CATEGORICAL.length] }} />
                             {s.label}
                           </span>
                           <span className="font-medium tabular-nums text-ink">{s.value}</span>
@@ -504,7 +538,7 @@ export function ReportsView({ invoices }: { invoices: InvoiceRow[] }) {
             action={<ExportMenu rows={monthly} columns={monthCols} filename="revenue-by-month" title={`Revenue by month (${cur})`} />}
           >
             <div className="p-5">
-              <BarChart data={monthly.map((m) => ({ label: m.short, value: m.billed }))} format={fmt} height={200} />
+              <GroupedBars data={monthly.map((m) => ({ label: m.short, value: m.billed }))} series={[{ key: "value", label: "Billed" }]} format="money" height={200} />
             </div>
             <ReportTable
               columns={[
@@ -545,7 +579,7 @@ export function ReportsView({ invoices }: { invoices: InvoiceRow[] }) {
             }
           >
             <div className="p-5">
-              <BarChart data={monthly.map((m) => ({ label: m.short, value: m.collectedByPaidDate }))} format={fmt} height={200} />
+              <GroupedBars data={monthly.map((m) => ({ label: m.short, value: m.collectedByPaidDate }))} series={[{ key: "value", label: "Collected" }]} format="money" height={200} />
             </div>
           </Panel>
 
@@ -586,16 +620,19 @@ export function ReportsView({ invoices }: { invoices: InvoiceRow[] }) {
                   <p className="py-8 text-center text-sm text-body">Nothing outstanding — you&apos;re all collected.</p>
                 ) : (
                   <>
-                    <DonutChart
-                      segments={aging.buckets.filter((b) => b.value > 0).map((b) => ({ label: b.label, value: b.value, color: b.color }))}
+                    <Donut
+                      data={aging.buckets.filter((b) => b.value > 0).map((b) => ({ label: b.label, value: b.value }))}
                       centerValue={fmt(totals.outstanding).replace(/\.00$/, "")}
                       centerLabel="outstanding"
+                      format="money"
+                      legend={false}
+                      height={200}
                     />
                     <div className="mt-4 space-y-2">
-                      {aging.buckets.map((b) => (
+                      {aging.buckets.filter((b) => b.value > 0).map((b, i) => (
                         <div key={b.key} className="flex items-center justify-between text-sm">
                           <span className="flex items-center gap-2 text-body">
-                            <span className="size-2.5 rounded-full" style={{ background: b.color }} />
+                            <span className="size-2.5 rounded-full" style={{ background: CATEGORICAL[i % CATEGORICAL.length] }} />
                             {b.label}
                           </span>
                           <span className="font-medium tabular-nums text-ink">{fmt(b.value)}</span>
@@ -673,7 +710,7 @@ export function ReportsView({ invoices }: { invoices: InvoiceRow[] }) {
             }
           >
             <div className="p-5">
-              <BarChart data={monthly.map((m) => ({ label: m.short, value: m.tax }))} format={fmt} height={200} />
+              <GroupedBars data={monthly.map((m) => ({ label: m.short, value: m.tax }))} series={[{ key: "value", label: "Tax" }]} format="money" height={200} />
             </div>
             <ReportTable
               columns={[

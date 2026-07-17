@@ -2,8 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, CheckCircle2, AlertCircle } from "lucide-react";
-import { updateClientSettingsAction } from "./actions";
+import { Loader2, CheckCircle2, AlertCircle, Mail } from "lucide-react";
+import { updateClientSettingsAction, updateDigestPreferenceAction } from "./actions";
+import { cn } from "@/lib/utils";
 
 type SettingsFormProps = {
   initialData: {
@@ -13,6 +14,7 @@ type SettingsFormProps = {
     address: string | null;
     taxId: string | null;
     email: string;
+    digestOptOut: boolean;
   };
 };
 
@@ -28,6 +30,19 @@ export function SettingsForm({ initialData }: SettingsFormProps) {
   const [phone, setPhone] = useState(initialData.phone || "");
   const [taxId, setTaxId] = useState(initialData.taxId || "");
   const [address, setAddress] = useState(initialData.address || "");
+
+  // Email preferences (weekly digest opt-out — saves immediately on toggle).
+  const [digestOptOut, setDigestOptOut] = useState(initialData.digestOptOut);
+  const [digestPending, startDigestTransition] = useTransition();
+
+  const toggleDigest = (nextEnabled: boolean) => {
+    const optOut = !nextEnabled;
+    setDigestOptOut(optOut);
+    startDigestTransition(async () => {
+      const res = await updateDigestPreferenceAction(optOut);
+      if (!res.ok) setDigestOptOut(!optOut); // revert on failure
+    });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,7 +68,8 @@ export function SettingsForm({ initialData }: SettingsFormProps) {
   };
 
   return (
-    <div className="rounded-card border border-hairline bg-paper max-w-2xl overflow-hidden">
+    <div className="max-w-2xl space-y-6">
+    <div className="rounded-card border border-hairline bg-paper overflow-hidden">
       <div className="border-b border-hairline px-6 py-4">
         <h3 className="font-display text-sm font-bold text-ink">Business & Profile Information</h3>
         <p className="text-xs text-muted mt-1">
@@ -185,6 +201,47 @@ export function SettingsForm({ initialData }: SettingsFormProps) {
           </button>
         </div>
       </form>
+    </div>
+
+    {/* Email preferences */}
+    <div className="rounded-card border border-hairline bg-paper overflow-hidden">
+      <div className="border-b border-hairline px-6 py-4">
+        <h3 className="font-display text-sm font-bold text-ink flex items-center gap-2">
+          <Mail className="size-4 text-brand" />
+          Email preferences
+        </h3>
+        <p className="text-xs text-muted mt-1">
+          Control the summary emails we send you.
+        </p>
+      </div>
+      <div className="flex items-center justify-between gap-4 p-6">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-ink">Weekly summary</p>
+          <p className="mt-0.5 text-xs text-muted">
+            A short recap of your active requests, amounts due, and deliverables ready to review.
+          </p>
+        </div>
+        <button
+          type="button"
+          role="switch"
+          aria-checked={!digestOptOut}
+          aria-label="Weekly summary email"
+          disabled={digestPending}
+          onClick={() => toggleDigest(digestOptOut)}
+          className={cn(
+            "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-60",
+            !digestOptOut ? "bg-brand" : "bg-hairline",
+          )}
+        >
+          <span
+            className={cn(
+              "inline-block size-4 transform rounded-full bg-white transition-transform",
+              !digestOptOut ? "translate-x-6" : "translate-x-1",
+            )}
+          />
+        </button>
+      </div>
+    </div>
     </div>
   );
 }

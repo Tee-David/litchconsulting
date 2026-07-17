@@ -17,15 +17,19 @@ export default async function ClientsPage() {
         <NewClientButton />
       </PageHeader>
 
-      {clients.length === 0 ? (
-        <EmptyState
-          icon={Users}
-          title="No clients yet"
-          description="Add your first client with the New client button. Clients you bill on invoices also appear here automatically."
-        />
-      ) : (
-        <ClientList clients={clients} />
-      )}
+      {/* The tour anchors the directory itself, so it wraps both branches —
+          an empty directory still has something to point at. */}
+      <div data-tour="clients-table">
+        {clients.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title="No clients yet"
+            description="Add your first client with the New client button. Clients you bill on invoices also appear here automatically."
+          />
+        ) : (
+          <ClientList clients={clients} />
+        )}
+      </div>
     </div>
   );
 }

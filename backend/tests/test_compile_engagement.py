@@ -63,7 +63,9 @@ def test_compile_engagement_gates_and_marks_in_review(tmp_path):
     repo = InMemoryRepository()
     eng = _engagement_with_items(repo)
 
-    result = compile_engagement(repo, eng.id, taxonomy=TAX, workdir=tmp_path)
+    result = compile_engagement(
+        repo, eng.id, taxonomy=TAX, workdir=tmp_path, storage=Storage(root=tmp_path)
+    )
 
     # G1 gate = zero *formula* errors (valid formulas); content correctness is HITL's job.
     assert result.ok is True
