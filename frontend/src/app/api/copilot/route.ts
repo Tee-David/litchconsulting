@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/server-user";
 import { assistantChat } from "@/lib/litchai/client";
 
+// Sage runs a local model on the VM: a warm reply is a few seconds, but a cold
+// start loads the embedding model and measured 77s end-to-end. Vercel's default
+// function timeout is 10s, which would abort every cold call — so raise it.
+export const maxDuration = 120;
+export const runtime = "nodejs";
+
 export async function POST(req: Request) {
   if (!(await isAdmin())) return new Response("Unauthorized", { status: 401 });
   
