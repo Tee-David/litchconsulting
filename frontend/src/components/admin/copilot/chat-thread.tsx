@@ -97,6 +97,27 @@ function TypingDots() {
   );
 }
 
+/**
+ * Sage runs a local model on our own VM. A warm reply lands in a few seconds,
+ * but the first request after an idle spell loads the model and has been
+ * measured at ~77s. Silence that long reads as "broken", so escalate an
+ * explanation the longer it takes rather than leaving the user guessing.
+ */
+function WaitingNote({ seconds }: { seconds: number }) {
+  const note =
+    seconds >= 40
+      ? "Still warming up — almost there. The model loads once, then replies are quick."
+      : seconds >= 12
+        ? "Sage is starting up. The first question after a quiet spell loads the model, which can take up to a minute."
+        : null;
+  if (!note) return null;
+  return (
+    <p className="mt-2 max-w-sm text-xs leading-relaxed text-muted">
+      {note} <span className="tabular-nums opacity-70">({seconds}s)</span>
+    </p>
+  );
+}
+
 /** Compact grounded-data card for a READ tool's structured result. */
 function ToolCard({ tool, data }: { tool?: string; data: Record<string, unknown> }) {
   if (tool === "list_analyses" && Array.isArray(data.documents)) {
@@ -166,6 +187,7 @@ export function ChatThread({ clients }: { clients: Client[] }) {
   const [appliedIds, setAppliedIds] = useState<Set<string>>(new Set());
   const [showPrompts, setShowPrompts] = useState(false);
   const [offline, setOffline] = useState<string | null>(null);
+  const [waited, setWaited] = useState(0);
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -174,6 +196,18 @@ export function ChatThread({ clients }: { clients: Client[] }) {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  // Tick a counter while a reply is in flight, so WaitingNote can explain a
+  // cold start instead of leaving the user staring at silent dots.
+  useEffect(() => {
+    if (!loading) {
+      setWaited(0);
+      return;
+    }
+    const started = Date.now();
+    const t = setInterval(() => setWaited(Math.round((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(t);
+  }, [loading]);
 
   function focusInput() {
     requestAnimationFrame(() => inputRef.current?.focus());
@@ -426,8 +460,9 @@ export function ChatThread({ clients }: { clients: Client[] }) {
                 <div className="grid size-8 shrink-0 place-items-center rounded-full border border-hairline bg-surface text-brand">
                   <Bot className="size-4" />
                 </div>
-                <div className="flex items-center rounded-2xl border border-hairline bg-surface px-4 py-3">
+                <div className="rounded-2xl border border-hairline bg-surface px-4 py-3">
                   <TypingDots />
+                  <WaitingNote seconds={waited} />
                 </div>
               </div>
             )}
