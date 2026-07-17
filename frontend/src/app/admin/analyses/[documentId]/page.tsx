@@ -2,8 +2,8 @@ import Link from "next/link";
 import { ArrowLeft, PlugZap } from "lucide-react";
 import { PageHeader } from "@/components/admin/ui/page-header";
 import { EmptyState } from "@/components/admin/ui/empty-state";
-import { ReviewGrid } from "@/components/admin/litchai/review-grid";
-import { EngagementPanel } from "@/components/admin/litchai/engagement-panel";
+import { ReviewGrid } from "@/components/admin/analyses/review-grid";
+import { EngagementPanel } from "@/components/admin/analyses/engagement-panel";
 import { getReview, getTaxonomy, type ReviewData, type TaxonomyCategory } from "@/lib/litchai/client";
 
 export const dynamic = "force-dynamic";
@@ -30,10 +30,10 @@ export default async function ReviewPage({
   return (
     <div className="space-y-6">
       <Link
-        href="/admin/litchai"
+        href="/admin/analyses"
         className="inline-flex items-center gap-1 text-sm text-body hover:text-ink"
       >
-        <ArrowLeft className="size-4" /> Back to AI Studio
+        <ArrowLeft className="size-4" /> Back to Analyses
       </Link>
 
       {!review ? (

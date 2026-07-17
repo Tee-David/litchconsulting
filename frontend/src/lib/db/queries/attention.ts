@@ -191,8 +191,8 @@ export async function needsAttention(): Promise<AttentionItem[]> {
           id: "ai-review",
           kind: "ai_review",
           title: `${obs.needs_review_total} AI line${obs.needs_review_total > 1 ? "s" : ""} awaiting review`,
-          detail: "Risk-ordered queue in the AI Studio",
-          href: "/admin/litchai",
+          detail: "Risk-ordered queue in Analyses",
+          href: "/admin/analyses",
           at: new Date().toISOString(),
           tone: "warning",
         });

@@ -17,16 +17,17 @@ export async function POST(req: Request) {
     return NextResponse.json(result);
   } catch (err) {
     const raw = err instanceof Error ? err.message : "Sage relay failed";
-    console.error("[copilot] relay error:", raw);
+    console.error("[sage] relay error:", raw);
     // The endpoint exists in this codebase but not on an older VM build — turn
-    // the raw "→ 404" into something an admin can act on.
+    // the raw "→ 404" into something an admin can act on. These regexes match the
+    // engine's raw error text; the messages we surface only ever name "Sage".
     const notDeployed = /\/assistant\/chat → 404/.test(raw);
     const notConfigured = /is not set — cannot reach LitchAI/.test(raw);
     const error = notDeployed
-      ? "Sage is offline: the LitchAI service on the server needs updating to this build."
+      ? "Sage is offline — the assistant service needs updating."
       : notConfigured
-        ? "Sage is not configured: LITCHAI_API_URL is unset."
-        : raw;
+        ? "Sage is not configured — the assistant service isn't connected yet."
+        : "Sage couldn't reach the assistant service. Please try again shortly.";
     return NextResponse.json({ error }, { status: notDeployed || notConfigured ? 503 : 500 });
   }
 }

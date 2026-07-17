@@ -69,7 +69,7 @@ export function DocumentList({ documents }: { documents: LitchaiDocument[] }) {
       columns={columns}
       data={documents}
       searchPlaceholder="Search documents…"
-      onRowClick={(d) => router.push(`/admin/litchai/${d.document_id}`)}
+      onRowClick={(d) => router.push(`/admin/analyses/${d.document_id}`)}
       getRowId={(d) => String(d.document_id)}
     />
   );

@@ -37,7 +37,7 @@ export async function applyAssistantProposalAction(
         action: `engagement.${action}`,
         entity: "engagement",
         entityId: String(id),
-        meta: { via: "copilot", status: res.status },
+        meta: { via: "sage", status: res.status },
       });
       return { ok: true, message: `Engagement ${id} → ${res.status}.` };
     }
@@ -54,7 +54,7 @@ export async function applyAssistantProposalAction(
         action: "line.recategorize",
         entity: "document",
         entityId: String(docId),
-        meta: { via: "copilot", lineItemId: lineId, categoryCode: res.category_code },
+        meta: { via: "sage", lineItemId: lineId, categoryCode: res.category_code },
       });
       return { ok: true, message: `Line ${lineId} reclassified to ${res.category_code}.` };
     }

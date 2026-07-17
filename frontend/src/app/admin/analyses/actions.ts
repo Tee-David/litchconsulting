@@ -44,7 +44,7 @@ export async function uploadDocument(formData: FormData): Promise<Result<{ docum
       documentId: result.document_id,
       duplicate: result.duplicate,
     });
-    revalidatePath("/admin/litchai");
+    revalidatePath("/admin/analyses");
     return { ok: true, documentId: result.document_id, duplicate: result.duplicate };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Upload failed" };
@@ -59,7 +59,7 @@ export async function recategorize(
   if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
   try {
     const res = await recategorizeLine(documentId, lineItemId, newCode);
-    revalidatePath(`/admin/litchai/${documentId}`);
+    revalidatePath(`/admin/analyses/${documentId}`);
     return { ok: true, categoryCode: res.category_code };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Recategorize failed" };
@@ -74,7 +74,7 @@ export async function engagementAction(
   if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
   try {
     const res = await transitionEngagement(engagementId, action);
-    revalidatePath(`/admin/litchai/${documentId}`);
+    revalidatePath(`/admin/analyses/${documentId}`);
     return { ok: true, status: res.status };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Action failed" };

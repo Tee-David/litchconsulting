@@ -13,14 +13,19 @@ const nextConfig: NextConfig = {
   // at runtime; keep it (and puppeteer-core) external so Next doesn't bundle or
   // mangle the binary.
   serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
-  // Templates and Integrations moved under Finance / Settings; keep the old
-  // URLs working for bookmarks and anything already linking to them.
+  // Templates and Integrations moved under Finance / Settings; the AI surfaces
+  // were renamed (assistant → sage, litchai → analyses). Keep the old URLs
+  // working for bookmarks and anything already linking to them.
   async redirects() {
     return [
       { source: "/admin/templates", destination: "/admin/finance/templates", permanent: true },
       { source: "/admin/templates/:path*", destination: "/admin/finance/templates/:path*", permanent: true },
       { source: "/admin/integrations", destination: "/admin/settings/integrations", permanent: true },
       { source: "/admin/integrations/:path*", destination: "/admin/settings/integrations/:path*", permanent: true },
+      { source: "/admin/assistant", destination: "/admin/sage", permanent: true },
+      { source: "/admin/assistant/:path*", destination: "/admin/sage/:path*", permanent: true },
+      { source: "/admin/litchai", destination: "/admin/analyses", permanent: true },
+      { source: "/admin/litchai/:path*", destination: "/admin/analyses/:path*", permanent: true },
     ];
   },
   outputFileTracingIncludes: {

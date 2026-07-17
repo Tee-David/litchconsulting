@@ -469,7 +469,7 @@ export async function getIntegrationStatuses(): Promise<IntegrationStatus[]> {
       description: "The only route to the OCI VM: tunnel + Access service token, no public port.",
       envKeys: [envGroup("LITCHAI_API_URL"), envGroup("LITCHAI_ACCESS_CLIENT_ID"), envGroup("LITCHAI_ACCESS_CLIENT_SECRET")],
       docsUrl: "https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/",
-      configHref: "/admin/litchai",
+      configHref: "/admin/analyses",
       ...litchai.tunnel,
     },
     {
@@ -480,7 +480,7 @@ export async function getIntegrationStatuses(): Promise<IntegrationStatus[]> {
       // Set on the VM, not here — these are reported by the backend probe.
       envKeys: [],
       docsUrl: "https://github.com/ollama/ollama/blob/main/docs/api.md",
-      configHref: "/admin/litchai/observability",
+      configHref: "/admin/analyses/observability",
       ...litchai.model,
     },
     {

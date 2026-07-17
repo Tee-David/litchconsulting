@@ -8,7 +8,7 @@ import { isAdmin } from "@/lib/server-user";
 import { presignPrivateGet, r2PrivateConfigured } from "@/lib/r2";
 import { PageHeader } from "@/components/admin/ui/page-header";
 import { EmptyState } from "@/components/admin/ui/empty-state";
-import { WorkbookEditor } from "@/components/admin/litchai/workbook-editor";
+import { WorkbookEditor } from "@/components/admin/analyses/workbook-editor";
 
 export const dynamic = "force-dynamic";
 

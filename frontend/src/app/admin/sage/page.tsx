@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/admin/ui/page-header";
-import { ChatThread } from "@/components/admin/copilot/chat-thread";
+import { ChatThread } from "@/components/admin/sage/chat-thread";
 import { db } from "@/lib/db/client";
 import { client } from "@/lib/db/schema";
 import { isNull } from "drizzle-orm";
