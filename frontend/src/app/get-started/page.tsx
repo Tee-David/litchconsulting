@@ -1,10 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import Image from "next/image";
-import { ArrowUpRight, CalendarClock, Clock, MessagesSquare } from "lucide-react";
+import { ArrowRight, ArrowUpRight, CalendarClock, Clock, MessagesSquare } from "lucide-react";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
-import { Section, SectionHeading, Button } from "@/components/ui/primitives";
+import { Section, SectionHeading } from "@/components/ui/primitives";
+import { BookConsultationButton } from "@/components/booking/book-consultation-button";
 import { getCatalog } from "@/lib/services/catalog";
 import { formatMoney } from "@/lib/invoice/money";
 
@@ -103,9 +104,10 @@ export default async function GetStartedPage() {
                   need.
                 </p>
               </div>
-              <Button href="/book" withArrow>
+              <BookConsultationButton className="group inline-flex items-center justify-center gap-2 whitespace-nowrap self-start rounded-full bg-brand px-6 py-3 text-sm font-medium text-white transition-all duration-300 hover:bg-brand-hover hover:shadow-lg hover:shadow-brand/25 active:scale-[0.98] focus-visible:outline-none">
                 <CalendarClock className="mr-1 size-4" /> Book a consultation
-              </Button>
+                <ArrowRight className="size-4 transition-transform duration-300 ease-out group-hover:translate-x-1.5" />
+              </BookConsultationButton>
             </div>
           </div>
         </Section>

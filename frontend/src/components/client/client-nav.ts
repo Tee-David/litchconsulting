@@ -3,7 +3,6 @@ import {
   LayoutGrid,
   Briefcase,
   Wallet,
-  FileStack,
   LifeBuoy,
   Settings,
 } from "lucide-react";
@@ -21,7 +20,6 @@ export const CLIENT_NAV_ITEMS: ClientNavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: LayoutGrid, group: "main", tourKey: "dashboard" },
   { label: "My Services", href: "/dashboard/requests", icon: Briefcase, group: "main", tourKey: "my-services" },
   { label: "Billing", href: "/dashboard/invoices", icon: Wallet, group: "main", tourKey: "billing" },
-  { label: "Templates", href: "/dashboard/templates", icon: FileStack, group: "main", tourKey: "templates" },
   { label: "Support Desk", href: "/dashboard/support", icon: LifeBuoy, group: "general", tourKey: "support" },
   { label: "Profile Settings", href: "/dashboard/settings", icon: Settings, group: "general", tourKey: "settings" },
 ];

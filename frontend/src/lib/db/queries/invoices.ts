@@ -1,5 +1,5 @@
 import "server-only";
-import { desc, eq, like, and } from "drizzle-orm";
+import { desc, eq, like, and, ne, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { invoice, invoiceItem } from "@/lib/db/schema";
 import { num } from "@/lib/invoice/money";
@@ -89,21 +89,38 @@ export async function recentInvoices(limit = 5): Promise<InvoiceRow[]> {
     .limit(limit);
 }
 
-/** Invoices and quotes for a specific client. */
+/**
+ * Invoices and quotes for a specific client. Drafts are admin-only work in
+ * progress — clients only ever see documents that have been sent or later, and
+ * never soft-deleted rows.
+ */
 export async function listClientInvoices(clientId: string): Promise<InvoiceRow[]> {
   return db
     .select()
     .from(invoice)
-    .where(eq(invoice.clientId, clientId))
+    .where(
+      and(
+        eq(invoice.clientId, clientId),
+        isNull(invoice.deletedAt),
+        ne(invoice.status, "draft"),
+      ),
+    )
     .orderBy(desc(invoice.createdAt));
 }
 
-/** Get a client's invoice or quote by ID, with line items. */
+/** Get a client's invoice or quote by ID, with line items (never drafts). */
 export async function getClientInvoice(id: string, clientId: string) {
   const [inv] = await db
     .select()
     .from(invoice)
-    .where(and(eq(invoice.id, id), eq(invoice.clientId, clientId)))
+    .where(
+      and(
+        eq(invoice.id, id),
+        eq(invoice.clientId, clientId),
+        isNull(invoice.deletedAt),
+        ne(invoice.status, "draft"),
+      ),
+    )
     .limit(1);
   if (!inv) return null;
   const items = await db

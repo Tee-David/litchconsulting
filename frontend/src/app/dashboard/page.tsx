@@ -4,7 +4,6 @@ import {
   Clock,
   BadgeCheck,
   LifeBuoy,
-  FileStack,
   FileText,
   ChevronRight,
   PlusCircle,
@@ -12,19 +11,22 @@ import {
   Briefcase,
   Calculator,
   CalendarClock,
+  Video,
 } from "lucide-react";
 import { getSessionUser } from "@/lib/server-user";
 import { getClientForUser } from "@/lib/db/queries/clients";
 import { clientInvoiceStats, listClientInvoices } from "@/lib/db/queries/invoices";
 import { listClientTickets } from "@/lib/db/queries/tickets";
-import { listActiveClientRequests } from "@/lib/db/queries/requests";
+import { listActiveClientRequests, listClientConsultations } from "@/lib/db/queries/requests";
 import { getCatalog } from "@/lib/services/catalog";
 import { formatMoney } from "@/lib/invoice/money";
+import { formatDateTime } from "@/lib/format-date";
 import { StatCard } from "@/components/admin/ui/stat-card";
 import { Badge, invoiceStatusTone } from "@/components/admin/ui/badge";
 import { EmptyState } from "@/components/admin/ui/empty-state";
 import { ActiveRequestCard } from "@/components/requests/active-request-card";
 import { TourWizardButton } from "@/components/tour/tour-wizard-button";
+import { BookConsultationButton } from "@/components/booking/book-consultation-button";
 
 export const dynamic = "force-dynamic";
 
@@ -40,17 +42,28 @@ export default async function ClientDashboardPage() {
 
   const clientRow = await getClientForUser(user.id, user.email || "", user.name || undefined);
 
-  const [stats, invoices, tickets, activeRequests, catalog] = await Promise.all([
+  const [stats, invoices, tickets, activeRequests, consultations, catalog] = await Promise.all([
     clientInvoiceStats(clientRow.id),
     listClientInvoices(clientRow.id),
     listClientTickets(clientRow.id),
     listActiveClientRequests(clientRow.id),
+    listClientConsultations(clientRow.id, user.email),
     getCatalog().catch(() => []),
   ]);
 
   const recentInvoices = invoices.slice(0, 4);
   const activeTickets = tickets.filter((t) => t.status !== "closed" && t.status !== "resolved");
   const featuredServices = catalog.slice(0, 3);
+
+  // Booked calls that haven't happened yet, soonest first (query returns newest first).
+  const now = Date.now();
+  const upcomingConsultations = consultations
+    .filter((c) => c.status !== "cancelled" && c.startsAt && new Date(c.startsAt).getTime() >= now)
+    .sort((a, b) => new Date(a.startsAt!).getTime() - new Date(b.startsAt!).getTime())
+    .slice(0, 3);
+
+  const quickActionTile =
+    "flex flex-col items-start gap-2 rounded-xl border border-hairline px-3 py-3 text-left transition-colors hover:border-brand hover:bg-surface";
 
   const firstName = (user.name || "Client").split(" ")[0];
   const hour = new Date().getHours();
@@ -207,26 +220,62 @@ export default async function ClientDashboardPage() {
           </div>
         </div>
 
-        {/* Right column: tools + quick actions */}
+        {/* Right column: consultations + tools + quick actions */}
         <div className="space-y-6">
+          {upcomingConsultations.length > 0 && (
+            <div className="rounded-card border border-hairline bg-paper p-5">
+              <div className="mb-3 flex items-center gap-2.5">
+                <span className="grid size-9 place-items-center rounded-full bg-brand-tint text-brand">
+                  <CalendarClock className="size-4.5" />
+                </span>
+                <div>
+                  <h3 className="font-display text-sm font-bold text-ink">Upcoming consultations</h3>
+                  <p className="text-xs text-muted">Your booked calls</p>
+                </div>
+              </div>
+              <ul className="space-y-2.5">
+                {upcomingConsultations.map((c) => (
+                  <li
+                    key={c.id}
+                    className="flex items-center justify-between gap-3 rounded-xl border border-hairline px-3 py-2.5"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-ink">
+                        {formatDateTime(c.startsAt)}
+                      </p>
+                      <p className="text-xs capitalize text-muted">{c.status}</p>
+                    </div>
+                    {c.meetingUrl && (
+                      <a
+                        href={c.meetingUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-hover keep-brand"
+                      >
+                        <Video className="size-3.5" /> Join
+                      </a>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div data-tour="quick-actions" className="rounded-card border border-hairline bg-paper p-5">
             <h3 className="mb-3 font-display text-sm font-bold text-ink">Quick Actions</h3>
             <div className="grid grid-cols-2 gap-2">
-              {[
-                { href: "/dashboard/requests/new", icon: PlusCircle, label: "Request a service" },
-                { href: "/book", icon: CalendarClock, label: "Book consultation" },
-                { href: "/dashboard/support?new=true", icon: LifeBuoy, label: "Get support" },
-                { href: "/dashboard/templates", icon: FileStack, label: "Templates" },
-              ].map((a) => (
-                <Link
-                  key={a.href}
-                  href={a.href}
-                  className="flex flex-col items-start gap-2 rounded-xl border border-hairline px-3 py-3 text-left transition-colors hover:border-brand hover:bg-surface"
-                >
-                  <a.icon className="size-5 text-brand" />
-                  <span className="text-xs font-semibold leading-tight text-ink">{a.label}</span>
-                </Link>
-              ))}
+              <Link href="/dashboard/requests/new" className={quickActionTile}>
+                <PlusCircle className="size-5 text-brand" />
+                <span className="text-xs font-semibold leading-tight text-ink">Request a service</span>
+              </Link>
+              <BookConsultationButton className={quickActionTile}>
+                <CalendarClock className="size-5 text-brand" />
+                <span className="text-xs font-semibold leading-tight text-ink">Book consultation</span>
+              </BookConsultationButton>
+              <Link href="/dashboard/support?new=true" className={quickActionTile}>
+                <LifeBuoy className="size-5 text-brand" />
+                <span className="text-xs font-semibold leading-tight text-ink">Get support</span>
+              </Link>
             </div>
           </div>
 
