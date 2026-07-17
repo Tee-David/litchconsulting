@@ -3,6 +3,7 @@ import { Document, Page, View, Text, StyleSheet, Link, Svg, Path, Font, Image } 
 import { computeTotals, formatMoney } from "@/lib/invoice/money";
 import { issuer as defaultIssuer, type Issuer } from "@/lib/invoice/issuer";
 import type { InvoiceData } from "@/lib/invoice/types";
+import { signaturePngDataUri } from "./assets";
 
 // Noto Sans supports the Naira (₦) and other currency glyphs that the built-in
 // Helvetica lacks — so the PDF renders currency exactly like the on-screen preview.
@@ -86,6 +87,7 @@ export function InvoiceDocument({
   const fmt = (n: number) => formatMoney(n, cur);
 
   const stamp = STATUS_STAMP[data.status];
+  const sigPng = signaturePngDataUri();
 
   return (
     <Document title={`${isQuote ? "Quote" : isReceipt ? "Receipt" : "Invoice"} ${data.number}`} author={issuer.name}>
@@ -201,12 +203,16 @@ export function InvoiceDocument({
           </Link>
         ) : null}
 
-        {/* Payment details + notes */}
         {/* Signature */}
         <View style={{ marginTop: 26, alignItems: "flex-end" }}>
-          <Text style={{ fontFamily: "NotoSans", fontStyle: "italic", fontSize: 15, color: INK }}>Litch Consulting</Text>
+          {sigPng ? (
+            <Image src={sigPng} style={{ height: 46, objectFit: "contain", marginBottom: -4 }} />
+          ) : (
+            <View style={{ height: 34 }} />
+          )}
           <View style={{ width: 150, borderTopWidth: 1, borderTopColor: INK, marginTop: 4 }} />
-          <Text style={{ color: BODY, fontSize: 8, marginTop: 3 }}>Authorised signatory</Text>
+          <Text style={{ fontFamily: "NotoSans", fontWeight: 700, marginTop: 4 }}>{issuer.signatory.name}</Text>
+          <Text style={{ color: BODY, fontSize: 8, marginTop: 2 }}>Authorised signatory</Text>
         </View>
 
         <View style={[s.section, { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" }]}>

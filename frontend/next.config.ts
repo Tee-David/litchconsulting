@@ -9,11 +9,18 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "images.unsplash.com" },
     ],
   },
+  // @sparticuz/chromium ships a compressed Chromium the HTML→PDF renderer loads
+  // at runtime; keep it (and puppeteer-core) external so Next doesn't bundle or
+  // mangle the binary.
+  serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
   outputFileTracingIncludes: {
-    // Ship the invoice PDF fonts (Noto Sans, for the ₦ glyph) with the
-    // serverless functions that render PDFs, so they resolve at runtime.
-    "/api/admin/**": ["./src/lib/invoice/pdf/fonts/**"],
-    "/admin/finance/**": ["./src/lib/invoice/pdf/fonts/**"],
+    // Ship the invoice fonts (Noto Sans, for the ₦ glyph) and the signature
+    // scan with every function that renders a PDF or emails a receipt — the
+    // HTML→PDF path embeds both as data URIs read from disk at runtime.
+    "/api/admin/**": ["./src/lib/invoice/pdf/fonts/**", "./public/brand/**"],
+    "/api/dashboard/**": ["./src/lib/invoice/pdf/fonts/**", "./public/brand/**"],
+    "/api/paystack/**": ["./src/lib/invoice/pdf/fonts/**", "./public/brand/**"],
+    "/admin/finance/**": ["./src/lib/invoice/pdf/fonts/**", "./public/brand/**"],
     // Pin the CockroachDB CA cert into every function so the DB layer always
     // validates against the committed cert, not just system CAs.
     "/**": ["./certs/cockroach-ca.crt"],

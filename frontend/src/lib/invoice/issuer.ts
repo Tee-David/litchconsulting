@@ -16,6 +16,13 @@ export const issuer = {
     accountName: process.env.INVOICE_ACCOUNT_NAME || site.legalName,
     accountNumber: process.env.INVOICE_ACCOUNT_NUMBER || "—",
   },
+  /** Authorised signatory shown on invoices/receipts. The signature image is
+   *  the cleaned scan at `public/brand/signature.png`; renderers fall back to
+   *  the name alone when it is absent. */
+  signatory: {
+    name: "A. Saheed",
+    signatureImage: "/brand/signature.png",
+  },
 };
 
 export type Issuer = typeof issuer;

@@ -177,14 +177,18 @@ export function InvoicePreview({
       {/* Signature */}
       <div className="relative mt-8 flex justify-end">
         <div className="text-center">
-          <p
-            className="text-2xl leading-none text-[#0a0e1a]"
-            style={{ fontFamily: "'Segoe Script','Brush Script MT',cursive", fontStyle: "italic" }}
-          >
-            Litch Consulting
-          </p>
-          <div className="mx-auto mt-1.5 w-44 border-t border-[#0a0e1a]" />
-          <p className="mt-1.5 text-xs text-[#8a92a6]">Authorised signatory</p>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={issuer.signatory.signatureImage}
+            alt=""
+            className="mx-auto -mb-1.5 h-14 w-auto object-contain"
+            onError={(e) => {
+              (e.currentTarget as HTMLImageElement).style.display = "none";
+            }}
+          />
+          <div className="mx-auto w-44 border-t border-[#0a0e1a]" />
+          <p className="mt-1.5 font-bold">{issuer.signatory.name}</p>
+          <p className="mt-0.5 text-xs text-[#8a92a6]">Authorised signatory</p>
         </div>
       </div>
 

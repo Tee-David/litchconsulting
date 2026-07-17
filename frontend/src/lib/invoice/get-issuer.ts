@@ -29,5 +29,6 @@ export async function getIssuer(): Promise<Issuer> {
       accountName: row.accountName || defaultIssuer.bank.accountName,
       accountNumber: row.accountNumber || defaultIssuer.bank.accountNumber,
     },
+    signatory: defaultIssuer.signatory,
   };
 }
