@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, type ComponentPropsWithoutRef } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
-  Bot,
-  User,
   ArrowUp,
   FileText,
   Check,
@@ -14,7 +14,6 @@ import {
   Mic,
   Lightbulb,
   Copy,
-  RefreshCw,
   Users,
   Receipt,
   Wand2,
@@ -23,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/shadcn/button";
 import { Select } from "@/components/ui/select";
+import { SageIcon } from "@/components/admin/sage-icon";
 import { useToast } from "@/components/admin/ui/toaster";
 import type { AssistantProposal, AssistantResponse } from "@/lib/litchai/client";
 import { applyAssistantProposalAction } from "@/app/admin/sage/actions";
@@ -81,6 +81,50 @@ const BROWSE_PROMPTS = [
   "Draft a short note to a client about an overdue invoice.",
   "What is our total outstanding receivables this quarter?",
 ];
+
+/** Markdown renderer for assistant replies — styled inline so it reads well
+ *  without the Tailwind typography plugin (finance answers use lists, bold,
+ *  code and the occasional table). */
+function AssistantMarkdown({ content }: { content: string }) {
+  return (
+    <div className="text-sm leading-relaxed text-ink">
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          p: (p) => <p className="mb-2 last:mb-0" {...p} />,
+          ul: (p) => <ul className="mb-2 ml-4 list-disc space-y-1 last:mb-0" {...p} />,
+          ol: (p) => <ol className="mb-2 ml-4 list-decimal space-y-1 last:mb-0" {...p} />,
+          li: (p) => <li className="pl-0.5" {...p} />,
+          strong: (p) => <strong className="font-semibold text-ink" {...p} />,
+          em: (p) => <em className="italic" {...p} />,
+          a: (p) => <a className="font-medium text-brand underline underline-offset-2" target="_blank" rel="noopener noreferrer" {...p} />,
+          h1: (p) => <h3 className="mb-1.5 mt-3 font-display text-base font-bold text-ink first:mt-0" {...p} />,
+          h2: (p) => <h3 className="mb-1.5 mt-3 font-display text-base font-bold text-ink first:mt-0" {...p} />,
+          h3: (p) => <h4 className="mb-1 mt-2.5 font-semibold text-ink first:mt-0" {...p} />,
+          code: ({ className, ...rest }: ComponentPropsWithoutRef<"code">) =>
+            /language-/.test(className || "") ? (
+              <code className="font-mono text-[13px]" {...rest} />
+            ) : (
+              <code className="rounded bg-surface px-1.5 py-0.5 font-mono text-[12.5px] text-ink" {...rest} />
+            ),
+          pre: (p) => (
+            <pre className="mb-2 overflow-x-auto rounded-xl border border-hairline bg-surface p-3 text-[13px] last:mb-0" {...p} />
+          ),
+          blockquote: (p) => <blockquote className="border-l-2 border-hairline pl-3 text-body" {...p} />,
+          table: (p) => (
+            <div className="mb-2 overflow-x-auto">
+              <table className="w-full border-collapse text-[13px]" {...p} />
+            </div>
+          ),
+          th: (p) => <th className="border border-hairline bg-surface px-2 py-1 text-left font-semibold" {...p} />,
+          td: (p) => <td className="border border-hairline px-2 py-1" {...p} />,
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
+}
 
 /** Pulsating streaming indicator — three dots that breathe while awaiting a reply. */
 function TypingDots() {
@@ -197,6 +241,15 @@ export function ChatThread({ clients }: { clients: Client[] }) {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
+  // Auto-grow the composer with its content (capped), so multi-line prompts
+  // don't hide behind a fixed one-row box.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [input]);
+
   // Tick a counter while a reply is in flight, so WaitingNote can explain a
   // cold start instead of leaving the user staring at silent dots.
   useEffect(() => {
@@ -293,14 +346,13 @@ export function ChatThread({ clients }: { clients: Client[] }) {
   }
 
   const empty = messages.length === 0;
-  const overLimit = input.length > MAX_CHARS;
 
   return (
     <div className="flex h-full flex-col">
-      {/* Scope bar */}
-      <div className="flex flex-wrap items-center gap-3 border-b border-hairline bg-surface/40 px-4 py-3">
+      {/* Scope bar — stacks full-width on phones, inline on ≥sm */}
+      <div className="flex flex-col gap-2 border-b border-hairline bg-surface/40 px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:px-4 sm:py-3">
         <span className="text-sm font-semibold text-ink">Scope</span>
-        <div className="w-48">
+        <div className="w-full sm:w-48">
           <Select
             value={scope}
             onChange={(v) => setScope(v as "firm" | "client")}
@@ -312,7 +364,7 @@ export function ChatThread({ clients }: { clients: Client[] }) {
           />
         </div>
         {scope === "client" && (
-          <div className="w-64">
+          <div className="w-full sm:w-64">
             <Select
               value={clientId}
               onChange={setClientId}
@@ -333,9 +385,9 @@ export function ChatThread({ clients }: { clients: Client[] }) {
         {empty ? (
           <div className="mx-auto flex h-full max-w-2xl flex-col items-center justify-center px-6 py-10 text-center">
             <div className="mb-4 grid size-14 place-items-center rounded-2xl bg-brand/10 text-brand">
-              <Bot className="size-7" />
+              <SageIcon className="size-7" />
             </div>
-            <h2 className="font-display text-3xl font-bold text-ink">Welcome to Sage</h2>
+            <h2 className="font-display text-2xl font-bold text-ink sm:text-3xl">Welcome to Sage</h2>
             <p className="mt-2 max-w-md text-sm text-body">
               Ask about firm knowledge, Nigerian tax rules, or a specific client&apos;s documents.
               Not sure where to start?
@@ -360,34 +412,22 @@ export function ChatThread({ clients }: { clients: Client[] }) {
             </div>
           </div>
         ) : (
-          <div className="space-y-6 p-4 sm:p-6">
-            {messages.map((m) => (
-              <div
-                key={m.id}
-                className={cn("flex max-w-[85%] gap-4", m.role === "user" ? "ml-auto flex-row-reverse" : "")}
-              >
-                <div
-                  className={cn(
-                    "grid size-8 shrink-0 place-items-center rounded-full",
-                    m.role === "user" ? "bg-brand text-white" : "border border-hairline bg-surface text-brand",
-                  )}
-                >
-                  {m.role === "user" ? <User className="size-4" /> : <Bot className="size-4" />}
+          <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 sm:px-6">
+            {messages.map((m) =>
+              m.role === "user" ? (
+                <div key={m.id} className="flex justify-end">
+                  <div className="max-w-[85%] whitespace-pre-wrap rounded-2xl rounded-br-md bg-brand px-4 py-2.5 text-sm text-white">
+                    {m.content}
+                  </div>
                 </div>
-                <div
-                  className={cn(
-                    "space-y-2 rounded-2xl p-4 text-sm",
-                    m.role === "user"
-                      ? "bg-brand text-white"
-                      : "border border-hairline bg-surface text-ink",
-                  )}
-                >
-                  <div className="whitespace-pre-wrap">{m.content}</div>
+              ) : (
+                <div key={m.id} className="space-y-2">
+                  <AssistantMarkdown content={m.content} />
 
-                  {m.role === "assistant" && m.toolResult && <ToolCard tool={m.tool} data={m.toolResult} />}
+                  {m.toolResult && <ToolCard tool={m.tool} data={m.toolResult} />}
 
-                  {m.role === "assistant" && m.proposal && (
-                    <div className="mt-3 rounded-xl border border-amber-400/40 bg-amber-50/60 p-3 dark:bg-amber-950/20">
+                  {m.proposal && (
+                    <div className="rounded-xl border border-amber-400/40 bg-amber-50/60 p-3 dark:bg-amber-950/20">
                       <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">
                         Proposed action — confirm to apply
                       </p>
@@ -419,8 +459,8 @@ export function ChatThread({ clients }: { clients: Client[] }) {
                     </div>
                   )}
 
-                  {m.role === "assistant" && m.citations && m.citations.length > 0 && (
-                    <div className="mt-3 space-y-1.5 border-t border-hairline pt-3">
+                  {m.citations && m.citations.length > 0 && (
+                    <div className="space-y-1.5 border-t border-hairline pt-3">
                       <p className="text-xs font-semibold text-muted">Sources</p>
                       <div className="flex flex-wrap gap-2">
                         {m.citations.map((ref, i) => (
@@ -436,34 +476,27 @@ export function ChatThread({ clients }: { clients: Client[] }) {
                     </div>
                   )}
 
-                  {m.role === "assistant" && (
-                    <div className="flex items-center gap-1 pt-1">
-                      <Button
-                        size="icon-xs"
-                        variant="ghost"
-                        aria-label="Copy answer"
-                        onClick={() => {
-                          void navigator.clipboard.writeText(m.content);
-                          toast.success("Copied");
-                        }}
-                      >
-                        <Copy className="size-3.5" />
-                      </Button>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-1">
+                    <Button
+                      size="icon-xs"
+                      variant="ghost"
+                      aria-label="Copy answer"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(m.content);
+                        toast.success("Copied");
+                      }}
+                    >
+                      <Copy className="size-3.5" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ),
+            )}
 
             {loading && (
-              <div className="flex max-w-[85%] gap-4">
-                <div className="grid size-8 shrink-0 place-items-center rounded-full border border-hairline bg-surface text-brand">
-                  <Bot className="size-4" />
-                </div>
-                <div className="rounded-2xl border border-hairline bg-surface px-4 py-3">
-                  <TypingDots />
-                  <WaitingNote seconds={waited} />
-                </div>
+              <div>
+                <TypingDots />
+                <WaitingNote seconds={waited} />
               </div>
             )}
             <div ref={bottomRef} />
@@ -472,100 +505,102 @@ export function ChatThread({ clients }: { clients: Client[] }) {
       </div>
 
       {/* Composer */}
-      <div className="border-t border-hairline bg-paper p-4">
-        {offline && (
-          <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-400/40 bg-amber-50/60 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/20 dark:text-amber-400">
-            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-            <span>{offline}</span>
-          </div>
-        )}
-
-        <div className="relative rounded-2xl border border-hairline bg-surface transition-colors focus-within:border-brand focus-within:ring-1 focus-within:ring-brand">
-          {showPrompts && (
-            <div className="absolute bottom-full left-0 mb-2 w-full max-w-md rounded-xl border border-hairline bg-paper p-1.5 shadow-xl shadow-black/10">
-              <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
-                Example prompts
-              </p>
-              {BROWSE_PROMPTS.map((p) => (
-                <button
-                  key={p}
-                  type="button"
-                  onClick={() => {
-                    setInput(p);
-                    setShowPrompts(false);
-                    focusInput();
-                  }}
-                  className="block w-full truncate rounded-lg px-2 py-1.5 text-left text-sm text-body transition-colors hover:bg-surface hover:text-ink"
-                >
-                  {p}
-                </button>
-              ))}
+      <div className="border-t border-hairline bg-paper px-3 py-3 sm:px-4 sm:py-4">
+        <div className="mx-auto w-full max-w-3xl">
+          {offline && (
+            <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-400/40 bg-amber-50/60 px-3 py-2 text-xs text-amber-700 dark:bg-amber-950/20 dark:text-amber-400">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+              <span>{offline}</span>
             </div>
           )}
 
-          <div className="flex items-end gap-2 p-2">
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  void send();
-                }
-              }}
-              maxLength={MAX_CHARS}
-              placeholder="Ask Sage anything…"
-              className="max-h-40 min-h-10 w-full resize-none bg-transparent px-2 py-2 text-sm text-ink outline-none placeholder:text-muted"
-              rows={1}
-            />
-            <Button
-              size="icon"
-              aria-label="Send message"
-              disabled={!input.trim() || loading || overLimit}
-              onClick={() => void send()}
-            >
-              <ArrowUp className="size-4" />
-            </Button>
+          <div className="relative rounded-2xl border border-hairline bg-surface transition-colors focus-within:border-brand focus-within:ring-1 focus-within:ring-brand">
+            {showPrompts && (
+              <div className="absolute bottom-full left-0 mb-2 w-full max-w-md rounded-xl border border-hairline bg-paper p-1.5 shadow-xl shadow-black/10">
+                <p className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
+                  Example prompts
+                </p>
+                {BROWSE_PROMPTS.map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => {
+                      setInput(p);
+                      setShowPrompts(false);
+                      focusInput();
+                    }}
+                    className="block w-full truncate rounded-lg px-2 py-1.5 text-left text-sm text-body transition-colors hover:bg-surface hover:text-ink"
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="flex items-end gap-2 p-2">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void send();
+                  }
+                }}
+                maxLength={MAX_CHARS}
+                placeholder="Ask Sage anything…"
+                className="max-h-40 min-h-10 w-full resize-none bg-transparent px-2 py-2 text-sm text-ink outline-none placeholder:text-muted"
+                rows={1}
+              />
+              <Button
+                size="icon"
+                aria-label="Send message"
+                disabled={!input.trim() || loading}
+                onClick={() => void send()}
+              >
+                <ArrowUp className="size-4" />
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-1 border-t border-hairline px-2 py-1.5">
+              <Button
+                size="xs"
+                variant="ghost"
+                className="text-muted"
+                title="Attaching documents is coming soon"
+                onClick={() => toast.toast("Document attachments are coming soon.", "info")}
+              >
+                <Paperclip className="size-3.5" /> <span className="hidden xs:inline">Attach</span>
+              </Button>
+              <Button
+                size="xs"
+                variant="ghost"
+                className="text-muted"
+                title="Voice messages are coming soon"
+                onClick={() => toast.toast("Voice messages are coming soon.", "info")}
+              >
+                <Mic className="size-3.5" /> <span className="hidden xs:inline">Voice</span>
+              </Button>
+              <Button
+                size="xs"
+                variant="ghost"
+                className="text-muted"
+                aria-expanded={showPrompts}
+                onClick={() => setShowPrompts((s) => !s)}
+              >
+                <Lightbulb className="size-3.5" /> <span className="hidden xs:inline">Browse prompts</span>
+              </Button>
+              <span className="ml-auto pr-1 text-[11px] tabular-nums text-muted">
+                {input.length.toLocaleString()} / {MAX_CHARS.toLocaleString()}
+              </span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-1 border-t border-hairline px-2 py-1.5">
-            <Button
-              size="xs"
-              variant="ghost"
-              className="text-muted"
-              title="Attaching documents is coming soon"
-              onClick={() => toast.toast("Document attachments are coming soon.", "info")}
-            >
-              <Paperclip className="size-3.5" /> Attach
-            </Button>
-            <Button
-              size="xs"
-              variant="ghost"
-              className="text-muted"
-              title="Voice messages are coming soon"
-              onClick={() => toast.toast("Voice messages are coming soon.", "info")}
-            >
-              <Mic className="size-3.5" /> Voice
-            </Button>
-            <Button
-              size="xs"
-              variant="ghost"
-              className="text-muted"
-              aria-expanded={showPrompts}
-              onClick={() => setShowPrompts((s) => !s)}
-            >
-              <Lightbulb className="size-3.5" /> Browse prompts
-            </Button>
-            <span className={cn("ml-auto pr-1 text-[11px] tabular-nums", overLimit ? "text-danger" : "text-muted")}>
-              {input.length.toLocaleString()} / {MAX_CHARS.toLocaleString()}
-            </span>
-          </div>
+          <p className="mt-2 text-center text-[11px] text-muted">
+            Sage may be inaccurate — verify against source documents. Grounded in the firm knowledge base.
+          </p>
         </div>
-
-        <p className="mt-2 text-center text-[11px] text-muted">
-          Sage may be inaccurate — verify against source documents. Grounded in the firm knowledge base.
-        </p>
       </div>
     </div>
   );

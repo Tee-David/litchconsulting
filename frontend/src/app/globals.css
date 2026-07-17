@@ -38,6 +38,7 @@
   --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
 
   /* Container */
+  --breakpoint-xs: 400px;
   --breakpoint-3xl: 1920px;
 }
 
