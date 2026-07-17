@@ -539,6 +539,39 @@ export const pushSubscription = pgTable(
   (t) => [index("push_subscription_user_idx").on(t.userId)]
 );
 
+/**
+ * A saved Sage chat thread, per admin user. `scope`/`clientId` mirror the
+ * chat's knowledge scope (firm | client) so reopening a thread restores the
+ * same context. `title` is derived from the first user message and editable.
+ */
+export const sageConversation = pgTable(
+  "sage_conversation",
+  {
+    id: id(),
+    userId: text("user_id").notNull(), // Better Auth user.id (owner)
+    title: text("title").notNull(),
+    scope: text("scope").notNull().default("firm"), // firm | client
+    clientId: uuid("client_id"), // soft ref → client.id, set when scope = 'client'
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("sage_conversation_user_idx").on(t.userId, t.updatedAt)]
+);
+
+/** One turn in a Sage conversation (role: user | assistant). */
+export const sageMessage = pgTable(
+  "sage_message",
+  {
+    id: id(),
+    conversationId: uuid("conversation_id").notNull(), // soft ref → sage_conversation.id
+    role: text("role").notNull(),
+    content: text("content").notNull(),
+    citations: jsonb("citations"), // string[] source labels, assistant turns only
+    createdAt: createdAt(),
+  },
+  (t) => [index("sage_message_conversation_idx").on(t.conversationId, t.createdAt)]
+);
+
 export type Client = typeof client.$inferSelect;
 export type Invoice = typeof invoice.$inferSelect;
 export type InvoiceItem = typeof invoiceItem.$inferSelect;
@@ -557,4 +590,6 @@ export type Payment = typeof payment.$inferSelect;
 export type Consultation = typeof consultation.$inferSelect;
 export type PushSubscription = typeof pushSubscription.$inferSelect;
 export type ClientNote = typeof clientNote.$inferSelect;
+export type SageConversation = typeof sageConversation.$inferSelect;
+export type SageMessage = typeof sageMessage.$inferSelect;
 export type AuditLog = typeof auditLog.$inferSelect;

@@ -69,3 +69,7 @@ CREATE INDEX IF NOT EXISTS "audit_log_created_idx" ON "audit_log" ("created_at")
 CREATE INDEX IF NOT EXISTS "audit_log_entity_idx" ON "audit_log" ("entity");
 CREATE INDEX IF NOT EXISTS "audit_log_action_idx" ON "audit_log" ("action");
 ALTER TABLE "client" ADD COLUMN IF NOT EXISTS "digest_opt_out" boolean DEFAULT false NOT NULL;
+CREATE TABLE IF NOT EXISTS "sage_conversation" ( "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL, "user_id" text NOT NULL, "title" text NOT NULL, "scope" text DEFAULT 'firm' NOT NULL, "client_id" uuid, "created_at" timestamp with time zone DEFAULT now() NOT NULL, "updated_at" timestamp with time zone DEFAULT now() NOT NULL);
+CREATE INDEX IF NOT EXISTS "sage_conversation_user_idx" ON "sage_conversation" ("user_id", "updated_at");
+CREATE TABLE IF NOT EXISTS "sage_message" ( "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL, "conversation_id" uuid NOT NULL, "role" text NOT NULL, "content" text NOT NULL, "citations" jsonb, "created_at" timestamp with time zone DEFAULT now() NOT NULL);
+CREATE INDEX IF NOT EXISTS "sage_message_conversation_idx" ON "sage_message" ("conversation_id", "created_at");

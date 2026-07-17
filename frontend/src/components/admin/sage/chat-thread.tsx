@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, type ComponentPropsWithoutRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -18,14 +19,28 @@ import {
   Receipt,
   Wand2,
   AlertTriangle,
+  History,
+  Search,
+  Plus,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/shadcn/button";
 import { Select } from "@/components/ui/select";
 import { SageIcon } from "@/components/admin/sage-icon";
 import { useToast } from "@/components/admin/ui/toaster";
+import { formatDateTime } from "@/lib/format-date";
 import type { AssistantProposal, AssistantResponse } from "@/lib/litchai/client";
-import { applyAssistantProposalAction } from "@/app/admin/sage/actions";
+import type { SageConversation } from "@/lib/db/schema";
+import {
+  applyAssistantProposalAction,
+  listSageConversationsAction,
+  loadSageConversationAction,
+  saveSageTurnAction,
+  renameSageConversationAction,
+  deleteSageConversationAction,
+} from "@/app/admin/sage/actions";
 
 const MAX_CHARS = 3000;
 
@@ -221,6 +236,138 @@ function ToolCard({ tool, data }: { tool?: string; data: Record<string, unknown>
   return null;
 }
 
+/** Search + list of saved conversations. Shared by the desktop rail and the
+ *  mobile drawer — same markup, different wrapper. Rename/delete controls are
+ *  always visible (not hover-gated) so they work on touch, not just mouse. */
+function HistoryPanel({
+  conversations,
+  activeId,
+  query,
+  loading,
+  onQueryChange,
+  onSelect,
+  onNew,
+  renamingId,
+  renameDraft,
+  onRenameStart,
+  onRenameDraftChange,
+  onRenameSubmit,
+  onRenameCancel,
+  onDelete,
+}: {
+  conversations: SageConversation[];
+  activeId: string | null;
+  query: string;
+  loading: boolean;
+  onQueryChange: (v: string) => void;
+  onSelect: (id: string) => void;
+  onNew: () => void;
+  renamingId: string | null;
+  renameDraft: string;
+  onRenameStart: (id: string, title: string) => void;
+  onRenameDraftChange: (v: string) => void;
+  onRenameSubmit: (id: string) => void;
+  onRenameCancel: () => void;
+  onDelete: (id: string) => void;
+}) {
+  return (
+    <div className="flex h-full flex-col">
+      <div className="p-3">
+        <Button size="sm" variant="outline" className="w-full justify-center gap-2" onClick={onNew}>
+          <Plus className="size-4" /> New chat
+        </Button>
+      </div>
+      <div className="px-3 pb-2">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted" />
+          <input
+            value={query}
+            onChange={(e) => onQueryChange(e.target.value)}
+            placeholder="Search conversations…"
+            className="w-full rounded-lg border border-hairline bg-surface py-1.5 pl-8 pr-2 text-xs text-ink outline-none placeholder:text-muted focus:border-brand"
+          />
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto px-2 pb-3">
+        {loading ? (
+          <p className="px-2 py-4 text-center text-xs text-muted">Loading…</p>
+        ) : conversations.length === 0 ? (
+          <p className="px-2 py-4 text-center text-xs text-muted">
+            {query ? "No matches." : "No conversations yet."}
+          </p>
+        ) : (
+          <ul className="space-y-0.5">
+            {conversations.map((c) => (
+              <li key={c.id}>
+                {renamingId === c.id ? (
+                  <div className="flex items-center gap-1 px-1 py-1">
+                    <input
+                      autoFocus
+                      value={renameDraft}
+                      onChange={(e) => onRenameDraftChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") onRenameSubmit(c.id);
+                        if (e.key === "Escape") onRenameCancel();
+                      }}
+                      className="min-w-0 flex-1 rounded-md border border-brand bg-paper px-1.5 py-1 text-xs text-ink outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onRenameSubmit(c.id)}
+                      className="shrink-0 rounded p-1 text-muted hover:text-brand"
+                      aria-label="Save title"
+                    >
+                      <Check className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={onRenameCancel}
+                      className="shrink-0 rounded p-1 text-muted hover:text-ink"
+                      aria-label="Cancel"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  </div>
+                ) : (
+                  <div
+                    className={cn(
+                      "flex items-center gap-0.5 rounded-lg pl-2 pr-1",
+                      c.id === activeId ? "bg-brand-tint" : "hover:bg-surface",
+                    )}
+                  >
+                    <button type="button" onClick={() => onSelect(c.id)} className="min-w-0 flex-1 py-1.5 text-left">
+                      <p className={cn("truncate text-sm", c.id === activeId ? "font-semibold text-brand" : "text-ink")}>
+                        {c.title}
+                      </p>
+                      <p className="truncate text-[11px] text-muted">{formatDateTime(c.updatedAt)}</p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onRenameStart(c.id, c.title)}
+                      className="grid size-7 shrink-0 place-items-center rounded-md text-muted hover:bg-surface hover:text-ink"
+                      aria-label="Rename"
+                    >
+                      <Pencil className="size-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onDelete(c.id)}
+                      className="grid size-7 shrink-0 place-items-center rounded-md text-muted hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
+                      aria-label="Delete"
+                    >
+                      <Trash2 className="size-3.5" />
+                    </button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export function ChatThread({ clients }: { clients: Client[] }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -233,6 +380,15 @@ export function ChatThread({ clients }: { clients: Client[] }) {
   const [offline, setOffline] = useState<string | null>(null);
   const [waited, setWaited] = useState(0);
 
+  // Conversation history — persisted per admin user, searchable.
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<SageConversation[]>([]);
+  const [historyQuery, setHistoryQuery] = useState("");
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
+
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const toast = useToast();
@@ -240,6 +396,22 @@ export function ChatThread({ clients }: { clients: Client[] }) {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
+
+  async function refreshHistory(query: string) {
+    setHistoryLoading(true);
+    try {
+      const res = await listSageConversationsAction(query);
+      if (res.ok) setConversations(res.conversations);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
+  // Instant on mount, debounced while the admin types a search.
+  useEffect(() => {
+    const t = setTimeout(() => void refreshHistory(historyQuery), historyQuery ? 300 : 0);
+    return () => clearTimeout(t);
+  }, [historyQuery]);
 
   // Auto-grow the composer with its content (capped), so multi-line prompts
   // don't hide behind a fixed one-row box.
@@ -271,6 +443,51 @@ export function ChatThread({ clients }: { clients: Client[] }) {
     setInput(s.prompt);
     setShowPrompts(false);
     focusInput();
+  }
+
+  function newChat() {
+    setMessages([]);
+    setConversationId(null);
+    setOffline(null);
+    setHistoryOpen(false);
+    focusInput();
+  }
+
+  async function selectConversation(id: string) {
+    setHistoryOpen(false);
+    const res = await loadSageConversationAction(id);
+    if (!res.ok || !res.conversation) {
+      toast.error(res.error || "Could not open that conversation.");
+      return;
+    }
+    setConversationId(id);
+    setScope(res.conversation.scope === "client" ? "client" : "firm");
+    setClientId(res.conversation.clientId || "");
+    setMessages(
+      (res.messages ?? []).map((m) => ({
+        id: m.id,
+        role: m.role === "user" ? "user" : "assistant",
+        content: m.content,
+        citations: Array.isArray(m.citations) ? (m.citations as string[]) : undefined,
+      })),
+    );
+  }
+
+  async function removeConversation(id: string) {
+    if (!confirm("Delete this conversation? This can't be undone.")) return;
+    const res = await deleteSageConversationAction(id);
+    if (!res.ok) return toast.error(res.message);
+    setConversations((prev) => prev.filter((c) => c.id !== id));
+    if (conversationId === id) newChat();
+  }
+
+  async function submitRename(id: string) {
+    const title = renameDraft.trim();
+    setRenamingId(null);
+    if (!title) return;
+    const res = await renameSageConversationAction(id, title);
+    if (!res.ok) return toast.error(res.message);
+    setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title } : c)));
   }
 
   async function send() {
@@ -309,18 +526,34 @@ export function ChatThread({ clients }: { clients: Client[] }) {
       }
 
       const payload = data as AssistantResponse;
+      const answer = payload.answer || "I'm not sure how to respond to that.";
       setMessages((prev) => [
         ...prev,
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: payload.answer || "I'm not sure how to respond to that.",
+          content: answer,
           citations: payload.citations,
           tool: payload.tool,
           toolResult: payload.tool_result,
           proposal: payload.proposal,
         },
       ]);
+
+      // Persist the turn (creates the conversation on the first exchange).
+      void saveSageTurnAction({
+        conversationId,
+        scope,
+        clientId: scope === "client" ? clientId : null,
+        userMessage: text,
+        assistantMessage: answer,
+        citations: payload.citations,
+      }).then((saved) => {
+        if (saved.ok) {
+          if (!conversationId) setConversationId(saved.conversationId);
+          void refreshHistory(historyQuery);
+        }
+      });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to get a response");
     } finally {
@@ -347,38 +580,109 @@ export function ChatThread({ clients }: { clients: Client[] }) {
 
   const empty = messages.length === 0;
 
+  const historyProps = {
+    conversations,
+    activeId: conversationId,
+    query: historyQuery,
+    loading: historyLoading,
+    onQueryChange: setHistoryQuery,
+    onSelect: (id: string) => void selectConversation(id),
+    onNew: newChat,
+    renamingId,
+    renameDraft,
+    onRenameStart: (id: string, title: string) => {
+      setRenamingId(id);
+      setRenameDraft(title);
+    },
+    onRenameDraftChange: setRenameDraft,
+    onRenameSubmit: (id: string) => void submitRename(id),
+    onRenameCancel: () => setRenamingId(null),
+    onDelete: (id: string) => void removeConversation(id),
+  };
+
   return (
-    <div className="flex h-full flex-col">
-      {/* Scope bar — stacks full-width on phones, inline on ≥sm */}
-      <div className="flex flex-col gap-2 border-b border-hairline bg-surface/40 px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:px-4 sm:py-3">
-        <span className="text-sm font-semibold text-ink">Scope</span>
-        <div className="w-full sm:w-48">
-          <Select
-            value={scope}
-            onChange={(v) => setScope(v as "firm" | "client")}
-            aria-label="Knowledge scope"
-            options={[
-              { value: "firm", label: "Firm knowledge base" },
-              { value: "client", label: "Client documents" },
-            ]}
-          />
-        </div>
-        {scope === "client" && (
-          <div className="w-full sm:w-64">
-            <Select
-              value={clientId}
-              onChange={setClientId}
-              searchable
-              placeholder="Select a client…"
-              aria-label="Client"
-              options={clients.map((c) => ({
-                value: c.id,
-                label: c.company || c.name || "Unknown",
-              }))}
+    <div className="flex h-full">
+      {/* Desktop history rail */}
+      <aside className="hidden w-64 shrink-0 border-r border-hairline bg-surface/30 md:flex md:flex-col">
+        <HistoryPanel {...historyProps} />
+      </aside>
+
+      {/* Mobile history drawer */}
+      <AnimatePresence>
+        {historyOpen && (
+          <div className="fixed inset-0 z-[80] md:hidden">
+            <motion.div
+              className="absolute inset-0 bg-night/50 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setHistoryOpen(false)}
             />
+            <motion.aside
+              className="absolute inset-y-0 left-0 flex w-72 max-w-[85%] flex-col border-r border-hairline bg-paper"
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "tween", duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+            >
+              <div className="flex items-center justify-between border-b border-hairline px-3 py-2.5">
+                <span className="text-sm font-semibold text-ink">History</span>
+                <button
+                  type="button"
+                  onClick={() => setHistoryOpen(false)}
+                  aria-label="Close history"
+                  className="grid size-8 place-items-center rounded-lg text-muted hover:bg-surface hover:text-ink"
+                >
+                  <X className="size-4.5" />
+                </button>
+              </div>
+              <div className="min-h-0 flex-1">
+                <HistoryPanel {...historyProps} />
+              </div>
+            </motion.aside>
           </div>
         )}
-      </div>
+      </AnimatePresence>
+
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Scope bar — stacks full-width on phones, inline on ≥sm */}
+        <div className="flex flex-col gap-2 border-b border-hairline bg-surface/40 px-3 py-2.5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 sm:px-4 sm:py-3">
+          <button
+            type="button"
+            onClick={() => setHistoryOpen(true)}
+            aria-label="Open conversation history"
+            className="grid size-9 shrink-0 place-items-center rounded-lg border border-hairline text-body transition-colors hover:bg-surface hover:text-ink md:hidden"
+          >
+            <History className="size-4.5" />
+          </button>
+          <span className="text-sm font-semibold text-ink">Scope</span>
+          <div className="w-full sm:w-48">
+            <Select
+              value={scope}
+              onChange={(v) => setScope(v as "firm" | "client")}
+              aria-label="Knowledge scope"
+              options={[
+                { value: "firm", label: "Firm knowledge base" },
+                { value: "client", label: "Client documents" },
+              ]}
+            />
+          </div>
+          {scope === "client" && (
+            <div className="w-full sm:w-64">
+              <Select
+                value={clientId}
+                onChange={setClientId}
+                searchable
+                placeholder="Select a client…"
+                aria-label="Client"
+                options={clients.map((c) => ({
+                  value: c.id,
+                  label: c.company || c.name || "Unknown",
+                }))}
+              />
+            </div>
+          )}
+        </div>
 
       {/* Messages / welcome */}
       <div className="flex-1 overflow-y-auto">
@@ -601,6 +905,7 @@ export function ChatThread({ clients }: { clients: Client[] }) {
             Sage may be inaccurate — verify against source documents. Grounded in the firm knowledge base.
           </p>
         </div>
+      </div>
       </div>
     </div>
   );
