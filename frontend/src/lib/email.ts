@@ -109,21 +109,28 @@ export function emailLayout(bodyHtml: string, opts: { preheader?: string } = {})
 <meta name="color-scheme" content="light dark">
 <meta name="supported-color-schemes" content="light dark">
 <style>
+  a:not(.btn) { color:${C.brand}; }
   @media (prefers-color-scheme: dark) {
     .bg-page { background:#0b0e17 !important; }
-    .card { background:#141a27 !important; border-color:#232a3b !important; }
-    .ink { color:#eef1f8 !important; }
-    .body { color:#aeb6c7 !important; }
-    .muted { color:#8791a6 !important; }
-    .hair { border-color:#232a3b !important; }
-    .tint { background:#1a2140 !important; }
-    .foot { background:#0b0e17 !important; }
-    /* Navy mark vanishes on a dark card — swap to the white one. */
+    /* Footer must be the SAME surface as the card — a darker footer reads as a
+       detached panel floating under the email. */
+    .card, .foot { background:#161c2b !important; }
+    .card { border-color:#2a3245 !important; }
+    .ink { color:#f0f3fa !important; }
+    .body { color:#b7bfd0 !important; }
+    .muted { color:#8d97ab !important; }
+    .hair { border-color:#2a3245 !important; }
+    /* Navy-on-navy is invisible: lift the detail card off the surface. */
+    .tint { background:#1e2740 !important; }
+    /* The navy pill all but disappears on a dark card (and clients then
+       auto-invert it to a washed-out lilac). Brighten it instead. */
+    .btn { background:#4a6cf7 !important; color:#ffffff !important; }
+    /* Brand blue is unreadable on dark — lift links too, but never the button. */
+    a:not(.btn) { color:#93aaff !important; }
+    /* The navy lockup vanishes on a dark card — swap to the white one. */
     .logo-light { display:none !important; }
-    .logo-dark { display:inline-block !important; }
-    .brandword { color:#ffffff !important; }
+    .logo-dark { display:block !important; }
   }
-  a { color:${C.brand}; }
   @media (max-width:600px){ .card{ border-radius:0 !important; } .pad{ padding-left:24px !important; padding-right:24px !important; } }
 </style>
 </head>
@@ -132,11 +139,11 @@ export function emailLayout(bodyHtml: string, opts: { preheader?: string } = {})
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="bg-page" style="background:${C.page};padding:28px 12px;">
     <tr><td align="center">
       <table role="presentation" width="600" cellpadding="0" cellspacing="0" class="card" style="width:600px;max-width:100%;background:${C.card};border:1px solid ${C.hair};border-radius:18px;overflow:hidden;">
-        <!-- header: logo lockup on the card, centred — no heavy colour bar -->
-        <tr><td align="center" style="padding:38px 30px 10px;">
-          <img src="${ASSETS}/brand/email-mark-navy.png" width="28" height="28" alt="" class="logo-light" style="vertical-align:middle;border:0;outline:none;">
-          <img src="${ASSETS}/brand/email-mark.png" width="28" height="28" alt="" class="logo-dark" style="display:none;vertical-align:middle;border:0;outline:none;mso-hide:all;">
-          <span class="brandword" style="vertical-align:middle;padding-left:9px;font-size:19px;font-weight:700;letter-spacing:-0.01em;color:${C.navy};">Litch Consulting</span>
+        <!-- header: the real brand lockup, left-aligned — no heavy colour bar.
+             Two variants because a navy logo is invisible on a dark card. -->
+        <tr><td align="left" class="pad" style="padding:34px 40px 16px;">
+          <img src="${ASSETS}/brand/email-logo-navy.png" width="150" height="73" alt="Litch Consulting" class="logo-light" style="display:block;border:0;outline:none;">
+          <img src="${ASSETS}/brand/email-logo-white.png" width="150" height="73" alt="Litch Consulting" class="logo-dark" style="display:none;border:0;outline:none;mso-hide:all;">
         </td></tr>
         <!-- body -->
         <tr><td class="ink pad" style="padding:22px 40px 36px;font-family:'Segoe UI',Arial,Helvetica,sans-serif;font-size:15px;line-height:1.65;color:${C.ink};">
