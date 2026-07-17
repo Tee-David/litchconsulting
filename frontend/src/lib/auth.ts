@@ -20,7 +20,16 @@ const googleEnabled = Boolean(googleId && googleSecret);
 export const auth = betterAuth({
   database: pool,
   secret: process.env.BETTER_AUTH_SECRET || process.env.AUTH_SECRET,
-  baseURL: process.env.BETTER_AUTH_URL || process.env.AUTH_URL,
+  // Pinned, not inferred: relying on Better Auth's request-host inference in prod
+  // produced a hostless `http:///verify-email` link (Google flagged it dead) —
+  // BETTER_AUTH_URL is intentionally unset in prod, so the inference has to work
+  // every time with no fallback, and it didn't. Same site-URL fallback as email.ts.
+  baseURL: (
+    process.env.BETTER_AUTH_URL ||
+    process.env.AUTH_URL ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    "https://www.litchconsulting.com"
+  ).replace(/\/$/, ""),
   trustedOrigins: [
     "http://localhost:3000",
     "https://litchconsulting.com",

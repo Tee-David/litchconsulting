@@ -3,6 +3,8 @@
  * admins. Run: `node --env-file=../.env --import tsx ./scripts/seed-users.ts`
  * (from the frontend/ dir).
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { auth } from "../src/lib/auth";
 import { Pool } from "pg";
 
@@ -13,10 +15,14 @@ const USERS = [
 ];
 
 function ssl() {
+  // Always verify against the committed CA (operator directive): env cert wins
+  // (rotation), else the repo cert file — never bare system CAs.
   const cert = process.env.COCKROACH_CA_CERT || process.env.COCKROACHDB_CERT;
-  return cert && cert.includes("BEGIN CERTIFICATE")
-    ? { ca: cert, rejectUnauthorized: true as const }
-    : { rejectUnauthorized: true as const };
+  if (cert && cert.includes("BEGIN CERTIFICATE")) return { ca: cert, rejectUnauthorized: true as const };
+  return {
+    ca: readFileSync(join(process.cwd(), "certs", "cockroach-ca.crt"), "utf8"),
+    rejectUnauthorized: true as const,
+  };
 }
 
 async function main() {

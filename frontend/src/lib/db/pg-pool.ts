@@ -1,7 +1,5 @@
 import { Pool, type PoolConfig } from "pg";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { COCKROACH_CA_PEM } from "./cockroach-ca";
 
 /**
  * The one CockroachDB connection pool for the whole app — shared by Drizzle
@@ -9,27 +7,18 @@ import path from "node:path";
  * serverless caps concurrent connections, and two `max: 5` pools was 10 sockets
  * competing for that cap.
  *
- * TLS: always pin the committed CA cert (operator directive). Order is env →
- * bundled file (`certs/cockroach-ca.crt`, shipped via next.config
- * outputFileTracingIncludes) → the local `~/.postgresql` cert. System CAs are a
- * last-resort only so a missing cert degrades instead of taking auth down.
+ * TLS: the CA is ALWAYS used (operator directive) and is imported as a module
+ * (`cockroach-ca.ts`, generated from certs/cockroach-ca.crt) — never read from
+ * disk or env at runtime. DATABASE_URL runs sslmode=verify-full, so any path
+ * where the CA failed to load meant every query on that function failed; an
+ * import cannot be absent from the bundle. An env cert still wins if provided
+ * (rotation escape hatch).
  */
 export function resolveSSL() {
   const envCert =
     process.env.COCKROACH_CA_CERT || process.env.COCKROACH_CERT || process.env.COCKROACHDB_CERT;
-  if (envCert && envCert.includes("BEGIN CERTIFICATE")) {
-    return { ca: envCert, rejectUnauthorized: true as const };
-  }
-  for (const f of [
-    path.join(process.cwd(), "certs", "cockroach-ca.crt"),
-    path.join(os.homedir(), ".postgresql", "root.crt"),
-  ]) {
-    try {
-      return { ca: fs.readFileSync(f, "utf8"), rejectUnauthorized: true as const };
-    } catch {}
-  }
-  console.warn("[db] CockroachDB CA cert not found — falling back to system CAs");
-  return { rejectUnauthorized: true as const };
+  const ca = envCert && envCert.includes("BEGIN CERTIFICATE") ? envCert : COCKROACH_CA_PEM;
+  return { ca, rejectUnauthorized: true as const };
 }
 
 /**
