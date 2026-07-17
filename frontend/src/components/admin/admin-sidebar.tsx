@@ -67,14 +67,16 @@ export function SidebarNav({
         )}
       </div>
 
-      <nav className={cn("flex-1 space-y-1 overflow-y-auto pb-4", collapsed ? "px-2" : "px-3")}>
-        {main.map(renderItem)}
-        {collapsed ? (
-          <div className="mx-2 my-3 h-px bg-hairline" />
-        ) : (
-          <p className="px-3 pb-1 pt-5 text-[11px] font-semibold uppercase tracking-wider text-muted">General</p>
-        )}
-        {general.map(renderItem)}
+      <nav className={cn("flex flex-1 flex-col overflow-y-auto pb-4", collapsed ? "px-2" : "px-3")}>
+        <div className="space-y-1">{main.map(renderItem)}</div>
+        <div className="mt-auto space-y-1 pt-4">
+          {collapsed ? (
+            <div className="mx-2 mb-3 h-px bg-hairline" />
+          ) : (
+            <p className="px-3 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted">General</p>
+          )}
+          {general.map(renderItem)}
+        </div>
       </nav>
 
       {/* Logout */}

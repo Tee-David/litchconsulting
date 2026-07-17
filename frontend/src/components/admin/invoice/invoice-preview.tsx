@@ -182,9 +182,6 @@ export function InvoicePreview({
             src={issuer.signatory.signatureImage}
             alt=""
             className="mx-auto -mb-1.5 h-14 w-auto object-contain"
-            onError={(e) => {
-              (e.currentTarget as HTMLImageElement).style.display = "none";
-            }}
           />
           <div className="mx-auto w-44 border-t border-[#0a0e1a]" />
           <p className="mt-1.5 font-bold">{issuer.signatory.name}</p>
