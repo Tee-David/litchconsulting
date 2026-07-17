@@ -149,6 +149,7 @@ export function SupportThreadClient({ ticketId, messages, ticketStatus }: Suppor
           <button
             type="submit"
             disabled={isPending || !replyText.trim()}
+            aria-label={isPending ? "Sending reply" : "Send reply"}
             className="inline-flex size-[42px] items-center justify-center rounded-xl bg-brand text-white transition-colors hover:bg-brand-hover disabled:opacity-50 shrink-0"
           >
             {isPending ? (

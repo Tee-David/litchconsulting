@@ -1,40 +1,16 @@
 import { betterAuth } from "better-auth";
-import { Pool } from "pg";
-import fs from "node:fs";
-import os from "node:os";
-import path from "node:path";
+import { pool } from "./db/pg-pool";
 
 /**
  * Better Auth server instance (Next.js, same-origin httpOnly cookies).
- * Database: CockroachDB (Postgres wire-compatible) via node-postgres Pool.
+ * Database: the shared CockroachDB pool (`db/pg-pool.ts`) — pinned CA cert and
+ * fail-fast timeouts, the same pool Drizzle uses. One pool, not two: a slow
+ * connect used to hang Better Auth's session check for ~2 min and cascade into
+ * "a server error occurred" across pages.
  *
  * Litch uses just two roles: `admin` (firm staff) and `client` (default).
  * Admin accounts are seeded/promoted manually; self-signup is always a client.
  */
-function resolveSSL() {
-  const envCert =
-    process.env.COCKROACH_CA_CERT || process.env.COCKROACH_CERT || process.env.COCKROACHDB_CERT;
-  if (envCert && envCert.includes("BEGIN CERTIFICATE")) {
-    return { ca: envCert, rejectUnauthorized: true as const };
-  }
-  for (const f of [
-    path.join(process.cwd(), "certs", "cockroach-ca.crt"),
-    path.join(os.homedir(), ".postgresql", "root.crt"),
-  ]) {
-    try {
-      return { ca: fs.readFileSync(f, "utf8"), rejectUnauthorized: true as const };
-    } catch {}
-  }
-  // CockroachDB Cloud certs chain to a publicly trusted root, so Node's system
-  // CAs still validate the connection when no cert file is present.
-  return { rejectUnauthorized: true as const };
-}
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || process.env.COCKROACHDB_URL,
-  ssl: resolveSSL(),
-  max: 5,
-});
 
 const googleId = process.env.GOOGLE_CLIENT_ID;
 const googleSecret = process.env.GOOGLE_CLIENT_SECRET;

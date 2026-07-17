@@ -32,14 +32,16 @@ function StarRating({ rating }: { rating: number }) {
   return (
     <span className="flex" role="img" aria-label={`${rating} out of 5 stars`}>
       {Array.from({ length: 5 }).map((_, i) => {
-        const fill = Math.max(0, Math.min(1, rating - i));
+        // Rounded: 4.7 - 4 is 0.7000000000000002 in binary float, which would
+        // otherwise reach the DOM as width:70.00000000000003%.
+        const fill = Math.round(Math.max(0, Math.min(1, rating - i)) * 100);
         return (
           <span key={i} className="relative inline-flex">
             <Star className="size-3.5 fill-white/25 text-white/30" />
             {fill > 0 && (
               <span
                 className="absolute inset-y-0 left-0 overflow-hidden"
-                style={{ width: `${fill * 100}%` }}
+                style={{ width: `${fill}%` }}
               >
                 <Star className="size-3.5 max-w-none fill-amber-400 text-amber-400" />
               </span>
@@ -92,10 +94,11 @@ export function Hero() {
       <div className="absolute inset-0 bg-gradient-to-t from-night/90 via-night/45 to-night/30" />
       <div className="absolute inset-0 bg-gradient-to-r from-brand/50 to-transparent" />
 
-      {/* Orbiting work-tool logos — bleeds off the right edge, only ~half visible */}
+      {/* Orbiting work-tool logos. translate-x-50% puts the rings' centre exactly
+          on the viewport edge, so precisely the left half shows at every width. */}
       <div
         aria-hidden
-        className="pointer-events-none absolute top-1/2 right-0 z-[1] hidden h-[612px] w-[612px] -translate-y-1/2 translate-x-[38%] lg:block xl:translate-x-[32%]"
+        className="pointer-events-none absolute top-1/2 right-0 z-[1] hidden h-[612px] w-[612px] -translate-y-1/2 translate-x-[50%] lg:block"
       >
         <div className="relative size-full">
           <OrbitingCircles iconSize={48} radius={266} duration={44}>

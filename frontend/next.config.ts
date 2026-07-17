@@ -9,11 +9,14 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "images.unsplash.com" },
     ],
   },
-  // Ship the invoice PDF fonts (Noto Sans, for the ₦ glyph) with the serverless
-  // functions that render PDFs, so they resolve at runtime on Vercel.
   outputFileTracingIncludes: {
+    // Ship the invoice PDF fonts (Noto Sans, for the ₦ glyph) with the
+    // serverless functions that render PDFs, so they resolve at runtime.
     "/api/admin/**": ["./src/lib/invoice/pdf/fonts/**"],
     "/admin/finance/**": ["./src/lib/invoice/pdf/fonts/**"],
+    // Pin the CockroachDB CA cert into every function so the DB layer always
+    // validates against the committed cert, not just system CAs.
+    "/**": ["./certs/cockroach-ca.crt"],
   },
 };
 
