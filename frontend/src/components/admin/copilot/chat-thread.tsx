@@ -179,7 +179,7 @@ export function ChatThread({ clients }: { clients: Client[] }) {
     requestAnimationFrame(() => inputRef.current?.focus());
   }
 
-  function useStarter(s: (typeof STARTERS)[number]) {
+  function applyStarter(s: (typeof STARTERS)[number]) {
     if (s.scope) setScope(s.scope);
     setInput(s.prompt);
     setShowPrompts(false);
@@ -311,7 +311,7 @@ export function ChatThread({ clients }: { clients: Client[] }) {
                 <button
                   key={s.label}
                   type="button"
-                  onClick={() => useStarter(s)}
+                  onClick={() => applyStarter(s)}
                   className="group flex items-center gap-3 rounded-2xl border border-hairline bg-paper p-4 text-left transition-colors hover:border-brand/40 hover:bg-surface/50"
                 >
                   <span className={cn("grid size-9 shrink-0 place-items-center rounded-xl", s.tint)}>
