@@ -13,6 +13,12 @@ if (!token) {
 const H = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 const API = "https://api.vercel.com";
 
+// Only what the WEB APP reads at runtime. Deliberately excluded: BETTER_AUTH_URL
+// (localhost), deployment/infra credentials (VERCEL_TOKEN, GITHUB_PAT,
+// CLOUDFLARE_*, OCI_*, LITCH_SSH_*) and LITCHAI_DATABASE_URL — those belong to
+// the VM/CI, and shipping them to the app would widen the blast radius for no
+// benefit. Anything the app calls `process.env.X` for MUST be listed here or it
+// silently degrades in prod (this is how Sage shipped with LITCHAI_API_URL unset).
 const KEYS = [
   "COCKROACHDB_URL",
   "COCKROACHDB_CERT",
@@ -21,7 +27,9 @@ const KEYS = [
   "R2_SECRET_KEY",
   "R2_ACCOUNT_ID",
   "R2_BUCKET_NAME",
+  "R2_PRIVATE_BUCKET",
   "BETTER_AUTH_SECRET",
+  "NEXT_PUBLIC_SITE_URL",
   "SMTP_HOST",
   "SMTP_PORT",
   "SMTP_USER",
@@ -29,6 +37,25 @@ const KEYS = [
   "SMTP_FROM",
   "CONTACT_TO_EMAIL",
   "CONTACT_FROM_EMAIL",
+  // LitchAI / Sage — the relay is gated on these; without them Sage reports
+  // "not configured" in production.
+  "LITCHAI_API_URL",
+  "LITCHAI_ACCESS_CLIENT_ID",
+  "LITCHAI_ACCESS_CLIENT_SECRET",
+  "LITCHAI_PUBLIC_KEY",
+  // Invoice issuer / bank block, push, crons.
+  "INVOICE_FROM_EMAIL",
+  "INVOICE_BANK_NAME",
+  "INVOICE_ACCOUNT_NAME",
+  "INVOICE_ACCOUNT_NUMBER",
+  "VAPID_PUBLIC_KEY",
+  "VAPID_PRIVATE_KEY",
+  "NEXT_PUBLIC_VAPID_PUBLIC_KEY",
+  "CRON_SECRET",
+  "GOOGLE_CLIENT_ID",
+  "GOOGLE_CLIENT_SECRET",
+  "PAYSTACK_SECRET_KEY",
+  "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY",
 ];
 
 async function findProject() {

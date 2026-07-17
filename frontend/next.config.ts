@@ -27,10 +27,30 @@ const nextConfig: NextConfig = {
     // Ship the invoice fonts (Noto Sans, for the ₦ glyph) and the signature
     // scan with every function that renders a PDF or emails a receipt — the
     // HTML→PDF path embeds both as data URIs read from disk at runtime.
-    "/api/admin/**": ["./src/lib/invoice/pdf/fonts/**", "./public/brand/**"],
-    "/api/dashboard/**": ["./src/lib/invoice/pdf/fonts/**", "./public/brand/**"],
-    "/api/paystack/**": ["./src/lib/invoice/pdf/fonts/**", "./public/brand/**"],
-    "/admin/finance/**": ["./src/lib/invoice/pdf/fonts/**", "./public/brand/**"],
+    // @sparticuz/chromium extracts bin/*.br at runtime via a computed path, so
+    // nothing imports them and the tracer can't see them. Without this they are
+    // absent from the function, Chromium can't launch, and the PDF silently
+    // degrades to the @react-pdf fallback.
+    "/api/admin/**": [
+      "./src/lib/invoice/pdf/fonts/**",
+      "./public/brand/**",
+      "./node_modules/@sparticuz/chromium/bin/**",
+    ],
+    "/api/dashboard/**": [
+      "./src/lib/invoice/pdf/fonts/**",
+      "./public/brand/**",
+      "./node_modules/@sparticuz/chromium/bin/**",
+    ],
+    "/api/paystack/**": [
+      "./src/lib/invoice/pdf/fonts/**",
+      "./public/brand/**",
+      "./node_modules/@sparticuz/chromium/bin/**",
+    ],
+    "/admin/finance/**": [
+      "./src/lib/invoice/pdf/fonts/**",
+      "./public/brand/**",
+      "./node_modules/@sparticuz/chromium/bin/**",
+    ],
     // Pin the CockroachDB CA cert into every function so the DB layer always
     // validates against the committed cert, not just system CAs.
     "/**": ["./certs/cockroach-ca.crt"],
