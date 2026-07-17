@@ -218,7 +218,7 @@ export function AccountingView({ expenses, invoices }: { expenses: ExpenseRow[];
       </div>
 
       {/* P&L cards */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Revenue collected" value={fmt(income)} icon={Wallet} hint={`${paidRows.length} payments`} />
         <StatCard label="Expenses" value={fmt(totalExpense)} icon={TrendingDown} hint={`${expenseRows.length} entries`} />
         <StatCard label="Net profit" value={fmt(net)} icon={Scale} />

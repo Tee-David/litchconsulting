@@ -156,7 +156,7 @@ export function PaymentsList({ payments }: { payments: PaymentRow[] }) {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Collected" value={formatMoney(totals.collected)} icon={HandCoins} hint={`${totals.count} successful`} />
         <StatCard label="Success rate" value={`${totals.rate}%`} icon={Percent} hint={`of ${filtered.length} attempts`} />
         <StatCard label="Needs attention" value={totals.attention} icon={AlertTriangle} hint="flagged / duplicate" />

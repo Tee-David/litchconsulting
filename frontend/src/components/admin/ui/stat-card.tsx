@@ -17,16 +17,18 @@ export function StatCard({
   hint?: string;
 }) {
   return (
-    <div className="rounded-card border border-hairline bg-paper p-5 shadow-sm shadow-black/[0.03]">
-      <div className="flex items-start justify-between gap-3">
-        <p className="text-sm font-medium text-body">{label}</p>
+    <div className="rounded-card border border-hairline bg-paper p-4 shadow-sm shadow-black/[0.03] sm:p-5">
+      <div className="flex items-start justify-between gap-2">
+        <p className="min-w-0 text-sm font-medium text-body">{label}</p>
         {Icon && (
-          <span className="grid size-9 shrink-0 place-items-center rounded-full bg-brand-tint text-brand">
-            <Icon className="size-4.5" />
+          <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-tint text-brand sm:size-9">
+            <Icon className="size-4 sm:size-4.5" />
           </span>
         )}
       </div>
-      <p className="mt-3 font-display text-2xl font-bold tracking-tight text-ink">{value}</p>
+      <p className="mt-3 break-words font-display text-xl font-bold tracking-tight text-ink tabular-nums sm:text-2xl">
+        {value}
+      </p>
       {(delta || hint) && (
         <div className="mt-1.5 flex items-center gap-1.5 text-xs">
           {delta && (

@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
 export function Tabs({ tabs }: { tabs: { label: string; href: string }[] }) {
   const pathname = usePathname();
   return (
-    <div className="no-scrollbar flex gap-1 overflow-x-auto border-b border-hairline">
+    <div className="no-scrollbar flex gap-1 overflow-x-auto overscroll-x-contain touch-pan-x border-b border-hairline">
       {tabs.map((t) => {
         const active = pathname === t.href || pathname.startsWith(t.href + "/");
         return (
@@ -49,7 +49,7 @@ export function QueryTabs({
   const searchParams = useSearchParams();
   const current = searchParams.get(param) || defaultValue;
   return (
-    <div className="no-scrollbar flex gap-1 overflow-x-auto border-b border-hairline">
+    <div className="no-scrollbar flex gap-1 overflow-x-auto overscroll-x-contain touch-pan-x border-b border-hairline">
       {tabs.map((t) => {
         const active = current === t.value;
         const href =

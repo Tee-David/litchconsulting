@@ -302,7 +302,7 @@ export function ModelTool() {
 
           {tab === "forecast" ? (
             <>
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard label="Total revenue" value={fmt(k.totalRev)} icon={TrendingUp} hint={`${inp.months} mo`} />
                 <StatCard label="Net profit" value={fmt(k.totalNet)} icon={Scale} />
                 <StatCard label="Ending cash" value={fmt(k.endingCash)} icon={Wallet} hint={k.cashOut ? `Cash-out mo ${k.cashOut}` : "Stays positive"} />
@@ -394,7 +394,7 @@ export function ModelTool() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <StatCard label="Enterprise value" value={fmt(val.enterprise)} icon={Scale} hint="DCF, base case" />
                 <StatCard label="PV of cash flows" value={fmt(val.pvExplicit)} icon={Wallet} />
                 <StatCard label="PV of terminal" value={fmt(val.pvTerminal)} icon={TrendingUp} />

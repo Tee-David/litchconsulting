@@ -354,12 +354,12 @@ export function SettingsView({
   return (
     <div className="space-y-6">
       {/* Tabs Switcher */}
-      <div className="flex border-b border-hairline">
+      <div className="no-scrollbar flex overflow-x-auto overscroll-x-contain touch-pan-x border-b border-hairline">
         <button
           type="button"
           onClick={() => setActiveTab("profile")}
           className={cn(
-            "flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-semibold transition-all",
+            "flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3.5 py-3 text-sm font-semibold transition-all sm:px-5",
             activeTab === "profile"
               ? "border-brand text-brand dark:border-white dark:text-white"
               : "border-transparent text-body hover:text-ink"
@@ -372,7 +372,7 @@ export function SettingsView({
           type="button"
           onClick={() => setActiveTab("general")}
           className={cn(
-            "flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-semibold transition-all",
+            "flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3.5 py-3 text-sm font-semibold transition-all sm:px-5",
             activeTab === "general"
               ? "border-brand text-brand dark:border-white dark:text-white"
               : "border-transparent text-body hover:text-ink"
@@ -385,7 +385,7 @@ export function SettingsView({
           type="button"
           onClick={() => setActiveTab("users")}
           className={cn(
-            "flex items-center gap-2 border-b-2 px-5 py-3 text-sm font-semibold transition-all",
+            "flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3.5 py-3 text-sm font-semibold transition-all sm:px-5",
             activeTab === "users"
               ? "border-brand text-brand dark:border-white dark:text-white"
               : "border-transparent text-body hover:text-ink"

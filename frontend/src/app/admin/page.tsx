@@ -142,7 +142,7 @@ export default async function AdminDashboard() {
       </div>
 
       {/* KPIs */}
-      <div data-tour="kpi-stats" className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div data-tour="kpi-stats" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard label="Open requests" value={reqStats.open} icon={Inbox} hint={`${reqStats.pendingPayment} awaiting quote/pay`} />
         <StatCard label="Total invoiced" value={formatMoney(stats.invoiced)} icon={Wallet} hint={`${stats.count} invoices`} />
         <StatCard label="Paid" value={formatMoney(stats.paid)} icon={BadgeCheck} />

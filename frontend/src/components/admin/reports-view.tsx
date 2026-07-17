@@ -435,7 +435,7 @@ export function ReportsView({ invoices }: { invoices: InvoiceRow[] }) {
       {/* ===================== OVERVIEW ===================== */}
       {report === "overview" && (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard label="Billed" value={fmt(totals.billed)} icon={Wallet} hint={`${live.length} invoices`} />
             <StatCard label="Collected" value={fmt(totals.collected)} icon={BadgeCheck} hint={`${totals.rate}% rate`} />
             <StatCard label="Outstanding" value={fmt(totals.outstanding)} icon={Clock} />
@@ -521,7 +521,7 @@ export function ReportsView({ invoices }: { invoices: InvoiceRow[] }) {
       {/* ===================== REVENUE ===================== */}
       {report === "revenue" && (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard label="Total billed" value={fmt(totals.billed)} icon={Wallet} hint={`${live.length} invoices`} />
             <StatCard label="Gross (pre-tax)" value={fmt(totals.gross)} icon={TrendingUp} />
             <StatCard label="Avg invoice" value={fmt(live.length ? totals.billed / live.length : 0)} icon={Receipt} />
@@ -557,7 +557,7 @@ export function ReportsView({ invoices }: { invoices: InvoiceRow[] }) {
       {/* ===================== COLLECTIONS ===================== */}
       {report === "collections" && (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard label="Collected" value={fmt(totals.collected)} icon={HandCoins} />
             <StatCard label="Outstanding" value={fmt(totals.outstanding)} icon={Clock} />
             <StatCard label="Collection rate" value={`${totals.rate}%`} icon={Percent} />
@@ -607,7 +607,7 @@ export function ReportsView({ invoices }: { invoices: InvoiceRow[] }) {
       {/* ===================== AGING ===================== */}
       {report === "aging" && (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
             {aging.buckets.map((b) => (
               <StatCard key={b.key} label={b.label} value={fmt(b.value)} hint={`${b.count} inv`} />
             ))}
@@ -687,7 +687,7 @@ export function ReportsView({ invoices }: { invoices: InvoiceRow[] }) {
       {/* ===================== TAX / VAT ===================== */}
       {report === "tax" && (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <StatCard label="Taxable base" value={fmt(totals.gross)} icon={Wallet} />
             <StatCard label="Tax / VAT charged" value={fmt(totals.tax)} icon={Receipt} />
             <StatCard label="Effective rate" value={`${totals.gross ? Math.round((totals.tax / totals.gross) * 100) : 0}%`} icon={Percent} />
@@ -728,7 +728,7 @@ export function ReportsView({ invoices }: { invoices: InvoiceRow[] }) {
       {/* ===================== CLIENTS ===================== */}
       {report === "clients" && (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard label="Clients billed" value={String(byClient.length)} icon={Users} />
             <StatCard label="Total billed" value={fmt(totals.billed)} icon={Wallet} />
             <StatCard label="Avg per client" value={fmt(byClient.length ? totals.billed / byClient.length : 0)} icon={TrendingUp} />
@@ -772,7 +772,7 @@ export function ReportsView({ invoices }: { invoices: InvoiceRow[] }) {
       {/* ===================== MONTHLY SUMMARY ===================== */}
       {report === "monthly" && (
         <>
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard label="Billed" value={fmt(totals.billed)} icon={Wallet} />
             <StatCard label="Collected" value={fmt(totals.collected)} icon={BadgeCheck} />
             <StatCard label="Tax / VAT" value={fmt(totals.tax)} icon={Receipt} />

@@ -187,6 +187,25 @@ body {
   border-radius: 4px;
 }
 
+/* Mobile: stop iOS Safari zooming the page when a small-font control is
+   focused. Any control under 16px is bumped to 16px on narrow screens — the
+   page keeps its density on desktop where zoom-on-focus doesn't happen. */
+@media (max-width: 640px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* Never let a page scroll sideways on a phone from an overflowing child. */
+@media (max-width: 640px) {
+  html,
+  body {
+    overflow-x: hidden;
+  }
+}
+
 /* Legibility for white text sitting on photos / hero images */
 .text-shadow-hero {
   text-shadow: 0 2px 16px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);

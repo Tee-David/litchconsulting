@@ -212,7 +212,7 @@ export function InvoiceList({ invoices }: { invoices: InvoiceRow[] }) {
 
   return (
     <div className="space-y-6">
-      <div data-tour="invoice-stats" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div data-tour="invoice-stats" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Total invoiced" value={formatMoney(stats.invoiced)} icon={Wallet} />
         <StatCard label="Paid" value={formatMoney(stats.paid)} icon={BadgeCheck} />
         <StatCard label="Outstanding" value={formatMoney(stats.outstanding)} icon={Clock} />

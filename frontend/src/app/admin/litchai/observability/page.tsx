@@ -38,7 +38,7 @@ export default async function ObservabilityPage() {
         <EmptyState icon={Activity} title="Metrics unavailable" description={error ?? "No data."} />
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-1 gap-3 xs:grid-cols-2 sm:grid-cols-4">
             <Stat label="Documents" value={data.documents_total} />
             <Stat label="Rejected" value={data.documents_rejected} />
             <Stat label="Needs review" value={data.needs_review_total} />

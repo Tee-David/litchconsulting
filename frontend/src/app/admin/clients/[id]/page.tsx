@@ -189,7 +189,7 @@ export default async function ClientHubPage({
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard label="Total billed" value={formatMoney(billed)} icon={Wallet} />
         <StatCard label="Paid" value={formatMoney(paid)} icon={BadgeCheck} />
         <StatCard label="Outstanding" value={formatMoney(outstanding)} icon={Clock} />

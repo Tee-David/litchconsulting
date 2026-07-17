@@ -123,7 +123,7 @@ export function ModelPortfolios() {
       </div>
 
       {/* General info cards */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="OCF (weighted)" value={`${meta.ocf}%`} icon={Coins} />
         <StatCard label="Transaction cost" value={`${meta.txn}%`} icon={Gauge} />
         <StatCard label="Funds / securities" value={`${meta.funds}`} icon={Boxes} hint={`${meta.securities} securities`} />

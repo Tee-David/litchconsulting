@@ -66,7 +66,7 @@ export default async function AdminRequestsPage({
         </Link>
       </PageHeader>
 
-      <div data-tour="requests-stats" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div data-tour="requests-stats" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Open requests" value={stats.open} icon={Inbox} />
         <StatCard label="Awaiting quote/payment" value={stats.pendingPayment} icon={Inbox} />
         <StatCard label="Awaiting documents" value={stats.awaitingDocs} icon={Inbox} />
