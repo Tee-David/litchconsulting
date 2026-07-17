@@ -279,7 +279,7 @@ export async function sendInvoiceAction(id: string): Promise<ActionResult> {
   };
 
   const { renderInvoicePdf } = await import("@/lib/invoice/pdf/render");
-  const { sendEmail, emailLayout, emailButton, emailIconBadge, emailDetailRows } = await import("@/lib/email");
+  const { sendEmail, emailLayout, emailButton, emailDetailRows, EMAIL_ICONS } = await import("@/lib/email");
   const { getIssuer } = await import("@/lib/invoice/get-issuer");
   const { formatMoney } = await import("@/lib/invoice/money");
   const pdf = await renderInvoicePdf(invoiceData, "invoice", await getIssuer());
@@ -297,7 +297,7 @@ export async function sendInvoiceAction(id: string): Promise<ActionResult> {
       ...(inv.dueDate ? [{ label: "Due", value: String(inv.dueDate) }] : []),
       { label: "Amount due", value: formatMoney(Number(inv.total), inv.currency), strong: true },
     ])}
-    <p style="margin:18px 0 12px;">${emailButton(payHref, "View & pay invoice")}</p>
+    <p style="margin:18px 0 12px;">${emailButton(payHref, "View & pay invoice", EMAIL_ICONS.arrow)}</p>
     <p class="muted" style="margin:0;color:#8a92a6;font-size:13px;">Or open it here: <a href="${publicLink}" style="color:#2540c4;">${publicLink}</a></p>
   `,
     { preheader: `Invoice ${inv.number} from Litch Consulting — ${formatMoney(Number(inv.total), inv.currency)} due` },

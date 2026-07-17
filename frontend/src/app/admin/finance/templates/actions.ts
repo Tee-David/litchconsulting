@@ -47,7 +47,7 @@ export async function saveTemplateAction(input: TemplateInput): Promise<ActionRe
     })
     .returning({ id: template.id });
 
-  revalidatePath("/admin/templates");
+  revalidatePath("/admin/finance/templates");
   return { ok: true, id: row.id };
 }
 
@@ -64,6 +64,6 @@ export async function deleteTemplateAction(id: string): Promise<ActionResult> {
       /* ignore storage cleanup failures */
     }
   }
-  revalidatePath("/admin/templates");
+  revalidatePath("/admin/finance/templates");
   return { ok: true };
 }

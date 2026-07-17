@@ -79,9 +79,26 @@ export function emailIconBadge(emoji: string, tint = C.tint): string {
   return `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 16px;"><tr><td class="tint" width="46" height="46" align="center" valign="middle" style="background:${tint};border-radius:12px;font-size:22px;line-height:46px;">${emoji}</td></tr></table>`;
 }
 
-/** Brand pill button (bulletproof-ish: padded anchor, no images). */
-export function emailButton(href: string, label: string): string {
-  return `<a href="${href}" class="btn" style="display:inline-block;background:${C.navy};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 26px;border-radius:9999px;">${label}</a>`;
+/**
+ * Small white glyphs for button labels. Deliberately unicode, not images or
+ * SVG: Gmail strips inline SVG and most clients block remote images by default,
+ * so an icon that "renders everywhere" has to be a character.
+ */
+export const EMAIL_ICONS = {
+  check: "✓",
+  arrow: "→",
+  download: "⬇",
+} as const;
+
+/**
+ * Brand pill button (bulletproof-ish: padded anchor, no images). `icon` is
+ * rendered in a fixed-width span so the glyph never crowds the label.
+ */
+export function emailButton(href: string, label: string, icon?: string): string {
+  const glyph = icon
+    ? `<span style="display:inline-block;padding-right:8px;font-size:15px;line-height:1;">${icon}</span>`
+    : "";
+  return `<a href="${href}" class="btn" style="display:inline-block;background:${C.navy};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 26px;border-radius:9999px;">${glyph}${label}</a>`;
 }
 
 /** Label/value rows in a tinted card — the receipt/order detail block. */
@@ -179,7 +196,7 @@ export async function sendVerificationEmail(to: string, url: string) {
     `
     <p style="margin:0 0 6px;font-size:20px;font-weight:700;">Welcome to Litch Consulting 👋</p>
     <p class="body" style="margin:0 0 22px;color:${C.body};">Confirm your email to secure your account and unlock your client portal — request services, track progress, pay invoices and download deliverables.</p>
-    <p style="margin:0 0 24px;">${emailButton(url, "Verify email")}</p>
+    <p style="margin:0 0 24px;">${emailButton(url, "Verify email", EMAIL_ICONS.check)}</p>
     <p class="muted" style="margin:0 0 6px;font-size:13px;color:${C.muted};">Or paste this link into your browser:</p>
     <p style="margin:0 0 18px;font-size:12px;word-break:break-all;"><a href="${url}" style="color:${C.brand};">${url}</a></p>
     <p class="muted" style="margin:0;font-size:13px;color:${C.muted};">This link expires in 1 hour. If you didn't create an account, you can ignore this email.</p>
@@ -199,7 +216,7 @@ export async function sendPasswordResetEmail(to: string, url: string) {
     `
     <p style="margin:0 0 6px;font-size:20px;font-weight:700;">Reset your password</p>
     <p class="body" style="margin:0 0 22px;color:${C.body};">We received a request to reset your Litch Consulting password. Choose a new one below — the link expires in 1 hour.</p>
-    <p style="margin:0 0 24px;">${emailButton(url, "Reset password")}</p>
+    <p style="margin:0 0 24px;">${emailButton(url, "Reset password", EMAIL_ICONS.arrow)}</p>
     <p class="muted" style="margin:0 0 6px;font-size:13px;color:${C.muted};">Or paste this link into your browser:</p>
     <p style="margin:0 0 18px;font-size:12px;word-break:break-all;"><a href="${url}" style="color:${C.brand};">${url}</a></p>
     <p class="muted" style="margin:0;font-size:13px;color:${C.muted};">If you didn't request this, you can safely ignore this email — your password won't change.</p>

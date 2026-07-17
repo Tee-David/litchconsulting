@@ -13,6 +13,16 @@ const nextConfig: NextConfig = {
   // at runtime; keep it (and puppeteer-core) external so Next doesn't bundle or
   // mangle the binary.
   serverExternalPackages: ["@sparticuz/chromium", "puppeteer-core"],
+  // Templates and Integrations moved under Finance / Settings; keep the old
+  // URLs working for bookmarks and anything already linking to them.
+  async redirects() {
+    return [
+      { source: "/admin/templates", destination: "/admin/finance/templates", permanent: true },
+      { source: "/admin/templates/:path*", destination: "/admin/finance/templates/:path*", permanent: true },
+      { source: "/admin/integrations", destination: "/admin/settings/integrations", permanent: true },
+      { source: "/admin/integrations/:path*", destination: "/admin/settings/integrations/:path*", permanent: true },
+    ];
+  },
   outputFileTracingIncludes: {
     // Ship the invoice fonts (Noto Sans, for the ₦ glyph) and the signature
     // scan with every function that renders a PDF or emails a receipt — the

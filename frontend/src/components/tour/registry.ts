@@ -862,7 +862,7 @@ export const TOURS: Record<string, TourDef> = {
     id: "admin-templates",
     audience: "admin",
     kind: "page",
-    route: "/admin/templates",
+    route: "/admin/finance/templates",
     steps: [
       {
         key: "templates-view",
@@ -973,7 +973,7 @@ export const TOURS: Record<string, TourDef> = {
     id: "admin-integrations",
     audience: "admin",
     kind: "page",
-    route: "/admin/integrations",
+    route: "/admin/settings/integrations",
     steps: [
       {
         key: "integrations-grid",
@@ -1300,7 +1300,7 @@ export const TOURS: Record<string, TourDef> = {
         "templates",
         "Templates",
         "Import a workbook once and reuse it forever — preview, download or share it by link. The starter library gives you branded models to build from.",
-        { route: "/admin/templates", page: "Templates", icon: "fileStack" },
+        { route: "/admin/finance/templates", page: "Templates", icon: "fileStack" },
       ),
       {
         key: "litchai",
@@ -1329,7 +1329,7 @@ export const TOURS: Record<string, TourDef> = {
         "integrations",
         "Integrations",
         "Email, storage, database, Google sign-in and Paystack, each reading its live config. Configured by environment, not by clicking — so nothing critical can be switched off by accident.",
-        { route: "/admin/integrations", page: "Integrations", icon: "cable" },
+        { route: "/admin/settings/integrations", page: "Integrations", icon: "cable" },
       ),
       centerStep(
         "help-desk",

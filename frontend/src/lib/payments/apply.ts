@@ -209,7 +209,7 @@ export async function applyInvoicePaid(
       if (data) {
         const { renderInvoicePdf } = await import("@/lib/invoice/pdf/render");
         const { getIssuer } = await import("@/lib/invoice/get-issuer");
-        const { sendEmail, emailLayout, emailButton, emailIconBadge, emailDetailRows } = await import("@/lib/email");
+        const { sendEmail, emailLayout, emailButton, emailDetailRows, EMAIL_ICONS } = await import("@/lib/email");
         const { formatMoney } = await import("@/lib/invoice/money");
         const pdf = await renderInvoicePdf(
           {
@@ -245,6 +245,7 @@ export async function applyInvoicePaid(
               ((req.requiredDocuments as RequiredDocument[]) ?? []).some((d) => d.required)
                 ? "Upload your documents"
                 : "Track your request",
+              EMAIL_ICONS.arrow,
             )}</p>`
           : "";
         await sendEmail({

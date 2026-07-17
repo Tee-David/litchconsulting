@@ -8,6 +8,7 @@ const FINANCE_TABS = [
   { label: "Accounting", href: "/admin/finance/accounting" },
   { label: "Models", href: "/admin/finance/tools" },
   { label: "Calculators", href: "/admin/finance/calculators" },
+  { label: "Templates", href: "/admin/finance/templates" },
 ];
 
 export default function FinanceLayout({ children }: { children: React.ReactNode }) {

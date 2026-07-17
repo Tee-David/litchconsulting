@@ -1,4 +1,3 @@
-import { PageHeader } from "@/components/admin/ui/page-header";
 import { getOrgSettings } from "@/lib/invoice/get-issuer";
 import { issuer as defaultIssuer, DEFAULT_TERMS } from "@/lib/invoice/issuer";
 import { SettingsView } from "@/components/admin/settings/settings-view";
@@ -50,7 +49,6 @@ export default async function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader title="Settings" description="Organisation profile, branding, invoice defaults, and administrative user access control." />
       <SettingsView
         initial={initial}
         placeholders={placeholders}
