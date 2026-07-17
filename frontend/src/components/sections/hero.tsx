@@ -145,7 +145,7 @@ export function Hero() {
               <p className="text-shadow-soft mb-3 text-sm font-medium uppercase tracking-[0.16em] text-white/85">
                 {slide.eyebrow}
               </p>
-              <h1 className="text-shadow-hero font-display text-[2.6rem] font-bold leading-[1.05] tracking-tight text-white text-pretty sm:text-5xl sm:text-balance md:text-6xl lg:text-[4.25rem]">
+              <h1 className="text-shadow-hero font-display text-[2.3rem] font-bold leading-[1.08] tracking-tight text-white text-pretty sm:text-5xl sm:text-balance md:text-6xl lg:text-[4.25rem]">
                 {slide.headline}
               </h1>
               <p className="text-shadow-soft mx-auto mt-5 max-w-xl text-base leading-relaxed text-white/85 md:mx-0 md:text-lg">
