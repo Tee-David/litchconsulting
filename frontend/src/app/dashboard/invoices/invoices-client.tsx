@@ -25,11 +25,13 @@ export function InvoicesClient({ invoices }: InvoicesClientProps) {
   // Current active list
   const currentList = activeTab === "invoices" ? invoicesList : quotesList;
 
-  // Unique statuses for the current active list
+  // Unique statuses for the current active list. Drafts are never shown to
+  // clients (the query already excludes them) — filter here too as a guard so a
+  // stray "Draft" option can never appear in the picker.
   const availableStatuses = useMemo(() => {
     const statuses = new Set<string>();
     currentList.forEach((i) => {
-      if (i.status) statuses.add(i.status);
+      if (i.status && i.status !== "draft") statuses.add(i.status);
     });
     return Array.from(statuses);
   }, [currentList]);

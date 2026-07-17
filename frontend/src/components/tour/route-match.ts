@@ -42,7 +42,6 @@ const ROUTE_TO_TOUR: Record<string, string> = {
   "/dashboard/requests": "client-requests",
   "/dashboard/requests/new": "client-request-new",
   "/dashboard/invoices": "client-invoices",
-  "/dashboard/templates": "client-templates",
   "/dashboard/support": "client-support",
   "/dashboard/settings": "client-settings",
 

@@ -143,7 +143,7 @@ export const TOURS: Record<string, TourDef> = {
         target: '[data-tour="quick-actions"]',
         title: "Quick actions",
         content:
-          "Four shortcuts you'll reach for most: start a request, book a free consultation, open a support ticket, or grab a template.",
+          "The shortcuts you'll reach for most: start a request, book a free consultation, or open a support ticket.",
         icon: "pointer",
         optional: true,
       },
@@ -237,24 +237,6 @@ export const TOURS: Record<string, TourDef> = {
     ],
   },
 
-  "client-templates": {
-    id: "client-templates",
-    audience: "client",
-    kind: "page",
-    route: "/dashboard/templates",
-    steps: [
-      {
-        key: "templates-list",
-        target: '[data-tour="templates-list"]',
-        title: "Template library",
-        content:
-          "Branded finance templates — models, schedules and trackers — free to preview and download. Search by name, then open one to see what's inside before you take it.",
-        icon: "fileStack",
-        optional: true,
-      },
-    ],
-  },
-
   "client-support": {
     id: "client-support",
     audience: "client",
@@ -335,12 +317,6 @@ export const TOURS: Record<string, TourDef> = {
         "Billing",
         "Invoices, quotes and receipts — pay online and it all updates instantly.",
         { icon: "wallet" },
-      ),
-      navStep(
-        "templates",
-        "Templates",
-        "A free library of branded finance templates you can preview and download.",
-        { icon: "fileStack" },
       ),
       navStep(
         "support",
@@ -458,17 +434,6 @@ export const TOURS: Record<string, TourDef> = {
         content:
           "Every invoice, quote and receipt. Pay securely online and it reconciles against your request automatically — no “did that go through?” emails.",
         icon: "wallet",
-        optional: true,
-      },
-      {
-        key: "templates",
-        route: "/dashboard/templates",
-        page: "Templates",
-        target: '[data-tour="templates-list"]',
-        title: "Templates",
-        content:
-          "A free library of branded finance templates — models, schedules and trackers. Preview one, then download it and make it yours.",
-        icon: "fileStack",
         optional: true,
       },
       {
