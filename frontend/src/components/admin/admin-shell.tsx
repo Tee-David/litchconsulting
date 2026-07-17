@@ -6,6 +6,7 @@ import { SidebarNav } from "./admin-sidebar";
 import { AdminTopbar, type AdminUser } from "./admin-topbar";
 import { InstallPrompt } from "./install-prompt";
 import { CommandPalette } from "./command-palette";
+import { SageFab } from "./sage-fab";
 import { TourProvider } from "../tour/tour-provider";
 import type { NotificationItem } from "@/lib/db/queries/notifications";
 import { cn } from "@/lib/utils";
@@ -98,6 +99,7 @@ export function AdminShell({
 
         <InstallPrompt />
         <CommandPalette />
+        <SageFab />
       </div>
     </TourProvider>
   );
