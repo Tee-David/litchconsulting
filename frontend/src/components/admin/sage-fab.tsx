@@ -12,11 +12,11 @@ import { SageIcon } from "./sage-icon";
  */
 export function SageFab() {
   const pathname = usePathname();
-  if (pathname?.startsWith("/admin/assistant")) return null;
+  if (pathname?.startsWith("/admin/sage")) return null;
 
   return (
     <Link
-      href="/admin/assistant"
+      href="/admin/sage"
       aria-label="Ask Sage"
       data-tour="sage-fab"
       className="group keep-brand fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-40 flex size-12 items-center justify-center rounded-full bg-brand text-white shadow-lg shadow-brand/35 ring-1 ring-white/10 transition-transform duration-200 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-paper motion-reduce:transition-none sm:bottom-6 sm:right-6 sm:size-14"

@@ -142,7 +142,7 @@ export function AiAnalysisCard({
               ) : (
                 <>
                   <Link
-                    href={`/admin/litchai/${doc.litchaiDocumentId}`}
+                    href={`/admin/analyses/${doc.litchaiDocumentId}`}
                     className="rounded-full border border-hairline px-3.5 py-1.5 text-xs font-semibold text-body transition-colors hover:bg-surface"
                   >
                     Review

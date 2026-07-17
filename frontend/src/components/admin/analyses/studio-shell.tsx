@@ -136,7 +136,7 @@ export function StudioShell({
                   body: "Pick a request → LitchAI panel → Analyze.",
                 },
                 {
-                  href: "/admin/litchai/observability",
+                  href: "/admin/analyses/observability",
                   icon: Activity,
                   title: "Pipeline health",
                   body: "Rung hit-rates, fallbacks, review counts.",

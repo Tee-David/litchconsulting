@@ -14,7 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/admin/ui/toaster";
 import type { EngagementAskResponse } from "@/lib/litchai/client";
-import { askAssistant, engagementAction } from "@/app/admin/litchai/actions";
+import { askAssistant, engagementAction } from "@/app/admin/analyses/actions";
 
 type ChatMessage =
   | { role: "user"; text: string }

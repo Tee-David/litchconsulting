@@ -4,7 +4,7 @@ import { Activity, PlugZap } from "lucide-react";
 import { db } from "@/lib/db/client";
 import { client, serviceRequest, serviceRequestDocument } from "@/lib/db/schema";
 import { PageHeader } from "@/components/admin/ui/page-header";
-import { StudioShell, type StudioClientGroup } from "@/components/admin/litchai/studio-shell";
+import { StudioShell, type StudioClientGroup } from "@/components/admin/analyses/studio-shell";
 import { listDocuments, type LitchaiDocument } from "@/lib/litchai/client";
 
 export const dynamic = "force-dynamic";
@@ -90,11 +90,11 @@ export default async function LitchaiStudioPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="AI Studio"
+        title="Analyses"
         description="Client documents compiled into formula-driven workbooks — analyses, review queues, and pipeline health in one place."
       >
         <Link
-          href="/admin/litchai/observability"
+          href="/admin/analyses/observability"
           className="inline-flex items-center gap-1.5 rounded-lg border border-hairline px-3 py-2 text-sm font-semibold text-body hover:bg-cloud"
         >
           <Activity className="size-4" /> Observability
@@ -117,7 +117,7 @@ export default async function LitchaiStudioPage() {
         </div>
       )}
 
-      <div data-tour="litchai-studio">
+      <div data-tour="analyses-studio">
         <StudioShell groups={groups} requestLinks={requestLinks} />
       </div>
     </div>

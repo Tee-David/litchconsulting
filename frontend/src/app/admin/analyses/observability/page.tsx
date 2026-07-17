@@ -27,7 +27,7 @@ export default async function ObservabilityPage() {
   return (
     <div className="space-y-6">
       <Link
-        href="/admin/litchai"
+        href="/admin/analyses"
         className="inline-flex items-center gap-1 text-sm text-body hover:text-ink"
       >
         <ArrowLeft className="size-4" /> Back to documents

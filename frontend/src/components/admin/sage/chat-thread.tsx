@@ -25,7 +25,7 @@ import { Button } from "@/components/ui/shadcn/button";
 import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/admin/ui/toaster";
 import type { AssistantProposal, AssistantResponse } from "@/lib/litchai/client";
-import { applyAssistantProposalAction } from "@/app/admin/assistant/actions";
+import { applyAssistantProposalAction } from "@/app/admin/sage/actions";
 
 const MAX_CHARS = 3000;
 
@@ -237,7 +237,7 @@ export function ChatThread({ clients }: { clients: Client[] }) {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/copilot", {
+      const res = await fetch("/api/sage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

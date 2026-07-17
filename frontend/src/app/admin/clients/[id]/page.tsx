@@ -675,7 +675,7 @@ async function DocumentsTab({ clientId }: { clientId: string }) {
                 <div className="flex shrink-0 items-center gap-1">
                   {/\.(xlsx|xls|csv)$/i.test(d.fileName) && (
                     <Link
-                      href={`/admin/litchai/editor?requestId=${requestId}&documentId=${d.id}`}
+                      href={`/admin/analyses/editor?requestId=${requestId}&documentId=${d.id}`}
                       className="grid size-8 place-items-center rounded-full text-muted transition-colors hover:bg-surface hover:text-ink"
                       title="Open in spreadsheet editor"
                     >

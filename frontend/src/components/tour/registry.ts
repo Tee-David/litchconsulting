@@ -880,12 +880,12 @@ export const TOURS: Record<string, TourDef> = {
     id: "admin-litchai",
     audience: "admin",
     kind: "page",
-    route: "/admin/litchai",
+    route: "/admin/analyses",
     steps: [
       {
         key: "litchai-studio",
-        target: '[data-tour="litchai-studio"]',
-        title: "The AI Studio",
+        target: '[data-tour="analyses-studio"]',
+        title: "Analyses",
         content:
           "Every LitchAI analysis, grouped by client. Send a client's documents for analysis from their request page and the pipeline compiles them into a formula-driven workbook — every number traceable, every formula verified before it can reach a client.",
         icon: "bot",
@@ -910,7 +910,7 @@ export const TOURS: Record<string, TourDef> = {
     id: "admin-litchai-observability",
     audience: "admin",
     kind: "page",
-    route: "/admin/litchai/observability",
+    route: "/admin/analyses/observability",
     steps: [
       centerStep(
         "intro",
@@ -925,7 +925,7 @@ export const TOURS: Record<string, TourDef> = {
     id: "admin-assistant",
     audience: "admin",
     kind: "page",
-    route: "/admin/assistant",
+    route: "/admin/sage",
     steps: [
       centerStep(
         "intro",
@@ -1304,10 +1304,10 @@ export const TOURS: Record<string, TourDef> = {
       ),
       {
         key: "litchai",
-        route: "/admin/litchai",
-        page: "LitchAI",
-        target: '[data-tour="litchai-studio"]',
-        title: "LitchAI",
+        route: "/admin/analyses",
+        page: "Analyses",
+        target: '[data-tour="analyses-studio"]',
+        title: "Analyses",
         content:
           "Client documents compiled into formula-driven workbooks, grouped by client. Every number stays traceable, and anything the pipeline isn't confident about waits for a human — nothing unverified reaches a client.",
         icon: "bot",
@@ -1317,7 +1317,7 @@ export const TOURS: Record<string, TourDef> = {
         "assistant",
         "Sage",
         "Ask questions in plain English across the firm's knowledge base — services, FAQs, internal SOPs — or scope it to one client and ask about their actual data.",
-        { route: "/admin/assistant", page: "Sage", icon: "sparkles" },
+        { route: "/admin/sage", page: "Sage", icon: "sparkles" },
       ),
       centerStep(
         "settings",

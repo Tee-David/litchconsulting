@@ -28,7 +28,7 @@ const QUICK_ACTIONS: QuickAction[] = [
   { label: "New invoice", href: "/admin/finance/invoices/new", icon: FileText, keywords: "create bill" },
   { label: "New request", href: "/request", icon: Inbox, keywords: "create service" },
   { label: "New client", href: "/admin/clients", icon: UserPlus, keywords: "create add" },
-  { label: "Ask Sage", href: "/admin/assistant", icon: Sparkles, keywords: "ai assistant chat knowledge" },
+  { label: "Ask Sage", href: "/admin/sage", icon: Sparkles, keywords: "ai assistant chat knowledge" },
   { label: "Go to Trash", href: "/admin/trash", icon: Trash2, keywords: "deleted" },
   { label: "Go to Audit log", href: "/admin/audit", icon: ScrollText, keywords: "history log" },
 ];

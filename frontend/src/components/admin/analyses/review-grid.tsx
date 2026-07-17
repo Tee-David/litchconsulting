@@ -7,7 +7,7 @@ import { AlertTriangle } from "lucide-react";
 import { DataTable } from "@/components/admin/ui/data-table";
 import { useToast } from "@/components/admin/ui/toaster";
 import type { FigureLineage, LineItem, QueueEntry, TaxonomyCategory } from "@/lib/litchai/client";
-import { recategorize } from "@/app/admin/litchai/actions";
+import { recategorize } from "@/app/admin/analyses/actions";
 import { formatMoney } from "@/lib/invoice/money";
 
 /**
