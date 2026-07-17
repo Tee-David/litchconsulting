@@ -13,7 +13,7 @@ export type ProposalResult = { ok: boolean; message: string };
 const ENGAGEMENT_ACTIONS = new Set(["submit", "approve", "reject", "lock", "reopen"]);
 
 /**
- * Apply a Copilot WRITE proposal — the backend only ever *proposes* these; a
+ * Apply a Sage WRITE proposal — the backend only ever *proposes* these; a
  * human confirms here, then we dispatch to the matching LitchAI endpoint. Admin
  * guarded; every applied proposal is written to the audit trail.
  */

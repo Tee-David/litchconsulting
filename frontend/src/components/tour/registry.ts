@@ -929,7 +929,7 @@ export const TOURS: Record<string, TourDef> = {
     steps: [
       centerStep(
         "intro",
-        "Copilot",
+        "Sage",
         "Ask questions in plain English across the firm's knowledge base — services, FAQs and internal SOPs — or scope it to one client and ask about their actual data.",
         { icon: "sparkles" },
       ),
@@ -1315,9 +1315,9 @@ export const TOURS: Record<string, TourDef> = {
       },
       centerStep(
         "assistant",
-        "Copilot",
+        "Sage",
         "Ask questions in plain English across the firm's knowledge base — services, FAQs, internal SOPs — or scope it to one client and ask about their actual data.",
-        { route: "/admin/assistant", page: "Copilot", icon: "sparkles" },
+        { route: "/admin/assistant", page: "Sage", icon: "sparkles" },
       ),
       centerStep(
         "settings",

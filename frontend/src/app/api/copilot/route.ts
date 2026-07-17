@@ -10,16 +10,16 @@ export async function POST(req: Request) {
     const result = await assistantChat(message, history, scope, clientId);
     return NextResponse.json(result);
   } catch (err) {
-    const raw = err instanceof Error ? err.message : "Copilot relay failed";
+    const raw = err instanceof Error ? err.message : "Sage relay failed";
     console.error("[copilot] relay error:", raw);
     // The endpoint exists in this codebase but not on an older VM build — turn
     // the raw "→ 404" into something an admin can act on.
     const notDeployed = /\/assistant\/chat → 404/.test(raw);
     const notConfigured = /is not set — cannot reach LitchAI/.test(raw);
     const error = notDeployed
-      ? "Copilot is offline: the LitchAI service on the server needs updating to this build."
+      ? "Sage is offline: the LitchAI service on the server needs updating to this build."
       : notConfigured
-        ? "Copilot is not configured: LITCHAI_API_URL is unset."
+        ? "Sage is not configured: LITCHAI_API_URL is unset."
         : raw;
     return NextResponse.json({ error }, { status: notDeployed || notConfigured ? 503 : 500 });
   }

@@ -85,7 +85,7 @@ const BROWSE_PROMPTS = [
 /** Pulsating streaming indicator — three dots that breathe while awaiting a reply. */
 function TypingDots() {
   return (
-    <span className="flex items-center gap-1.5 py-1" role="status" aria-label="Copilot is thinking">
+    <span className="flex items-center gap-1.5 py-1" role="status" aria-label="Sage is thinking">
       {[0, 200, 400].map((delay) => (
         <span
           key={delay}
@@ -216,7 +216,7 @@ export function ChatThread({ clients }: { clients: Client[] }) {
 
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const msg = data?.error || "Copilot relay failed";
+        const msg = data?.error || "Sage relay failed";
         if (res.status === 503) setOffline(msg);
         throw new Error(msg);
       }
@@ -301,7 +301,7 @@ export function ChatThread({ clients }: { clients: Client[] }) {
             <div className="mb-4 grid size-14 place-items-center rounded-2xl bg-brand/10 text-brand">
               <Bot className="size-7" />
             </div>
-            <h2 className="font-display text-3xl font-bold text-ink">Welcome to Copilot</h2>
+            <h2 className="font-display text-3xl font-bold text-ink">Welcome to Sage</h2>
             <p className="mt-2 max-w-md text-sm text-body">
               Ask about firm knowledge, Nigerian tax rules, or a specific client&apos;s documents.
               Not sure where to start?
@@ -480,7 +480,7 @@ export function ChatThread({ clients }: { clients: Client[] }) {
                 }
               }}
               maxLength={MAX_CHARS}
-              placeholder="Ask Copilot anything…"
+              placeholder="Ask Sage anything…"
               className="max-h-40 min-h-10 w-full resize-none bg-transparent px-2 py-2 text-sm text-ink outline-none placeholder:text-muted"
               rows={1}
             />
@@ -529,7 +529,7 @@ export function ChatThread({ clients }: { clients: Client[] }) {
         </div>
 
         <p className="mt-2 text-center text-[11px] text-muted">
-          Copilot may be inaccurate — verify against source documents. Grounded in the firm knowledge base.
+          Sage may be inaccurate — verify against source documents. Grounded in the firm knowledge base.
         </p>
       </div>
     </div>

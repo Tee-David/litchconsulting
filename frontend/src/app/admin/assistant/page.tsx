@@ -15,7 +15,7 @@ export default async function AssistantPage() {
   return (
     <div className="flex h-[calc(100vh-6rem)] flex-col space-y-6">
       <PageHeader
-        title="Copilot"
+        title="Sage"
         description="Query the firm's knowledge base and your client's specific data."
       />
       <div className="flex-1 overflow-hidden rounded-2xl border border-hairline bg-paper shadow-sm">

@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { after } from "next/server";
 import { pool } from "./db/pg-pool";
 
 /**
@@ -95,6 +96,20 @@ export const auth = betterAuth({
   },
   advanced: {
     cookiePrefix: "litch",
+    // On Vercel, Better Auth sends verification/reset mail as a background task;
+    // without extending the function lifetime the serverless invocation returns
+    // and the SMTP send is cut off (verification email never arrives). `after`
+    // keeps the function alive until the promise settles. Outside a request
+    // scope (scripts) `after` throws — fall back to letting it run inline.
+    backgroundTasks: {
+      handler: (promise: Promise<unknown>) => {
+        try {
+          after(promise);
+        } catch {
+          void promise;
+        }
+      },
+    },
   },
 });
 

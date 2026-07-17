@@ -15,6 +15,11 @@ export function SignupForm() {
   const params = useSearchParams();
   const redirectParam = params.get("redirect");
   const redirectTo = redirectParam && redirectParam.startsWith("/") ? redirectParam : "/dashboard";
+  // Better Auth bakes callbackURL into the verification link; an absolute URL
+  // stops it inferring the origin (which can misfire between apex/www and break
+  // the post-verify redirect). Falls back to the path during SSR.
+  const callbackURL =
+    typeof window !== "undefined" ? `${window.location.origin}${redirectTo}` : redirectTo;
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -39,7 +44,7 @@ export function SignupForm() {
       name: name.trim(),
       email,
       password,
-      callbackURL: redirectTo,
+      callbackURL,
     });
     setLoading(false);
     if (error) {
@@ -53,7 +58,7 @@ export function SignupForm() {
   }
 
   function google() {
-    void signIn.social({ provider: "google", callbackURL: redirectTo });
+    void signIn.social({ provider: "google", callbackURL });
   }
 
   return (
