@@ -14,6 +14,8 @@ import {
   Search,
   FileText,
   Tags,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useToast } from "@/components/admin/ui/toaster";
 import {
@@ -47,6 +49,8 @@ export function PostList({ posts, categories = [] }: { posts: PostRow[]; categor
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkBusy, setBulkBusy] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const rows = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -63,7 +67,18 @@ export function PostList({ posts, categories = [] }: { posts: PostRow[]; categor
     draft: posts.filter((p) => p.status === "draft").length,
   };
 
-  const allSelected = rows.length > 0 && rows.every((p) => selected.has(p.id));
+  // Paginate the filtered rows. Changing a filter/search can shrink the list
+  // past the current page, so clamp rather than stranding the user on a blank
+  // page (React renders the clamped page; no effect needed).
+  const totalRows = rows.length;
+  const pageCount = Math.max(1, Math.ceil(totalRows / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const from = totalRows === 0 ? 0 : (safePage - 1) * pageSize + 1;
+  const to = Math.min(safePage * pageSize, totalRows);
+  const pageRows = rows.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  // Select-all acts on the visible page, matching what the checkbox sits above.
+  const allSelected = pageRows.length > 0 && pageRows.every((p) => selected.has(p.id));
   const someSelected = selected.size > 0;
 
   function toggleOne(id: string) {
@@ -75,7 +90,9 @@ export function PostList({ posts, categories = [] }: { posts: PostRow[]; categor
     });
   }
   function toggleAll() {
-    setSelected((prev) => (rows.every((p) => prev.has(p.id)) ? new Set() : new Set(rows.map((p) => p.id))));
+    setSelected((prev) =>
+      pageRows.every((p) => prev.has(p.id)) ? new Set() : new Set(pageRows.map((p) => p.id)),
+    );
   }
 
   async function toggle(p: PostRow) {
@@ -193,10 +210,10 @@ export function PostList({ posts, categories = [] }: { posts: PostRow[]; categor
           {/* Select-all header */}
           <label className="flex cursor-pointer items-center gap-3 border-b border-hairline bg-surface/40 px-4 py-2.5 text-xs font-medium text-muted">
             <input type="checkbox" checked={allSelected} onChange={toggleAll} className="size-4 rounded border-hairline accent-brand" />
-            Select all ({rows.length})
+            Select all ({pageRows.length})
           </label>
           <div className="divide-y divide-hairline">
-            {rows.map((p) => (
+            {pageRows.map((p) => (
               <div key={p.id} className={cn("flex items-center gap-3 px-4 py-3.5 transition-colors hover:bg-surface/50", selected.has(p.id) && "bg-brand/[0.04]")}>
                 <input
                   type="checkbox"
@@ -251,6 +268,55 @@ export function PostList({ posts, categories = [] }: { posts: PostRow[]; categor
                 </div>
               </div>
             ))}
+          </div>
+
+          {/* Pagination — mirrors the DataTable footer used elsewhere in admin */}
+          <div className="flex flex-col items-center justify-between gap-3 border-t border-hairline px-4 py-3 text-sm text-body sm:flex-row">
+            <div className="flex items-center gap-2">
+              <span>Rows per page</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="rounded-lg border border-hairline bg-paper px-2 py-1 text-ink outline-none focus:border-brand"
+              >
+                {[10, 25, 50, 100].map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="tabular-nums">
+                {from}–{to} of {totalRows}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={safePage <= 1}
+                  aria-label="Previous page"
+                  className="grid size-8 place-items-center rounded-lg border border-hairline bg-paper text-ink transition-colors hover:bg-surface disabled:opacity-40"
+                >
+                  <ChevronLeft className="size-4" />
+                </button>
+                <span className="px-1 tabular-nums text-xs text-muted">
+                  {safePage} / {pageCount}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                  disabled={safePage >= pageCount}
+                  aria-label="Next page"
+                  className="grid size-8 place-items-center rounded-lg border border-hairline bg-paper text-ink transition-colors hover:bg-surface disabled:opacity-40"
+                >
+                  <ChevronRight className="size-4" />
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
