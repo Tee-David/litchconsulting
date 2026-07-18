@@ -1,5 +1,5 @@
 import "server-only";
-import { and, asc, desc, eq, ilike, or } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { sageConversation, sageMessage, type SageConversation, type SageMessage } from "@/lib/db/schema";
 
@@ -43,14 +43,20 @@ export async function listSageConversations(
   }
 }
 
-/** All messages in one conversation, oldest first — the thread to replay into the UI. */
+/** All messages in one conversation, oldest first — the thread to replay into the UI.
+ *  Tiebreaker: on an identical timestamp (older rows saved both turns in one
+ *  batch insert) the user turn must precede the assistant reply, so the thread
+ *  never renders answer-before-question. */
 export async function getSageMessages(conversationId: string): Promise<SageMessage[]> {
   try {
     return await db
       .select()
       .from(sageMessage)
       .where(eq(sageMessage.conversationId, conversationId))
-      .orderBy(asc(sageMessage.createdAt));
+      .orderBy(
+        asc(sageMessage.createdAt),
+        asc(sql`case when ${sageMessage.role} = 'user' then 0 else 1 end`),
+      );
   } catch {
     return [];
   }

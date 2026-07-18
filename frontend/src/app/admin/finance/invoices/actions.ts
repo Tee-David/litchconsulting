@@ -147,13 +147,36 @@ export async function deleteInvoiceAction(id: string): Promise<ActionResult> {
 export async function setInvoiceStatusAction(id: string, status: string): Promise<ActionResult> {
   if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
   if (status === "paid") {
-    // Manual mark-as-paid runs the same pipeline as a Paystack success:
-    // amountPaid + paidAt + linked-request advance + receipt + admin alert.
+    // Mark-as-paid == "the full amount landed". Record a manual payment for the
+    // OUTSTANDING balance so the ledger sums to the total and amount_paid stays
+    // consistent with recomputeInvoicePaid — otherwise a later payment edit
+    // would recompute against a phantom total and reopen the invoice. recompute
+    // then clears it and runs the paid side-effects (receipt, request advance).
     const [inv] = await db.select().from(invoice).where(eq(invoice.id, id));
     if (!inv) return { ok: false, error: "Not found" };
     if (inv.status !== "paid") {
-      const { applyInvoicePaid } = await import("@/lib/payments/apply");
-      await applyInvoicePaid(inv, { via: "manual" });
+      const paid = (await successfulPaymentsForInvoice(id)).reduce(
+        (s, p) => s + num(p.amountSettled ?? p.amount),
+        0,
+      );
+      const outstanding = num(inv.total) - paid;
+      if (outstanding > 0.005) {
+        await db.insert(payment).values({
+          reference: `MARK-${inv.number}-${randomUUID().slice(0, 6)}`,
+          provider: "manual",
+          invoiceId: inv.id,
+          clientId: inv.clientId ?? null,
+          status: "success",
+          amount: String(outstanding.toFixed(2)),
+          amountSettled: String(outstanding.toFixed(2)),
+          currency: inv.currency,
+          channel: "mark_paid",
+          paidAt: new Date(),
+          verifiedAt: new Date(),
+          rawEvent: { note: "Marked as paid" },
+        });
+      }
+      await recomputeInvoicePaid(id);
     }
   } else {
     const patch: Record<string, unknown> = { status, updatedAt: new Date() };

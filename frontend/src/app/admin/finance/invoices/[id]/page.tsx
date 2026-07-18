@@ -53,17 +53,38 @@ export default async function ViewInvoicePage({ params }: { params: Promise<{ id
             currency={inv.currency}
             total={inv.total}
             amountPaid={inv.amountPaid}
-            payments={payments.map((p) => ({
-              id: p.id,
-              provider: p.provider,
-              status: p.status,
-              reference: p.reference,
-              amount: p.amount,
-              amountSettled: p.amountSettled,
-              channel: p.channel,
-              paidAt: p.paidAt ? p.paidAt.toISOString() : null,
-              createdAt: p.createdAt.toISOString(),
-            }))}
+            payments={payments.map((p) => {
+              const raw = (p.rawEvent ?? {}) as Record<string, unknown>;
+              const auth = (raw.authorization ?? {}) as Record<string, unknown>;
+              const customer = (raw.customer ?? {}) as Record<string, unknown>;
+              const str = (v: unknown) => (typeof v === "string" && v ? v : undefined);
+              return {
+                id: p.id,
+                provider: p.provider,
+                status: p.status,
+                reference: p.reference,
+                amount: p.amount,
+                amountSettled: p.amountSettled,
+                currency: p.currency,
+                channel: p.channel,
+                paystackId: p.paystackId,
+                note: str(raw.note) ?? null,
+                paidAt: p.paidAt ? p.paidAt.toISOString() : null,
+                verifiedAt: p.verifiedAt ? p.verifiedAt.toISOString() : null,
+                createdAt: p.createdAt.toISOString(),
+                meta:
+                  p.provider === "manual"
+                    ? null
+                    : {
+                        gatewayResponse: str(raw.gateway_response),
+                        bank: str(auth.bank),
+                        cardType: str(auth.card_type),
+                        last4: str(auth.last4),
+                        customerEmail: str(customer.email),
+                        fees: typeof raw.fees === "number" ? raw.fees / 100 : undefined,
+                      },
+              };
+            })}
           />
           <InvoiceTimeline invoice={inv} />
         </div>
