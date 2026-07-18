@@ -56,6 +56,11 @@ const KEYS = [
   "GOOGLE_CLIENT_SECRET",
   "PAYSTACK_SECRET_KEY",
   "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY",
+  // Cal.com — booking modal (public link) + webhook that mirrors bookings into
+  // the consultation table. Both degrade gracefully when unset (the CTA falls
+  // back to the /book page), but must be listed here to reach prod.
+  "NEXT_PUBLIC_CALCOM_LINK",
+  "CALCOM_WEBHOOK_SECRET",
 ];
 
 async function findProject() {
