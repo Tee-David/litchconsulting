@@ -1,17 +1,15 @@
-import type { LucideIcon } from "lucide-react";
+import type { ComponentType } from "react";
+import { SageIcon } from "@/components/admin/sage-icon";
 import {
   LayoutGrid,
   Inbox,
   Users,
   BarChart3,
   Wallet,
-  FileStack,
   PenSquare,
   Settings,
-  Cable,
   LifeBuoy,
   Bot,
-  Sparkles,
   ScrollText,
 } from "lucide-react";
 
@@ -22,7 +20,7 @@ import {
 export type NavItem = {
   label: string;
   href: string;
-  icon: LucideIcon;
+  icon: ComponentType<{ className?: string }>;
   group: "main" | "general";
   /** Stable key for `data-tour="nav-<tourKey>"` anchors used by the guided tour. */
   tourKey: string;
@@ -36,7 +34,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: "Finance", href: "/admin/finance", icon: Wallet, group: "main", tourKey: "finance" },
   { label: "Blog", href: "/admin/blog", icon: PenSquare, group: "main", tourKey: "blog" },
   { label: "Analyses", href: "/admin/analyses", icon: Bot, group: "main", tourKey: "litchai" },
-  { label: "Sage", href: "/admin/sage", icon: Sparkles, group: "general", tourKey: "copilot" },
+  { label: "Sage", href: "/admin/sage", icon: SageIcon, group: "general", tourKey: "copilot" },
   { label: "Settings", href: "/admin/settings", icon: Settings, group: "general", tourKey: "settings" },
   { label: "Help Desk", href: "/admin/help-desk", icon: LifeBuoy, group: "general", tourKey: "help-desk" },
   { label: "Audit log", href: "/admin/audit", icon: ScrollText, group: "general", tourKey: "audit" },
