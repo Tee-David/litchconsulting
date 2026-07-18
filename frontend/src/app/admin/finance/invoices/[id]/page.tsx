@@ -5,6 +5,8 @@ import { getInvoice } from "@/lib/db/queries/invoices";
 import { paymentsForInvoice } from "@/lib/db/queries/payments";
 import { toInvoiceData } from "@/lib/invoice/map";
 import { getIssuer } from "@/lib/invoice/get-issuer";
+import { qrDataUrl } from "@/lib/invoice/pdf/render";
+import { siteOrigin } from "@/lib/site-url";
 import { num } from "@/lib/invoice/money";
 import { InvoicePreview } from "@/components/admin/invoice/invoice-preview";
 import { InvoiceViewActions } from "@/components/admin/invoice/invoice-view-actions";
@@ -21,6 +23,8 @@ export default async function ViewInvoicePage({ params }: { params: Promise<{ id
   const inv = data.invoice;
   const invoiceData = toInvoiceData(inv, data.items);
   const payments = await paymentsForInvoice(inv.id);
+  // Same "Scan to pay" QR the PDF embeds, so the preview and the download match.
+  const qr = inv.publicToken ? await qrDataUrl(`${siteOrigin()}/i/${inv.publicToken}`) : undefined;
 
   // Part-paid is a real state the status column can't express on its own.
   const paid = num(inv.amountPaid);
@@ -46,7 +50,7 @@ export default async function ViewInvoicePage({ params }: { params: Promise<{ id
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-        <InvoicePreview data={invoiceData} issuer={issuer} />
+        <InvoicePreview data={invoiceData} issuer={issuer} qrDataUrl={qr} />
         <div className="space-y-5">
           <InvoicePaymentsCard
             invoiceId={inv.id}

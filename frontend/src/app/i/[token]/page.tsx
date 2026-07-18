@@ -4,6 +4,8 @@ import { CheckCircle2, Landmark, AlertTriangle } from "lucide-react";
 import { getInvoiceByToken } from "@/lib/db/queries/invoices";
 import { toInvoiceData } from "@/lib/invoice/map";
 import { getIssuer } from "@/lib/invoice/get-issuer";
+import { qrDataUrl } from "@/lib/invoice/pdf/render";
+import { siteOrigin } from "@/lib/site-url";
 import { InvoicePreview } from "@/components/admin/invoice/invoice-preview";
 import { Logo } from "@/components/ui/logo";
 import { formatMoney, computeTotals } from "@/lib/invoice/money";
@@ -26,6 +28,7 @@ export default async function PublicInvoicePage({
   if (!data) notFound();
 
   const invoiceData = toInvoiceData(data.invoice, data.items);
+  const qr = data.invoice.publicToken ? await qrDataUrl(`${siteOrigin()}/i/${data.invoice.publicToken}`) : undefined;
   const totals = computeTotals(invoiceData.items);
   const isPaid = data.invoice.status === "paid";
   const payable =
@@ -105,7 +108,7 @@ export default async function PublicInvoicePage({
 
         {/* The paid thank-you hero above already confirms payment, so suppress the
             in-paper banner here to avoid a double banner. */}
-        <InvoicePreview data={invoiceData} issuer={issuer} showPaidBanner={false} />
+        <InvoicePreview data={invoiceData} issuer={issuer} showPaidBanner={false} qrDataUrl={qr} />
 
         <p className="mt-6 text-center text-xs text-muted">
           Powered by Litch Consulting · Questions? Reply to the email this invoice came from.

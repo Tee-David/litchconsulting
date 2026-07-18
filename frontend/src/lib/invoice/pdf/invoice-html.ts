@@ -103,7 +103,15 @@ ${notoFontCss()}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{background:#fff}
 body{font-family:'Outfit','NotoSans',-apple-system,'Segoe UI',Roboto,sans-serif;color:${INK};font-size:12px;line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.page{position:relative;width:100%;padding:44px 44px 56px;overflow:hidden}
+/* Bottom padding is small because page.pdf() reserves a bottom margin for the
+   running "Page x of y" footer. overflow:visible so content can flow to page 2. */
+.page{position:relative;width:100%;padding:44px 44px 18px}
+/* Repeat the column headings on every page of a long line-item list. */
+thead{display:table-header-group}
+tr{page-break-inside:avoid;break-inside:avoid}
+/* Never strand these across a page break — a total or a signature alone at the
+   top of a sheet reads as an error on a financial document. */
+.keep-together{page-break-inside:avoid;break-inside:avoid}
 table{width:100%;border-collapse:collapse}
 @page{size:A4;margin:0}
 </style></head>
@@ -180,7 +188,7 @@ table{width:100%;border-collapse:collapse}
   </div>
 
   <!-- totals -->
-  <div style="position:relative;margin-top:18px;display:flex;justify-content:flex-end">
+  <div class="keep-together" style="position:relative;margin-top:18px;display:flex;justify-content:flex-end">
     <div style="width:260px">
       <div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:${BODY}">Subtotal</span><span style="font-variant-numeric:tabular-nums">${esc(fmt(totals.subtotal))}</span></div>
       <div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:${BODY}">Tax</span><span style="font-variant-numeric:tabular-nums">${esc(fmt(totals.taxTotal))}</span></div>
@@ -197,7 +205,7 @@ table{width:100%;border-collapse:collapse}
   }
 
   <!-- signature -->
-  <div style="position:relative;margin-top:30px;display:flex;justify-content:flex-end">
+  <div class="keep-together" style="position:relative;margin-top:30px;display:flex;justify-content:flex-end">
     <div style="text-align:center">
       ${
         sig
@@ -211,7 +219,7 @@ table{width:100%;border-collapse:collapse}
   </div>
 
   <!-- payment details + QR -->
-  <div style="position:relative;margin-top:26px;border-top:1px solid ${HAIR};padding-top:18px;display:flex;justify-content:space-between;align-items:flex-end;gap:24px">
+  <div class="keep-together" style="position:relative;margin-top:26px;border-top:1px solid ${HAIR};padding-top:18px;display:flex;justify-content:space-between;align-items:flex-end;gap:24px">
     <div>
       <div style="font-weight:700;margin-bottom:4px">Payment details</div>
       <div style="color:${BODY}">Bank: ${esc(issuer.bank.name)}</div>

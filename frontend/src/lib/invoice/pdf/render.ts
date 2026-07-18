@@ -28,7 +28,10 @@ export async function renderInvoicePdf(
   qr?: string,
 ): Promise<Buffer> {
   try {
-    return await renderHtmlPdf(invoiceHtml({ data, variant, issuer, qrDataUrl: qr }));
+    const label = [data.number, issuer?.name].filter(Boolean).join(" · ");
+    return await renderHtmlPdf(invoiceHtml({ data, variant, issuer, qrDataUrl: qr }), {
+      footerLabel: label,
+    });
   } catch (err) {
     console.error("[invoice-pdf] HTML→PDF failed, using @react-pdf fallback:", err instanceof Error ? err.message : err);
     // InvoiceDocument is a pure (hook-free) component returning a <Document>;

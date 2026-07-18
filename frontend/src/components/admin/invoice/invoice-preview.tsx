@@ -27,6 +27,7 @@ export function InvoicePreview({
   issuer = defaultIssuer,
   variant = "invoice",
   showPaidBanner = true,
+  qrDataUrl,
 }: {
   data: InvoiceData;
   issuer?: Issuer;
@@ -34,6 +35,10 @@ export function InvoicePreview({
   /** In-paper green "paid" banner. Off on the public pay page, which shows its
    *  own thank-you hero above the paper (avoids a double banner). */
   showPaidBanner?: boolean;
+  /** "Scan to pay" QR, rendered beside the payment details exactly as the PDF
+   *  does — passed in by the server pages (this component also renders inside
+   *  the client builder, so it can't generate one itself). */
+  qrDataUrl?: string;
 }) {
   const isQuote = variant === "quote";
   const totals = computeTotals(data.items);
@@ -212,11 +217,20 @@ export function InvoicePreview({
 
       {/* Payment details + notes */}
       <div className="relative mt-7 grid gap-6 border-t border-[#e6e8f0] pt-5 text-sm sm:grid-cols-2">
-        <div>
-          <p className="font-semibold">Payment details</p>
-          <p className="mt-1 text-[#5b6474]">Bank: {issuer.bank.name}</p>
-          <p className="text-[#5b6474]">Account name: {issuer.bank.accountName}</p>
-          <p className="text-[#5b6474]">Account number: {issuer.bank.accountNumber}</p>
+        <div className="flex items-end justify-between gap-4">
+          <div>
+            <p className="font-semibold">Payment details</p>
+            <p className="mt-1 text-[#5b6474]">Bank: {issuer.bank.name}</p>
+            <p className="text-[#5b6474]">Account name: {issuer.bank.accountName}</p>
+            <p className="text-[#5b6474]">Account number: {issuer.bank.accountNumber}</p>
+          </div>
+          {qrDataUrl && (
+            <div className="shrink-0 text-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={qrDataUrl} alt="" className="size-[62px]" />
+              <p className="mt-0.5 text-[8px] leading-none text-[#5b6474]">Scan to pay</p>
+            </div>
+          )}
         </div>
         {(data.notes || data.terms) && (
           <div>

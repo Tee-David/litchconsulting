@@ -58,7 +58,16 @@ const onServerless = Boolean(
   process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.AWS_EXECUTION_ENV,
 );
 
-export async function renderHtmlPdf(html: string): Promise<Buffer> {
+export type PdfDocOptions = {
+  /** Shown bottom-left on every page, e.g. "INV-2026-003 · Litch Consulting". */
+  footerLabel?: string;
+};
+
+/** Escape for the header/footer templates (they're raw HTML fragments). */
+const escHtml = (v: string) =>
+  v.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+export async function renderHtmlPdf(html: string, opts: PdfDocOptions = {}): Promise<Buffer> {
   const puppeteer = await import("puppeteer-core");
 
   let launchOpts: Parameters<typeof puppeteer.launch>[0];
@@ -81,10 +90,25 @@ export async function renderHtmlPdf(html: string): Promise<Buffer> {
     // Everything (fonts, signature, QR) is embedded as data URIs, so there is
     // no network to idle on — "load" fires once the inline assets are parsed.
     await page.setContent(html, { waitUntil: "load", timeout: 20_000 });
+
+    // A long line-item list runs to several A4 pages, so every page carries the
+    // document's identity and "Page x of y" — a loose sheet is still traceable.
+    // Chromium renders these templates inside the page margin, hence the bottom
+    // margin below (the body reserves no space for them itself).
+    const label = escHtml(opts.footerLabel ?? "");
+    const footerTemplate = `
+      <div style="width:100%;padding:0 44px;font-family:-apple-system,'Segoe UI',Roboto,sans-serif;font-size:7.5px;color:#8a92a6;display:flex;justify-content:space-between;align-items:center;">
+        <span>${label}</span>
+        <span>Page <span class="pageNumber"></span> of <span class="totalPages"></span></span>
+      </div>`;
+
     const pdf = await page.pdf({
       format: "A4",
       printBackground: true,
-      preferCSSPageSize: true,
+      displayHeaderFooter: true,
+      headerTemplate: "<span></span>", // no running header; page 1 carries the masthead
+      footerTemplate,
+      margin: { top: "0", right: "0", bottom: "38px", left: "0" },
     });
     return Buffer.from(pdf);
   } finally {

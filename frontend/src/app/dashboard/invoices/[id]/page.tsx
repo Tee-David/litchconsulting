@@ -5,6 +5,8 @@ import { getSessionUser } from "@/lib/server-user";
 import { getClientForUser } from "@/lib/db/queries/clients";
 import { getClientInvoice } from "@/lib/db/queries/invoices";
 import { getIssuer } from "@/lib/invoice/get-issuer";
+import { qrDataUrl } from "@/lib/invoice/pdf/render";
+import { siteOrigin } from "@/lib/site-url";
 import { toInvoiceData } from "@/lib/invoice/map";
 import { InvoicePreview } from "@/components/admin/invoice/invoice-preview";
 import { Badge, invoiceStatusTone } from "@/components/admin/ui/badge";
@@ -31,6 +33,7 @@ export default async function ClientInvoiceDetailPage({
 
   const issuer = await getIssuer();
   const invoiceData = toInvoiceData(data.invoice, data.items);
+  const qr = data.invoice.publicToken ? await qrDataUrl(`${siteOrigin()}/i/${data.invoice.publicToken}`) : undefined;
 
   const { status, kind, number, issueDate, dueDate, publicToken } = data.invoice;
 
@@ -139,7 +142,7 @@ export default async function ClientInvoiceDetailPage({
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Left 2 Cols: Branded Preview */}
         <div className="lg:col-span-2">
-          <InvoicePreview data={invoiceData} issuer={issuer} />
+          <InvoicePreview data={invoiceData} issuer={issuer} qrDataUrl={qr} />
         </div>
 
         {/* Right 1 Col: Metadata & Info */}

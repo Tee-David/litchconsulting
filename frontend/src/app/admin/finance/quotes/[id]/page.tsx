@@ -4,6 +4,8 @@ import { ArrowLeft } from "lucide-react";
 import { getInvoice } from "@/lib/db/queries/invoices";
 import { toInvoiceData } from "@/lib/invoice/map";
 import { getIssuer } from "@/lib/invoice/get-issuer";
+import { qrDataUrl } from "@/lib/invoice/pdf/render";
+import { siteOrigin } from "@/lib/site-url";
 import { InvoicePreview } from "@/components/admin/invoice/invoice-preview";
 import { QuoteViewActions } from "@/components/admin/invoice/quote-view-actions";
 import { Badge, invoiceStatusTone } from "@/components/admin/ui/badge";
@@ -15,6 +17,7 @@ export default async function ViewQuotePage({ params }: { params: Promise<{ id: 
   const [data, issuer] = await Promise.all([getInvoice(id), getIssuer()]);
   if (!data || data.invoice.kind !== "quote") notFound();
   const quoteData = toInvoiceData(data.invoice, data.items);
+  const qr = data.invoice.publicToken ? await qrDataUrl(`${siteOrigin()}/i/${data.invoice.publicToken}`) : undefined;
 
   return (
     <div className="space-y-5">
@@ -28,7 +31,7 @@ export default async function ViewQuotePage({ params }: { params: Promise<{ id: 
         </div>
         <QuoteViewActions id={data.invoice.id} status={data.invoice.status} />
       </div>
-      <InvoicePreview data={quoteData} issuer={issuer} variant="quote" />
+      <InvoicePreview data={quoteData} issuer={issuer} variant="quote" qrDataUrl={qr} />
     </div>
   );
 }
