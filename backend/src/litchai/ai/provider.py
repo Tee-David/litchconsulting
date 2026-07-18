@@ -75,6 +75,92 @@ class OllamaProvider:
         )
 
 
+class OpenAICompatProvider:
+    """OpenAI-compatible chat provider for the **general-chat** path only.
+
+    Cerebras / Groq / SambaNova all expose the same ``/chat/completions`` shape,
+    so one adapter fronts whichever is chosen by env (``LITCHAI_CHAT_BASE_URL``).
+    Firm-knowledge and client-data questions never touch this — they stay on the
+    local :class:`OllamaProvider` + RAG. There is no model digest to pin (the
+    remote model isn't reproducible), so the exact-match cache doesn't apply and
+    this is only ever called on the direct general-chat path, not via the harness.
+    """
+
+    name = "openai_compat"
+
+    def __init__(
+        self,
+        *,
+        base_url: str,
+        api_key: str,
+        model: str,
+        timeout: float = 60.0,
+    ) -> None:
+        self.request_model = model
+        self._base_url = base_url.rstrip("/")
+        self._api_key = api_key
+        self._timeout = timeout
+        self.model_digest = None  # remote model — not digest-pinned
+
+    def generate(
+        self, prompt: str, *, schema: dict[str, Any] | None = None, params: dict[str, Any] | None = None
+    ) -> ProviderResponse:
+        import httpx  # noqa: PLC0415
+
+        p = params or {}
+        body: dict[str, Any] = {
+            "model": self.request_model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": p.get("temperature", 0.7),
+        }
+        if p.get("max_tokens") is not None:
+            body["max_tokens"] = p["max_tokens"]
+        if p.get("top_p") is not None:
+            body["top_p"] = p["top_p"]
+        if schema is not None:  # general path passes no schema; honour one if given
+            body["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {"name": "response", "schema": schema},
+            }
+        started = time.monotonic()
+        resp = httpx.post(
+            f"{self._base_url}/chat/completions",
+            json=body,
+            headers={
+                "Authorization": f"Bearer {self._api_key}",
+                "Content-Type": "application/json",
+            },
+            timeout=self._timeout,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        choice = (data.get("choices") or [{}])[0]
+        text = ((choice.get("message") or {}).get("content") or "")
+        usage = data.get("usage") or {}
+        return ProviderResponse(
+            text=text,
+            finish_reason=choice.get("finish_reason"),
+            input_tokens=usage.get("prompt_tokens"),
+            output_tokens=usage.get("completion_tokens"),
+            latency_ms=int((time.monotonic() - started) * 1000),
+            model_digest=self.model_digest,
+        )
+
+
+def build_chat_provider() -> Provider | None:
+    """Return the general-chat provider when all three envs are set, else ``None``.
+
+    Gated so an unset config just means "no general chat" (a graceful grounded
+    refusal upstream) — never a crash. Reads are cheap; callers cache the result.
+    """
+    base_url = os.environ.get("LITCHAI_CHAT_BASE_URL")
+    api_key = os.environ.get("LITCHAI_CHAT_API_KEY")
+    model = os.environ.get("LITCHAI_CHAT_MODEL")
+    if not (base_url and api_key and model):
+        return None
+    return OpenAICompatProvider(base_url=base_url, api_key=api_key, model=model)
+
+
 @dataclass
 class FakeProvider:
     """Scripted provider for tests. ``responder`` maps a prompt to the raw text
