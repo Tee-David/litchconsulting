@@ -2,12 +2,13 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { PageHeader } from "@/components/admin/ui/page-header";
 import { listPosts } from "@/lib/db/queries/posts";
+import { listCategories } from "@/lib/db/queries/categories";
 import { PostList } from "@/components/admin/blog/post-list";
 
 export const dynamic = "force-dynamic";
 
 export default async function BlogPage() {
-  const posts = await listPosts();
+  const [posts, categories] = await Promise.all([listPosts(), listCategories("blog")]);
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -21,7 +22,7 @@ export default async function BlogPage() {
         </Link>
       </div>
       <div data-tour="posts-list">
-        <PostList posts={posts} />
+        <PostList posts={posts} categories={categories} />
       </div>
     </div>
   );

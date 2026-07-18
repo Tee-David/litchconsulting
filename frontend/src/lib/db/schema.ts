@@ -7,6 +7,7 @@ import {
   integer,
   date,
   index,
+  uniqueIndex,
   jsonb,
 } from "drizzle-orm/pg-core";
 
@@ -184,6 +185,25 @@ export const post = pgTable(
   },
   (t) => [index("post_status_idx").on(t.status), index("post_published_idx").on(t.publishedAt)]
 );
+
+/**
+ * Managed categories for the blog (and, later, templates). `post.tag` /
+ * `template.category` stay free text so the curated-content merges keep working;
+ * this table drives the editable pick-list and lets a rename cascade in one UPDATE.
+ */
+export const category = pgTable(
+  "category",
+  {
+    id: id(),
+    kind: text("kind").notNull(), // 'blog' | 'template'
+    name: text("name").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("category_kind_name_idx").on(t.kind, t.name)]
+);
+export type Category = typeof category.$inferSelect;
 
 /**
  * Business expenses ledger. Income for the P&L is derived from collected

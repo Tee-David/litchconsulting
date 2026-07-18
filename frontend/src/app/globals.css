@@ -255,6 +255,59 @@ body {
   }
 }
 
+/* Rendered article body (tiptap WYSIWYG output + the editor surface). Shared by
+   the blog editor preview and the public /insights page so they match. */
+.article-html {
+  color: var(--color-body);
+  font-size: 1rem;
+  line-height: 1.75;
+}
+.article-html > :first-child { margin-top: 0; }
+.article-html p { margin-top: 1.25rem; }
+.article-html h2 {
+  margin-top: 2.25rem;
+  font-family: var(--font-display, inherit);
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+.article-html h3 {
+  margin-top: 1.75rem;
+  font-family: var(--font-display, inherit);
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--color-ink);
+}
+.article-html ul,
+.article-html ol { margin-top: 1.25rem; padding-left: 1.4rem; }
+.article-html ul { list-style: disc; }
+.article-html ol { list-style: decimal; }
+.article-html li { margin-top: 0.4rem; }
+.article-html li::marker { color: var(--color-brand); }
+.article-html a { color: var(--color-brand); text-decoration: underline; text-underline-offset: 2px; }
+.article-html strong { font-weight: 600; color: var(--color-ink); }
+.article-html img { margin: 1.5rem 0; border-radius: 0.75rem; max-width: 100%; height: auto; }
+.article-html blockquote {
+  margin: 1.5rem 0;
+  border-left: 3px solid var(--color-brand);
+  padding-left: 1rem;
+  color: var(--color-ink);
+  font-style: italic;
+}
+.article-html code {
+  background: var(--color-surface);
+  border-radius: 0.3rem;
+  padding: 0.1rem 0.35rem;
+  font-size: 0.9em;
+}
+.article-html .is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--color-muted);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
 /* Indeterminate progress bar — a segment that sweeps across the track when an
    upload is in flight but reports no granular progress (e.g. the server-relay
    path), so the UI reads as "working" rather than frozen. */

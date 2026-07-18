@@ -70,6 +70,13 @@ const STATEMENTS = [
     CONSTRAINT "post_slug_unique" UNIQUE("slug"))`,
   `CREATE INDEX IF NOT EXISTS "post_status_idx" ON "post" ("status")`,
   `CREATE INDEX IF NOT EXISTS "post_published_idx" ON "post" ("published_at")`,
+  `CREATE TABLE IF NOT EXISTS "category" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "kind" text NOT NULL, "name" text NOT NULL,
+    "sort_order" integer DEFAULT 0 NOT NULL,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "category_kind_name_idx" ON "category" ("kind", "name")`,
   `CREATE TABLE IF NOT EXISTS "ticket" (
     "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
     "number" text NOT NULL, "subject" text NOT NULL,

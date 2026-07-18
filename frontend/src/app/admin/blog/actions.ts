@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { post } from "@/lib/db/schema";
 import { isAdmin, getCurrentUserId } from "@/lib/server-user";
@@ -82,5 +82,38 @@ export async function deletePostAction(id: string): Promise<ActionResult> {
   const [row] = await db.select({ slug: post.slug }).from(post).where(eq(post.id, id)).limit(1);
   await db.delete(post).where(eq(post.id, id));
   revalidateBlog(row?.slug);
+  return { ok: true };
+}
+
+/* -------------------------------------------------------------------------- *
+ * Bulk actions — for the box-select toolbar on the blog table.
+ * -------------------------------------------------------------------------- */
+
+export async function bulkSetPostStatusAction(
+  ids: string[],
+  status: "draft" | "published",
+): Promise<ActionResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
+  if (ids.length === 0) return { ok: false, error: "Nothing selected." };
+  // Mirror savePostAction's publish semantics per row: set publishedAt on first
+  // publish (keep an existing one), clear it on unpublish — so the public page
+  // sorts correctly instead of showing bulk-published posts with a null date.
+  const rows = await db
+    .select({ id: post.id, publishedAt: post.publishedAt })
+    .from(post)
+    .where(inArray(post.id, ids));
+  for (const row of rows) {
+    const publishedAt = status === "published" ? row.publishedAt ?? new Date() : null;
+    await db.update(post).set({ status, publishedAt, updatedAt: new Date() }).where(eq(post.id, row.id));
+  }
+  revalidateBlog();
+  return { ok: true };
+}
+
+export async function bulkDeletePostsAction(ids: string[]): Promise<ActionResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
+  if (ids.length === 0) return { ok: false, error: "Nothing selected." };
+  await db.delete(post).where(inArray(post.id, ids));
+  revalidateBlog();
   return { ok: true };
 }

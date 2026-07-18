@@ -3,15 +3,18 @@
 import { useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { Loader2, Save, Send, ExternalLink, ImageIcon } from "lucide-react";
+import { Loader2, Save, Send, ExternalLink, ImageIcon, UploadCloud, X } from "lucide-react";
 import { useToast } from "@/components/admin/ui/toaster";
 import { InsightBody } from "@/components/insights/insight-body";
-import { splitBody, estimateReadMins, slugify } from "@/lib/insights-format";
+import { RichTextEditor } from "@/components/admin/blog/rich-text-editor";
+import { splitBody, estimateReadMins, slugify, mdSubsetToHtml } from "@/lib/insights-format";
 import { savePostAction } from "@/app/admin/blog/actions";
+import { uploadFile } from "@/lib/upload-client";
 import type { PostInput } from "@/lib/blog-types";
+import type { Category } from "@/lib/db/schema";
 import { cn } from "@/lib/utils";
 
-const TAGS = ["Taxation", "Modelling", "Reporting", "Analytics", "Advisory", "Forensics", "Insights"];
+const FALLBACK_TAGS = ["Taxation", "Modelling", "Reporting", "Analytics", "Advisory", "Forensics", "Insights"];
 
 const inputCls =
   "w-full rounded-lg border border-hairline bg-paper px-3 py-2.5 text-sm text-ink outline-none transition-colors placeholder:text-muted focus:border-brand";
@@ -21,25 +24,97 @@ function fmtDate(d = new Date()) {
   return d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
 }
 
-export function PostEditor({ initial }: { initial?: PostInput }) {
+/** Single-image cover dropzone — uploads straight to R2 (same helper the app's
+ *  uploader uses) so nobody has to paste an image URL. */
+function CoverDropzone({ value, onChange }: { value: string; onChange: (url: string) => void }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+
+  async function upload(file: File) {
+    setBusy(true);
+    try {
+      onChange(await uploadFile(file, "cover"));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Upload failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (value) {
+    return (
+      <div className="group relative aspect-[16/9] overflow-hidden rounded-lg border border-hairline bg-surface">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={value} alt="Cover" className="size-full object-cover" />
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          className="absolute right-2 top-2 grid size-8 place-items-center rounded-lg bg-black/50 text-white opacity-0 transition-opacity hover:bg-black/70 group-hover:opacity-100"
+          aria-label="Remove cover image"
+        >
+          <X className="size-4" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <label
+      onDragOver={(e) => {
+        e.preventDefault();
+        setDragOver(true);
+      }}
+      onDragLeave={() => setDragOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setDragOver(false);
+        const f = e.dataTransfer.files?.[0];
+        if (f) void upload(f);
+      }}
+      className={cn(
+        "flex aspect-[16/9] cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border-2 border-dashed text-center transition-colors",
+        dragOver ? "border-brand bg-brand-tint/40" : "border-hairline bg-surface/40 hover:border-brand hover:bg-brand-tint/25",
+      )}
+    >
+      {busy ? <Loader2 className="size-6 animate-spin text-brand" /> : <UploadCloud className="size-6 text-brand" />}
+      <span className="text-sm font-medium text-ink">{busy ? "Uploading…" : "Drop a cover image, or click"}</span>
+      <span className="text-xs text-muted">PNG, JPG or WEBP</span>
+      <input
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) void upload(f);
+          e.target.value = "";
+        }}
+      />
+    </label>
+  );
+}
+
+export function PostEditor({ initial, categories = [] }: { initial?: PostInput; categories?: Category[] }) {
   const router = useRouter();
   const toast = useToast();
   const [busy, setBusy] = useState<"draft" | "publish" | null>(null);
   const [slugEdited, setSlugEdited] = useState(!!initial?.id);
 
   const [form, setForm] = useState<PostInput>(
-    initial ?? {
-      slug: "",
-      title: "",
-      tag: "Insights",
-      excerpt: "",
-      coverImage: "",
-      author: "Litch Consulting",
-      body: "",
-      status: "draft",
-      seoTitle: "",
-      seoDescription: "",
-    },
+    initial
+      ? { ...initial, body: mdSubsetToHtml(initial.body || "") } // legacy markdown → HTML for the WYSIWYG
+      : {
+          slug: "",
+          title: "",
+          tag: "Insights",
+          excerpt: "",
+          coverImage: "",
+          author: "Litch Consulting",
+          body: "",
+          status: "draft",
+          seoTitle: "",
+          seoDescription: "",
+        },
   );
 
   const set = <K extends keyof PostInput>(k: K, v: PostInput[K]) => setForm((f) => ({ ...f, [k]: v }));
@@ -48,10 +123,16 @@ export function PostEditor({ initial }: { initial?: PostInput }) {
     setForm((f) => ({ ...f, title: v, slug: slugEdited ? f.slug : slugify(v) }));
   }
 
-  const paragraphs = useMemo(() => splitBody(form.body), [form.body]);
-  const readMins = useMemo(() => estimateReadMins(form.body), [form.body]);
+  // The body is HTML now; strip tags for the reading estimate + preview split.
+  const plain = useMemo(() => form.body.replace(/<[^>]+>/g, " "), [form.body]);
+  const readMins = useMemo(() => estimateReadMins(plain), [plain]);
   const seoTitle = (form.seoTitle || form.title || "Untitled post").slice(0, 60);
   const seoDesc = (form.seoDescription || form.excerpt || "").slice(0, 160);
+
+  const tagOptions = useMemo(() => {
+    const names = categories.length ? categories.map((c) => c.name) : FALLBACK_TAGS;
+    return Array.from(new Set([form.tag, ...names].filter(Boolean)));
+  }, [categories, form.tag]);
 
   async function save(status: "draft" | "published") {
     if (!form.title.trim()) {
@@ -126,7 +207,7 @@ export function PostEditor({ initial }: { initial?: PostInput }) {
           <div>
             <label className={labelCls}>Category</label>
             <select value={form.tag} onChange={(e) => set("tag", e.target.value)} className={inputCls}>
-              {TAGS.map((t) => (
+              {tagOptions.map((t) => (
                 <option key={t} value={t}>
                   {t}
                 </option>
@@ -135,15 +216,14 @@ export function PostEditor({ initial }: { initial?: PostInput }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelCls}>Author</label>
-            <input value={form.author} onChange={(e) => set("author", e.target.value)} placeholder="Litch Consulting" className={inputCls} />
-          </div>
-          <div>
-            <label className={labelCls}>Cover image URL</label>
-            <input value={form.coverImage} onChange={(e) => set("coverImage", e.target.value)} placeholder="https://…" className={inputCls} />
-          </div>
+        <div>
+          <label className={labelCls}>Author</label>
+          <input value={form.author} onChange={(e) => set("author", e.target.value)} placeholder="Litch Consulting" className={inputCls} />
+        </div>
+
+        <div>
+          <label className={labelCls}>Cover image</label>
+          <CoverDropzone value={form.coverImage || ""} onChange={(url) => set("coverImage", url)} />
         </div>
 
         <div>
@@ -160,15 +240,9 @@ export function PostEditor({ initial }: { initial?: PostInput }) {
         <div>
           <div className="mb-1.5 flex items-center justify-between">
             <label className={labelCls + " mb-0"}>Body</label>
-            <span className="text-[11px] text-muted">{readMins} min read · Markdown: ## heading, - bullet, **bold**</span>
+            <span className="text-[11px] text-muted">{readMins} min read</span>
           </div>
-          <textarea
-            value={form.body}
-            onChange={(e) => set("body", e.target.value)}
-            rows={16}
-            placeholder={"Write the article. Separate paragraphs with a blank line.\n\n## A section heading\n\n- A bullet point\n- Another point\n\nUse **bold** for emphasis."}
-            className={cn(inputCls, "resize-y font-mono text-[13px] leading-relaxed")}
-          />
+          <RichTextEditor value={form.body} onChange={(html) => set("body", html)} />
         </div>
 
         <div className="rounded-card border border-hairline bg-surface/40 p-4">
@@ -229,8 +303,8 @@ export function PostEditor({ initial }: { initial?: PostInput }) {
               </span>
             </div>
             {form.excerpt && <p className="mt-5 text-lg leading-relaxed text-ink text-pretty">{form.excerpt}</p>}
-            {paragraphs.length > 0 ? (
-              <InsightBody paragraphs={paragraphs} />
+            {plain.trim() ? (
+              <InsightBody paragraphs={splitBody(form.body)} className="mt-2" />
             ) : (
               <p className="mt-6 text-sm italic text-muted">Start writing the body to see it rendered here…</p>
             )}

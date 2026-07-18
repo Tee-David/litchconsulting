@@ -1,4 +1,11 @@
 import { Fragment, type ReactNode } from "react";
+import DOMPurify from "isomorphic-dompurify";
+
+/** True once a block carries real HTML tags (tiptap output) rather than the
+ *  lightweight markdown the curated + legacy posts use. */
+function looksLikeHtml(s: string): boolean {
+  return /<(p|h[1-6]|ul|ol|li|img|a|strong|em|blockquote|br|figure)\b/i.test(s);
+}
 
 /** Inline **bold** support. */
 function inline(text: string): ReactNode[] {
@@ -20,6 +27,17 @@ function inline(text: string): ReactNode[] {
  * Shared by the CMS editor preview and the public /insights page.
  */
 export function InsightBody({ paragraphs, className }: { paragraphs: string[]; className?: string }) {
+  // A WYSIWYG (tiptap) post arrives as a single HTML block — render it sanitized
+  // with the shared article styles. Curated + legacy posts keep the markdown path.
+  const joined = paragraphs.join("\n\n");
+  if (looksLikeHtml(joined)) {
+    return (
+      <div
+        className={`article-html ${className ?? ""}`}
+        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(joined) }}
+      />
+    );
+  }
   return (
     <div className={className}>
       {paragraphs.map((block, i) => {
