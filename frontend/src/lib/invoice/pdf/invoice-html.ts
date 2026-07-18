@@ -211,8 +211,21 @@ table{width:100%;border-collapse:collapse}
     }
   </div>
 
-  ${data.notes ? `<div style="position:relative;margin-top:20px"><div style="font-weight:700;margin-bottom:4px">Notes</div><div style="color:${BODY}">${esc(data.notes)}</div></div>` : ""}
+  ${
+    data.notes
+      ? `<div style="position:relative;margin-top:20px"><div style="font-weight:700;margin-bottom:4px">Notes</div><ul style="margin:0;padding:0;list-style:none;color:${BODY}">${data.notes
+          .split(/\n+/)
+          .filter(Boolean)
+          .map((line) => `<li style="display:flex;gap:6px"><span>•</span><span>${esc(line)}</span></li>`)
+          .join("")}</ul></div>`
+      : ""
+  }
   ${data.terms ? `<div style="position:relative;margin-top:16px;font-size:11px;color:${MUTED}">${esc(data.terms)}</div>` : ""}
+
+  <div style="position:relative;margin-top:28px;border-top:1px solid ${HAIR};padding-top:14px;display:flex;justify-content:space-between;font-size:10px;color:${MUTED}">
+    <span style="font-weight:700;color:${BRAND}">${esc(issuer.name)}</span>
+    <span>${esc(issuer.website)} · ${esc(issuer.phone)}</span>
+  </div>
 
 </div></body></html>`;
 }

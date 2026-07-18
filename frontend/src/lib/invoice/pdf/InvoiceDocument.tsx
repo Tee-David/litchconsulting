@@ -25,7 +25,7 @@ const MARK =
 
 const STATUS_STAMP: Record<string, { label: string; color: string }> = {
   paid: { label: "PAID", color: "#16a34a" },
-  sent: { label: "UNPAID", color: "#d97706" },
+  sent: { label: "SENT", color: "#d97706" },
   overdue: { label: "OVERDUE", color: "#dc2626" },
   draft: { label: "DRAFT", color: "#8a92a6" },
   void: { label: "VOID", color: "#8a92a6" },
@@ -232,7 +232,9 @@ export function InvoiceDocument({
         {data.notes ? (
           <View style={s.section}>
             <Text style={s.sectionLabel}>Notes</Text>
-            <Text style={{ color: BODY }}>{data.notes}</Text>
+            {data.notes.split(/\n+/).filter(Boolean).map((line, i) => (
+              <Text key={i} style={{ color: BODY }}>• {line}</Text>
+            ))}
           </View>
         ) : null}
         {data.terms ? (
@@ -243,7 +245,7 @@ export function InvoiceDocument({
 
         <View style={s.footer} fixed>
           <Text>{issuer.name}</Text>
-          <Text>{issuer.website}</Text>
+          <Text>{`${issuer.website} · ${issuer.phone}`}</Text>
         </View>
       </Page>
     </Document>

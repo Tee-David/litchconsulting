@@ -202,12 +202,32 @@ export function InvoicePreview({
             {data.notes && (
               <>
                 <p className="font-semibold">Notes</p>
-                <p className="mt-1 text-[#5b6474]">{data.notes}</p>
+                <ul className="mt-1 space-y-0.5 text-[#5b6474]">
+                  {data.notes
+                    .split(/\n+/)
+                    .filter(Boolean)
+                    .map((line, i) => (
+                      <li key={i} className="flex gap-1.5">
+                        <span aria-hidden>•</span>
+                        <span>{line}</span>
+                      </li>
+                    ))}
+                </ul>
               </>
             )}
             {data.terms && <p className="mt-3 text-xs text-[#8a92a6]">{data.terms}</p>}
           </div>
         )}
+      </div>
+
+      {/* Footer contact band */}
+      <div className="relative mt-8 flex flex-wrap items-center justify-between gap-2 border-t border-[#e6e8f0] pt-4 text-xs text-[#8a92a6]">
+        <span className="font-semibold" style={{ color: BRAND }}>
+          {issuer.name}
+        </span>
+        <span>
+          {issuer.website} · {issuer.phone}
+        </span>
       </div>
     </div>
   );
