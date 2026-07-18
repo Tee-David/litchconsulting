@@ -6,6 +6,9 @@ After=network.target docker.service
 
 [Service]
 User=ubuntu
+# Same ciphertext store as the API — the worker reads envelopes from it.
+StateDirectory=litchai
+StateDirectoryMode=0700
 EnvironmentFile=/etc/litchai/env
 WorkingDirectory=/home/ubuntu/litchconsulting/backend
 ExecStart=/home/ubuntu/litchai/venv/bin/procrastinate --app=litchai.queue.queue worker

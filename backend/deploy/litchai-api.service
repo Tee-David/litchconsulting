@@ -6,6 +6,11 @@ After=network.target docker.service
 
 [Service]
 User=ubuntu
+# Creates /var/lib/litchai (0700, owned by User=) before start. Without this the
+# ciphertext store can't be created — the service user can't mkdir under
+# /var/lib — and every document upload 500s with PermissionError.
+StateDirectory=litchai
+StateDirectoryMode=0700
 EnvironmentFile=/etc/litchai/env
 WorkingDirectory=/home/ubuntu/litchconsulting/backend
 ExecStart=/home/ubuntu/litchai/venv/bin/uvicorn litchai.api:app --host 127.0.0.1 --port 8000
