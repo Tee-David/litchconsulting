@@ -26,7 +26,12 @@ export default async function ViewInvoicePage({ params }: { params: Promise<{ id
           <h2 className="font-display text-lg font-bold text-ink">{data.invoice.number}</h2>
           <Badge tone={invoiceStatusTone(data.invoice.status)}>{data.invoice.status}</Badge>
         </div>
-        <InvoiceViewActions id={data.invoice.id} status={data.invoice.status} />
+        <InvoiceViewActions
+          id={data.invoice.id}
+          status={data.invoice.status}
+          number={data.invoice.number}
+          publicToken={data.invoice.publicToken}
+        />
       </div>
       <InvoicePreview data={invoiceData} issuer={issuer} />
     </div>
