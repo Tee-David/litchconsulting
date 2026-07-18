@@ -40,18 +40,24 @@ export function invoiceHtml({
   issuer = defaultIssuer,
   variant = "invoice",
   qrDataUrl,
+  showPaidBanner = true,
 }: {
   data: InvoiceData;
   issuer?: Issuer;
   variant?: "invoice" | "receipt" | "quote";
   qrDataUrl?: string;
+  showPaidBanner?: boolean;
 }): string {
   const isReceipt = variant === "receipt";
   const isQuote = variant === "quote";
   const title = isQuote ? "QUOTE" : isReceipt ? "RECEIPT" : "INVOICE";
   const totals = computeTotals(data.items);
   const fmt = (n: number) => formatMoney(n, data.currency);
-  const stamp = STATUS_STAMP[data.status];
+  // Receipts already brand themselves paid (header "PAID ✓" + "Total Paid"), so
+  // the banner is invoice-only. When it shows, the diagonal stamp is dropped —
+  // same rule as the on-screen preview, so the replica stays 1:1.
+  const showBanner = showPaidBanner && data.status === "paid" && !isReceipt;
+  const stamp = showBanner ? undefined : STATUS_STAMP[data.status];
   const sig = signatureSvgDataUri();
   const mark = markSvgDataUri();
 
@@ -118,6 +124,14 @@ table{width:100%;border-collapse:collapse}
     stamp
       ? `<div style="position:absolute;top:104px;right:52px;transform:rotate(-12deg);opacity:0.7">
            <span style="display:inline-block;border:3px solid ${stamp.color};color:${stamp.color};border-radius:8px;padding:2px 12px;font-size:22px;font-weight:800;letter-spacing:1px;text-transform:uppercase">${esc(stamp.label)}</span>
+         </div>`
+      : ""
+  }
+
+  ${
+    showBanner
+      ? `<div style="position:relative;display:flex;align-items:center;gap:10px;background:#eafaf0;border:1px solid #c9efd8;color:#16a34a;border-radius:8px;padding:12px 16px;margin-bottom:22px;font-weight:600;font-size:13px">
+           <span style="font-size:15px;line-height:1">✓</span><span>Invoice paid${data.paidAt ? ` on ${esc(data.paidAt)}` : ""}</span>
          </div>`
       : ""
   }

@@ -103,7 +103,9 @@ export default async function PublicInvoicePage({
           </div>
         )}
 
-        <InvoicePreview data={invoiceData} issuer={issuer} />
+        {/* The paid thank-you hero above already confirms payment, so suppress the
+            in-paper banner here to avoid a double banner. */}
+        <InvoicePreview data={invoiceData} issuer={issuer} showPaidBanner={false} />
 
         <p className="mt-6 text-center text-xs text-muted">
           Powered by Litch Consulting · Questions? Reply to the email this invoice came from.

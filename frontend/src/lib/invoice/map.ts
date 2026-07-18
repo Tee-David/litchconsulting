@@ -1,6 +1,7 @@
 import type { Invoice, InvoiceItem } from "@/lib/db/schema";
 import type { InvoiceData, InvoiceInput } from "./types";
 import { num } from "./money";
+import { formatDate } from "@/lib/format-date";
 
 const billToOf = (inv: Invoice) => ({
   name: inv.billToName || undefined,
@@ -42,6 +43,7 @@ export function toInvoiceData(inv: Invoice, items: InvoiceItem[]): InvoiceData {
     terms: inv.terms,
     paymentUrl: inv.publicToken ? `${SITE_BASE}/i/${inv.publicToken}` : null,
     publicToken: inv.publicToken,
+    paidAt: inv.paidAt ? formatDate(inv.paidAt) : null,
   };
 }
 

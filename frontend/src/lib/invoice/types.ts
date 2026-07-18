@@ -29,6 +29,8 @@ export type InvoiceData = {
   terms?: string | null;
   paymentUrl?: string | null;
   publicToken?: string | null;
+  /** Formatted date the invoice was paid (drives the in-paper PAID banner). */
+  paidAt?: string | null;
 };
 
 export const INVOICE_STATUSES = ["draft", "sent", "paid", "overdue", "void"] as const;

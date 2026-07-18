@@ -1,8 +1,10 @@
+import { CheckCircle2 } from "lucide-react";
 import { computeTotals, formatMoney } from "@/lib/invoice/money";
 import { issuer as defaultIssuer, type Issuer } from "@/lib/invoice/issuer";
 import type { InvoiceData } from "@/lib/invoice/types";
 
 const BRAND = "#0a196d";
+const PAID = "#16a34a";
 
 const STATUS_STAMP: Record<string, { label: string; color: string }> = {
   paid: { label: "PAID", color: "#16a34a" },
@@ -24,15 +26,23 @@ export function InvoicePreview({
   data,
   issuer = defaultIssuer,
   variant = "invoice",
+  showPaidBanner = true,
 }: {
   data: InvoiceData;
   issuer?: Issuer;
   variant?: "invoice" | "quote";
+  /** In-paper green "paid" banner. Off on the public pay page, which shows its
+   *  own thank-you hero above the paper (avoids a double banner). */
+  showPaidBanner?: boolean;
 }) {
   const isQuote = variant === "quote";
   const totals = computeTotals(data.items);
   const fmt = (n: number) => formatMoney(n, data.currency);
-  const stamp = STATUS_STAMP[data.status];
+  // When the paid banner shows, drop the diagonal PAID stamp — the banner is the
+  // richer paid indicator (it carries the date) and the two would collide/read
+  // as redundant. Every renderer applies this same rule, so parity holds.
+  const showBanner = showPaidBanner && data.status === "paid";
+  const stamp = showBanner ? undefined : STATUS_STAMP[data.status];
 
   return (
     <div className="relative mx-auto w-full max-w-3xl overflow-hidden rounded-card border border-hairline bg-white p-4 text-[#0a0e1a] shadow-sm sm:p-6 md:p-9">
@@ -63,6 +73,17 @@ export function InvoicePreview({
           >
             {stamp.label}
           </span>
+        </div>
+      )}
+
+      {/* PAID banner */}
+      {showBanner && (
+        <div
+          className="relative mb-6 flex items-center gap-2.5 rounded-lg px-4 py-3 text-sm font-semibold"
+          style={{ background: "#eafaf0", border: "1px solid #c9efd8", color: PAID }}
+        >
+          <CheckCircle2 className="size-5 shrink-0" />
+          <span>Invoice paid{data.paidAt ? ` on ${data.paidAt}` : ""}</span>
         </div>
       )}
 
