@@ -28,7 +28,7 @@ from pydantic import BaseModel
 from litchai.ai.cache import AiCache, AiTelemetry
 from litchai.ai.harness import run_task
 from litchai.ai.provider import Provider
-from litchai.ai.tasks import TaskPolicy, TaskSpec
+from litchai.ai.tasks import PROMPTS_DIR, TaskPolicy, TaskSpec
 from litchai.categorize.retrieval import RetrievedChunk, hybrid_knowledge
 from litchai.db.repo import Repository
 from litchai.embeddings import Embedder, cosine
@@ -36,6 +36,14 @@ from litchai.embeddings import Embedder, cosine
 ToolKind = Literal["read", "write"]
 
 IDK = "I don't have anything in the knowledge base to answer that. Try rephrasing, or check the source records directly."
+
+# Shown when a general_chat turn is routed but no external chat provider is
+# configured (LITCHAI_CHAT_* unset). A friendly grounded refusal — never a hard
+# error and never a hallucinated answer.
+GENERAL_CHAT_UNAVAILABLE = (
+    "I'm set up to answer from Litch's knowledge base — ask me about our services, "
+    "tax rules, a client's documents, or the pipeline."
+)
 
 
 @dataclass(frozen=True)
@@ -63,6 +71,24 @@ TOOLS: tuple[Tool, ...] = (
             "how much does forensic accounting cost",
             "explain the companies income tax rate",
             "how does the engagement lifecycle work",
+        ),
+    ),
+    Tool(
+        name="general_chat",
+        kind="read",
+        description=(
+            "Small talk and general reasoning NOT specific to Litch, tax or a client — "
+            "greetings, thanks, brainstorming, phrasing help, generic explanations, 'who are you'."
+        ),
+        examples=(
+            "hello, how are you",
+            "thanks for your help",
+            "can you help me brainstorm some ideas",
+            "explain what a balance sheet is in general terms",
+            "what's a good way to phrase this",
+            "who are you and what can you do",
+            "good morning",
+            "tell me a fun fact",
         ),
     ),
     Tool(
@@ -128,6 +154,27 @@ TOOLS_BY_NAME = {t.name: t for t in TOOLS}
 DEFAULT_TOOL = TOOLS_BY_NAME["search_knowledge"]
 _ENGAGEMENT_ACTIONS = ("submit", "approve", "reject", "lock", "reopen")
 
+# Safety epsilon (D4). This is a tax-advisory product: a finance/tax question
+# that lands in a near-tie between general_chat and search_knowledge must fall to
+# the *grounded* tool, never to ungrounded general chat. Within this cosine
+# margin, search_knowledge wins.
+KNOWLEDGE_TIE_EPSILON = 0.05
+
+
+def _prefer_knowledge_on_tie(
+    ranked: list[tuple[Tool, float]], epsilon: float
+) -> list[tuple[Tool, float]]:
+    """If general_chat is top but search_knowledge is within ``epsilon`` of it,
+    promote search_knowledge. Keeps a borderline tax/finance question grounded
+    instead of letting it drift into ungrounded chat (see KNOWLEDGE_TIE_EPSILON)."""
+    if not ranked or ranked[0][0].name != "general_chat":
+        return ranked
+    top_score = ranked[0][1]
+    for i, (tool, score) in enumerate(ranked):
+        if tool.name == "search_knowledge" and (top_score - score) <= epsilon:
+            return [ranked[i], *ranked[:i], *ranked[i + 1 :]]
+    return ranked
+
 
 # --- stage 1: semantic router ----------------------------------------------
 @dataclass
@@ -138,6 +185,7 @@ class SemanticRouter:
     embedder: Embedder
     tools: tuple[Tool, ...] = TOOLS
     threshold: float = 0.55
+    tie_epsilon: float = KNOWLEDGE_TIE_EPSILON
     _index: list[tuple[Tool, list[float]]] = field(default_factory=list, init=False)
 
     def __post_init__(self) -> None:
@@ -159,7 +207,7 @@ class SemanticRouter:
         return sorted(best.values(), key=lambda ts: ts[1], reverse=True)
 
     def route(self, message: str) -> tuple[Tool, float] | None:
-        ranked = self.score(message)
+        ranked = _prefer_knowledge_on_tie(self.score(message), self.tie_epsilon)
         if ranked and ranked[0][1] >= self.threshold:
             return ranked[0]
         return None
@@ -267,15 +315,30 @@ class RouteDecision:
     score: float | None = None
 
 
+def _routing_text(message: str, history: list[dict[str, str]] | None) -> str:
+    """Cheap history-into-routing (D5). A very short follow-up ("yes", "and you?",
+    "thanks") carries little routing signal on its own, so we prepend the most
+    recent user turn to keep chat/firm threads coherent. Longer messages route on
+    their own. Slot extraction still runs on the raw message, never this."""
+    if history and len(message.split()) <= 4:
+        prev = next(
+            (t.get("content", "") for t in reversed(history) if t.get("role") == "user"), ""
+        )
+        if prev:
+            return f"{prev} {message}"
+    return message
+
+
 def route_message(
     message: str,
     router: SemanticRouter,
     *,
     provider: Provider,
+    history: list[dict[str, str]] | None = None,
     cache: AiCache | None = None,
     telemetry: AiTelemetry | None = None,
 ) -> RouteDecision:
-    hit = router.route(message)
+    hit = router.route(_routing_text(message, history))
     if hit is not None:
         tool, score = hit
         return RouteDecision(tool=tool, slots=extract_slots(message, tool), method="semantic", score=score)
@@ -455,9 +518,16 @@ def generate_answer(
     history: list[dict[str, str]] | None,
     *,
     provider: Provider,
+    tool_name: str = "search_knowledge",
     cache: AiCache | None = None,
     telemetry: AiTelemetry | None = None,
 ) -> AnswerOut:
+    # Defensive (D3): general_chat is served entirely on the chat-provider path in
+    # answer_chat and must never reach grounded generation. If a stray call gets
+    # here, degrade to the grounded refusal — the no-context short-circuit below
+    # would otherwise swallow it into an IDK about the knowledge base.
+    if tool_name == "general_chat":
+        return AnswerOut(answer=GENERAL_CHAT_UNAVAILABLE, can_answer=True)
     # Nothing to ground on → don't call the model, just say so.
     if not context and not _has_groundable_data(tool_result):
         detail = tool_result.data.get("error") if tool_result and tool_result.data.get("error") else IDK
@@ -476,6 +546,35 @@ def generate_answer(
     if result.ok and isinstance(result.model, AnswerOut):
         return result.model
     return AnswerOut(answer=IDK, can_answer=False)
+
+
+# --- general chat (off-corpus, external provider) --------------------------
+# Non-zero temperature: general chat wants a little warmth/variety, unlike the
+# deterministic grounded path. num_ctx is a no-op for OpenAI-compatible providers
+# (they size their own context) but keeps the policy shape consistent.
+_GENERAL_CHAT_POLICY = TaskPolicy(temperature=0.7, num_ctx=8192)
+
+
+def _general_chat_params() -> dict[str, Any]:
+    return {**_GENERAL_CHAT_POLICY.params(), "max_tokens": 800}
+
+
+def _render_general_prompt(message: str, history: list[dict[str, str]] | None) -> str:
+    template = (PROMPTS_DIR / "assistant_general.md").read_text(encoding="utf-8")
+    return template.format(history=_format_history(history), message=message[:1000])
+
+
+def generate_general_chat(
+    message: str,
+    history: list[dict[str, str]] | None,
+    *,
+    provider: Provider,
+) -> str:
+    """Free-form general-chat answer via the external chat provider. Plain text,
+    no schema, non-zero temperature. Falls back to the grounded refusal if the
+    provider returns nothing."""
+    resp = provider.generate(_render_general_prompt(message, history), params=_general_chat_params())
+    return resp.text.strip() or GENERAL_CHAT_UNAVAILABLE
 
 
 # --- top-level entry point -------------------------------------------------
@@ -510,11 +609,29 @@ def answer_chat(
     history: list[dict[str, str]] | None = None,
     scope: str = "firm",
     client_id: str | None = None,
+    chat_provider: Provider | None = None,
     cache: AiCache | None = None,
     telemetry: AiTelemetry | None = None,
 ) -> ChatResult:
     router = router or SemanticRouter(embedder)
-    decision = route_message(message, router, provider=provider, cache=cache, telemetry=telemetry)
+    decision = route_message(
+        message, router, provider=provider, history=history, cache=cache, telemetry=telemetry
+    )
+
+    # general_chat: off-corpus small talk / reasoning. Skip retrieval and the
+    # READ/proposal paths entirely and answer via the external chat provider. If
+    # none is configured, degrade to a friendly grounded refusal — no model call,
+    # no hallucination.
+    if decision.tool.name == "general_chat":
+        answer = (
+            generate_general_chat(message, history, provider=chat_provider)
+            if chat_provider is not None
+            else GENERAL_CHAT_UNAVAILABLE
+        )
+        return ChatResult(
+            answer=answer, citations=[], tool="general_chat", routed_by=decision.method,
+            can_answer=True,
+        )
 
     # scope='client' is the only mode that includes a client's operational context.
     retrieval_client = client_id if scope == "client" else None
@@ -537,7 +654,8 @@ def answer_chat(
         repo=repo, embedder=embedder, context=context, client_id=read_client,
     )
     out = generate_answer(
-        message, context, tool_result, history, provider=provider, cache=cache, telemetry=telemetry
+        message, context, tool_result, history, provider=provider,
+        tool_name=decision.tool.name, cache=cache, telemetry=telemetry,
     )
     citations = _dedupe([c.citation for c in context]) if out.can_answer and context else []
     return ChatResult(

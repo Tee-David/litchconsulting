@@ -129,6 +129,82 @@ def test_telemetry_records_generation_call():
     assert any(e.task == "assistant_answer" for e in telemetry.events)
 
 
+# --- general chat (external provider, off-corpus) --------------------------
+def _chat(text="Hi there! How can I help?"):
+    """A FakeProvider standing in for the external OpenAI-compatible chat model.
+    Returns plain text (the general path uses no JSON schema)."""
+    return FakeProvider(responder=lambda p: text)
+
+
+def test_general_chat_routes_to_chat_provider_with_no_citations():
+    repo, emb, router = _seeded()
+    local = _answer("SHOULD NOT BE USED", can=False)  # local model + RAG must stay untouched
+    chat = _chat("Doing well, thanks for asking!")
+    result = A.answer_chat(
+        "hello, how are you", repo=repo, embedder=emb, provider=local, router=router,
+        chat_provider=chat,
+    )
+    assert result.tool == "general_chat"
+    assert result.routed_by == "semantic"
+    assert result.can_answer is True
+    assert result.citations == []
+    assert result.answer == "Doing well, thanks for asking!"
+    assert len(chat.calls) == 1                        # answered by the external provider
+    assert len(local.calls) == 0                       # never spent the local model on this
+
+
+def test_general_chat_without_provider_degrades_to_grounded_refusal():
+    repo, emb, router = _seeded()
+    local = _answer("nope")
+    result = A.answer_chat(
+        "thanks for your help", repo=repo, embedder=emb, provider=local, router=router,
+        chat_provider=None,
+    )
+    assert result.tool == "general_chat"
+    assert result.answer == A.GENERAL_CHAT_UNAVAILABLE
+    assert result.citations == []
+    assert result.can_answer is True
+    assert len(local.calls) == 0                       # no model call, no hallucination
+
+
+def test_tax_question_stays_on_search_knowledge_not_general_chat():
+    # Safety (D4): a tax/finance question must never fall into ungrounded chat,
+    # even with a chat provider available.
+    repo, emb, router = _seeded()
+    chat = _chat("SHOULD NOT BE USED")
+    result = A.answer_chat(
+        "what is the vat rate", repo=repo, embedder=emb, provider=_answer("7.5%"),
+        router=router, chat_provider=chat,
+    )
+    assert result.tool == "search_knowledge"
+    assert len(chat.calls) == 0
+
+
+def test_search_knowledge_wins_near_tie_over_general_chat():
+    gc, sk = A.TOOLS_BY_NAME["general_chat"], A.TOOLS_BY_NAME["search_knowledge"]
+    # Within epsilon → grounded tool is promoted.
+    near = A._prefer_knowledge_on_tie([(gc, 0.80), (sk, 0.78)], A.KNOWLEDGE_TIE_EPSILON)
+    assert near[0][0].name == "search_knowledge"
+    # Comfortably ahead → general_chat is left alone.
+    clear = A._prefer_knowledge_on_tie([(gc, 0.90), (sk, 0.50)], A.KNOWLEDGE_TIE_EPSILON)
+    assert clear[0][0].name == "general_chat"
+
+
+def test_build_chat_provider_is_gated_on_env(monkeypatch):
+    from litchai.ai.provider import OpenAICompatProvider, build_chat_provider
+
+    for k in ("LITCHAI_CHAT_BASE_URL", "LITCHAI_CHAT_API_KEY", "LITCHAI_CHAT_MODEL"):
+        monkeypatch.delenv(k, raising=False)
+    assert build_chat_provider() is None               # unset env → no general chat
+    monkeypatch.setenv("LITCHAI_CHAT_BASE_URL", "https://api.groq.com/openai/v1")
+    monkeypatch.setenv("LITCHAI_CHAT_API_KEY", "sk-test")
+    monkeypatch.setenv("LITCHAI_CHAT_MODEL", "llama-3.3-70b")
+    provider = build_chat_provider()
+    assert isinstance(provider, OpenAICompatProvider)
+    assert provider.request_model == "llama-3.3-70b"
+    assert provider.name == "openai_compat"
+
+
 # --- API route -------------------------------------------------------------
 def _app():
     repo, emb = InMemoryRepository(), FakeEmbedder()

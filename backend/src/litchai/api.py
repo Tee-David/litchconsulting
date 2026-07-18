@@ -43,6 +43,15 @@ def _default_provider() -> Any:
     return OllamaProvider()
 
 
+def _default_chat_provider() -> Any:
+    """External general-chat provider (OpenAI-compatible), or ``None`` when the
+    LITCHAI_CHAT_* env is unset — in which case general chat degrades to a
+    grounded refusal. Firm knowledge + client data never use this."""
+    from litchai.ai.provider import build_chat_provider
+
+    return build_chat_provider()
+
+
 def _default_embedder() -> Any:
     from litchai.embeddings import OllamaEmbedder
 
@@ -120,15 +129,19 @@ def create_app(
     store_provider: StoreProvider | None = None,
     provider_factory: ProviderFactory | None = None,
     embedder_factory: EmbedderFactory | None = None,
+    chat_provider_factory: ProviderFactory | None = None,
 ) -> FastAPI:
     app = FastAPI(title="LitchAI", version=API_VERSION, lifespan=_lifespan)
     app.state.repo_provider = repo_provider or _pg_provider
     app.state.store_provider = store_provider or _pg_store_provider
     app.state.provider_factory = provider_factory or _default_provider
     app.state.embedder_factory = embedder_factory or _default_embedder
+    app.state.chat_provider_factory = chat_provider_factory or _default_chat_provider
     app.state.storage = storage or Storage()
-    app.state.embedder = None   # built once on first Copilot call
+    app.state.embedder = None   # built once on first Sage call
     app.state.router = None      # SemanticRouter (tool-utterance index) cached here
+    app.state.chat_provider = None        # external general-chat provider (or None)
+    app.state.chat_provider_built = False  # sentinel: None is a valid built value
 
     def get_repo() -> Iterator[Repository]:
         with app.state.repo_provider() as repo:
@@ -499,6 +512,15 @@ def create_app(
             app.state.router = SemanticRouter(embedder)
         return app.state.router
 
+    def _get_chat_provider():
+        # Built once (like the embedder/router). None is a valid result — it just
+        # means general chat degrades to a grounded refusal — so a sentinel flag,
+        # not `is None`, decides whether we've already tried.
+        if not app.state.chat_provider_built:
+            app.state.chat_provider = app.state.chat_provider_factory()
+            app.state.chat_provider_built = True
+        return app.state.chat_provider
+
     @app.post("/assistant/chat")
     async def assistant_chat(
         body: AssistantChatRequest, repo: Repository = Depends(get_repo)
@@ -533,6 +555,7 @@ def create_app(
             history=body.history,
             scope=body.scope,
             client_id=body.client_id,
+            chat_provider=_get_chat_provider(),
             cache=cache,
             telemetry=telemetry,
         )
