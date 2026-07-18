@@ -73,11 +73,13 @@ export function InvoiceDocument({
   variant = "invoice",
   issuer = defaultIssuer,
   qrDataUrl,
+  showPaidBanner = true,
 }: {
   data: InvoiceData;
   variant?: "invoice" | "receipt" | "quote";
   issuer?: Issuer;
   qrDataUrl?: string;
+  showPaidBanner?: boolean;
 }) {
   const isReceipt = variant === "receipt";
   const isQuote = variant === "quote";
@@ -86,7 +88,10 @@ export function InvoiceDocument({
   const cur = data.currency;
   const fmt = (n: number) => formatMoney(n, cur);
 
-  const stamp = STATUS_STAMP[data.status];
+  // Same paid-banner rule as the preview + HTML replica: invoice-only, and it
+  // replaces the diagonal stamp so the two never collide.
+  const showBanner = showPaidBanner && data.status === "paid" && !isReceipt;
+  const stamp = showBanner ? undefined : STATUS_STAMP[data.status];
   const sigPng = signaturePngDataUri();
 
   return (
@@ -105,6 +110,28 @@ export function InvoiceDocument({
         {stamp ? (
           <View style={{ position: "absolute", top: 96, right: 44, borderWidth: 2, borderColor: stamp.color, borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2, transform: "rotate(-12deg)" }}>
             <Text style={{ color: stamp.color, fontFamily: "NotoSans", fontWeight: 700, fontSize: 16, letterSpacing: 1, opacity: 0.75 }}>{stamp.label}</Text>
+          </View>
+        ) : null}
+
+        {/* PAID banner */}
+        {showBanner ? (
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: "#eafaf0",
+              borderWidth: 1,
+              borderColor: "#c9efd8",
+              borderRadius: 6,
+              paddingVertical: 9,
+              paddingHorizontal: 14,
+              marginBottom: 18,
+            }}
+          >
+            <Text style={{ color: "#16a34a", fontFamily: "NotoSans", fontWeight: 700, fontSize: 11, marginRight: 7 }}>✓</Text>
+            <Text style={{ color: "#16a34a", fontFamily: "NotoSans", fontWeight: 700, fontSize: 10 }}>
+              Invoice paid{data.paidAt ? ` on ${data.paidAt}` : ""}
+            </Text>
           </View>
         ) : null}
 
