@@ -13,6 +13,7 @@ import { Badge, type BadgeTone } from "@/components/admin/ui/badge";
 import { formatMoney, num } from "@/lib/invoice/money";
 import { formatDateTime } from "@/lib/format-date";
 import type { PaymentRow } from "@/lib/db/queries/payments";
+import { Select } from "@/components/ui/select";
 
 const STATUSES = [
   "all",
@@ -172,18 +173,14 @@ export function PaymentsList({ payments }: { payments: PaymentRow[] }) {
         toolbar={
           <>
             <DateRangeFilter onChange={setRange} />
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              aria-label="Filter by payment status"
-              className="h-9 rounded-lg border border-hairline bg-paper px-3 text-sm capitalize text-ink outline-none focus:border-brand"
-            >
-              {STATUSES.map((s) => (
-                <option key={s} value={s} className="capitalize">
-                  {s === "all" ? "All statuses" : pretty(s)}
-                </option>
-              ))}
-            </select>
+            <div className="w-44">
+              <Select
+                value={status}
+                onChange={setStatus}
+                aria-label="Filter by payment status"
+                options={STATUSES.map((s) => ({ value: s, label: s === "all" ? "All statuses" : pretty(s) }))}
+              />
+            </div>
             <ExportMenu rows={filtered} columns={exportColumns} filename="payments" title="Payments" />
           </>
         }

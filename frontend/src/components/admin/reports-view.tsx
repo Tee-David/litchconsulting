@@ -22,6 +22,7 @@ import { StatCard } from "@/components/admin/ui/stat-card";
 import { GroupedBars, Donut, CATEGORICAL } from "@/components/charts";
 import { ExportMenu, type ExportColumn } from "@/components/admin/ui/export-menu";
 import { EmptyState } from "@/components/admin/ui/empty-state";
+import { Select } from "@/components/ui/select";
 import { formatMoney, num, CURRENCIES } from "@/lib/invoice/money";
 import { cn } from "@/lib/utils";
 import type { InvoiceRow } from "@/lib/db/queries/invoices";
@@ -383,17 +384,16 @@ export function ReportsView({ invoices }: { invoices: InvoiceRow[] }) {
           </div>
           <DateRangeFilter onChange={setRange} />
           {currencies.length > 1 && (
-            <select
+            <Select
+              className="w-32"
               value={cur}
-              onChange={(e) => setCurrency(e.target.value)}
-              className="h-9 rounded-lg border border-hairline bg-paper px-3 text-sm font-medium text-ink outline-none focus:border-brand"
-            >
-              {currencies.map((c) => (
-                <option key={c} value={c}>
-                  {CURRENCIES.find((x) => x.code === c)?.symbol || ""} {c}
-                </option>
-              ))}
-            </select>
+              onChange={setCurrency}
+              options={currencies.map((c) => ({
+                value: c,
+                label: `${CURRENCIES.find((x) => x.code === c)?.symbol || ""} ${c}`,
+              }))}
+              aria-label="Currency"
+            />
           )}
           <div className="flex flex-wrap items-center gap-1">
             {STATUSES.map((s) => {

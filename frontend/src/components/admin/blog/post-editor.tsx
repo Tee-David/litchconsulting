@@ -13,6 +13,7 @@ import { uploadFile } from "@/lib/upload-client";
 import type { PostInput } from "@/lib/blog-types";
 import type { Category } from "@/lib/db/schema";
 import { cn } from "@/lib/utils";
+import { Select } from "@/components/ui/select";
 
 const FALLBACK_TAGS = ["Taxation", "Modelling", "Reporting", "Analytics", "Advisory", "Forensics", "Insights"];
 
@@ -206,13 +207,12 @@ export function PostEditor({ initial, categories = [] }: { initial?: PostInput; 
           </div>
           <div>
             <label className={labelCls}>Category</label>
-            <select value={form.tag} onChange={(e) => set("tag", e.target.value)} className={inputCls}>
-              {tagOptions.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
+            <Select
+              value={form.tag}
+              onChange={(v) => set("tag", v)}
+              options={tagOptions.map((t) => ({ value: t, label: t }))}
+              aria-label="Category"
+            />
           </div>
         </div>
 

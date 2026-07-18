@@ -56,6 +56,8 @@ export function InvoiceBuilder({
   const [terms, setTerms] = useState(initial?.terms ?? DEFAULT_TERMS);
   const [busy, setBusy] = useState<"save" | "send" | null>(null);
   const [mobileView, setMobileView] = useState<"form" | "preview">("form");
+  // Desktop: let the admin collapse the preview and give the form the full width.
+  const [showPreview, setShowPreview] = useState(true);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
@@ -159,6 +161,25 @@ export function InvoiceBuilder({
             <Eye className="size-4" /> Preview
           </button>
         </div>
+
+        {/* Desktop-only: collapse the preview to give the form full width. */}
+        <button
+          type="button"
+          role="switch"
+          aria-checked={showPreview}
+          onClick={() => setShowPreview((s) => !s)}
+          className="hidden items-center gap-2 rounded-lg border border-hairline bg-paper px-3 py-2 text-sm font-medium text-body transition-colors hover:bg-surface hover:text-ink lg:inline-flex"
+        >
+          <span
+            className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${showPreview ? "bg-brand" : "bg-hairline"}`}
+          >
+            <span
+              className={`absolute top-0.5 size-4 rounded-full bg-white transition-[left] ${showPreview ? "left-[18px]" : "left-0.5"}`}
+            />
+          </span>
+          Show preview
+        </button>
+
         <div className="ml-auto flex flex-wrap items-center gap-2">
           <button onClick={onDownload} className="inline-flex items-center gap-1.5 rounded-lg border border-hairline bg-paper px-3 py-2 text-sm font-medium text-ink hover:bg-surface">
             <Download className="size-4" /> <span className="hidden sm:inline">PDF</span>
@@ -180,7 +201,7 @@ export function InvoiceBuilder({
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className={`grid gap-6 ${showPreview ? "lg:grid-cols-2" : "lg:grid-cols-1"}`}>
         {/* Form */}
         <div className={`min-w-0 space-y-5 ${mobileView === "preview" ? "hidden lg:block" : ""}`}>
           <div className="rounded-card border border-hairline bg-paper p-5">
@@ -323,7 +344,7 @@ export function InvoiceBuilder({
         </div>
 
         {/* Live preview */}
-        <div className={`min-w-0 lg:sticky lg:top-20 lg:self-start ${mobileView === "form" ? "hidden lg:block" : ""}`}>
+        <div className={`min-w-0 lg:sticky lg:top-20 lg:self-start ${mobileView === "form" ? "hidden lg:block" : ""} ${showPreview ? "" : "lg:hidden"}`}>
           <InvoicePreview data={data} issuer={issuer} variant={isQuote ? "quote" : "invoice"} />
         </div>
       </div>

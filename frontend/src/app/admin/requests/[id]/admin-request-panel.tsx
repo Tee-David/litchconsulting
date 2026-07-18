@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ChevronDown,
   Loader2,
   Lock,
   MessageSquarePlus,
@@ -14,6 +13,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useToast } from "@/components/admin/ui/toaster";
 import { Uploader } from "@/components/ui/uploader";
+import { Select } from "@/components/ui/select";
 import { LEGAL_TRANSITIONS, STATUS_LABELS, type RequestStatus } from "@/lib/requests/status";
 import {
   adminSetRequestStatusAction,
@@ -105,20 +105,14 @@ export function AdminRequestPanel({
           </p>
         ) : (
           <>
-            <div className="relative mt-3">
-              <select
+            <div className="mt-3">
+              <Select
                 value={toStatus}
-                onChange={(e) => setToStatus(e.target.value)}
-                className={cn(inputCls, "appearance-none pr-9")}
-              >
-                <option value="">Move to…</option>
-                {targets.map((t) => (
-                  <option key={t} value={t}>
-                    {STATUS_LABELS[t]}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
+                onChange={setToStatus}
+                options={targets.map((t) => ({ value: t, label: STATUS_LABELS[t] }))}
+                placeholder="Move to…"
+                aria-label="Move to status"
+              />
             </div>
             <textarea
               rows={2}

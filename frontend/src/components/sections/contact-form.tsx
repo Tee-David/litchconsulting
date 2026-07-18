@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { contactSchema, serviceOptions } from "@/lib/schemas";
+import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 const field =
@@ -16,6 +17,7 @@ export function ContactForm() {
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<Errors>({});
   const [err, setErr] = useState<string | null>(null);
+  const [service, setService] = useState("");
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -88,13 +90,16 @@ export function ContactForm() {
           <input id="company" name="company" className={field} placeholder="Company name" />
         </div>
         <div>
-          <label className={label} htmlFor="service">Service</label>
-          <select id="service" name="service" className={cn(field, "appearance-none")} defaultValue="">
-            <option value="" disabled>Select a service</option>
-            {serviceOptions.map((s) => (
-              <option key={s} value={s}>{s}</option>
-            ))}
-          </select>
+          <span className={label}>Service</span>
+          {/* Custom Select isn't a form control — the hidden input carries the value into FormData. */}
+          <input type="hidden" name="service" value={service} />
+          <Select
+            value={service}
+            onChange={setService}
+            options={serviceOptions.map((s) => ({ value: s, label: s }))}
+            placeholder="Select a service"
+            aria-label="Service"
+          />
           {errors.service && <p className="mt-1 text-xs text-red-600">{errors.service}</p>}
         </div>
       </div>

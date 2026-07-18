@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CreditCard, Loader2, XCircle, ThumbsUp, LifeBuoy } from "lucide-react";
 import { Modal } from "@/components/admin/ui/modal";
+import { Select } from "@/components/ui/select";
 import {
   initRequestPaymentAction,
   cancelRequestAction,
@@ -145,15 +146,12 @@ export function RequestActions({
           </p>
           <div>
             <label className="mb-1 block text-xs font-semibold text-muted">Choose a reason</label>
-            <select
+            <Select
               value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              className="w-full rounded-xl border border-hairline bg-paper px-3 py-2.5 text-sm text-ink outline-none focus:border-brand"
-            >
-              {CANCEL_REASONS.map((r) => (
-                <option key={r}>{r}</option>
-              ))}
-            </select>
+              onChange={setReason}
+              options={CANCEL_REASONS.map((r) => ({ value: r, label: r }))}
+              aria-label="Choose a reason"
+            />
           </div>
           <div>
             <label className="mb-1 block text-xs font-semibold text-muted">

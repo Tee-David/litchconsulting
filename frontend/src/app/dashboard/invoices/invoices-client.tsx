@@ -8,6 +8,7 @@ import { formatMoney } from "@/lib/invoice/money";
 import { EmptyState } from "@/components/admin/ui/empty-state";
 import { motion, AnimatePresence } from "framer-motion";
 import type { InvoiceRow } from "@/lib/db/queries/invoices";
+import { Select } from "@/components/ui/select";
 
 type InvoicesClientProps = {
   invoices: InvoiceRow[];
@@ -101,18 +102,20 @@ export function InvoicesClient({ invoices }: InvoicesClientProps) {
         {/* Status Filter */}
         <div className="flex items-center gap-2 self-start sm:self-auto">
           <Filter className="size-4 text-muted shrink-0" />
-          <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-            className="h-9 rounded-lg border border-hairline bg-paper px-3 text-sm font-medium text-ink outline-none focus:border-brand"
-          >
-            <option value="all">All statuses</option>
-            {availableStatuses.map((status) => (
-              <option key={status} value={status}>
-                {status.charAt(0).toUpperCase() + status.slice(1)}
-              </option>
-            ))}
-          </select>
+          <div className="w-44">
+            <Select
+              value={selectedStatus}
+              onChange={setSelectedStatus}
+              aria-label="Filter by status"
+              options={[
+                { value: "all", label: "All statuses" },
+                ...availableStatuses.map((status) => ({
+                  value: status,
+                  label: status.charAt(0).toUpperCase() + status.slice(1),
+                })),
+              ]}
+            />
+          </div>
         </div>
       </div>
 

@@ -15,6 +15,7 @@ import {
   Globe,
 } from "lucide-react";
 import { serviceOptions } from "@/lib/schemas";
+import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -196,16 +197,15 @@ export function BookingForm() {
               transition={{ duration: 0.25 }}
               className="flex flex-1 flex-col"
             >
-              <label className="text-sm font-medium text-ink">What would you like to discuss?</label>
-              <select
+              <span className="text-sm font-medium text-ink">What would you like to discuss?</span>
+              <Select
+                className="mt-2"
                 value={service}
-                onChange={(e) => setService(e.target.value)}
-                className="mt-2 w-full rounded-xl border border-hairline bg-paper px-4 py-2.5 text-sm outline-none focus:border-brand"
-              >
-                {serviceOptions.map((s) => (
-                  <option key={s}>{s}</option>
-                ))}
-              </select>
+                onChange={setService}
+                options={serviceOptions.map((s) => ({ value: s, label: s }))}
+                aria-label="What would you like to discuss?"
+              />
+
 
               <div className="mt-6 flex items-center justify-between">
                 <p className="font-display text-base font-bold text-ink">{monthLabel}</p>

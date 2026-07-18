@@ -18,6 +18,7 @@ import { StatCard } from "@/components/admin/ui/stat-card";
 import { Donut, CATEGORICAL } from "@/components/charts";
 import { ExportMenu, type ExportColumn } from "@/components/admin/ui/export-menu";
 import { Modal } from "@/components/admin/ui/modal";
+import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/admin/ui/toaster";
 import { formatMoney, num, CURRENCIES } from "@/lib/invoice/money";
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS, categoryMeta } from "@/lib/accounting/categories";
@@ -196,13 +197,16 @@ export function AccountingView({ expenses, invoices }: { expenses: ExpenseRow[];
         <div className="flex flex-wrap items-center gap-2">
           <DateRangeFilter onChange={setRange} />
           {currencies.length > 1 && (
-            <select value={cur} onChange={(e) => setCurrency(e.target.value)} className="h-9 rounded-lg border border-hairline bg-paper px-3 text-sm font-medium text-ink outline-none focus:border-brand">
-              {currencies.map((c) => (
-                <option key={c} value={c}>
-                  {CURRENCIES.find((x) => x.code === c)?.symbol || ""} {c}
-                </option>
-              ))}
-            </select>
+            <Select
+              className="w-32"
+              value={cur}
+              onChange={setCurrency}
+              options={currencies.map((c) => ({
+                value: c,
+                label: `${CURRENCIES.find((x) => x.code === c)?.symbol || ""} ${c}`,
+              }))}
+              aria-label="Currency"
+            />
           )}
         </div>
         <div className="flex items-center gap-2">
@@ -462,13 +466,12 @@ export function AccountingView({ expenses, invoices }: { expenses: ExpenseRow[];
           </div>
           <div>
             <label className={labelCls}>Category</label>
-            <select value={editing.category} onChange={(e) => setEditing((s) => ({ ...s, category: e.target.value }))} className={inputCls}>
-              {EXPENSE_CATEGORIES.map((c) => (
-                <option key={c.key} value={c.key}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
+            <Select
+              value={editing.category}
+              onChange={(v) => setEditing((s) => ({ ...s, category: v }))}
+              options={EXPENSE_CATEGORIES.map((c) => ({ value: c.key, label: c.label }))}
+              aria-label="Category"
+            />
           </div>
           <div>
             <label className={labelCls}>Amount</label>
@@ -484,23 +487,22 @@ export function AccountingView({ expenses, invoices }: { expenses: ExpenseRow[];
           </div>
           <div>
             <label className={labelCls}>Currency</label>
-            <select value={editing.currency} onChange={(e) => setEditing((s) => ({ ...s, currency: e.target.value }))} className={inputCls}>
-              {CURRENCIES.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.symbol} {c.code}
-                </option>
-              ))}
-            </select>
+            <Select
+              value={editing.currency ?? ""}
+              onChange={(v) => setEditing((s) => ({ ...s, currency: v }))}
+              options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.symbol} ${c.code}` }))}
+              aria-label="Currency"
+            />
           </div>
           <div>
             <label className={labelCls}>Payment method</label>
-            <select value={editing.method} onChange={(e) => setEditing((s) => ({ ...s, method: e.target.value }))} className={cn(inputCls, "capitalize")}>
-              {PAYMENT_METHODS.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
+            <Select
+              className="capitalize"
+              value={editing.method ?? ""}
+              onChange={(v) => setEditing((s) => ({ ...s, method: v }))}
+              options={PAYMENT_METHODS.map((m) => ({ value: m, label: m }))}
+              aria-label="Payment method"
+            />
           </div>
           <div>
             <label className={labelCls}>Vendor</label>
