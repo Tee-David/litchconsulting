@@ -85,6 +85,16 @@ function deriveTitle(text: string): string {
   return `${clean.slice(0, 60).replace(/\s+\S*$/, "")}…`;
 }
 
+// A greeting / filler opener carries no topic — keep the title provisional and
+// upgrade it to the first *substantive* message (how ChatGPT/Claude name a chat).
+const TRIVIAL_OPENER =
+  /^(hi|hey+|hello|yo|sup|hiya|howdy|gm|good (morning|afternoon|evening|day)|thanks?|thank (you|u)|ok(ay)?|great|cool|nice|test|ping)\b[\s!.?]*$/i;
+
+function isTrivial(text: string): boolean {
+  const c = text.trim();
+  return c.length < 12 || TRIVIAL_OPENER.test(c);
+}
+
 export async function listSageConversationsAction(
   search?: string,
 ): Promise<{ ok: boolean; conversations: SageConversation[] }> {
@@ -103,23 +113,22 @@ export async function loadSageConversationAction(
   return { ok: true, conversation, messages: await getSageMessages(id) };
 }
 
-export type SaveTurnInput = {
+export type BeginTurnInput = {
   conversationId?: string | null;
   scope: "firm" | "client";
   clientId?: string | null;
   userMessage: string;
-  assistantMessage: string;
-  citations?: string[];
 };
-export type SaveTurnResult =
+export type BeginTurnResult =
   | { ok: true; conversationId: string; title: string }
   | { ok: false; error: string };
 
-/** Persist one turn (user + assistant message), creating the conversation on
- *  the first turn. Called after the /api/sage round trip already has an
- *  answer, so this is a single follow-up write, not on the request's critical
- *  path for getting a reply. */
-export async function saveSageTurnAction(input: SaveTurnInput): Promise<SaveTurnResult> {
+/** Persist the USER message immediately when a turn is sent — creating the
+ *  conversation on the first message. Because this runs *before* the model
+ *  replies, the question survives even if the reply is slow, gets cut off, or
+ *  the admin navigates away mid-response. Also upgrades a provisional title
+ *  (from a greeting) to the first substantive message. */
+export async function beginSageTurnAction(input: BeginTurnInput): Promise<BeginTurnResult> {
   const userId = await getCurrentUserId();
   if (!userId || !(await isAdmin())) return { ok: false, error: "Not authorized." };
 
@@ -134,10 +143,14 @@ export async function saveSageTurnAction(input: SaveTurnInput): Promise<SaveTurn
         .where(and(eq(sageConversation.id, conversationId), eq(sageConversation.userId, userId)));
       if (!existing) return { ok: false, error: "Conversation not found." };
       title = existing.title;
-      await db
-        .update(sageConversation)
-        .set({ updatedAt: new Date() })
-        .where(eq(sageConversation.id, conversationId));
+      // Auto-rename: a chat opened with "hi" gets its name from the first real
+      // question the admin asks, mirroring ChatGPT/Claude.
+      const set: { updatedAt: Date; title?: string } = { updatedAt: new Date() };
+      if (isTrivial(title) && !isTrivial(input.userMessage)) {
+        title = deriveTitle(input.userMessage);
+        set.title = title;
+      }
+      await db.update(sageConversation).set(set).where(eq(sageConversation.id, conversationId));
     } else {
       title = deriveTitle(input.userMessage);
       const [row] = await db
@@ -152,20 +165,44 @@ export async function saveSageTurnAction(input: SaveTurnInput): Promise<SaveTurn
       conversationId = row.id;
     }
 
-    await db.insert(sageMessage).values([
-      { conversationId, role: "user", content: input.userMessage },
-      {
-        conversationId,
-        role: "assistant",
-        content: input.assistantMessage,
-        citations: input.citations?.length ? input.citations : null,
-      },
-    ]);
-
+    await db.insert(sageMessage).values({ conversationId, role: "user", content: input.userMessage });
     revalidatePath("/admin/sage");
     return { ok: true, conversationId, title };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Could not save the conversation." };
+  }
+}
+
+/** Append the assistant reply once it lands. Best-effort follow-up to
+ *  `beginSageTurnAction`; a failure here never blocks the on-screen answer. */
+export async function finishSageTurnAction(input: {
+  conversationId: string;
+  assistantMessage: string;
+  citations?: string[];
+}): Promise<{ ok: boolean; error?: string }> {
+  const userId = await getCurrentUserId();
+  if (!userId || !(await isAdmin())) return { ok: false, error: "Not authorized." };
+  try {
+    const [conv] = await db
+      .select({ id: sageConversation.id })
+      .from(sageConversation)
+      .where(and(eq(sageConversation.id, input.conversationId), eq(sageConversation.userId, userId)));
+    if (!conv) return { ok: false, error: "Conversation not found." };
+
+    await db.insert(sageMessage).values({
+      conversationId: input.conversationId,
+      role: "assistant",
+      content: input.assistantMessage,
+      citations: input.citations?.length ? input.citations : null,
+    });
+    await db
+      .update(sageConversation)
+      .set({ updatedAt: new Date() })
+      .where(eq(sageConversation.id, input.conversationId));
+    revalidatePath("/admin/sage");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not save the reply." };
   }
 }
 

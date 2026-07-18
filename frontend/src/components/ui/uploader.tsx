@@ -185,11 +185,16 @@ export function Uploader({
                     <span className="shrink-0 text-xs text-muted">{formatBytes(it.file.size)}</span>
                   </div>
                   {it.status === "uploading" && (
-                    <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-hairline">
-                      <div
-                        className="h-full rounded-full bg-brand transition-[width]"
-                        style={{ width: `${it.pct}%` }}
-                      />
+                    <div className="relative mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-hairline">
+                      {it.pct > 0 ? (
+                        <div
+                          className="h-full rounded-full bg-brand transition-[width] duration-200"
+                          style={{ width: `${it.pct}%` }}
+                        />
+                      ) : (
+                        /* no granular progress yet (relay path) — sweep a segment */
+                        <div className="absolute inset-y-0 left-0 w-1/3 rounded-full bg-brand animate-indeterminate-bar" />
+                      )}
                     </div>
                   )}
                   {it.status === "done" && (

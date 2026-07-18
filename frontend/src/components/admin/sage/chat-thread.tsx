@@ -37,7 +37,8 @@ import {
   applyAssistantProposalAction,
   listSageConversationsAction,
   loadSageConversationAction,
-  saveSageTurnAction,
+  beginSageTurnAction,
+  finishSageTurnAction,
   renameSageConversationAction,
   deleteSageConversationAction,
 } from "@/app/admin/sage/actions";
@@ -413,6 +414,14 @@ export function ChatThread({ clients }: { clients: Client[] }) {
     return () => clearTimeout(t);
   }, [historyQuery]);
 
+  // Restore the conversation named in the URL (?c=…) on first load, so a
+  // refresh or returning from another page continues where you left off.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("c");
+    if (id) void selectConversation(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Auto-grow the composer with its content (capped), so multi-line prompts
   // don't hide behind a fixed one-row box.
   useEffect(() => {
@@ -445,9 +454,19 @@ export function ChatThread({ clients }: { clients: Client[] }) {
     focusInput();
   }
 
+  // Keep the active conversation in the URL (?c=…) so a refresh or a trip to
+  // another page and back restores the thread instead of dropping you on a
+  // blank chat. history.replaceState avoids a server round-trip.
+  function setActiveConversation(id: string | null) {
+    setConversationId(id);
+    if (typeof window !== "undefined") {
+      window.history.replaceState(null, "", id ? `/admin/sage?c=${id}` : "/admin/sage");
+    }
+  }
+
   function newChat() {
     setMessages([]);
-    setConversationId(null);
+    setActiveConversation(null);
     setOffline(null);
     setHistoryOpen(false);
     focusInput();
@@ -460,7 +479,7 @@ export function ChatThread({ clients }: { clients: Client[] }) {
       toast.error(res.error || "Could not open that conversation.");
       return;
     }
-    setConversationId(id);
+    setActiveConversation(id);
     setScope(res.conversation.scope === "client" ? "client" : "firm");
     setClientId(res.conversation.clientId || "");
     setMessages(
@@ -506,6 +525,21 @@ export function ChatThread({ clients }: { clients: Client[] }) {
     setOffline(null);
     setLoading(true);
 
+    // Persist the question up front so it survives a slow/cut-off reply or a
+    // navigation away, and so the conversation appears in history immediately.
+    const begun = await beginSageTurnAction({
+      conversationId,
+      scope,
+      clientId: scope === "client" ? clientId : null,
+      userMessage: text,
+    });
+    let activeId = conversationId;
+    if (begun.ok) {
+      activeId = begun.conversationId;
+      if (!conversationId) setActiveConversation(begun.conversationId);
+      void refreshHistory(historyQuery);
+    }
+
     try {
       const res = await fetch("/api/sage", {
         method: "POST",
@@ -540,20 +574,13 @@ export function ChatThread({ clients }: { clients: Client[] }) {
         },
       ]);
 
-      // Persist the turn (creates the conversation on the first exchange).
-      void saveSageTurnAction({
-        conversationId,
-        scope,
-        clientId: scope === "client" ? clientId : null,
-        userMessage: text,
-        assistantMessage: answer,
-        citations: payload.citations,
-      }).then((saved) => {
-        if (saved.ok) {
-          if (!conversationId) setConversationId(saved.conversationId);
-          void refreshHistory(historyQuery);
-        }
-      });
+      if (activeId) {
+        void finishSageTurnAction({
+          conversationId: activeId,
+          assistantMessage: answer,
+          citations: payload.citations,
+        }).then(() => void refreshHistory(historyQuery));
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to get a response");
     } finally {
