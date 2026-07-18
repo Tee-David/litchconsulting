@@ -93,7 +93,10 @@ export function TourLauncher() {
       {open && (
         <div
           role="menu"
-          className="absolute right-0 mt-2 w-64 overflow-hidden rounded-2xl border border-hairline bg-paper p-1.5 shadow-xl shadow-black/10"
+          // The help icon sits mid-topbar on phones, so `right-0` pushed this
+          // 16rem menu off the left edge. Pin it to the viewport under the bar on
+          // mobile; keep the anchored dropdown on ≥sm.
+          className="fixed inset-x-3 top-16 z-50 overflow-hidden rounded-2xl border border-hairline bg-paper p-1.5 shadow-xl shadow-black/10 sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-64"
         >
           <div className="px-3 py-2">
             <p className="text-sm font-semibold text-ink">Guided tours</p>
