@@ -1,7 +1,36 @@
 import "server-only";
-import { desc, eq, ne } from "drizzle-orm";
+import { and, asc, desc, eq, ne } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { payment, invoice, client } from "@/lib/db/schema";
+
+export type InvoicePayment = typeof payment.$inferSelect;
+
+/** Every non-initialised payment attempt on one invoice, oldest first — the
+ *  ledger behind the invoice's activity timeline and payments card. */
+export async function paymentsForInvoice(invoiceId: string): Promise<InvoicePayment[]> {
+  try {
+    return await db
+      .select()
+      .from(payment)
+      .where(and(eq(payment.invoiceId, invoiceId), ne(payment.status, "initialized")))
+      .orderBy(asc(payment.createdAt));
+  } catch {
+    return [];
+  }
+}
+
+/** Successful payments only — what `amount_paid` is recomputed from. */
+export async function successfulPaymentsForInvoice(invoiceId: string): Promise<InvoicePayment[]> {
+  try {
+    return await db
+      .select()
+      .from(payment)
+      .where(and(eq(payment.invoiceId, invoiceId), eq(payment.status, "success")))
+      .orderBy(asc(payment.createdAt));
+  } catch {
+    return [];
+  }
+}
 
 export type PaymentRow = {
   payment: typeof payment.$inferSelect;

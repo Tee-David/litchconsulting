@@ -8,8 +8,9 @@ import { db } from "@/lib/db/client";
 import { invoice, invoiceItem, client, serviceRequest, serviceRequestEvent, payment } from "@/lib/db/schema";
 import { isAdmin, getCurrentUserId } from "@/lib/server-user";
 import { recordAudit } from "@/lib/audit";
-import { computeTotals } from "@/lib/invoice/money";
+import { computeTotals, num } from "@/lib/invoice/money";
 import { nextInvoiceNumber, getInvoice } from "@/lib/db/queries/invoices";
+import { successfulPaymentsForInvoice } from "@/lib/db/queries/payments";
 import type { InvoiceInput, BillTo } from "@/lib/invoice/types";
 
 type ActionResult = { ok: boolean; id?: string; error?: string };
@@ -462,3 +463,132 @@ export async function bulkSetInvoiceStatusAction(ids: string[], status: string):
   }
 }
 
+
+/* -------------------------------------------------------------------------- *
+ * Manual payments (deposits / bank transfers the admin confirms by hand).
+ *
+ * `invoice.amount_paid` is always the SUM of successful payment rows — never a
+ * hardcoded total — so part-payments accumulate and the invoice only flips to
+ * `paid` once the balance is cleared. The online Paystack path and its
+ * amount-mismatch gate are deliberately untouched.
+ * -------------------------------------------------------------------------- */
+
+function paymentsRevalidate(id: string) {
+  revalidatePath(`/admin/finance/invoices/${id}`);
+  revalidatePath("/admin/finance/invoices");
+  revalidatePath("/admin/finance/payments");
+  revalidatePath("/admin/finance/receipts");
+  revalidatePath("/admin");
+  revalidatePath("/dashboard/invoices");
+}
+
+/**
+ * Re-derive `amount_paid` from successful payments. If that clears the total
+ * and the invoice isn't already paid, hand off to applyInvoicePaid so the full
+ * side-effects (receipt email, request advance, audit, admin alert) run exactly
+ * as they do for an online payment. Part-payments just update the running total.
+ */
+async function recomputeInvoicePaid(invoiceId: string): Promise<void> {
+  const [inv] = await db.select().from(invoice).where(eq(invoice.id, invoiceId)).limit(1);
+  if (!inv) return;
+
+  const paid = (await successfulPaymentsForInvoice(invoiceId)).reduce(
+    (sum, p) => sum + num(p.amountSettled ?? p.amount),
+    0,
+  );
+  const total = num(inv.total);
+  const cleared = total > 0 && paid >= total;
+
+  if (cleared && inv.status !== "paid") {
+    const { applyInvoicePaid } = await import("@/lib/payments/apply");
+    await applyInvoicePaid(inv, { via: "manual" }); // sets status/paidAt/amountPaid + effects
+    return;
+  }
+
+  // Part-payment, an over/under correction, or already-paid: just keep the
+  // running total honest. A correction that drops a paid invoice back below its
+  // total reopens it as `sent` (audited by the caller).
+  const nextStatus = !cleared && inv.status === "paid" ? "sent" : inv.status;
+  await db
+    .update(invoice)
+    .set({
+      amountPaid: String(paid.toFixed(2)),
+      status: nextStatus,
+      paidAt: cleared ? inv.paidAt : null,
+      updatedAt: new Date(),
+    })
+    .where(eq(invoice.id, invoiceId));
+}
+
+export async function recordManualPaymentAction(input: {
+  invoiceId: string;
+  amount: number;
+  channel?: string;
+  paidAt?: string;
+  note?: string;
+}): Promise<ActionResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
+  const amount = Number(input.amount);
+  if (!Number.isFinite(amount) || amount <= 0) return { ok: false, error: "Enter an amount greater than zero." };
+
+  try {
+    const [inv] = await db.select().from(invoice).where(eq(invoice.id, input.invoiceId)).limit(1);
+    if (!inv) return { ok: false, error: "Invoice not found." };
+
+    const reference = `MANUAL-${inv.number}-${randomUUID().slice(0, 6)}`;
+    await db.insert(payment).values({
+      reference,
+      provider: "manual",
+      invoiceId: inv.id,
+      clientId: inv.clientId ?? null,
+      status: "success",
+      amount: String(amount.toFixed(2)),
+      amountSettled: String(amount.toFixed(2)),
+      currency: inv.currency,
+      channel: input.channel?.trim() || "bank_transfer",
+      paidAt: input.paidAt ? new Date(input.paidAt) : new Date(),
+      verifiedAt: new Date(),
+      rawEvent: input.note?.trim() ? { note: input.note.trim() } : null,
+    });
+
+    await recordAudit({
+      action: "payment.recorded_manual",
+      entity: "invoice",
+      entityId: inv.id,
+      meta: { number: inv.number, amount, currency: inv.currency, channel: input.channel || "bank_transfer", reference },
+    });
+
+    await recomputeInvoicePaid(inv.id);
+    paymentsRevalidate(inv.id);
+    return { ok: true, id: inv.id };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not record the payment." };
+  }
+}
+
+/** Remove a manually recorded payment (a correction). Provider-gated so a real
+ *  Paystack record can never be deleted from the ledger. */
+export async function deleteManualPaymentAction(paymentId: string): Promise<ActionResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
+  try {
+    const [pay] = await db.select().from(payment).where(eq(payment.id, paymentId)).limit(1);
+    if (!pay) return { ok: false, error: "Payment not found." };
+    if (pay.provider !== "manual") {
+      return { ok: false, error: "Only manually recorded payments can be removed." };
+    }
+
+    await db.delete(payment).where(eq(payment.id, paymentId));
+    await recordAudit({
+      action: "payment.removed_manual",
+      entity: "invoice",
+      entityId: pay.invoiceId,
+      meta: { amount: num(pay.amountSettled ?? pay.amount), reference: pay.reference },
+    });
+
+    await recomputeInvoicePaid(pay.invoiceId);
+    paymentsRevalidate(pay.invoiceId);
+    return { ok: true, id: pay.invoiceId };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not remove the payment." };
+  }
+}

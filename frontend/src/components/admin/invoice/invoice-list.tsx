@@ -183,9 +183,18 @@ export function InvoiceList({ invoices }: { invoices: InvoiceRow[] }) {
       {
         accessorKey: "status",
         header: "Status",
-        cell: ({ getValue }) => {
+        cell: ({ getValue, row }) => {
           const s = getValue() as string;
-          return <Badge tone={invoiceStatusTone(s)}>{s}</Badge>;
+          // Part-paid is invisible in `status` alone — surface it so the ledger
+          // doesn't read as "nothing received" on a deposit.
+          const paid = num(row.original.amountPaid);
+          const partial = s !== "paid" && paid > 0 && paid < num(row.original.total);
+          return (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Badge tone={invoiceStatusTone(s)}>{s}</Badge>
+              {partial && <Badge tone="warning">Partial</Badge>}
+            </div>
+          );
         },
       },
       {

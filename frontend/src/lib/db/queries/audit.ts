@@ -22,6 +22,25 @@ export async function listAuditLog(opts?: {
     .limit(opts?.limit ?? 250);
 }
 
+/** The trail for one record (e.g. an invoice) — powers its activity timeline.
+ *  Tolerant of a missing table so a detail page never 500s on the timeline. */
+export async function auditForEntity(
+  entity: string,
+  entityId: string,
+  limit = 50,
+): Promise<AuditRow[]> {
+  try {
+    return await db
+      .select()
+      .from(auditLog)
+      .where(and(eq(auditLog.entity, entity), eq(auditLog.entityId, entityId)))
+      .orderBy(desc(auditLog.createdAt))
+      .limit(limit);
+  } catch {
+    return [];
+  }
+}
+
 /** Distinct entity / action values present in the log — drives the filters. */
 export async function auditFilterOptions(): Promise<{ entities: string[]; actions: string[] }> {
   const [entities, actions] = await Promise.all([
