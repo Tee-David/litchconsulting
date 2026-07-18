@@ -2,10 +2,12 @@
  * Send one of each transactional template to a test inbox — both a preview of
  * the designs and a live check that SMTP delivery works.
  *
- *   node --env-file=.env.local --import tsx scripts/send-email-samples.ts [to]
+ *   node --conditions=react-server --env-file=.env.local \
+ *     --import tsx scripts/send-email-samples.ts [to]
  *
- * (In this repo it's run via an esbuild bundle because tsx trips on native deps
- * under Node 26; the logic is identical.)
+ * `--conditions=react-server` is required: lib/email.ts imports `server-only`,
+ * whose default entry throws outside a server bundle. That flag selects the
+ * package's no-op export, exactly as Next's bundler does.
  */
 import {
   emailConfigured,
