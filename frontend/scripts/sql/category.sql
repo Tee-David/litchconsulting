@@ -1,5 +1,9 @@
--- Managed blog/template categories. Paste into the CockroachDB SQL Shell (defaultdb).
--- Idempotent — safe to re-run.
+-- Managed blog/template categories. Idempotent — safe to re-run.
+--
+-- ⚠️ The CockroachDB Cloud SQL Shell accepts ONE statement per run ("expecting
+-- 1 statement, found N"). Paste each statement below separately, then finish
+-- with the SELECT — DDL is accepted instantly but backfills asynchronously, so
+-- the verify query is the only proof it actually landed.
 CREATE TABLE IF NOT EXISTS "category" (
   "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
   "kind" text NOT NULL,
