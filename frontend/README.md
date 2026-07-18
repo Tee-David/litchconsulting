@@ -35,14 +35,14 @@ the client.
 
 ### Admin dashboard
 Requests pipeline, clients, finance (invoices, quotes, receipts, accounting, calculators, models
-at `finance/tools`), reports, blog, templates, LitchAI (documents, editor, observability),
+at `finance/tools`), reports, blog, templates, Analyses (documents, editor, observability),
 integrations, notifications, help desk, audit log, trash, and settings.
 
-### LitchAI Copilot
-`/admin/assistant` is a grounded admin assistant. The page calls the `/api/copilot` relay, which
+### Sage
+`/admin/sage` is a grounded admin assistant. The page calls the `/api/sage` relay, which
 is `isAdmin()`-guarded and forwards to the LitchAI backend's `POST /assistant/chat` over a
 Cloudflare Access service token. Answers carry citations; **write actions arrive as proposals**
-that a human confirms before `assistant/actions.ts` executes them (audit-logged). All LitchAI
+that a human confirms before `app/admin/sage/actions.ts` executes them (audit-logged). All LitchAI
 features are gated on `LITCHAI_API_URL` being set — without it, the rest of the app is unaffected.
 
 ### Charts
@@ -94,13 +94,13 @@ frontend/
 ├── src/app/
 │   ├── (auth)/                Login, signup, verification
 │   ├── admin/                 Admin dashboard (isAdmin()-gated in layout.tsx)
-│   │   ├── assistant/         LitchAI Copilot UI + confirm-gated actions
+│   │   ├── sage/              Sage chat UI + history + confirm-gated actions
 │   │   ├── audit/             Audit log viewer
 │   │   ├── clients/ requests/ finance/ reports/ blog/ templates/
 │   │   ├── help-desk/ integrations/ litchai/ notifications/ settings/ trash/
 │   │   └── command-actions.ts ⌘K cross-entity search (server action)
 │   ├── dashboard/             Client portal (invoices, requests, support, settings)
-│   ├── api/                   copilot, cron/*, paystack, calcom, push, upload, contact …
+│   ├── api/                   sage, cron/*, paystack, calcom, push, upload, contact …
 │   ├── i/[token]/             Public pay page
 │   ├── calculators/           Public Nigerian tax calculators
 │   └── globals.css            Tailwind v4 CSS-first design tokens

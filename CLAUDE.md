@@ -40,29 +40,37 @@ All mail is nodemailer/SMTP (`lib/email.ts`) — there is **no** Resend integrat
 - **Schema:** `lib/db/schema.ts` — `lead, client, invoice, invoice_item, expense, payment, post,
   template, ticket, ticket_message, service_offering, service_request, service_request_event,
   service_request_document, consultation, client_note, audit_log, push_subscription,
-  org_settings` + the Better Auth `user` mapping (see Reads above).
+  sage_conversation, sage_message, org_settings` + the Better Auth `user` mapping (see Reads above).
 - **Soft delete:** `client/invoice/ticket/service_request` carry `deleted_at`. Queries filter
   `isNull(deletedAt)`; `/admin/trash` restores or type-to-confirm purges; `/api/cron/sweep`
   purges rows soft-deleted >30d ago.
 - **Audit:** `lib/audit.ts` `recordAudit()` → `audit_log`; rendered at `/admin/audit`. Call it
-  from destructive/consequential actions (Copilot proposal dispatch already does).
+  from destructive/consequential actions (Sage proposal dispatch already does).
 - **Storage:** R2 `litch-consulting` (public) = assets; `litch-consulting-private`
   (`R2_PRIVATE_BUCKET`) = client documents, deliverables **and DB backups** — private access
   only via ownership-checked presigned URLs.
-  > ⚠️ **The R2 credentials in `.env` are account-wide.** They can see every bucket on the
-  > Cloudflare account — including other projects (`realtors-practice`, `voca`, `trax`,
-  > `nomarc`, `rp-web`, `swiftlify-storage`, `wendiloveee`). **Use them only for Litch
-  > Consulting**, and only against `litch-consulting` / `litch-consulting-private`. Never
-  > read, write, list or delete another project's bucket from this repo. The same rule
-  > applies to any Cloudflare token added here: Litch scope only. (A `CLOUDFLARE_TOKEN`
-  > scoped to `realtorspractice.com.ng` was removed from `.env` for exactly this reason —
-  > another project's credential has no business in this one.)
+  > ⚠️ **The R2 credentials in `.env` are scoped to Litch's two buckets only** —
+  > `litch-consulting` + `litch-consulting-private` are reachable; every other project's
+  > bucket (`voca`, `trax`, `nomarc`, `wendiloveee`, …) and `ListBuckets` return
+  > **AccessDenied** (verified). They also can't manage bucket CORS (object-scoped), so a
+  > CORS change needs an R2-admin token or the Cloudflare dashboard. **Still: only ever use
+  > them for Litch Consulting.** Any *new* credential added here must be Litch-scoped too —
+  > a `CLOUDFLARE_TOKEN` scoped to `realtorspractice.com.ng` was removed from `.env` for
+  > exactly this reason; another project's credential has no business in this one.
 - **Tax rates:** `lib/tax/nigeria-tax-config.json` is the **single versioned source** of
   Nigerian tax rates (NTA 2025: PAYE bands, VAT, WHT, CIT + Development Levy, pension/NHF).
   `lib/calculators/*` and the LitchAI compilers both read it — never hardcode a rate.
 - **Invoicing:** builder (`components/admin/invoice/invoice-builder.tsx`) → live HTML preview
-  (`invoice-preview.tsx`) → branded PDF (`lib/invoice/pdf/InvoiceDocument.tsx`, `render.ts`) →
-  SMTP send + public `/i/[token]` pay page. Receipts reuse the PDF with `variant="receipt"`.
+  (`invoice-preview.tsx`) → branded PDF → SMTP send + public `/i/[token]` pay page. Receipts
+  reuse the PDF with `variant="receipt"`. **PDF is an exact replica of the preview:** the
+  primary path prints the same HTML via headless Chromium (`lib/invoice/pdf/{invoice-html.ts,
+  render-html.ts}`), falling back to `@react-pdf` (`InvoiceDocument.tsx`) only if Chromium can't
+  launch. **Parity rule — a document-body change must land in ALL THREE** (`invoice-preview.tsx`,
+  `invoice-html.ts`, `InvoiceDocument.tsx`) or the fallback silently diverges; keep fixed hex
+  (`BRAND/INK/BODY/MUTED/HAIR/TINT`) inside the paper, semantic tokens only outside it. The
+  watermark masks `public/brand/litch-mark.svg` (evenodd) in preview+HTML — never fill the path
+  (nonzero → grey disc). `@sparticuz/chromium` `bin/**` must be traced into **every** PDF route
+  in `next.config.ts` `outputFileTracingIncludes` (incl. `/pay/**`, the receipt path).
 
 ## Platform surfaces
 
@@ -70,12 +78,27 @@ All mail is nodemailer/SMTP (`lib/email.ts`) — there is **no** Resend integrat
   `PeriodFilter` and the `CATEGORICAL` palette. Formatting crosses RSC→client as a serializable
   `format` token (`"money" | "number" | "percent"`), **never** a function. The legacy SVG
   `admin/ui/charts.tsx` still serves the public calculators — don't delete it.
-- **LitchAI Copilot:** `/admin/assistant` → `/api/copilot` relay (`isAdmin()`-guarded) →
+- **Sage (the AI assistant):** `/admin/sage` → `/api/sage` relay (`isAdmin()`-guarded) →
   `lib/litchai/client.ts` → backend `POST /assistant/chat`. Grounded over `knowledge_chunk`
   (pgvector HNSW + pg_trgm, RRF-fused). The contract is `citations` / `tool` / `proposal` —
-  **reads return data, writes return a proposal only**, dispatched by `assistant/actions.ts`
+  **reads return data, writes return a proposal only**, dispatched by `app/admin/sage/actions.ts`
   after human confirm, audit-logged. Everything is gated on `LITCHAI_API_URL`; the app must
-  degrade cleanly without it. (`askEngagement` keeps the older `EngagementAskResponse` shape.)
+  degrade cleanly without it. Chat threads persist per admin user in `sage_conversation` +
+  `sage_message` (searchable history rail). **Naming:** *Sage* is the only user-facing name;
+  *LitchAI* is engine-only (env `LITCHAI_*`, the `lib/litchai/` transport, the VM). Never
+  reintroduce "copilot"/"assistant" as a user-facing label.
+- **Analyses (AI Studio):** `/admin/analyses` (`components/admin/analyses/*`) is the separate
+  document→Excel workbench over the same LitchAI engine — not the chatbot. Old routes
+  `/admin/assistant` and `/admin/litchai` permanently redirect (`next.config.ts`).
+- **⚠️ Keeping Sage current (do this when you ship a substantial surface/capability):** Sage
+  only knows what's in its grounding + tools, so a big new feature is invisible to it until you
+  teach it. When you add a meaningful admin surface or capability, in the same change: (1) add
+  a short **knowledge chunk** describing it to the RAG store, (2) add a couple of **router
+  example utterances** to `backend/src/litchai/ai/assistant.py` `TOOLS` if it's queryable, (3)
+  add a **read tool** (returns data) or **write proposal** (human-confirmed) if it's
+  actionable, then (4) `python -m litchai.knowledge reindex`. Rule of thumb: if a user would
+  reasonably ask Sage about the new thing, Sage must be updated to know about it — otherwise
+  the assistant silently drifts behind the product.
 - **⌘K palette:** `components/admin/command-palette.tsx` (cmdk) + `app/admin/command-actions.ts`
   (admin-guarded cross-entity search over clients/requests/invoices).
 - **Crons** (`vercel.json`, each guarded by `CRON_SECRET`): `/api/cron/sweep` `0 7 * * *` (purge),
@@ -137,7 +160,7 @@ cd backend                                                       # LitchAI (Pyth
 python3 -m venv .venv && .venv/bin/pip install -e ".[dev]"       # one-time setup
 .venv/bin/pytest                                                 # golden-fixture suite (needs LibreOffice)
 .venv/bin/ruff check src tests
-.venv/bin/python -m litchai.knowledge reindex                    # rebuild Copilot RAG store
+.venv/bin/python -m litchai.knowledge reindex                    # rebuild Sage RAG store
 ```
 
 ## LitchAI transport

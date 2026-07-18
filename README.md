@@ -49,7 +49,7 @@ compiler that only the admin ever reaches, on its own machine.
                     |  Vercel                           |
                     |                                   |
                     |  Marketing · Auth · Admin ·       |
-                    |  Invoicing · Copilot UI · PWA     |
+                    |  Invoicing · Sage · PWA             |
                     +--+--------+---------+---------+---+
                        |        |         |         |
              Better Auth   Drizzle    R2 / SMTP   server-only
@@ -115,11 +115,11 @@ never drift. Money totals are always recomputed server-side.
 
 **Admin dashboard**
 Requests pipeline, clients, finance (invoices, quotes, receipts, accounting, models), reports,
-blog, templates, LitchAI review, integrations, help desk and settings — all reads are React Server
+blog, templates, Analyses, integrations, help desk and settings — all reads are React Server
 Components querying Drizzle directly; all writes are `isAdmin()`-guarded server actions.
 
-**LitchAI Copilot**
-An admin assistant at `/admin/assistant` that answers grounded questions over a firm knowledge
+**Sage**
+An admin assistant at `/admin/sage` that answers grounded questions over a firm knowledge
 base with citations, and *proposes* write actions that a human confirms before they execute. The
 retrieval store is `knowledge_chunk` (pgvector HNSW + pg_trgm, fused with reciprocal-rank fusion).
 

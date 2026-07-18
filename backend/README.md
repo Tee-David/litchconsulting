@@ -18,7 +18,7 @@ computed cell is a real Excel formula** — an auditable working paper, not a fl
 > **Core rule: no generative step ever touches a formula.**
 > Compilers are hand-written Python. A headless-LibreOffice recompute plus golden fixtures gate
 > every file before it reaches human review. The LLM's role is confined to categorisation
-> suggestions and the grounded Copilot — never to arithmetic.
+> suggestions and the grounded Sage assistant — never to arithmetic.
 
 This is a **standalone service**. It deploys to its own Oracle Cloud (OCI) VM and is **never**
 deployed to Vercel. The web platform in `frontend/` reaches it only through a Cloudflare Tunnel,
@@ -95,9 +95,9 @@ observable — see `GET /observability`.
 `generated_files` records the compiler, contract-schema, taxonomy, tax-config and recompute-engine
 versions for every file produced, so any deliverable can be traced to the exact code that made it.
 
-### Copilot RAG
+### Sage RAG
 
-`knowledge_chunk` (pgvector HNSW + `pg_trgm` GIN, scope/client filtered) backs the admin Copilot.
+`knowledge_chunk` (pgvector HNSW + `pg_trgm` GIN, scope/client filtered) backs the admin assistant (Sage).
 `src/litchai/categorize/retrieval.py` fuses vector and trigram hits with reciprocal-rank fusion and
 resolves parent documents. `POST /assistant/chat` runs a two-stage router — semantic tool select,
 then constrained slot extraction — and returns a grounded answer with citations. **Read tools
@@ -134,7 +134,7 @@ The API binds to **loopback only** (`127.0.0.1:8000`); the Cloudflare Tunnel is 
 | `POST` | `/engagements/{id}/reopen` | Reopen |
 | `POST` | `/engagements/{id}/compile` | Compile deliverables |
 | `POST` | `/engagements/{id}/ask` | Engagement-scoped question |
-| `POST` | `/assistant/chat` | Admin Copilot — grounded answer + citations + tool proposals |
+| `POST` | `/assistant/chat` | Sage — grounded answer + citations + tool proposals |
 | `POST` | `/knowledge/reindex` | Rebuild the firm-global RAG store |
 | `GET` | `/observability` | Status counts, rung hit-rates, fallback rate |
 | `POST` | `/clients/{id}/erase` | NDPA right-to-erasure |
@@ -150,7 +150,7 @@ backend/
 │   ├── pipeline.py queue.py   Orchestration + Procrastinate tasks
 │   ├── taxconfig.py           Loads the shared tax config from the repo checkout
 │   ├── crypto.py              Blind-relay envelope decrypt
-│   ├── knowledge.py           Copilot RAG ingestion CLI
+│   ├── knowledge.py           Sage RAG ingestion CLI
 │   ├── embeddings.py          Embedding client
 │   ├── sanitize.py scanning.py storage.py seed.py fixtures_gen.py
 │   ├── contracts/             Fixed structured-input schemas, one per template
@@ -236,7 +236,7 @@ client-scoped `category_memory`; and flags firm-global memory rows carrying that
 text `stale = true` for operator review. It returns per-entity counts for the erasure record.
 
 **Observability** — `GET /observability`, surfaced in the admin UI at
-`/admin/litchai/observability`. Richer SQL views (most-corrected categories, still-confusing
+`/admin/analyses/observability`. Richer SQL views (most-corrected categories, still-confusing
 narrations, LLM usage) live in `litchai.categorize.reports.SQL_VIEWS`.
 
 ---
