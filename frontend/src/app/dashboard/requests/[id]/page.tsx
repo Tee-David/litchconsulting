@@ -77,9 +77,15 @@ export default async function ClientRequestDetailPage({
             <h1 className="font-display text-xl font-bold tracking-tight text-ink sm:text-2xl">
               {req.serviceName}
             </h1>
-            <Badge tone={requestStatusTone(req.status)}>
-              {STATUS_LABELS[req.status as RequestStatus] ?? req.status}
-            </Badge>
+            {req.status === "awaiting_documents" && clientUploads.length > 0 ? (
+              // The client has uploaded — acknowledge it rather than leaving them
+              // staring at "Awaiting documents" as if nothing happened.
+              <Badge tone="success">Documents provided</Badge>
+            ) : (
+              <Badge tone={requestStatusTone(req.status)}>
+                {STATUS_LABELS[req.status as RequestStatus] ?? req.status}
+              </Badge>
+            )}
             <Badge tone="neutral">{req.number}</Badge>
           </div>
         </div>
