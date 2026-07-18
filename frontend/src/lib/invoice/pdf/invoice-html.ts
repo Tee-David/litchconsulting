@@ -102,7 +102,7 @@ export function invoiceHtml({
 ${notoFontCss()}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{background:#fff}
-body{font-family:'NotoSans',-apple-system,'Segoe UI',Roboto,sans-serif;color:${INK};font-size:12px;line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{font-family:'Outfit','NotoSans',-apple-system,'Segoe UI',Roboto,sans-serif;color:${INK};font-size:12px;line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .page{position:relative;width:100%;padding:44px 44px 56px;overflow:hidden}
 table{width:100%;border-collapse:collapse}
 @page{size:A4;margin:0}
@@ -123,7 +123,7 @@ table{width:100%;border-collapse:collapse}
   ${
     stamp
       ? `<div style="position:absolute;top:104px;right:52px;transform:rotate(-12deg);opacity:0.7">
-           <span style="display:inline-block;border:3px solid ${stamp.color};color:${stamp.color};border-radius:8px;padding:2px 12px;font-size:22px;font-weight:800;letter-spacing:1px;text-transform:uppercase">${esc(stamp.label)}</span>
+           <span style="display:inline-block;border:3px solid ${stamp.color};color:${stamp.color};border-radius:8px;padding:2px 12px;font-family:'Space Grotesk','NotoSans',sans-serif;font-size:22px;font-weight:800;letter-spacing:1px;text-transform:uppercase">${esc(stamp.label)}</span>
          </div>`
       : ""
   }

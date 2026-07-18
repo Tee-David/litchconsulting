@@ -20,14 +20,31 @@ function fontFace(file: string, weight: number): string | null {
   }
 }
 
+/** A variable-font `@font-face` (one file spanning a weight range). */
+function variableFontFace(file: string, family: string, weightRange: string): string | null {
+  try {
+    const b64 = fs.readFileSync(path.join(FONT_DIR, file)).toString("base64");
+    return `@font-face{font-family:'${family}';font-style:normal;font-weight:${weightRange};font-display:swap;src:url(data:font/ttf;base64,${b64}) format('truetype');}`;
+  } catch {
+    return null;
+  }
+}
+
 let fontCss: string | null | undefined;
-/** `@font-face` blocks for NotoSans (regular + bold). Carries the ₦ glyph that
- *  the built-in PDF fonts lack; italic is left to the browser to synthesise. */
+/**
+ * `@font-face` blocks for the PDF: the site's own **Outfit** (body) and
+ * **Space Grotesk** (display) so the printed document matches the on-screen
+ * preview, plus **NotoSans** as the ₦-glyph fallback (Outfit/Space Grotesk lack
+ * the Naira sign — Chromium falls back per-glyph). Cached for the process life.
+ */
 export function notoFontCss(): string {
   if (fontCss !== undefined) return fontCss ?? "";
-  const faces = [fontFace("NotoSans-Regular.ttf", 400), fontFace("NotoSans-Bold.ttf", 700)].filter(
-    Boolean,
-  );
+  const faces = [
+    fontFace("NotoSans-Regular.ttf", 400),
+    fontFace("NotoSans-Bold.ttf", 700),
+    variableFontFace("Outfit.ttf", "Outfit", "100 900"),
+    variableFontFace("SpaceGrotesk.ttf", "Space Grotesk", "300 700"),
+  ].filter(Boolean);
   fontCss = faces.length ? faces.join("") : null;
   return fontCss ?? "";
 }
