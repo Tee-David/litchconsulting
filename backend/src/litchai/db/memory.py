@@ -37,6 +37,7 @@ class InMemoryRepository:
         self._audit: list[AuditEntry] = []
         self._generated: dict[int, dict[str, Any]] = {}
         self._knowledge: dict[int, KnowledgeChunk] = {}
+        self._compile_locks: set[int] = set()
         self._seq = 0
 
     def _next_id(self) -> int:
@@ -143,6 +144,15 @@ class InMemoryRepository:
 
     def get_engagement(self, engagement_id: int) -> Engagement | None:
         return self._engagements.get(engagement_id)
+
+    def try_compile_lock(self, engagement_id: int) -> bool:
+        if engagement_id in self._compile_locks:
+            return False
+        self._compile_locks.add(engagement_id)
+        return True
+
+    def release_compile_lock(self, engagement_id: int) -> None:
+        self._compile_locks.discard(engagement_id)
 
     def transition_engagement(
         self, engagement_id: int, to_status: str, detail: dict[str, Any] | None = None
@@ -287,6 +297,12 @@ class InMemoryRepository:
         if doc is None:
             raise RepositoryError(f"unknown document {document_id}")
         return self._replace_document(doc, extraction_engine=engine)
+
+    def set_document_engagement(self, document_id: int, engagement_id: int | None) -> Document:
+        doc = self._documents.get(document_id)
+        if doc is None:
+            raise RepositoryError(f"unknown document {document_id}")
+        return self._replace_document(doc, engagement_id=engagement_id)
 
     # --- line items --------------------------------------------------------
     def add_line_items(self, items: list[LineItem]) -> list[LineItem]:

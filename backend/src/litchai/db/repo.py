@@ -175,6 +175,18 @@ class Repository(Protocol):
 
     def get_engagement(self, engagement_id: int) -> Engagement | None: ...
 
+    def try_compile_lock(self, engagement_id: int) -> bool:
+        """Take a session-level advisory lock so two callers can't compile the
+        same engagement at once. Returns False if someone already holds it —
+        the caller should refuse rather than queue (compiles are minutes long).
+        Session-scoped, not transaction-scoped: the pg connection is autocommit."""
+        ...
+
+    def release_compile_lock(self, engagement_id: int) -> None:
+        """Release the lock taken by :meth:`try_compile_lock`. Always call in a
+        ``finally`` — a leaked lock blocks every later compile on this session."""
+        ...
+
     def transition_engagement(
         self,
         engagement_id: int,
@@ -235,6 +247,12 @@ class Repository(Protocol):
     def set_document_progress(self, document_id: int, progress: dict[str, Any]) -> Document: ...
 
     def set_document_extraction_engine(self, document_id: int, engine: str) -> Document: ...
+
+    def set_document_engagement(self, document_id: int, engagement_id: int | None) -> Document:
+        """Attach (or detach) a document to an engagement after upload. Uploading
+        with ``engagement_id`` covers the happy path; this is what lets an
+        already-ingested document be pulled into an engagement so it can compile."""
+        ...
 
     # --- line items --------------------------------------------------------
     def add_line_items(self, items: list[LineItem]) -> list[LineItem]: ...

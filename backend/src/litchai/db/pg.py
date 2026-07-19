@@ -234,6 +234,20 @@ class PostgresRepository:
             row = cur.fetchone()
             return _engagement(row) if row else None
 
+    def try_compile_lock(self, engagement_id: int) -> bool:
+        from litchai.documents.state import engagement_lock_key
+
+        with self.conn.cursor() as cur:
+            cur.execute("SELECT pg_try_advisory_lock(%s) AS ok", (engagement_lock_key(engagement_id),))
+            row = cur.fetchone()
+            return bool(row and row["ok"])
+
+    def release_compile_lock(self, engagement_id: int) -> None:
+        from litchai.documents.state import engagement_lock_key
+
+        with self.conn.cursor() as cur:
+            cur.execute("SELECT pg_advisory_unlock(%s)", (engagement_lock_key(engagement_id),))
+
     def transition_engagement(
         self, engagement_id: int, to_status: str, detail: dict[str, Any] | None = None
     ) -> Engagement:
@@ -397,6 +411,17 @@ class PostgresRepository:
             cur.execute(
                 f"UPDATE documents SET extraction_engine = %s WHERE id = %s RETURNING {_DOC_COLS}",
                 (engine, document_id),
+            )
+            row = cur.fetchone()
+            if row is None:
+                raise RepositoryError(f"unknown document {document_id}")
+            return _document(row)
+
+    def set_document_engagement(self, document_id: int, engagement_id: int | None) -> Document:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                f"UPDATE documents SET engagement_id = %s WHERE id = %s RETURNING {_DOC_COLS}",
+                (engagement_id, document_id),
             )
             row = cur.fetchone()
             if row is None:

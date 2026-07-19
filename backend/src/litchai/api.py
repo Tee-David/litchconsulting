@@ -64,6 +64,19 @@ class AssistantChatRequest(BaseModel):
     scope: str = "firm"           # 'firm' | 'client'
     client_id: str | None = None
 
+
+class CreateEngagementRequest(BaseModel):
+    client_id: str
+    period_label: str
+    template: str
+    aux_inputs: dict[str, Any] | None = None
+    materiality: float | None = None
+
+
+# Only these two templates have a workbook compiler wired (pipeline._VARIANT_FOR_TEMPLATE);
+# refuse anything else at creation rather than letting it fail later at compile.
+COMPILABLE_TEMPLATES = {"annual_report_ias1", "annual_report_ifrs18"}
+
 # Upload guardrails (FR1). The blind-relay envelope adds a little overhead, so
 # the ciphertext cap is generous relative to the ~80-page scan worst case.
 MAX_UPLOAD_BYTES = 60 * 1024 * 1024
@@ -405,6 +418,69 @@ def create_app(
             raise HTTPException(400, str(exc)) from exc
         return {"ok": True, "line_item_id": line_item_id, "category_code": new_code}
 
+    def _engagement_dict(eng: Any) -> dict[str, Any]:
+        return {
+            "engagement_id": eng.id,
+            "client_id": eng.client_id,
+            "period_label": eng.period_label,
+            "template": eng.template,
+            "materiality": eng.materiality,
+            "status": eng.status,
+        }
+
+    @app.post("/engagements", status_code=201)
+    async def create_engagement_endpoint(
+        body: CreateEngagementRequest, repo: Repository = Depends(get_repo)
+    ) -> dict[str, Any]:
+        """Create the engagement a compile hangs off. Until this existed nothing
+        could reach /compile — the repo call was only ever used by tests."""
+        if body.template not in COMPILABLE_TEMPLATES:
+            raise HTTPException(
+                422,
+                f"template {body.template!r} has no workbook compiler "
+                f"(expected one of {sorted(COMPILABLE_TEMPLATES)})",
+            )
+        if not body.client_id.strip() or not body.period_label.strip():
+            raise HTTPException(422, "client_id and period_label are required")
+        eng = repo.create_engagement(
+            body.client_id,
+            body.period_label,
+            body.template,
+            body.aux_inputs,
+            body.materiality,
+        )
+        return _engagement_dict(eng)
+
+    @app.get("/engagements/{engagement_id}")
+    async def get_engagement_endpoint(
+        engagement_id: int, repo: Repository = Depends(get_repo)
+    ) -> dict[str, Any]:
+        eng = repo.get_engagement(engagement_id)
+        if eng is None:
+            raise HTTPException(404, "engagement not found")
+        out = _engagement_dict(eng)
+        gen = repo.latest_generated_file(engagement_id)
+        out["latest_generated_file_id"] = gen.id if gen else None
+        return out
+
+    @app.post("/engagements/{engagement_id}/documents/{document_id}")
+    async def attach_document_endpoint(
+        engagement_id: int, document_id: int, repo: Repository = Depends(get_repo)
+    ) -> dict[str, Any]:
+        """Pull an already-ingested document into an engagement so it compiles.
+        Uploading with ?engagement_id= covers the happy path; this covers the
+        common case of analysing first and deciding the engagement after."""
+        eng = repo.get_engagement(engagement_id)
+        if eng is None:
+            raise HTTPException(404, "engagement not found")
+        doc = repo.get_document(document_id)
+        if doc is None:
+            raise HTTPException(404, "document not found")
+        if doc.client_id != eng.client_id:
+            raise HTTPException(409, "document belongs to a different client")
+        doc = repo.set_document_engagement(document_id, engagement_id)
+        return {"document_id": doc.id, "engagement_id": doc.engagement_id, "status": doc.status}
+
     def _engagement_transition(engagement_id: int, to_status: str, repo: Repository,
                                detail: dict[str, Any] | None = None) -> dict[str, Any]:
         from litchai.documents.state import IllegalTransition
@@ -467,12 +543,18 @@ def create_app(
 
         if repo.get_engagement(engagement_id) is None:
             raise HTTPException(404, "engagement not found")
+        # Compiles run for minutes (LibreOffice recompute) — refuse a second one
+        # rather than queueing behind it or racing the generated_files write.
+        if not repo.try_compile_lock(engagement_id):
+            raise HTTPException(409, "a compile is already running for this engagement")
         try:
             result = compile_engagement(
                 repo, engagement_id, taxonomy=load_taxonomy(), storage=app.state.storage
             )
         except (MappingError, ValueError) as exc:
             raise HTTPException(422, str(exc)) from exc
+        finally:
+            repo.release_compile_lock(engagement_id)
         pack = result.review_pack.to_dict()
         return {
             "ok": result.ok,
