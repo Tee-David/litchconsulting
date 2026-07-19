@@ -5,9 +5,16 @@ import { isAdmin } from "@/lib/server-user";
 import { postEncryptedDocument } from "@/lib/litchai/blind-relay";
 import {
   askEngagement,
+  assistantSelection,
+  attachDocumentToEngagement,
+  compileEngagement,
+  createEngagement,
   recategorizeLine,
   transitionEngagement,
+  type CompilableTemplate,
+  type CompileResult,
   type EngagementAskResponse,
+  type SelectionResult,
 } from "@/lib/litchai/client";
 
 type Result<T = unknown> = { ok: boolean; error?: string } & Partial<T>;
@@ -78,6 +85,73 @@ export async function engagementAction(
     return { ok: true, status: res.status };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Action failed" };
+  }
+}
+
+/**
+ * Make the pipeline reachable (Wave 2, Step 1): create the engagement a compile
+ * hangs off, attach this document, and compile the formula-driven workbook in
+ * one shot. Returns the deterministic review pack (anomalies/errors/summaries)
+ * — the number is compiled + recompute-gated, never model-invented.
+ */
+export async function compileWorkbookAction(
+  documentId: number,
+  input: {
+    clientId: string;
+    periodLabel: string;
+    template: CompilableTemplate;
+    materiality?: number | null;
+  },
+): Promise<Result<{ engagementId: number; result: CompileResult }>> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
+  if (!input.clientId) return { ok: false, error: "This document isn't linked to a client yet." };
+  if (!input.periodLabel.trim()) return { ok: false, error: "A period label is required." };
+  try {
+    const eng = await createEngagement({
+      clientId: input.clientId,
+      periodLabel: input.periodLabel.trim(),
+      template: input.template,
+      materiality: input.materiality,
+    });
+    await attachDocumentToEngagement(eng.engagement_id, documentId);
+    const result = await compileEngagement(eng.engagement_id);
+    revalidatePath(`/admin/analyses/${documentId}`);
+    return { ok: true, engagementId: eng.engagement_id, result };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Compile failed" };
+  }
+}
+
+/** Recompile an existing engagement (e.g. after corrections) and re-gate it. */
+export async function recompileWorkbookAction(
+  engagementId: number,
+  documentId: number,
+): Promise<Result<{ result: CompileResult }>> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
+  try {
+    const result = await compileEngagement(engagementId);
+    revalidatePath(`/admin/analyses/${documentId}`);
+    return { ok: true, result };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Compile failed" };
+  }
+}
+
+/** Spreadsheet AI (Step 2): run one command over the current selection. */
+export async function runSelectionCommandAction(input: {
+  command: string;
+  selectionA1: string;
+  sheetName?: string;
+  headers?: string[];
+  rows?: string[][];
+  formulas?: (string | null)[][];
+  instruction?: string;
+}): Promise<Result<{ result: SelectionResult }>> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
+  try {
+    return { ok: true, result: await assistantSelection(input) };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Assistant unavailable" };
   }
 }
 

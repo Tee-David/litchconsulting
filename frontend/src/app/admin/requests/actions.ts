@@ -447,6 +447,64 @@ export async function publishVerifiedDeliverableAction(
   }
 }
 
+/**
+ * Persist an AI-edited spreadsheet as a WORKING COPY (Wave 2, Step 2e): bytes →
+ * private R2 → an admin-only deliverable row badged **unverified**
+ * (`publish_variant = manual_override`, `litchai_status = unverified`). No client
+ * email — a working copy is an internal artifact; the *verified* deliverable
+ * still comes from the compiler via `publishVerifiedDeliverableAction`.
+ */
+export async function saveWorkingCopyAction(input: {
+  requestId: string;
+  fileName: string;
+  base64: string;
+}): Promise<ActionResult & { documentId?: string }> {
+  if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
+  const req = await loadRequest(input.requestId);
+  if (!req) return { ok: false, error: "Not found" };
+  try {
+    const bytes = Buffer.from(input.base64, "base64");
+    if (bytes.length === 0) return { ok: false, error: "Nothing to save." };
+    const { uploadPrivateObject } = await import("@/lib/r2");
+    const admin = await getSessionUser();
+    const base = input.fileName.replace(/\.[^.]+$/, "");
+    const fileName = `${base} — AI working copy.xlsx`;
+    const r2Key = `requests/${req.id}/${Date.now()}-ai-working-copy.xlsx`;
+    await uploadPrivateObject(
+      r2Key,
+      bytes,
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    const [row] = await db
+      .insert(serviceRequestDocument)
+      .values({
+        requestId: req.id,
+        kind: "deliverable",
+        fileName,
+        contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        sizeBytes: bytes.length,
+        r2Key,
+        uploadedByRole: "admin",
+        uploadedByName: admin?.name || "Litch Consulting",
+        publishVariant: "manual_override",
+        litchaiStatus: "unverified",
+      })
+      .returning({ id: serviceRequestDocument.id });
+    await db.insert(serviceRequestEvent).values({
+      requestId: req.id,
+      type: "ai_working_copy_saved",
+      message: `Saved an AI-edited working copy of ${input.fileName} (unverified).`,
+      visibility: "internal",
+      actorRole: "admin",
+      actorName: admin?.name || "Litch Consulting",
+    });
+    revalidateRequest(req.id);
+    return { ok: true, documentId: row?.id };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Save failed" };
+  }
+}
+
 /** Delete a document (e.g. a wrong upload). Bytes stay in R2 history is fine — row goes. */
 export async function adminDeleteRequestDocumentAction(
   requestId: string,

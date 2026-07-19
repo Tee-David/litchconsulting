@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { Loader2 } from "lucide-react";
 
@@ -24,7 +24,15 @@ const XlsxEditorPreview = dynamic(
   }
 );
 
-export function WorkbookEditor({ src, fileName }: { src: string; fileName?: string }) {
+export function WorkbookEditor({
+  src,
+  fileName,
+  aiPanel,
+}: {
+  src: string;
+  fileName?: string;
+  aiPanel?: ReactNode;
+}) {
   const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
@@ -44,6 +52,7 @@ export function WorkbookEditor({ src, fileName }: { src: string; fileName?: stri
         isDark={isDark}
         onIsDarkChange={setIsDark}
         className="min-h-[70vh]"
+        aiPanel={aiPanel}
       />
     </div>
   );

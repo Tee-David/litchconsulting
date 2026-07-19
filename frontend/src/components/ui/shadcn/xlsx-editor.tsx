@@ -2144,12 +2144,16 @@ export function XlsxEditorSurface({
 }
 
 export function XlsxEditorPreview({
+  aiPanel,
   className,
   fileName,
   isDark,
   onIsDarkChange,
   src,
 }: {
+  /** Optional side panel rendered INSIDE the viewer provider (so it can use the
+   *  useXlsxViewer* hooks). Litch mounts its Analyses AI panel here. */
+  aiPanel?: React.ReactNode
   className?: string
   fileName?: string
   isDark: boolean
@@ -2158,6 +2162,7 @@ export function XlsxEditorPreview({
 }) {
   return (
     <XlsxEditorContent
+      aiPanel={aiPanel}
       className={className}
       effectiveIsDark={isDark}
       fileName={fileName}
@@ -2169,6 +2174,7 @@ export function XlsxEditorPreview({
 }
 
 function XlsxEditorContent({
+  aiPanel,
   className,
   effectiveIsDark,
   fileName,
@@ -2176,6 +2182,7 @@ function XlsxEditorContent({
   shouldRenderNightMode,
   url,
 }: {
+  aiPanel?: React.ReactNode
   className?: string
   effectiveIsDark: boolean
   fileName?: string
@@ -2366,6 +2373,7 @@ function XlsxEditorContent({
         onChange={handleUpload}
       />
       <XlsxWorkbookLoadedEditor
+        aiPanel={aiPanel}
         fileName={displayFileName}
         isDark={effectiveIsDark}
         onIsDarkChange={setNightRenderEnabled}
@@ -2382,6 +2390,7 @@ function XlsxEditorContent({
 }
 
 function XlsxWorkbookLoadedEditor({
+  aiPanel,
   fileName,
   isDark,
   onIsDarkChange,
@@ -2391,6 +2400,7 @@ function XlsxWorkbookLoadedEditor({
   workbookBuffer,
   workbookIdentity,
 }: {
+  aiPanel?: React.ReactNode
   fileName: string
   isDark: boolean
   onIsDarkChange: (checked: boolean) => void
@@ -2416,16 +2426,27 @@ function XlsxWorkbookLoadedEditor({
     )
   )
 
+  const surface = (
+    <XlsxEditorSurface
+      isDark={isDark}
+      onIsDarkChange={onIsDarkChange}
+      onUploadClick={onUploadClick}
+      renderTableHeaderMenu={renderTableHeaderMenu}
+      showNightRenderToggle={showNightRenderToggle}
+      workbookIdentity={workbookIdentity}
+    />
+  )
+
   return (
     <XlsxViewerProvider controller={controller} isDark={isDark}>
-      <XlsxEditorSurface
-        isDark={isDark}
-        onIsDarkChange={onIsDarkChange}
-        onUploadClick={onUploadClick}
-        renderTableHeaderMenu={renderTableHeaderMenu}
-        showNightRenderToggle={showNightRenderToggle}
-        workbookIdentity={workbookIdentity}
-      />
+      {aiPanel ? (
+        <div className="flex min-h-0 flex-col lg:flex-row">
+          <div className="min-w-0 flex-1">{surface}</div>
+          {aiPanel}
+        </div>
+      ) : (
+        surface
+      )}
     </XlsxViewerProvider>
   )
 }

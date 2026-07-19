@@ -1,4 +1,7 @@
 import "server-only";
+import type { CompilableTemplate } from "./templates";
+
+export type { CompilableTemplate } from "./templates";
 
 /**
  * LitchAI OCI backend client (PRD §12.5).
@@ -67,10 +70,55 @@ export type FigureLineage = {
 };
 
 export type ReviewData = {
-  document: { document_id: number; status: string; filename: string; engagement_id: number | null };
+  document: {
+    document_id: number;
+    status: string;
+    filename: string;
+    engagement_id: number | null;
+    client_id: string;
+  };
   line_items: LineItem[];
   queue: QueueEntry[];
   lineage: FigureLineage[];
+};
+
+export type Engagement = {
+  engagement_id: number;
+  client_id: string;
+  period_label: string;
+  template: string;
+  materiality: number | null;
+  status: string;
+  latest_generated_file_id?: number | null;
+};
+
+/** A flagged figure from the deterministic ReviewPack (never model-invented). */
+export type Anomaly = {
+  severity: "info" | "warning" | "high";
+  code: string;
+  message: string;
+  refs: string[];
+  amount: number | null;
+};
+
+export type SectionSummary = { label: string; total: number; pct_of_parent: number | null };
+
+/** Result of POST /engagements/{id}/compile. `errors` are [sheet, row, col, token]. */
+export type CompileResult = {
+  ok: boolean;
+  generated_file_id: number | null;
+  errors: [string, number, number, string][];
+  anomalies: Anomaly[];
+  summaries: SectionSummary[];
+};
+
+/** One proposed cell edit from the spreadsheet AI (POST /assistant/selection). */
+export type SelectionEdit = { cell: string; value: string | null; formula: string | null };
+export type SelectionResult = {
+  command: string;
+  edits: SelectionEdit[];
+  explanation: string;
+  warnings: string[];
 };
 
 /** A confirm-gated WRITE the backend proposes but never executes itself. */
@@ -107,6 +155,69 @@ export function transitionEngagement(
   action: "submit" | "approve" | "reject" | "lock" | "reopen",
 ): Promise<{ engagement_id: number; status: string }> {
   return litchai(`/engagements/${engagementId}/${action}`, { method: "POST" });
+}
+
+/** Create the engagement a compile hangs off (template must be compilable). */
+export function createEngagement(input: {
+  clientId: string;
+  periodLabel: string;
+  template: CompilableTemplate;
+  materiality?: number | null;
+  auxInputs?: Record<string, unknown> | null;
+}): Promise<Engagement> {
+  return litchai("/engagements", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      client_id: input.clientId,
+      period_label: input.periodLabel,
+      template: input.template,
+      materiality: input.materiality ?? null,
+      aux_inputs: input.auxInputs ?? null,
+    }),
+  });
+}
+
+export function getEngagement(engagementId: number): Promise<Engagement> {
+  return litchai(`/engagements/${engagementId}`);
+}
+
+/** Pull an already-ingested document into an engagement so it compiles. */
+export function attachDocumentToEngagement(
+  engagementId: number,
+  documentId: number,
+): Promise<{ document_id: number; engagement_id: number | null; status: string }> {
+  return litchai(`/engagements/${engagementId}/documents/${documentId}`, { method: "POST" });
+}
+
+/** Compile the engagement's workbook: recompute + gate, returns the review pack. */
+export function compileEngagement(engagementId: number): Promise<CompileResult> {
+  return litchai(`/engagements/${engagementId}/compile`, { method: "POST" });
+}
+
+/** Spreadsheet AI: a selection + headers → a structured cell-edit proposal. */
+export function assistantSelection(input: {
+  command: string;
+  selectionA1: string;
+  sheetName?: string;
+  headers?: string[];
+  rows?: string[][];
+  formulas?: (string | null)[][];
+  instruction?: string;
+}): Promise<SelectionResult> {
+  return litchai("/assistant/selection", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      command: input.command,
+      selection_a1: input.selectionA1,
+      sheet_name: input.sheetName,
+      headers: input.headers ?? [],
+      rows: input.rows ?? [],
+      formulas: input.formulas ?? null,
+      instruction: input.instruction,
+    }),
+  });
 }
 
 export function askEngagement(engagementId: number, question: string): Promise<EngagementAskResponse> {
