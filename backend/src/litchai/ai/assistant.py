@@ -114,6 +114,18 @@ TOOLS: tuple[Tool, ...] = (
         slots=("document_id",),
     ),
     Tool(
+        name="engagement_status",
+        kind="read",
+        description="Report an engagement's compile status: template, workflow status, latest generated file.",
+        examples=(
+            "has engagement 3 been compiled",
+            "what's the status of engagement 6",
+            "is the workbook for engagement 2 ready",
+            "show me engagement 4's compile status",
+        ),
+        slots=("engagement_id",),
+    ),
+    Tool(
         name="pipeline_health",
         kind="read",
         description="Summarise pipeline health: totals, statuses, how many need review, LLM fallback rate.",
@@ -402,6 +414,20 @@ def execute_read(
         return ToolResult(tool.name, "read", {
             "document_id": doc.id, "filename": doc.filename, "status": doc.status,
             "engagement_id": doc.engagement_id, "progress": doc.progress,
+        })
+
+    if tool.name == "engagement_status":
+        eng_id = slots.get("engagement_id")
+        if eng_id is None:
+            return ToolResult(tool.name, "read", {"error": "Which engagement? Give me an engagement id."})
+        eng = repo.get_engagement(int(eng_id))
+        if eng is None or (client_id is not None and eng.client_id != client_id):
+            return ToolResult(tool.name, "read", {"error": f"No engagement {eng_id} found."})
+        gen = repo.latest_generated_file(eng.id)
+        return ToolResult(tool.name, "read", {
+            "engagement_id": eng.id, "template": eng.template, "status": eng.status,
+            "latest_generated_file_id": gen.id if gen else None,
+            "validation_status": gen.validation_status if gen else None,
         })
 
     if tool.name == "pipeline_health":
