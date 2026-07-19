@@ -73,6 +73,22 @@ class CreateEngagementRequest(BaseModel):
     materiality: float | None = None
 
 
+class SelectionCommandRequest(BaseModel):
+    """AI-in-the-spreadsheet (Analyses editor). The editor ships only a selection
+    — never the whole workbook — and the model proposes structured cell edits."""
+
+    command: str
+    selection_a1: str
+    sheet_name: str | None = None
+    headers: list[str] = []
+    rows: list[list[str]] = []
+    formulas: list[list[str]] | None = None
+    instruction: str | None = None
+    # The editor verifies edits in-browser (WASM recompute), so server-side
+    # LibreOffice verification is off by default — opt in for a belt-and-braces check.
+    verify: bool = False
+
+
 # Only these two templates have a workbook compiler wired (pipeline._VARIANT_FOR_TEMPLATE);
 # refuse anything else at creation rather than letting it fail later at compile.
 COMPILABLE_TEMPLATES = {"annual_report_ias1", "annual_report_ifrs18"}
@@ -377,6 +393,7 @@ def create_app(
                 "status": doc.status,
                 "filename": doc.filename,
                 "engagement_id": doc.engagement_id,
+                "client_id": doc.client_id,
             },
             "line_items": [_line_item_dict(li) for li in items],
             "queue": [
@@ -642,6 +659,62 @@ def create_app(
             telemetry=telemetry,
         )
         return asdict(result)
+
+    @app.post("/assistant/selection")
+    async def assistant_selection(
+        body: SelectionCommandRequest, repo: Repository = Depends(get_repo)
+    ) -> dict[str, Any]:
+        """AI-in-the-spreadsheet (Analyses editor). A selection + headers → a
+        structured cell-edit proposal under a strict JSON schema. Edits are
+        PROPOSALS: the editor previews them, verifies formulas in-browser, and a
+        human applies them. Prefers the external chat provider (Cerebras) for
+        quality, falls back to the local model; degrades to an empty proposal +
+        warning rather than erroring the editor."""
+        from litchai.ai.selection import (
+            COMMANDS,
+            run_selection_command,
+            verify_selection_edits,
+        )
+
+        if body.command not in COMMANDS:
+            raise HTTPException(
+                422,
+                f"unknown command {body.command!r} (expected one of {sorted(COMMANDS)})",
+            )
+        if not body.selection_a1.strip():
+            raise HTTPException(422, "selection_a1 is required")
+
+        conn = getattr(repo, "conn", None)
+        cache = telemetry = None
+        if conn is not None:
+            from litchai.ai.pg import PgCache, PgTelemetry
+
+            cache, telemetry = PgCache(conn), PgTelemetry(conn)
+
+        provider = _get_chat_provider() or app.state.provider_factory()
+        result = run_selection_command(
+            command=body.command,
+            selection_a1=body.selection_a1,
+            sheet_name=body.sheet_name,
+            headers=body.headers,
+            rows=body.rows,
+            formulas=body.formulas,
+            instruction=body.instruction,
+            provider=provider,
+            cache=cache,
+            telemetry=telemetry,
+        )
+        warnings = list(result.warnings)
+        if body.verify and result.edits:
+            warnings.extend(
+                verify_selection_edits(body.selection_a1, body.rows, result.edits)
+            )
+        return {
+            "command": body.command,
+            "edits": [e.model_dump() for e in result.edits],
+            "explanation": result.explanation,
+            "warnings": warnings,
+        }
 
     @app.post("/knowledge/reindex")
     async def knowledge_reindex(repo: Repository = Depends(get_repo)) -> dict[str, Any]:
