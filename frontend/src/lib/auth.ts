@@ -17,19 +17,21 @@ const googleId = process.env.GOOGLE_CLIENT_ID;
 const googleSecret = process.env.GOOGLE_CLIENT_SECRET;
 const googleEnabled = Boolean(googleId && googleSecret);
 
+// Pinned, not inferred: relying on Better Auth's request-host inference in prod
+// produced a hostless `http:///verify-email` link (Google flagged it dead) —
+// BETTER_AUTH_URL is intentionally unset in prod, so the inference has to work
+// every time with no fallback, and it didn't. Same site-URL fallback as email.ts.
+const SITE_URL = (
+  process.env.BETTER_AUTH_URL ||
+  process.env.AUTH_URL ||
+  process.env.NEXT_PUBLIC_SITE_URL ||
+  "https://www.litchconsulting.com"
+).replace(/\/$/, "");
+
 export const auth = betterAuth({
   database: pool,
   secret: process.env.BETTER_AUTH_SECRET || process.env.AUTH_SECRET,
-  // Pinned, not inferred: relying on Better Auth's request-host inference in prod
-  // produced a hostless `http:///verify-email` link (Google flagged it dead) —
-  // BETTER_AUTH_URL is intentionally unset in prod, so the inference has to work
-  // every time with no fallback, and it didn't. Same site-URL fallback as email.ts.
-  baseURL: (
-    process.env.BETTER_AUTH_URL ||
-    process.env.AUTH_URL ||
-    process.env.NEXT_PUBLIC_SITE_URL ||
-    "https://www.litchconsulting.com"
-  ).replace(/\/$/, ""),
+  baseURL: SITE_URL,
   trustedOrigins: [
     "http://localhost:3000",
     "https://litchconsulting.com",
@@ -67,7 +69,7 @@ export const auth = betterAuth({
           html: emailLayout(`
             <p style="margin:0 0 14px;">Hi ${user.name?.split(" ")[0] || "there"},</p>
             <p style="margin:0 0 18px;">Your account is verified — welcome aboard. From your dashboard you can request a service, track progress, pay invoices, download deliverables, and reach us any time.</p>
-            <p style="margin:0 0 20px;"><a href="${(process.env.BETTER_AUTH_URL || "https://litchconsulting.com").replace(/\/$/, "")}/dashboard" style="display:inline-block;background:#0a196d;color:#fff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:9999px;">Open your dashboard</a></p>
+            <p style="margin:0 0 20px;"><a href="${SITE_URL}/dashboard" style="display:inline-block;background:#0a196d;color:#fff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:9999px;">Open your dashboard</a></p>
             <p style="margin:0;color:#5b6474;font-size:13px;">Questions? Just reply to this email — a real person reads it.</p>
           `),
         });
