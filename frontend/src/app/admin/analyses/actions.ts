@@ -9,6 +9,7 @@ import {
   attachDocumentToEngagement,
   compileEngagement,
   createEngagement,
+  getDocument,
   recategorizeLine,
   transitionEngagement,
   type CompilableTemplate,
@@ -152,6 +153,25 @@ export async function runSelectionCommandAction(input: {
     return { ok: true, result: await assistantSelection(input) };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Assistant unavailable" };
+  }
+}
+
+/**
+ * Lightweight poll for the Review page's own live-status banner. The review
+ * page previously only rendered a static "Status: X" string with no way to
+ * tell whether the pipeline was actually doing anything — this backs a poll
+ * loop that shows real progress and, on failure, the actual reason.
+ */
+export async function getDocumentStatusAction(
+  documentId: number
+): Promise<Result<{ status: string; reason?: string }>> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
+  try {
+    const doc = await getDocument(documentId);
+    const reason = doc.progress?.reason;
+    return { ok: true, status: doc.status, reason: typeof reason === "string" ? reason : undefined };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Status check failed" };
   }
 }
 

@@ -8,6 +8,7 @@ import { EmptyState } from "@/components/admin/ui/empty-state";
 import { ReviewGrid } from "@/components/admin/analyses/review-grid";
 import { EngagementPanel } from "@/components/admin/analyses/engagement-panel";
 import { WorkbookCompiler } from "@/components/admin/analyses/workbook-compiler";
+import { ReviewStatusBanner } from "@/components/admin/analyses/review-status-banner";
 import { getReview, getTaxonomy, type ReviewData, type TaxonomyCategory } from "@/lib/litchai/client";
 
 export const dynamic = "force-dynamic";
@@ -88,7 +89,13 @@ export default async function ReviewPage({
         <>
           <PageHeader
             title={review.document.filename}
-            description={`Status: ${review.document.status} · risk-ordered — biggest, least-certain lines first`}
+            description="Risk-ordered — biggest, least-certain lines first"
+          />
+
+          <ReviewStatusBanner
+            documentId={id}
+            initialStatus={review.document.status}
+            retryTarget={editorLink}
           />
 
           <WorkbookCompiler
