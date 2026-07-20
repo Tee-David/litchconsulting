@@ -20,7 +20,7 @@ from litchai.categorize.memory_store import MemoryStore
 from litchai.db.repo import Document, LineItem, Repository
 from litchai.documents.state import DocumentStatus
 from litchai.embeddings import Embedder
-from litchai.extraction import engine_for
+from litchai.extraction import ExtractionError, engine_for
 from litchai.extraction.balance import check_continuity
 from litchai.scanning import NoopScanner, Scanner
 from litchai.storage import Storage
@@ -82,8 +82,19 @@ def extract_document(
         raise ValueError(f"unknown document {document_id}")
 
     plaintext = decrypt(storage.read(doc.client_id, doc.source_hash))
-    engine = engine_for(doc.mime, doc.filename)
-    result = engine.extract(plaintext)
+    try:
+        engine = engine_for(doc.mime, doc.filename)
+        result = engine.extract(plaintext)
+    except ExtractionError as exc:
+        # A document that isn't a recognizable transactional source (e.g. a blank
+        # report template) is an expected business outcome, not a crash — land in
+        # the state machine's own EXTRACTION_FAILED (retryable) rather than
+        # letting the job die uncaught and leave the document stuck at EXTRACTING
+        # forever with no visible reason.
+        repo.set_document_progress(document_id, {"stage": "extraction_failed", "reason": str(exc)})
+        return repo.transition_document(
+            document_id, DocumentStatus.EXTRACTION_FAILED, {"reason": str(exc)}
+        )
     continuity = check_continuity(result)
     break_rows = {b.row_index for b in continuity.breaks}
 

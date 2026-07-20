@@ -28,33 +28,42 @@ type DocRow = {
 };
 
 // A relayed doc is "done" (needs no more polling) once it reaches one of these.
-const TERMINAL = new Set(["categorized", "ready", "published", "failed", "rejected", "error"]);
+const TERMINAL = new Set([
+  "categorized",
+  "ready",
+  "published",
+  "failed",
+  "rejected",
+  "extraction_failed",
+  "error",
+]);
+const FAILED = new Set(["failed", "rejected", "extraction_failed", "error"]);
 
 const STEPS = ["Queued", "Scanning", "Extracting", "Categorizing", "Ready"] as const;
 
 function stepIndex(status: string | null): number {
   const s = (status || "").toLowerCase();
+  // Exact-match the failure states FIRST — "extraction_failed" contains "extract"
+  // and would otherwise misread as "still extracting" via the substring checks below.
+  if (FAILED.has(s)) return -1;
   if (s === "published" || s === "categorized" || s === "ready" || s === "extracted") return 4;
   if (s.includes("categor")) return 3;
   if (s.includes("extract")) return 2;
   if (s.includes("scan")) return 1;
-  if (s === "failed" || s === "rejected" || s === "error") return -1;
   return 0; // queued / received / processing
 }
 
 function statusTone(status: string | null): BadgeTone {
-  switch (status) {
+  const s = (status || "").toLowerCase();
+  if (FAILED.has(s)) return "danger";
+  switch (s) {
     case "categorized":
     case "extracted":
     case "ready":
       return "success";
     case "published":
       return "brand";
-    case "rejected":
-    case "failed":
-    case "error":
-      return "danger";
-    case null:
+    case "":
       return "neutral";
     default:
       return "info"; // received / scanning / extracting / queued …
@@ -62,13 +71,34 @@ function statusTone(status: string | null): BadgeTone {
 }
 
 /** Live pipeline stepper — replaces the old "click, then nothing happens". */
-function AnalysisStepper({ status }: { status: string | null }) {
+function AnalysisStepper({
+  status,
+  reason,
+  onRetry,
+  retrying,
+}: {
+  status: string | null;
+  reason?: string;
+  onRetry: () => void;
+  retrying: boolean;
+}) {
   const active = stepIndex(status);
   if (active < 0) {
     return (
-      <p className="text-xs font-medium text-red-600 dark:text-red-400">
-        Analysis failed — reanalyze, or check the pipeline health.
-      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="text-xs font-medium text-red-600 dark:text-red-400">
+          {reason ? `Analysis couldn't complete: ${reason}` : "Analysis failed."}
+        </p>
+        <button
+          type="button"
+          onClick={onRetry}
+          disabled={retrying}
+          className="inline-flex items-center gap-1 rounded-full border border-red-500/30 px-2.5 py-0.5 text-[11px] font-semibold text-red-600 transition-colors hover:bg-red-500/10 disabled:opacity-50 dark:text-red-400"
+        >
+          {retrying ? <Loader2 className="size-3 animate-spin" /> : <Sparkles className="size-3" />}
+          Reanalyze
+        </button>
+      </div>
     );
   }
   return (
@@ -120,6 +150,7 @@ export function AiAnalysisCard({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [refreshing, startRefresh] = useTransition();
   const [statusMap, setStatusMap] = useState<Record<string, string>>({});
+  const [reasonMap, setReasonMap] = useState<Record<string, string>>({});
 
   const liveStatus = (d: DocRow) => statusMap[d.id] ?? d.litchaiStatus;
 
@@ -136,6 +167,7 @@ export function AiAnalysisCard({
       const res = await syncRequestAiStatusAction(requestId);
       if (!active) return;
       if (res.ok && res.statuses) setStatusMap((prev) => ({ ...prev, ...res.statuses }));
+      if (res.ok && res.reasons) setReasonMap((prev) => ({ ...prev, ...res.reasons }));
       if (elapsed >= 5 * 60 * 1000) clearInterval(id); // give up after 5 min
     }, 3000);
     return () => {
@@ -159,7 +191,8 @@ export function AiAnalysisCard({
     startRefresh(async () => {
       const res = await syncRequestAiStatusAction(requestId);
       if (res.ok && res.statuses) setStatusMap((prev) => ({ ...prev, ...res.statuses }));
-      else if (!res.ok) toast.error(res.error || "Could not refresh");
+      if (res.ok && res.reasons) setReasonMap((prev) => ({ ...prev, ...res.reasons }));
+      if (!res.ok) toast.error(res.error || "Could not refresh");
     });
   }
 
@@ -235,7 +268,7 @@ export function AiAnalysisCard({
                     )}
                     Analyze
                   </button>
-                ) : (
+                ) : FAILED.has((status ?? "").toLowerCase()) ? null : (
                   <>
                     <Link
                       href={`/admin/analyses/${doc.litchaiDocumentId}`}
@@ -263,7 +296,12 @@ export function AiAnalysisCard({
               </div>
               {doc.litchaiDocumentId && (
                 <div className="w-full pl-8">
-                  <AnalysisStepper status={status} />
+                  <AnalysisStepper
+                    status={status}
+                    reason={reasonMap[doc.id]}
+                    onRetry={() => analyze(doc)}
+                    retrying={busyId === doc.id}
+                  />
                 </div>
               )}
             </li>

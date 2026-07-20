@@ -284,10 +284,17 @@ export async function adminLinkInvoiceAction(
 
 /* ---------------------- LitchAI bridge (Milestone 3) ---------------------- */
 
+/** Terminal-failure statuses a document can be re-relayed from (fresh ciphertext,
+ * new backend document id — the old one stays a dead record for its own history). */
+const RETRYABLE_LITCHAI_STATUSES = new Set(["rejected", "extraction_failed", "failed", "error"]);
+
 /**
  * Relay one client upload to the LitchAI pipeline: private-R2 bytes →
  * blind-relay encrypt → OCI API. Only ciphertext leaves this process (§12.6);
  * we store the returned document id and track its status on the doc row.
+ * Already-relayed documents short-circuit UNLESS they ended in a terminal
+ * failure — those get a fresh document id so "Reanalyze" in the UI actually does
+ * something (previously it was a no-op past the first relay).
  */
 export async function relayRequestDocumentAction(
   requestId: string,
@@ -309,7 +316,7 @@ export async function relayRequestDocumentAction(
       )
     );
   if (!doc) return { ok: false, error: "Document not found" };
-  if (doc.litchaiDocumentId) {
+  if (doc.litchaiDocumentId && !RETRYABLE_LITCHAI_STATUSES.has(doc.litchaiStatus || "")) {
     return { ok: true, litchaiDocumentId: doc.litchaiDocumentId };
   }
 
@@ -355,7 +362,7 @@ export async function relayRequestDocumentAction(
 /** Refresh the pipeline status of every relayed doc on a request (poll-based, no webhook). */
 export async function syncRequestAiStatusAction(
   requestId: string
-): Promise<ActionResult & { statuses?: Record<string, string> }> {
+): Promise<ActionResult & { statuses?: Record<string, string>; reasons?: Record<string, string> }> {
   if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
   if (!process.env.LITCHAI_API_URL) return { ok: false, error: "LitchAI isn't configured yet." };
 
@@ -364,14 +371,17 @@ export async function syncRequestAiStatusAction(
     .from(serviceRequestDocument)
     .where(eq(serviceRequestDocument.requestId, requestId));
   const relayed = docs.filter((d) => d.litchaiDocumentId);
-  if (relayed.length === 0) return { ok: true, statuses: {} };
+  if (relayed.length === 0) return { ok: true, statuses: {}, reasons: {} };
 
   const { getDocument } = await import("@/lib/litchai/client");
   const statuses: Record<string, string> = {};
+  const reasons: Record<string, string> = {};
   for (const doc of relayed) {
     try {
       const remote = await getDocument(Number(doc.litchaiDocumentId));
       statuses[doc.id] = remote.status;
+      const reason = remote.progress?.reason;
+      if (typeof reason === "string") reasons[doc.id] = reason;
       if (remote.status !== doc.litchaiStatus) {
         await db
           .update(serviceRequestDocument)
@@ -384,7 +394,7 @@ export async function syncRequestAiStatusAction(
     }
   }
   revalidateRequest(requestId);
-  return { ok: true, statuses };
+  return { ok: true, statuses, reasons };
 }
 
 /**
