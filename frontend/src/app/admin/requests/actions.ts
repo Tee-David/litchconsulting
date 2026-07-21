@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   client,
@@ -521,15 +521,39 @@ export async function adminDeleteRequestDocumentAction(
   documentId: string
 ): Promise<ActionResult> {
   if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
+  const [doc] = await db
+    .select({ r2Key: serviceRequestDocument.r2Key })
+    .from(serviceRequestDocument)
+    .where(
+      and(
+        eq(serviceRequestDocument.id, documentId),
+        eq(serviceRequestDocument.requestId, requestId)
+      )
+    )
+    .limit(1);
+  // Honest result: if the row is already gone, say so instead of a false success.
+  if (!doc) return { ok: false, error: "Document not found — it may already have been removed." };
+
   await db
     .delete(serviceRequestDocument)
     .where(
       and(
         eq(serviceRequestDocument.id, documentId),
-        eq(serviceRequestDocument.requestId, requestId),
-        isNull(serviceRequestDocument.litchaiDocumentId) // never orphan an AI run
+        eq(serviceRequestDocument.requestId, requestId)
       )
     );
+  // Best-effort private-bucket cleanup so deleting a document doesn't leave the
+  // ciphertext orphaned in R2. A prior version silently refused to delete any
+  // document that had been sent to AI (isNull(litchaiDocumentId)) yet still
+  // returned ok — the row stayed but the toast said "removed".
+  if (doc.r2Key) {
+    try {
+      const { deletePrivateObject } = await import("@/lib/r2");
+      await deletePrivateObject(doc.r2Key);
+    } catch {
+      /* row is gone from the client's view regardless; object sweep is backstop */
+    }
+  }
   revalidateRequest(requestId);
   return { ok: true };
 }
