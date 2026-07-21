@@ -140,3 +140,33 @@ export async function alertAdminDocumentUploaded(req: ServiceRequest, fileName: 
     href: `${baseUrl()}/admin/requests/${req.id}`,
   });
 }
+
+/** Client notice when the advisor returns a document for correction. */
+export async function emailCorrectionRequested(
+  req: ServiceRequest,
+  to: string,
+  fileName: string,
+  reason: string
+) {
+  await safeSend({
+    to,
+    subject: `Action needed on ${req.number} — please re-upload a document`,
+    html: emailLayout(`
+      <p style="margin:0 0 14px;">Hi there,</p>
+      <p style="margin:0 0 18px;">We had a look at <strong>${fileName}</strong> on your <strong>${req.serviceName}</strong> request (${req.number}), and we need a corrected version before we can continue.</p>
+      <p style="margin:0 0 8px;color:#3c4657;font-weight:600;">What we need:</p>
+      <p style="margin:0 0 18px;padding:12px 16px;background:#f3f5fb;border-radius:12px;color:#3c4657;">${reason}</p>
+      <p style="margin:0 0 18px;">Open your request workspace to upload the corrected file — it takes a minute.</p>
+      ${button(requestLink(req), "Upload corrected document")}
+    `),
+  });
+}
+
+/** Admin alert when a client replies on the request thread. */
+export async function alertAdminClientMessage(req: ServiceRequest, body: string, clientName?: string | null) {
+  await notifyAdmin({
+    subject: `New message on ${req.number} from ${clientName || "client"}`,
+    html: `<p><strong>${clientName || "The client"}</strong> replied on request <strong>${req.number}</strong> (${req.serviceName}):</p><p style="color:#3c4657;padding:12px 16px;background:#f3f5fb;border-radius:12px;">${body}</p>`,
+    href: `${baseUrl()}/admin/requests/${req.id}`,
+  });
+}

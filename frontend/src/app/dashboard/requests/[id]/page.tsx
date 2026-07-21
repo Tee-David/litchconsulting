@@ -9,6 +9,7 @@ import { Badge } from "@/components/admin/ui/badge";
 import { requestStatusTone, STATUS_LABELS, type RequestStatus, type StepLabelOverrides } from "@/lib/requests/status";
 import { RequestProgressTracker } from "@/components/requests/progress-tracker";
 import { RequestTimeline } from "@/components/requests/request-timeline";
+import { RequestMessageBox } from "@/components/requests/request-message-box";
 import { DocsChecklist } from "@/components/requests/docs-checklist";
 import { DeliverablesCard } from "@/components/requests/deliverables-card";
 import { PayButton } from "@/components/pay/pay-button";
@@ -160,6 +161,10 @@ export default async function ClientRequestDetailPage({
               documents={clientUploads}
               canUpload={canUpload}
             />
+          )}
+
+          {!["cancelled", "declined", "refunded", "completed"].includes(req.status) && (
+            <RequestMessageBox requestId={req.id} />
           )}
 
           <RequestTimeline events={events} />

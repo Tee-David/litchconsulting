@@ -252,6 +252,9 @@ const STATEMENTS = [
     "citations" jsonb,
     "created_at" timestamp with time zone DEFAULT now() NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS "sage_message_conversation_idx" ON "sage_message" ("conversation_id", "created_at")`,
+  // ---- Admin → client document feedback (return-for-correction) ----
+  `ALTER TABLE "service_request_document" ADD COLUMN IF NOT EXISTS "correction_reason" text`,
+  `ALTER TABLE "service_request_document" ADD COLUMN IF NOT EXISTS "correction_requested_at" timestamp with time zone`,
 ];
 
 /**

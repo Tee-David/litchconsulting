@@ -175,25 +175,38 @@ function DocSlot({
   }
 
   const busy = state.phase === "uploading" || state.phase === "saving";
-  const done = Boolean(existing);
+  const needsCorrection = Boolean(existing?.correctionReason);
+  const done = Boolean(existing) && !needsCorrection;
 
   return (
     <div
       className={cn(
         "rounded-xl2 border p-4 transition-colors",
-        done ? "border-emerald-500/30 bg-emerald-500/[0.04]" : "border-hairline bg-surface"
+        needsCorrection
+          ? "border-amber-500/40 bg-amber-500/[0.06]"
+          : done
+            ? "border-emerald-500/30 bg-emerald-500/[0.04]"
+            : "border-hairline bg-surface"
       )}
     >
       <div className="flex items-start gap-3">
         <div
           className={cn(
             "mt-0.5 grid size-8 shrink-0 place-items-center rounded-full",
-            done
-              ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
-              : "bg-brand-tint text-brand keep-brand"
+            needsCorrection
+              ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+              : done
+                ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400"
+                : "bg-brand-tint text-brand keep-brand"
           )}
         >
-          {done ? <CheckCircle2 className="size-4.5" /> : <CircleDashed className="size-4.5" />}
+          {needsCorrection ? (
+            <AlertTriangle className="size-4.5" />
+          ) : done ? (
+            <CheckCircle2 className="size-4.5" />
+          ) : (
+            <CircleDashed className="size-4.5" />
+          )}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -213,6 +226,12 @@ function DocSlot({
             <p className="mt-1.5 truncate text-xs text-body">
               <span className="font-medium text-ink">{existing.fileName}</span> ·{" "}
               {formatDateTime(existing.createdAt)}
+            </p>
+          )}
+
+          {needsCorrection && existing?.correctionReason && (
+            <p className="mt-2 rounded-lg bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-300">
+              Your advisor asked for a correction: {existing.correctionReason}
             </p>
           )}
 
@@ -245,12 +264,18 @@ function DocSlot({
             onClick={() => inputRef.current?.click()}
             className={cn(
               "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-2 text-xs font-semibold transition-colors",
-              done
-                ? "border border-hairline bg-paper text-body hover:bg-surface"
-                : "bg-brand text-white hover:bg-brand-hover"
+              needsCorrection
+                ? "bg-amber-500 text-white hover:bg-amber-600"
+                : done
+                  ? "border border-hairline bg-paper text-body hover:bg-surface"
+                  : "bg-brand text-white hover:bg-brand-hover"
             )}
           >
-            {done ? (
+            {needsCorrection ? (
+              <>
+                <RefreshCcw className="size-3.5" /> Re-upload
+              </>
+            ) : done ? (
               <>
                 <RefreshCcw className="size-3.5" /> Replace
               </>

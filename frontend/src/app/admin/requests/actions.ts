@@ -14,7 +14,12 @@ import { isAdmin, getSessionUser } from "@/lib/server-user";
 import { recordAudit } from "@/lib/audit";
 import { canTransition, type RequestStatus } from "@/lib/requests/status";
 import { markQuoteSent } from "@/lib/requests/quote";
-import { emailStatusChanged, emailDeliverableReady, emailRequestTerminal } from "@/lib/emails/requests";
+import {
+  emailStatusChanged,
+  emailDeliverableReady,
+  emailRequestTerminal,
+  emailCorrectionRequested,
+} from "@/lib/emails/requests";
 
 type ActionResult = { ok: boolean; error?: string };
 
@@ -43,6 +48,53 @@ function revalidateRequest(id: string) {
   revalidatePath("/dashboard/requests");
   revalidatePath(`/dashboard/requests/${id}`);
   revalidatePath("/dashboard");
+}
+
+/**
+ * Friendly, client-facing processing milestones. The AI/LitchAI pipeline is
+ * never named to the client — they see plain-English progress ("Documents
+ * received", "Processed", "Needs your attention") while the technical
+ * ai_analysis_* events stay internal for the admin. Deduped per milestone so a
+ * repeated status poll doesn't spam the timeline.
+ */
+const CLIENT_MILESTONES = {
+  under_review: "We've received your documents and started reviewing them.",
+  processed: "We've finished processing your documents — your advisor is preparing your deliverable.",
+  needs_attention:
+    "One or more of your documents need your attention. Please review the documents on your request and re-upload where asked.",
+} as const;
+type ClientMilestone = keyof typeof CLIENT_MILESTONES;
+
+async function emitClientMilestone(requestId: string, milestone: ClientMilestone): Promise<boolean> {
+  const [existing] = await db
+    .select({ id: serviceRequestEvent.id })
+    .from(serviceRequestEvent)
+    .where(
+      and(
+        eq(serviceRequestEvent.requestId, requestId),
+        eq(serviceRequestEvent.type, "processing_update"),
+        eq(serviceRequestEvent.toStatus, milestone)
+      )
+    )
+    .limit(1);
+  if (existing) return false;
+  await db.insert(serviceRequestEvent).values({
+    requestId,
+    type: "processing_update",
+    toStatus: milestone,
+    message: CLIENT_MILESTONES[milestone],
+    visibility: "client",
+    actorRole: "system",
+  });
+  return true;
+}
+
+/** Backend LitchAI status → client-facing milestone (or null = keep quiet). */
+function milestoneForStatus(status: string): ClientMilestone | null {
+  const s = status.toLowerCase();
+  if (["categorized", "ready", "published", "extracted"].includes(s)) return "processed";
+  if (["extraction_failed", "failed", "rejected", "error"].includes(s)) return "needs_attention";
+  return null;
 }
 
 /**
@@ -352,6 +404,8 @@ export async function relayRequestDocumentAction(
       actorRole: "admin",
       actorName: admin?.name || "Litch Consulting",
     });
+    // Client-facing: a warm "we're reviewing your documents" — never mentions AI.
+    await emitClientMilestone(requestId, "under_review");
     revalidateRequest(requestId);
     return { ok: true, litchaiDocumentId: String(result.document_id) };
   } catch (err) {
@@ -387,6 +441,9 @@ export async function syncRequestAiStatusAction(
           .update(serviceRequestDocument)
           .set({ litchaiStatus: remote.status })
           .where(eq(serviceRequestDocument.id, doc.id));
+        // On crossing into a terminal state, tell the client in plain English.
+        const milestone = milestoneForStatus(remote.status);
+        if (milestone) await emitClientMilestone(requestId, milestone);
       }
     } catch (err) {
       statuses[doc.id] = doc.litchaiStatus || "unknown";
@@ -554,6 +611,62 @@ export async function adminDeleteRequestDocumentAction(
       /* row is gone from the client's view regardless; object sweep is backstop */
     }
   }
+  revalidateRequest(requestId);
+  return { ok: true };
+}
+
+/**
+ * Return a client upload for correction: records a client-visible reason on the
+ * document, posts a "correction requested" event to the client timeline, and
+ * emails them. The client re-uploads into the same slot (which supersedes and
+ * clears the flag). This is the structured alternative to burying feedback in
+ * an internal note.
+ */
+export async function adminRequestDocumentCorrectionAction(
+  requestId: string,
+  documentId: string,
+  reason: string
+): Promise<ActionResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
+  const trimmed = reason.trim();
+  if (!trimmed) return { ok: false, error: "Tell the client what needs correcting." };
+
+  const req = await loadRequest(requestId);
+  if (!req) return { ok: false, error: "Not found" };
+  const [doc] = await db
+    .select()
+    .from(serviceRequestDocument)
+    .where(
+      and(
+        eq(serviceRequestDocument.id, documentId),
+        eq(serviceRequestDocument.requestId, requestId),
+        eq(serviceRequestDocument.kind, "client_upload")
+      )
+    );
+  if (!doc) return { ok: false, error: "Document not found" };
+
+  const admin = await getSessionUser();
+  await db
+    .update(serviceRequestDocument)
+    .set({ correctionReason: trimmed, correctionRequestedAt: new Date() })
+    .where(eq(serviceRequestDocument.id, doc.id));
+  await db.insert(serviceRequestEvent).values({
+    requestId,
+    type: "correction_requested",
+    message: `We need a corrected version of ${doc.fileName}: ${trimmed}`,
+    visibility: "client",
+    actorRole: "admin",
+    actorName: admin?.name || "Litch Consulting",
+  });
+
+  const to = await clientEmailFor(req.clientId);
+  if (to) void emailCorrectionRequested(req, to, doc.fileName, trimmed);
+  await recordAudit({
+    action: "request.correction_requested",
+    entity: "request",
+    entityId: requestId,
+    meta: { documentId, fileName: doc.fileName },
+  });
   revalidateRequest(requestId);
   return { ok: true };
 }

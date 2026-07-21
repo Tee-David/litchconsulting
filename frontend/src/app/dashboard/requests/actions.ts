@@ -22,6 +22,7 @@ import {
   alertAdminDocumentUploaded,
   alertAdminDocumentsComplete,
   emailRequestTerminal,
+  alertAdminClientMessage,
 } from "@/lib/emails/requests";
 import { notifyAdmin } from "@/lib/notify";
 
@@ -325,7 +326,8 @@ export async function recordRequestDocumentAction(input: {
         if (p.id !== doc.id) {
           await tx
             .update(serviceRequestDocument)
-            .set({ supersededById: doc.id })
+            // Re-upload resolves any pending correction on the slot.
+            .set({ supersededById: doc.id, correctionReason: null, correctionRequestedAt: null })
             .where(eq(serviceRequestDocument.id, p.id));
         }
       }
@@ -418,6 +420,34 @@ export async function approveCloseRequestAction(requestId: string): Promise<Acti
     subject: `✅ ${req.number} approved & closed by client`,
     html: `<p><strong>${clientRow.name}</strong> approved and closed <strong>${req.number}</strong> (${req.serviceName}).</p>`,
   });
+  revalidateRequest(requestId);
+  return { ok: true, id: requestId };
+}
+
+/**
+ * Client reply on the request's message thread. Writes the same client-visible
+ * "message" event the advisor's replies use, and alerts the admin by email.
+ */
+export async function postRequestMessageAction(
+  requestId: string,
+  body: string
+): Promise<ActionResult> {
+  const owned = await ownRequest(requestId);
+  if (!owned) return { ok: false, error: "Not found" };
+  const { req, clientRow } = owned;
+  const trimmed = body.trim();
+  if (!trimmed) return { ok: false, error: "Write a message first." };
+  if (trimmed.length > 4000) return { ok: false, error: "Message is too long." };
+
+  await db.insert(serviceRequestEvent).values({
+    requestId,
+    type: "message",
+    message: trimmed,
+    visibility: "client",
+    actorRole: "client",
+    actorName: clientRow.name,
+  });
+  void alertAdminClientMessage(req, trimmed, clientRow.name);
   revalidateRequest(requestId);
   return { ok: true, id: requestId };
 }

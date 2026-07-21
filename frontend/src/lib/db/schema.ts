@@ -432,6 +432,10 @@ export const serviceRequestDocument = pgTable(
     litchaiStatus: text("litchai_status"), // queued | processing | ready | failed | published
     // for deliverables published from the AI Studio: verified | manual_override
     publishVariant: text("publish_variant"),
+    // Admin → client document feedback: when set, this upload was returned for
+    // correction (client-visible reason). Cleared when the client re-uploads.
+    correctionReason: text("correction_reason"),
+    correctionRequestedAt: timestamp("correction_requested_at", { withTimezone: true }),
     createdAt: createdAt(),
   },
   (t) => [

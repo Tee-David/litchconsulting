@@ -10,12 +10,17 @@ import {
   CheckCircle2,
   CircleDashed,
   Table2,
+  Undo2,
+  AlertTriangle,
 } from "lucide-react";
 import type { ServiceRequestDocument } from "@/lib/db/schema";
 import type { RequiredDocument } from "@/lib/services/catalog";
 import { formatDateTime } from "@/lib/format-date";
 import { useToast } from "@/components/admin/ui/toaster";
-import { adminDeleteRequestDocumentAction } from "../actions";
+import {
+  adminDeleteRequestDocumentAction,
+  adminRequestDocumentCorrectionAction,
+} from "../actions";
 
 function prettySize(bytes: number) {
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -67,6 +72,23 @@ export function AdminDocumentList({
     });
   }
 
+  function requestCorrection(doc: ServiceRequestDocument) {
+    const reason = window.prompt(
+      `What needs correcting on "${doc.fileName}"? The client sees this and is emailed to re-upload.`,
+      doc.correctionReason || ""
+    );
+    if (reason === null) return; // cancelled
+    if (!reason.trim()) {
+      toast.error("Tell the client what needs correcting.");
+      return;
+    }
+    startTransition(async () => {
+      const res = await adminRequestDocumentCorrectionAction(requestId, doc.id, reason.trim());
+      if (!res.ok) toast.error(res.error || "Could not send");
+      else toast.success("Correction requested — the client has been notified");
+    });
+  }
+
   function row(doc: ServiceRequestDocument, deletable: boolean) {
     return (
       <li key={doc.id} className="flex items-center justify-between gap-3 px-5 py-3">
@@ -81,9 +103,26 @@ export function AdminDocumentList({
               {doc.uploadedByName ? ` · ${doc.uploadedByName}` : ""}
               {doc.litchaiStatus ? ` · AI: ${doc.litchaiStatus}` : ""}
             </p>
+            {doc.correctionReason && (
+              <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="size-3" />
+                Correction requested: {doc.correctionReason}
+              </p>
+            )}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
+          {deletable && (
+            <button
+              type="button"
+              onClick={() => requestCorrection(doc)}
+              disabled={pending}
+              className="grid size-8 place-items-center rounded-full text-muted transition-colors hover:bg-amber-500/10 hover:text-amber-500"
+              title="Request correction — return this to the client"
+            >
+              <Undo2 className="size-4" />
+            </button>
+          )}
           {/\.(xlsx|xls|csv)$/i.test(doc.fileName) && (
             <Link
               href={`/admin/analyses/editor?requestId=${requestId}&documentId=${doc.id}`}

@@ -9,6 +9,8 @@ import {
   XCircle,
   RotateCcw,
   CircleDot,
+  Loader,
+  AlertTriangle,
 } from "lucide-react";
 import type { ServiceRequestEvent } from "@/lib/db/schema";
 import { Badge } from "@/components/admin/ui/badge";
@@ -30,6 +32,9 @@ const EVENT_ICONS: Record<string, typeof CheckCircle2> = {
   documents_complete: FileCheck2,
   deliverable_uploaded: PackageCheck,
   note: MessageSquare,
+  message: MessageSquare,
+  processing_update: Loader,
+  correction_requested: AlertTriangle,
   ai_analysis_started: Sparkles,
   ai_analysis_completed: Sparkles,
   invoice_linked: FileCheck2,
@@ -39,6 +44,8 @@ const EVENT_ICONS: Record<string, typeof CheckCircle2> = {
 };
 
 const NEGATIVE = new Set(["cancelled", "declined", "refunded"]);
+// Needs client action — amber, not the red of a terminal failure.
+const ATTENTION = new Set(["correction_requested"]);
 
 function eventTitle(ev: ServiceRequestEvent): string {
   switch (ev.type) {
@@ -58,6 +65,25 @@ function eventTitle(ev: ServiceRequestEvent): string {
       return "Deliverable ready";
     case "note":
       return ev.actorRole === "admin" ? "Note from your advisor" : "Note";
+    case "message":
+      return ev.actorRole === "admin"
+        ? "Message from your advisor"
+        : ev.actorRole === "client"
+          ? "Your message"
+          : "Message";
+    case "processing_update":
+      switch (ev.toStatus) {
+        case "under_review":
+          return "Documents under review";
+        case "processed":
+          return "Documents processed";
+        case "needs_attention":
+          return "Needs your attention";
+        default:
+          return "Update on your request";
+      }
+    case "correction_requested":
+      return "Correction requested";
     case "ai_analysis_started":
       return "AI analysis started";
     case "ai_analysis_completed":
@@ -92,6 +118,7 @@ export function RequestTimeline({
         {events.map((ev, i) => {
           const Icon = EVENT_ICONS[ev.type] ?? CheckCircle2;
           const negative = NEGATIVE.has(ev.type);
+          const attention = ATTENTION.has(ev.type);
           return (
             <li key={ev.id} className="relative flex gap-3.5">
               {i < events.length - 1 && (
@@ -105,9 +132,11 @@ export function RequestTimeline({
                   "z-10 grid size-8 shrink-0 place-items-center rounded-full border-2 bg-paper",
                   negative
                     ? "border-red-400 text-red-500"
-                    : i === 0
-                      ? "border-brand text-brand keep-brand"
-                      : "border-emerald-500/70 text-emerald-600 dark:text-emerald-400"
+                    : attention
+                      ? "border-amber-400 text-amber-500"
+                      : i === 0
+                        ? "border-brand text-brand keep-brand"
+                        : "border-emerald-500/70 text-emerald-600 dark:text-emerald-400"
                 )}
               >
                 <Icon className="size-4" />
