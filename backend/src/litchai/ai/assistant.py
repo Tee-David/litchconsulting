@@ -71,6 +71,11 @@ TOOLS: tuple[Tool, ...] = (
             "how much does forensic accounting cost",
             "explain the companies income tax rate",
             "how does the engagement lifecycle work",
+            "how do i ask a client to re-upload a document",
+            "how do i return a document to the client for correction",
+            "why is a document showing extraction failed",
+            "how do i message a client on their request",
+            "why did the client's analysis fail",
         ),
     ),
     Tool(

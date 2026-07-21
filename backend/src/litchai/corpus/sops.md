@@ -23,6 +23,37 @@ tickets, notes or chat. Duplicate uploads are detected by ciphertext hash and ar
 not re-processed. If a client requests erasure, run the erasure flow, which
 deletes their documents, line items, engagements and client-scoped memory.
 
+A document can be deleted from a request from the admin request page; deleting a
+client upload removes the row and the stored file, and the client no longer sees
+it. If a document is not a transactional source — for example a blank annual-
+report or statement template with no date, description and amount rows — the
+extractor rejects it and the analysis shows "Extraction failed" with the reason.
+That is expected behaviour, not a fault: ask the client for the actual
+transaction listing (bank statement, ledger, or sales/expense/payroll register).
+Documents can never be left stuck at "Extracting": a background self-heal marks
+any stalled document as failed within a few minutes so it always shows a reason
+and a Reanalyze button.
+
+## Returning a document for correction
+
+When a client uploads the wrong or an incomplete document, use "Request
+correction" on that document rather than a private note. This records a reason
+the client can see, posts it to their request timeline, and emails them to re-
+upload. The client sees an amber banner on that document slot and re-uploads a
+corrected version, which replaces the old file and clears the flag. Use this
+whenever a client needs to provide a different or complete document — it is the
+proper channel for document feedback, in place of an internal-only note.
+
+## Keeping the client informed
+
+Clients see plain-English progress on their request — "Documents under review",
+"Documents processed", and "Needs your attention" — while the documents are
+analysed; the AI pipeline is never named to the client. Clients and advisors can
+also message each other on a request: the client posts from their workspace and
+the advisor replies with a visible-to-client note. Use the visible-to-client note
+or the correction flow (not an internal note) whenever the client needs to see or
+act on something. Internal notes stay private to staff.
+
 ## Categorisation review
 
 Transaction lines are categorised by a four-rung ladder (exact match, trigram,
