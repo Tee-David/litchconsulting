@@ -38,6 +38,36 @@ CPU burst + a `SELECT 1`). Monitor 7-day 95th-percentile CPU/network/memory in
 the OCI console; raise the burst (`heartbeat_burst(ms=…)`) if utilization dips
 toward the reclamation floor.
 
+## Stuck document ("Extracting…" forever)
+
+A document only holds an *in-flight* status (`received`/`scanning`/`extracting`/
+`categorizing`) while its `litchai.ingest_document` job is running. If it's stuck
+there, the job died without recording a failure.
+
+**Diagnose:**
+- `journalctl -u litchai-worker -n 100 --no-pager` — look for a traceback ending
+  the last `ingest_document` run.
+- Queue state: `sudo docker exec litchai-postgres psql -U litchai -d litchai -c
+  "select id, task_name, status, attempts from procrastinate_jobs order by id desc limit 10"`.
+  A `failed` job whose document is still `extracting` is the classic stuck case.
+- Doc state: `… -c "select id, filename, status, progress->>'reason' from documents order by id"`.
+
+**Self-heal:** `litchai.sweep_stale` (periodic task, every 10 min — `queue.py`,
+`ops/sweep.py`) fails any in-flight document past a 30-min grace window that has
+no live queue job, moving it to `extraction_failed`/`rejected` with a reason. So
+a stuck doc resolves itself within ~10 min even after a `kill -9`/OOM/hang that
+the job's own `try/except` can't catch. Confirm it's running:
+`… -c "select max(id), max(scheduled_at) from procrastinate_jobs where task_name='litchai.sweep_stale'"`.
+
+**User-facing retry:** once a doc is `extraction_failed` (retryable), the Analyses
+review page / request AI card shows the reason + a **Reanalyze** button that
+re-relays fresh ciphertext as a new backend document.
+
+**Expected non-recoverable case:** a document that isn't a transactional source
+(a blank annual-report/statement *template* with no date/description/amount rows)
+correctly fails with `no recognizable header row` — that is the extractor working,
+not a bug. Reanalyzing the same template fails the same way by design.
+
 ## NDPA — retention & erasure
 
 **Processors (data-protection register):** Cloudflare (Tunnel + R2) and Vercel.

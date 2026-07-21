@@ -14,6 +14,9 @@ const STATUS_STYLE: Record<string, string> = {
   extracted: "bg-sky-500/10 text-sky-600 dark:text-sky-400",
   categorized: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
   rejected: "bg-red-500/10 text-red-600 dark:text-red-400",
+  extraction_failed: "bg-red-500/10 text-red-600 dark:text-red-400",
+  failed: "bg-red-500/10 text-red-600 dark:text-red-400",
+  error: "bg-red-500/10 text-red-600 dark:text-red-400",
   superseded: "bg-surface text-muted",
 };
 
@@ -21,7 +24,7 @@ function StatusBadge({ status }: { status: string }) {
   const cls = STATUS_STYLE[status] ?? "bg-surface text-body";
   return (
     <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold capitalize ${cls}`}>
-      {status}
+      {status.replace(/_/g, " ")}
     </span>
   );
 }
