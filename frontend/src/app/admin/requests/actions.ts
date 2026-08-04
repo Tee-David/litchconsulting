@@ -525,6 +525,8 @@ export async function saveWorkingCopyAction(input: {
   requestId: string;
   fileName: string;
   base64: string;
+  /** What the AI changed, for the audit trail: one entry per applied batch. */
+  aiEdits?: { command: string; cells: string[] }[];
 }): Promise<ActionResult & { documentId?: string }> {
   if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
   const req = await loadRequest(input.requestId);
@@ -564,6 +566,24 @@ export async function saveWorkingCopyAction(input: {
       visibility: "internal",
       actorRole: "admin",
       actorName: admin?.name || "Litch Consulting",
+    });
+    // An AI-edited deliverable leaving the editor is consequential: it lands in
+    // the request as a document a client can eventually be sent. The request
+    // timeline alone is not the audit trail — /admin/audit is.
+    await recordAudit({
+      action: "ai_working_copy_saved",
+      entity: "service_request_document",
+      entityId: row?.id ?? null,
+      meta: {
+        requestId: req.id,
+        requestNumber: req.number,
+        sourceFileName: input.fileName,
+        savedFileName: fileName,
+        bytes: bytes.length,
+        litchaiStatus: "unverified",
+        aiEdits: input.aiEdits ?? null,
+        aiEditedCells: (input.aiEdits ?? []).reduce((n, b) => n + b.cells.length, 0),
+      },
     });
     revalidateRequest(req.id);
     return { ok: true, documentId: row?.id };

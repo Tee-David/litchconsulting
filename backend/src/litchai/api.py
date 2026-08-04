@@ -82,7 +82,11 @@ class SelectionCommandRequest(BaseModel):
     sheet_name: str | None = None
     headers: list[str] = []
     rows: list[list[str]] = []
-    formulas: list[list[str]] | None = None
+    # Inner str must be OPTIONAL: the editor sends null for every cell that holds
+    # no formula, which is most of them. Typing this `list[list[str]]` made the
+    # route 422 on any selection containing a single non-formula cell — i.e. all
+    # of them — and the editor reported it as "Assistant unavailable".
+    formulas: list[list[str | None]] | None = None
     instruction: str | None = None
     # The editor verifies edits in-browser (WASM recompute), so server-side
     # LibreOffice verification is off by default — opt in for a belt-and-braces check.
@@ -660,8 +664,17 @@ def create_app(
         )
         return asdict(result)
 
+    # Backstop only — the editor already caps a selection at 900 cells. This
+    # bounds a direct API caller (the route is service-token authenticated, not
+    # rate limited) so one request cannot blow up the prompt or the worker.
+    MAX_SELECTION_CELLS = 20_000
+
+    # Deliberately `def`, not `async def`: the provider call underneath is
+    # blocking httpx. As a coroutine it ran on the event loop and a slow model
+    # call stalled every other request in the worker; FastAPI runs a sync path
+    # operation in its threadpool instead.
     @app.post("/assistant/selection")
-    async def assistant_selection(
+    def assistant_selection(
         body: SelectionCommandRequest, repo: Repository = Depends(get_repo)
     ) -> dict[str, Any]:
         """AI-in-the-spreadsheet (Analyses editor). A selection + headers → a
@@ -672,6 +685,7 @@ def create_app(
         warning rather than erroring the editor."""
         from litchai.ai.selection import (
             COMMANDS,
+            parse_a1,
             run_selection_command,
             verify_selection_edits,
         )
@@ -683,6 +697,17 @@ def create_app(
             )
         if not body.selection_a1.strip():
             raise HTTPException(422, "selection_a1 is required")
+        if parse_a1(body.selection_a1.split(":")[0]) is None:
+            raise HTTPException(
+                422, f"selection_a1 {body.selection_a1!r} is not a valid A1 range"
+            )
+        cells = sum(len(r) for r in body.rows)
+        if cells > MAX_SELECTION_CELLS:
+            raise HTTPException(
+                422,
+                f"selection too large ({cells} cells > {MAX_SELECTION_CELLS}) — "
+                "send a smaller range",
+            )
 
         conn = getattr(repo, "conn", None)
         cache = telemetry = None

@@ -50,12 +50,38 @@ function rangeA1(range: XlsxCellRange) {
   const n = normalize(range);
   return `${cellA1(n.start.row, n.start.col)}:${cellA1(n.end.row, n.end.col)}`;
 }
+/** "B4" or "$B$4" → 0-indexed {row,col}; anything else (ranges, sheet-qualified
+ *  refs, garbage) → null. The `$` tolerance matters: without it an absolute ref
+ *  from the model was silently skipped with no trace. */
 function a1ToAddr(a1: string): { row: number; col: number } | null {
-  const m = /^([A-Za-z]+)(\d+)$/.exec(a1.trim());
+  const m = /^\$?([A-Za-z]{1,3})\$?(\d{1,7})$/.exec(a1.trim());
   if (!m) return null;
   let col = 0;
   for (const ch of m[1].toUpperCase()) col = col * 26 + (ch.charCodeAt(0) - 64);
-  return { row: Number(m[2]) - 1, col: col - 1 };
+  const row = Number(m[2]) - 1;
+  if (row < 0) return null;
+  return { row, col: col - 1 };
+}
+
+/** The rectangle an AI edit may land in: the selection, one row below, one
+ *  column right — mirroring the server's `allowed_region`. Enforced on both
+ *  sides on purpose: this is the last gate before a write, and cell values come
+ *  from client-uploaded workbooks. */
+function allowedRegion(range: XlsxCellRange) {
+  const n = normalize(range);
+  return {
+    start: n.start,
+    end: { row: n.end.row + 1, col: n.end.col + 1 },
+  };
+}
+
+function inRegion(addr: { row: number; col: number }, region: ReturnType<typeof allowedRegion>) {
+  return (
+    addr.row >= region.start.row &&
+    addr.row <= region.end.row &&
+    addr.col >= region.start.col &&
+    addr.col <= region.end.col
+  );
 }
 function toBase64(bytes: Uint8Array) {
   let bin = "";
@@ -104,6 +130,8 @@ export function AiPanel({ requestId, fileName }: { requestId?: string; fileName?
   const [proposal, setProposal] = useState<ProposedEdit[] | null>(null);
   const [lastCommand, setLastCommand] = useState<string>("");
   const [appliedBatch, setAppliedBatch] = useState(0);
+  /** Every AI batch actually written, for the audit entry recorded on save. */
+  const [appliedLog, setAppliedLog] = useState<{ command: string; cells: string[] }[]>([]);
   const [verify, setVerify] = useState<"clean" | "errors" | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -147,24 +175,45 @@ export function AiPanel({ requestId, fileName }: { requestId?: string; fileName?
   }
 
   /** Apply edits, recompute in-browser, and surface any error cells. */
-  function applyEdits(edits: SelectionEdit[]) {
+  function applyEdits(edits: SelectionEdit[], commandLabel = lastCommand) {
     if (readOnly) {
       toast.error("This workbook is read-only (too large to edit here).");
       return;
     }
     const addrs: { row: number; col: number }[] = [];
+    const rejected: string[] = [];
+    const region = range ? allowedRegion(range) : null;
     let applied = 0;
     for (const e of edits) {
       const addr = a1ToAddr(e.cell);
-      if (!addr) continue;
+      // Refuse anything unparseable or outside the selection's margin rather
+      // than skipping it silently — a dropped write the reviewer never hears
+      // about is how a half-applied proposal looks like a complete one.
+      if (!addr || (region && !inRegion(addr, region))) {
+        rejected.push(e.cell);
+        continue;
+      }
       if (e.formula) setCellFormula(addr, e.formula);
       else if (e.value !== null) setCellValue(addr, e.value);
       else continue;
       addrs.push(addr);
       applied++;
     }
+    if (rejected.length) {
+      setWarnings((w) => [
+        ...w,
+        `Refused ${rejected.length} edit(s) outside the selection: ${rejected.slice(0, 5).join(", ")}${
+          rejected.length > 5 ? "…" : ""
+        }`,
+      ]);
+      toast.error(`Refused ${rejected.length} out-of-range edit(s).`);
+    }
     if (applied === 0) return;
     setAppliedBatch((n) => n + applied);
+    setAppliedLog((log) => [
+      ...log,
+      { command: commandLabel || "unknown", cells: addrs.map((a) => cellA1(a.row, a.col)) },
+    ]);
     controller.recalculate();
     // Verify: read the recomputed values and catch error tokens.
     const ws = controller.getActiveWorksheet();
@@ -235,13 +284,14 @@ export function AiPanel({ requestId, fileName }: { requestId?: string; fileName?
     if (askBeforeEdits) {
       setProposal(r.edits.map((e) => ({ ...e, before: readCurrent(e.cell) })));
     } else {
-      applyEdits(r.edits);
+      applyEdits(r.edits, command.label);
     }
   }
 
   function undoBatch() {
     for (let i = 0; i < appliedBatch; i++) undo();
     setAppliedBatch(0);
+    setAppliedLog([]);
     setVerify(null);
     toast.success("Reverted the AI edits.");
   }
@@ -260,6 +310,7 @@ export function AiPanel({ requestId, fileName }: { requestId?: string; fileName?
         requestId,
         fileName: fileName || "workbook.xlsx",
         base64: toBase64(bytes),
+        aiEdits: appliedLog,
       });
       if (res.ok) toast.success("Saved working copy (unverified) to the request.");
       else toast.error(res.error || "Save failed");
