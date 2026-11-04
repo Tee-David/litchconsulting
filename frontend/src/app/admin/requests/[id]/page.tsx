@@ -78,7 +78,7 @@ export default async function AdminRequestDetailPage({
         </div>
         {!inv && req.pricingMode === "quote" && req.status === "quote_requested" && (
           <Link
-            href={`/admin/finance/invoices/new?requestId=${req.id}`}
+            href={`/admin/billing/invoices/new?requestId=${req.id}`}
             className="inline-flex items-center gap-2 self-start rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover keep-brand"
           >
             <ReceiptText className="size-4" /> Create quote invoice
@@ -181,7 +181,7 @@ export default async function AdminRequestDetailPage({
               <div className="flex items-center justify-between text-sm">
                 <div>
                   <Link
-                    href={`/admin/finance/invoices/${inv.id}`}
+                    href={`/admin/billing/invoices/${inv.id}`}
                     className="text-muted hover:text-brand"
                   >
                     {inv.number}

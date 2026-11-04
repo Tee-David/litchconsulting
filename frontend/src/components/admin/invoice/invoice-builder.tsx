@@ -11,7 +11,7 @@ import type { ClientRow } from "@/lib/db/queries/clients";
 import { InvoicePreview } from "./invoice-preview";
 import { ClientCombobox } from "./client-combobox";
 import { useToast } from "@/components/admin/ui/toaster";
-import { saveInvoiceAction, sendInvoiceAction } from "@/app/admin/finance/invoices/actions";
+import { saveInvoiceAction, sendInvoiceAction } from "@/app/admin/billing/invoices/actions";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const emptyItem = (): InvoiceItemData => ({ description: "", detail: "", quantity: 1, unitPrice: 0, taxRate: 0 });
@@ -38,7 +38,7 @@ export function InvoiceBuilder({
 }) {
   const isQuote = kind === "quote";
   const noun = isQuote ? "quote" : "invoice";
-  const basePath = isQuote ? "/admin/finance/quotes" : "/admin/finance/invoices";
+  const basePath = isQuote ? "/admin/billing/quotes" : "/admin/billing/invoices";
   const pdfBase = isQuote ? "/api/admin/quotes" : "/api/admin/invoices";
   const router = useRouter();
   const toast = useToast();

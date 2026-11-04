@@ -12,7 +12,7 @@ import { PAYMENT_METHODS, formatPaymentMethod, formatPaymentStatus } from "@/lib
 import {
   recordManualPaymentAction,
   deleteManualPaymentAction,
-} from "@/app/admin/finance/invoices/actions";
+} from "@/app/admin/billing/invoices/actions";
 import { PaymentDetailModal, type PaymentView } from "./payment-detail-modal";
 import { cn } from "@/lib/utils";
 

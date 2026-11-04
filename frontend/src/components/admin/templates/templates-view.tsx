@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/components/admin/ui/toaster";
 import { Modal } from "@/components/admin/ui/modal";
-import { saveTemplateAction, deleteTemplateAction } from "@/app/admin/finance/templates/actions";
+import { saveTemplateAction, deleteTemplateAction } from "@/app/admin/billing/templates/actions";
 import type { TemplateRow } from "@/lib/db/queries/templates";
 import { uploadFile } from "@/lib/upload-client";
 import { formatBytes, extLabel } from "@/lib/files";

@@ -38,7 +38,7 @@ export async function createCategoryAction(kind: Kind, name: string): Promise<Re
     if (existing) return { ok: false, error: "That category already exists." };
     await db.insert(category).values({ kind, name: clean });
     revalidatePath("/admin/blog");
-    revalidatePath("/admin/finance/templates");
+    revalidatePath("/admin/billing/templates");
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Could not create category." };
@@ -63,7 +63,7 @@ export async function renameCategoryAction(id: string, name: string): Promise<Re
       await db.update(template).set({ category: clean }).where(eq(template.category, row.name));
     }
     revalidatePath("/admin/blog");
-    revalidatePath("/admin/finance/templates");
+    revalidatePath("/admin/billing/templates");
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Could not rename category." };
@@ -84,7 +84,7 @@ export async function deleteCategoryAction(id: string): Promise<Result> {
     }
     await db.delete(category).where(eq(category.id, id));
     revalidatePath("/admin/blog");
-    revalidatePath("/admin/finance/templates");
+    revalidatePath("/admin/billing/templates");
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Could not delete category." };

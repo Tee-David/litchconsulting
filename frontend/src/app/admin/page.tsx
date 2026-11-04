@@ -1,304 +1,211 @@
 import Link from "next/link";
-import { desc } from "drizzle-orm";
+import { Plus } from "lucide-react";
+import { requireArea } from "@/lib/server-user";
+import { buildAdminAttention } from "@/lib/attention/admin";
+import { formatMoney } from "@/lib/invoice/money";
+import { AttentionList } from "@/components/kit";
+import { AreaTrend, GroupedBars } from "@/components/charts";
+import { ActLink, Kpi, PageHead, Panel } from "@/components/admin/ui/surface";
+import { UrlSegmented } from "@/components/admin/ui/url-segmented";
+import { homeData, isHomePeriod, type HomePeriod } from "./_lib/home-data";
 import {
-  Plus,
-  Wallet,
-  BadgeCheck,
-  Clock,
-  AlertTriangle,
-  Users,
-  FileText,
-  BarChart3,
-  Receipt,
-  Inbox,
-} from "lucide-react";
-import { db } from "@/lib/db/client";
-import { lead } from "@/lib/db/schema";
-import { getSessionUser } from "@/lib/server-user";
-import { invoiceStats, listInvoices } from "@/lib/db/queries/invoices";
-import {
-  requestStats,
-  requestStatusCounts,
-  upcomingConsultations,
-  recentPayments,
-  serviceMix,
-} from "@/lib/db/queries/requests";
-import { needsAttention } from "@/lib/db/queries/attention";
-import { agingBuckets } from "@/lib/invoice/aging";
-import { formatMoney, num } from "@/lib/invoice/money";
-import { StatCard } from "@/components/admin/ui/stat-card";
-import { Badge, invoiceStatusTone } from "@/components/admin/ui/badge";
-import { GroupedBars, Donut } from "@/components/charts";
-import { EmptyState } from "@/components/admin/ui/empty-state";
-import { AttentionList } from "@/components/admin/dashboard/attention-list";
-import { PipelineStrip } from "@/components/admin/dashboard/pipeline-strip";
-import { ArAgingCard } from "@/components/admin/dashboard/ar-aging-card";
-import { PaymentsFeed } from "@/components/admin/dashboard/payments-feed";
-import { ConsultationsCard } from "@/components/admin/dashboard/consultations-card";
+  assignMe,
+  dismissEmail,
+  followUpQuote,
+  markReceived,
+  remindInvoice,
+  remindReview,
+  retryEmail,
+  undoAttention,
+} from "./attention-actions";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
-function last6Months() {
-  const now = new Date();
-  return Array.from({ length: 6 }, (_, idx) => {
-    const d = new Date(now.getFullYear(), now.getMonth() - (5 - idx), 1);
-    return {
-      key: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`,
-      label: d.toLocaleString("en", { month: "short" }),
-    };
-  });
-}
-
-const STATUS_COLORS: Record<string, string> = {
-  paid: "#16a34a",
-  sent: "#4c6ef5",
-  draft: "#f5a524",
-  overdue: "#e5484d",
-  void: "#8a92a6",
-  refunded: "#e5484d",
+const PERIOD_TEXT: Record<HomePeriod, { label: string; now: string; prev: string; chart: string }> = {
+  week: { label: "Week", now: "last 7 days", prev: "the 7 days before", chart: "last 7 days" },
+  month: { label: "Month", now: "last 30 days", prev: "the 30 days before", chart: "last 30 days" },
+  year: { label: "Year", now: "last 12 months", prev: "the 12 months before", chart: "last 12 months" },
 };
 
-const MIX_COLORS = ["#0a196d", "#4c6ef5", "#16a34a", "#f5a524", "#e5484d", "#8a92a6"];
+function short(n: number) {
+  if (n >= 1e9) return `₦${(n / 1e9).toFixed(2)}bn`;
+  if (n >= 1e6) return `₦${(n / 1e6).toFixed(2)}m`;
+  if (n >= 1e3) return `₦${Math.round(n / 1e3)}k`;
+  return formatMoney(n);
+}
 
-export default async function AdminDashboard() {
-  const [user, stats, invoices, leads, reqStats, statusCounts, attention, consults, payments, mix] =
-    await Promise.all([
-      getSessionUser(),
-      invoiceStats(),
-      listInvoices(),
-      db.select().from(lead).orderBy(desc(lead.createdAt)).limit(50),
-      requestStats(),
-      requestStatusCounts(),
-      needsAttention(),
-      upcomingConsultations(7),
-      recentPayments(8),
-      serviceMix(new Date().getFullYear()),
-    ]);
+export default async function AdminHome({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
+  const user = await requireArea("home", "/admin");
+  const sp = await searchParams;
+  const period: HomePeriod = isHomePeriod(sp.period) ? sp.period : "month";
+  const [items, d] = await Promise.all([buildAdminAttention(), homeData(period)]);
+  const P = PERIOD_TEXT[period];
 
-  // Billed by issue month vs collected by paid month — same fetch, two series.
-  const monthly = last6Months().map((m) => ({
-    label: m.label,
-    billed: invoices
-      .filter((i) => i.kind === "invoice" && (i.issueDate || "").startsWith(m.key))
-      .reduce((s, i) => s + num(i.total), 0),
-    collected: invoices
-      .filter(
-        (i) => i.kind === "invoice" && i.paidAt && (i.paidAt as Date).toISOString().startsWith(m.key)
-      )
-      .reduce((s, i) => s + num(i.amountPaid), 0),
-  }));
+  const hour = Number(new Date().toLocaleString("en-GB", { hour: "numeric", hour12: false, timeZone: "Africa/Lagos" }));
+  const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
+  const first = (user.name || "there").split(" ")[0];
 
-  const statusOrder = ["paid", "sent", "draft", "overdue", "void", "refunded"];
-  const byStatus = statusOrder
-    .map((s) => ({
-      label: s,
-      value: invoices.filter((i) => i.status === s).length,
-      color: STATUS_COLORS[s],
-    }))
-    .filter((s) => s.value > 0);
-
-  const aging = agingBuckets(invoices);
-  const mixSegments = mix.slice(0, 6).map((m, i) => ({
-    label: m.serviceName,
-    value: m.n,
-    color: MIX_COLORS[i % MIX_COLORS.length],
-  }));
-  const mixTotal = mix.reduce((s, m) => s + m.n, 0);
-
-  const recent = invoices.slice(0, 5);
-  const recentLeads = leads.slice(0, 5);
-  const newLeads7 = leads.filter(
-    (l) => l.createdAt && new Date(l.createdAt).getTime() > Date.now() - 7 * 864e5
-  ).length;
-  const collectionRate = stats.invoiced ? Math.round((stats.paid / stats.invoiced) * 100) : 0;
-  const monthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
-  const thisMonth = invoices
-    .filter((i) => (i.issueDate || "").startsWith(monthKey))
-    .reduce((s, i) => s + num(i.total), 0);
-  const firstName = (user?.name || "there").split(" ")[0];
-  const greeting =
-    new Date().getHours() < 12
-      ? "Good morning"
-      : new Date().getHours() < 18
-        ? "Good afternoon"
-        : "Good evening";
+  const change = d.collectedPrev > 0 ? Math.round(((d.collected - d.collectedPrev) / d.collectedPrev) * 100) : null;
+  const onTimePct = d.deliveredCount ? Math.round((d.onTime / d.deliveredCount) * 100) : null;
+  const stageMax = Math.max(1, ...d.stages.map((s) => s.n));
+  const hasMoney = d.money.some((m) => m.billed || m.collected);
+  const hasFlow = d.flow.some((f) => f.opened || f.delivered);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="font-display text-xl font-bold tracking-tight text-ink sm:text-2xl">
-            {greeting}, {firstName}
-          </h1>
-          <p className="mt-1 text-sm text-body">Here&rsquo;s what&rsquo;s happening across your practice.</p>
-        </div>
-        <Link
-          href="/admin/finance/invoices/new"
-          className="inline-flex items-center gap-1.5 self-start rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
-        >
-          <Plus className="size-4" /> New invoice
-        </Link>
-      </div>
-
-      {/* KPIs */}
-      <div data-tour="kpi-stats" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <StatCard label="Open requests" value={reqStats.open} icon={Inbox} hint={`${reqStats.pendingPayment} awaiting quote/pay`} />
-        <StatCard label="Total invoiced" value={formatMoney(stats.invoiced)} icon={Wallet} hint={`${stats.count} invoices`} />
-        <StatCard label="Paid" value={formatMoney(stats.paid)} icon={BadgeCheck} />
-        <StatCard label="Outstanding" value={formatMoney(stats.outstanding)} icon={Clock} />
-        <StatCard label="Overdue" value={stats.overdueCount} icon={AlertTriangle} hint="invoices" />
-      </div>
-
-      {/* Main grid */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Left column */}
-        <div className="space-y-6 lg:col-span-2">
-          <AttentionList items={attention} />
-          <PipelineStrip counts={statusCounts} />
-
-          <div data-tour="billed-collected" className="rounded-card border border-hairline bg-paper p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="font-display text-sm font-bold text-ink">
-                Billed vs collected — last 6 months
-              </h3>
-            </div>
-            <GroupedBars
-              data={monthly}
-              series={[
-                { key: "billed", label: "Billed" },
-                { key: "collected", label: "Collected" },
-              ]}
-              format="money"
+    <div className="space-y-5">
+      <PageHead
+        title={`${greeting}, ${first}`}
+        lede={
+          items.length === 0
+            ? "Nothing needs you right now. The numbers are below."
+            : `${items.length} ${items.length === 1 ? "thing needs" : "things need"} you. The worst is at the top.`
+        }
+        actions={
+          <>
+            <UrlSegmented
+              param="period"
+              label="Period for figures and charts"
+              value={period}
+              options={(["week", "month", "year"] as const).map((v) => ({ value: v, label: PERIOD_TEXT[v].label }))}
             />
-          </div>
+            <ActLink href="/admin/billing/quotes/new">
+              <Plus /> New quote
+            </ActLink>
+          </>
+        }
+      />
 
-          <PaymentsFeed rows={payments} />
+      <div data-tour="needs-action">
+        <AttentionList
+          items={items}
+          actions={{ remindInvoice, followUpQuote, remindReview, assignMe, markReceived, retryEmail, dismissEmail }}
+          undo={undoAttention}
+          emptyWhy="No transfers to confirm, nothing late, no client waiting. New items appear here the moment they need a decision."
+          emptyAction={
+            <Link href="/admin/requests" className="text-sm font-medium text-accent hover:underline">
+              Look at open requests
+            </Link>
+          }
+        />
+      </div>
 
-          <div data-tour="recent-invoices" className="rounded-card border border-hairline bg-paper">
-            <div className="flex items-center justify-between border-b border-hairline px-5 py-4">
-              <h3 className="font-display text-sm font-bold text-ink">Recent invoices</h3>
-              <Link href="/admin/finance/invoices" className="text-sm font-medium text-brand hover:underline">
-                View all
+      <div data-tour="kpi-stats" className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-4">
+        <Kpi
+          label={`Collected, ${P.now}`}
+          value={short(d.collected)}
+          note={change === null ? `Nothing collected in ${P.prev}` : `${change >= 0 ? "+" : ""}${change}% on ${P.prev}`}
+          noteTone={change === null ? "muted" : change >= 0 ? "good" : "bad"}
+          href="/admin/billing/payments"
+        />
+        <Kpi
+          label="Owed to us"
+          value={short(d.owedTotal)}
+          note={d.lateCount ? `${formatMoney(d.lateTotal)} late · ${d.owedCount} invoices` : `${d.owedCount} invoices, none late`}
+          noteTone={d.lateCount ? "bad" : "muted"}
+          href="/admin/billing?view=unpaid"
+        />
+        <Kpi
+          label="Open requests"
+          value={String(d.openTotal)}
+          note={`${d.withUs} with us · ${d.withClient} with clients · ${Math.max(0, d.openTotal - d.withUs - d.withClient)} other`}
+          href="/admin/requests"
+        />
+        <Kpi
+          label="Delivered on time"
+          value={onTimePct === null ? "—" : `${onTimePct}%`}
+          note={d.deliveredCount ? `${d.onTime} of ${d.deliveredCount} in the last 90 days` : "Nothing delivered in the last 90 days"}
+          noteTone={onTimePct !== null && onTimePct < 80 ? "warn" : "muted"}
+        />
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <div className="space-y-5">
+          <Panel
+            tour="billed-collected"
+            title="Billed and collected"
+            sub={P.chart}
+            action={
+              <Link href="/admin/billing" className="text-sm font-medium text-accent hover:underline">
+                Billing
               </Link>
-            </div>
-            {recent.length === 0 ? (
-              <div className="p-6">
-                <EmptyState icon={FileText} title="No invoices yet" description="Create your first invoice to see it here." />
-              </div>
-            ) : (
-              <div className="divide-y divide-hairline">
-                {recent.map((inv) => (
-                  <Link
-                    key={inv.id}
-                    href={`/admin/finance/invoices/${inv.id}`}
-                    className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-surface"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-ink">{inv.billToCompany || inv.billToName || "—"}</p>
-                      <p className="text-xs text-muted">{inv.number} · {inv.issueDate}</p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-medium tabular-nums text-ink">{formatMoney(num(inv.total), inv.currency)}</span>
-                      <Badge tone={invoiceStatusTone(inv.status)}>{inv.status}</Badge>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right rail */}
-        <div className="space-y-6">
-          {/* Quick actions */}
-          <div data-tour="quick-actions" className="rounded-card border border-hairline bg-paper p-5">
-            <h3 className="mb-3 font-display text-sm font-bold text-ink">Quick actions</h3>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { href: "/admin/finance/invoices/new", icon: Plus, label: "New invoice" },
-                { href: "/admin/clients", icon: Users, label: "Clients" },
-                { href: "/admin/reports", icon: BarChart3, label: "Reports" },
-                { href: "/admin/finance/receipts", icon: Receipt, label: "Receipts" },
-              ].map((a) => (
-                <Link
-                  key={a.href}
-                  href={a.href}
-                  className="flex items-center gap-2 rounded-xl border border-hairline px-3 py-2.5 text-sm font-medium text-ink transition-colors hover:border-brand hover:bg-surface"
-                >
-                  <a.icon className="size-4 text-brand" />
-                  {a.label}
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          <ConsultationsCard rows={consults} />
-          <ArAgingCard aging={aging} />
-
-          {/* Collection rate */}
-          <div data-tour="collection-rate" className="rounded-card border border-hairline bg-paper p-5">
-            <div className="flex items-center justify-between">
-              <h3 className="font-display text-sm font-bold text-ink">Collection rate</h3>
-              <span className="font-display text-lg font-bold text-ink">{collectionRate}%</span>
-            </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-surface">
-              <div className="h-full rounded-full bg-emerald-500" style={{ width: `${collectionRate}%` }} />
-            </div>
-            <p className="mt-2 text-xs text-muted">{formatMoney(thisMonth)} invoiced this month</p>
-          </div>
-
-          <div className="rounded-card border border-hairline bg-paper p-5">
-            <h3 className="mb-4 font-display text-sm font-bold text-ink">Invoices by status</h3>
-            {byStatus.length === 0 ? (
-              <p className="py-8 text-center text-sm text-body">No data yet.</p>
-            ) : (
-              <>
-                <Donut
-                  data={byStatus.map((s) => ({ label: s.label, value: s.value }))}
-                  centerValue={String(stats.count)}
-                  centerLabel="total invoices"
-                />
-              </>
-            )}
-          </div>
-
-          {/* Service mix */}
-          {mixSegments.length > 0 && (
-            <div className="rounded-card border border-hairline bg-paper p-5">
-              <h3 className="mb-4 font-display text-sm font-bold text-ink">Service mix — this year</h3>
-              <Donut
-                data={mixSegments.map((s) => ({ label: s.label, value: s.value }))}
-                centerValue={String(mixTotal)}
-                centerLabel="requests YTD"
+            }
+          >
+            {hasMoney ? (
+              <AreaTrend
+                data={d.money}
+                series={[
+                  { key: "billed", label: "Billed" },
+                  { key: "collected", label: "Collected" },
+                ]}
+                format="money"
               />
-            </div>
-          )}
-
-          <div className="rounded-card border border-hairline bg-paper">
-            <div className="flex items-center justify-between border-b border-hairline px-5 py-4">
-              <div>
-                <h3 className="font-display text-sm font-bold text-ink">Recent leads</h3>
-                <p className="text-xs text-muted">{newLeads7} new this week</p>
-              </div>
-              <Users className="size-4 text-muted" />
-            </div>
-            {recentLeads.length === 0 ? (
-              <p className="px-5 py-8 text-center text-sm text-body">No leads captured yet.</p>
+            ) : (
+              <p className="py-10 text-center text-sm text-body">No invoices issued or payments received in the {P.chart}.</p>
+            )}
+          </Panel>
+          <Panel title="Requests opened and delivered" sub={P.chart}>
+            {hasFlow ? (
+              <GroupedBars
+                data={d.flow}
+                series={[
+                  { key: "opened", label: "Opened" },
+                  { key: "delivered", label: "Delivered" },
+                ]}
+              />
+            ) : (
+              <p className="py-10 text-center text-sm text-body">No requests opened or delivered in the {P.chart}.</p>
+            )}
+          </Panel>
+        </div>
+        <div className="space-y-5">
+          <Panel tour="pipeline" title="Where requests are" sub={`${d.openTotal} open`}>
+            <ul className="space-y-2.5">
+              {d.stages.map((s) => (
+                <li key={s.label} className="grid grid-cols-[6.5rem_minmax(0,1fr)_2rem] items-center gap-3 text-sm">
+                  <span className="text-body">{s.label}</span>
+                  <span className="h-2 overflow-hidden rounded-full bg-surface" aria-hidden>
+                    <span
+                      className={cn(
+                        "block h-full rounded-full",
+                        s.tone === "warn" ? "bg-warn" : s.tone === "info" ? "bg-info" : s.tone === "good" ? "bg-good" : "bg-act",
+                      )}
+                      style={{ width: `${(s.n / stageMax) * 100}%` }}
+                    />
+                  </span>
+                  <span className="text-right font-semibold tabular-nums text-ink">{s.n}</span>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+          <Panel title="Team load" sub="open requests per person">
+            {d.teamLoad.length === 0 ? (
+              <p className="text-sm text-body">
+                Nobody has requests assigned yet. Assign from{" "}
+                <Link href="/admin/requests" className="font-medium text-accent hover:underline">
+                  Requests
+                </Link>
+                .
+              </p>
             ) : (
               <ul className="divide-y divide-hairline">
-                {recentLeads.map((l) => (
-                  <li key={l.id} className="flex items-center justify-between gap-3 px-5 py-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-ink">{l.name || l.email}</p>
-                      <p className="truncate text-xs text-muted">{l.email}</p>
-                    </div>
-                    <Badge tone="neutral">{l.source}</Badge>
+                {d.teamLoad.map((t) => (
+                  <li key={t.name} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-brand-tint text-xs font-semibold text-brand">
+                      {t.name
+                        .split(/\s+/)
+                        .map((w) => w[0])
+                        .slice(0, 2)
+                        .join("")
+                        .toUpperCase()}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-medium text-ink">{t.name}</span>
+                    <span className="text-sm tabular-nums text-body">{t.open} open</span>
                   </li>
                 ))}
               </ul>
             )}
-          </div>
+          </Panel>
         </div>
       </div>
     </div>

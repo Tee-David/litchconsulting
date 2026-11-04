@@ -29,7 +29,7 @@ export function PaymentsFeed({
             return (
               <Link
                 key={p.id}
-                href={`/admin/finance/invoices/${p.invoiceId}`}
+                href={`/admin/billing/invoices/${p.invoiceId}`}
                 className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-surface"
               >
                 <div className="min-w-0">

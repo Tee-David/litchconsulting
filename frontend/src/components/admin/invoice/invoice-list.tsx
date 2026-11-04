@@ -22,7 +22,7 @@ import {
   setInvoiceStatusAction,
   bulkDeleteInvoicesAction,
   bulkSetInvoiceStatusAction,
-} from "@/app/admin/finance/invoices/actions";
+} from "@/app/admin/billing/invoices/actions";
 import { Wallet, BadgeCheck, Clock, AlertTriangle, Loader2 } from "lucide-react";
 
 const STATUSES = ["all", "draft", "sent", "paid", "overdue", "void"];
@@ -95,10 +95,10 @@ function RowActions({ row }: { row: InvoiceRow }) {
             style={{ position: "fixed", top: pos.top, left: pos.left, width: 180 }}
             className="z-[100] rounded-xl border border-hairline bg-paper p-1.5 shadow-xl shadow-black/15"
           >
-            <Link href={`/admin/finance/invoices/${row.id}`} className={item}>
+            <Link href={`/admin/billing/invoices/${row.id}`} className={item}>
               <Eye className="size-4 text-muted" /> View
             </Link>
-            <Link href={`/admin/finance/invoices/${row.id}/edit`} className={item}>
+            <Link href={`/admin/billing/invoices/${row.id}/edit`} className={item}>
               <PenLine className="size-4 text-muted" /> Edit
             </Link>
             <button className={item} onClick={() => run(() => sendInvoiceAction(row.id), "Invoice sent.")}>
@@ -238,7 +238,7 @@ export function InvoiceList({ invoices }: { invoices: InvoiceRow[] }) {
             description="Create your first invoice — add line items, preview the branded document, then send it to your client."
             action={
               <Link
-                href="/admin/finance/invoices/new"
+                href="/admin/billing/invoices/new"
                 className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover"
               >
                 <Plus className="size-4" /> New invoice
@@ -312,7 +312,7 @@ export function InvoiceList({ invoices }: { invoices: InvoiceRow[] }) {
             columns={columns}
             data={filtered}
             searchPlaceholder="Search invoices…"
-            onRowClick={(r) => router.push(`/admin/finance/invoices/${r.id}`)}
+            onRowClick={(r) => router.push(`/admin/billing/invoices/${r.id}`)}
             enableSelection={true}
             onSelectionChange={setSelected}
             getRowId={(r) => r.id}

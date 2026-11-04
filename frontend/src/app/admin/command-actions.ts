@@ -83,7 +83,7 @@ export async function commandSearch(query: string): Promise<CommandHit[]> {
     });
   }
   for (const inv of invoices) {
-    const base = inv.kind === "quote" ? "/admin/finance/quotes" : "/admin/finance/invoices";
+    const base = inv.kind === "quote" ? "/admin/billing/quotes" : "/admin/billing/invoices";
     hits.push({
       id: inv.id,
       label: `${inv.number}${inv.projectTitle ? ` · ${inv.projectTitle}` : ""}`,

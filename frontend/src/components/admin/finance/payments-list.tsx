@@ -168,7 +168,7 @@ export function PaymentsList({ payments }: { payments: PaymentRow[] }) {
         columns={columns}
         data={filtered}
         searchPlaceholder="Search by client, reference or invoice…"
-        onRowClick={(r) => router.push(`/admin/finance/invoices/${r.invoiceId}`)}
+        onRowClick={(r) => router.push(`/admin/billing/invoices/${r.invoiceId}`)}
         getRowId={(r) => r.payment.id}
         toolbar={
           <>

@@ -65,6 +65,18 @@ const nextConfig: NextConfig = {
       { source: "/admin/assistant/:path*", destination: "/admin/sage/:path*", permanent: true },
       { source: "/admin/litchai", destination: "/admin/analyses", permanent: true },
       { source: "/admin/litchai/:path*", destination: "/admin/analyses/:path*", permanent: true },
+      // Finance's eight tabs became Billing (redesign R2.4).
+      { source: "/admin/finance", destination: "/admin/billing", permanent: true },
+      { source: "/admin/finance/invoices", destination: "/admin/billing?view=invoices", permanent: true },
+      { source: "/admin/finance/quotes", destination: "/admin/billing?view=quotes", permanent: true },
+      { source: "/admin/finance/receipts", destination: "/admin/billing?view=paid", permanent: true },
+      { source: "/admin/finance/accounting", destination: "/admin/billing/expenses", permanent: true },
+      { source: "/admin/finance/models", destination: "/admin/billing/tools", permanent: true },
+      { source: "/admin/finance/:path*", destination: "/admin/billing/:path*", permanent: true },
+      { source: "/admin/billing/accounting", destination: "/admin/billing/expenses", permanent: true },
+      { source: "/admin/billing/receipts", destination: "/admin/billing?view=paid", permanent: true },
+      { source: "/admin/billing/invoices", destination: "/admin/billing?view=invoices", permanent: false },
+      { source: "/admin/billing/quotes", destination: "/admin/billing?view=quotes", permanent: false },
     ];
   },
   outputFileTracingIncludes: {
@@ -90,7 +102,8 @@ const nextConfig: NextConfig = {
       "./public/brand/**",
       "./node_modules/@sparticuz/chromium/bin/**",
     ],
-    "/admin/finance/**": [
+    // Billing (was /admin/finance): send invoice, confirm a transfer → receipt PDF.
+    "/admin/billing/**": [
       "./src/lib/invoice/pdf/fonts/**",
       "./public/brand/**",
       "./node_modules/@sparticuz/chromium/bin/**",

@@ -22,7 +22,7 @@ import { Select } from "@/components/ui/select";
 import { useToast } from "@/components/admin/ui/toaster";
 import { formatMoney, num, CURRENCIES } from "@/lib/invoice/money";
 import { EXPENSE_CATEGORIES, PAYMENT_METHODS, categoryMeta } from "@/lib/accounting/categories";
-import { saveExpenseAction, deleteExpenseAction, bulkDeleteExpensesAction, type ExpenseInput } from "@/app/admin/finance/accounting/actions";
+import { saveExpenseAction, deleteExpenseAction, bulkDeleteExpensesAction, type ExpenseInput } from "@/app/admin/billing/expenses/actions";
 import type { ExpenseRow } from "@/lib/db/queries/expenses";
 import type { InvoiceRow } from "@/lib/db/queries/invoices";
 import { cn } from "@/lib/utils";

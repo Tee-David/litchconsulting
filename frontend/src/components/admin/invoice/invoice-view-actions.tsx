@@ -22,7 +22,7 @@ import {
   setInvoiceStatusAction,
   duplicateInvoiceAction,
   deleteInvoiceAction,
-} from "@/app/admin/finance/invoices/actions";
+} from "@/app/admin/billing/invoices/actions";
 
 export function InvoiceViewActions({
   id,
@@ -93,7 +93,7 @@ export function InvoiceViewActions({
     setBusy(null);
     if (res.ok && res.id) {
       toast.success("Invoice duplicated.");
-      router.push(`/admin/finance/invoices/${res.id}`);
+      router.push(`/admin/billing/invoices/${res.id}`);
     } else {
       toast.error(res.error || "Could not duplicate.");
     }
@@ -107,7 +107,7 @@ export function InvoiceViewActions({
     setBusy(null);
     if (res.ok) {
       toast.success("Invoice deleted.");
-      router.push("/admin/finance/invoices");
+      router.push("/admin/billing/invoices");
     } else {
       toast.error(res.error || "Could not delete.");
     }
@@ -135,7 +135,7 @@ export function InvoiceViewActions({
       <a href={`/api/admin/invoices/${id}/pdf`} target="_blank" rel="noopener noreferrer" className={btn}>
         <Download className="size-4" /> PDF
       </a>
-      <Link href={`/admin/finance/invoices/${id}/edit`} className={btn}>
+      <Link href={`/admin/billing/invoices/${id}/edit`} className={btn}>
         <PenLine className="size-4" /> Edit
       </Link>
       {status !== "paid" && (

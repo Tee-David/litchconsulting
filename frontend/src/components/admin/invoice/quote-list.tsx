@@ -21,7 +21,7 @@ import {
   convertQuoteToInvoiceAction,
   bulkDeleteInvoicesAction,
   bulkSetInvoiceStatusAction,
-} from "@/app/admin/finance/invoices/actions";
+} from "@/app/admin/billing/invoices/actions";
 import { FileSignature, BadgeCheck, Send as SendIcon, FileEdit, Loader2 } from "lucide-react";
 
 function RowActions({ row }: { row: InvoiceRow }) {
@@ -83,10 +83,10 @@ function RowActions({ row }: { row: InvoiceRow }) {
         pos &&
         createPortal(
           <div ref={menuRef} onClick={(e) => e.stopPropagation()} style={{ position: "fixed", top: pos.top, left: pos.left, width: 190 }} className="z-[100] rounded-xl border border-hairline bg-paper p-1.5 shadow-xl shadow-black/15">
-            <Link href={`/admin/finance/quotes/${row.id}`} className={item}><Eye className="size-4 text-muted" /> View</Link>
-            <Link href={`/admin/finance/quotes/${row.id}/edit`} className={item}><PenLine className="size-4 text-muted" /> Edit</Link>
+            <Link href={`/admin/billing/quotes/${row.id}`} className={item}><Eye className="size-4 text-muted" /> View</Link>
+            <Link href={`/admin/billing/quotes/${row.id}/edit`} className={item}><PenLine className="size-4 text-muted" /> Edit</Link>
             <button className={item} onClick={() => run(() => sendInvoiceAction(row.id), "Quote sent.")}><Send className="size-4 text-muted" /> Send</button>
-            <button className={item} onClick={() => run(() => convertQuoteToInvoiceAction(row.id), "Converted to invoice.", (id) => `/admin/finance/invoices/${id}`)}><ArrowRightLeft className="size-4 text-muted" /> Convert to invoice</button>
+            <button className={item} onClick={() => run(() => convertQuoteToInvoiceAction(row.id), "Converted to invoice.", (id) => `/admin/billing/invoices/${id}`)}><ArrowRightLeft className="size-4 text-muted" /> Convert to invoice</button>
             <button className={item} onClick={() => run(() => setInvoiceStatusAction(row.id, "accepted"), "Marked accepted.")}><CheckCircle2 className="size-4 text-muted" /> Mark accepted</button>
             <button className={item} onClick={() => run(() => setInvoiceStatusAction(row.id, "declined"), "Marked declined.")}><XCircle className="size-4 text-muted" /> Mark declined</button>
             <button className={`${item} text-red-600`} onClick={() => { if (confirm(`Delete quote ${row.number}?`)) run(() => deleteInvoiceAction(row.id), "Deleted."); }}><Trash2 className="size-4" /> Delete</button>
@@ -161,7 +161,7 @@ export function QuoteList({ quotes }: { quotes: InvoiceRow[] }) {
             title="No quotes yet"
             description="Draft a quote with the same builder as invoices, then convert an accepted quote into an invoice in one click."
             action={
-              <Link href="/admin/finance/quotes/new" className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover">
+              <Link href="/admin/billing/quotes/new" className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white hover:bg-brand-hover">
                 <Plus className="size-4" /> New quote
               </Link>
             }
@@ -233,7 +233,7 @@ export function QuoteList({ quotes }: { quotes: InvoiceRow[] }) {
             columns={columns}
             data={filtered}
             searchPlaceholder="Search quotes…"
-            onRowClick={(r) => router.push(`/admin/finance/quotes/${r.id}`)}
+            onRowClick={(r) => router.push(`/admin/billing/quotes/${r.id}`)}
             enableSelection={true}
             onSelectionChange={setSelected}
             getRowId={(r) => r.id}

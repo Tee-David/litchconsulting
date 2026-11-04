@@ -158,7 +158,7 @@ export default async function ClientHubPage({
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link
-            href={`/admin/finance/invoices/new?clientId=${id}`}
+            href={`/admin/billing/invoices/new?clientId=${id}`}
             className="inline-flex items-center gap-1.5 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover keep-brand"
           >
             <Plus className="size-4" /> New invoice
@@ -554,7 +554,7 @@ async function BillingTab({
             {invoices.map((inv) => (
               <Link
                 key={inv.id}
-                href={`/admin/finance/${inv.kind === "quote" ? "quotes" : "invoices"}/${inv.id}`}
+                href={`/admin/billing/${inv.kind === "quote" ? "quotes" : "invoices"}/${inv.id}`}
                 className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-surface"
               >
                 <div className="min-w-0">

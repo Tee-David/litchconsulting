@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PenLine, Send, ArrowRightLeft, CheckCircle2, XCircle, Download, Loader2 } from "lucide-react";
 import { useToast } from "@/components/admin/ui/toaster";
-import { sendInvoiceAction, setInvoiceStatusAction, convertQuoteToInvoiceAction } from "@/app/admin/finance/invoices/actions";
+import { sendInvoiceAction, setInvoiceStatusAction, convertQuoteToInvoiceAction } from "@/app/admin/billing/invoices/actions";
 
 export function QuoteViewActions({ id, status }: { id: string; status: string }) {
   const router = useRouter();
@@ -35,7 +35,7 @@ export function QuoteViewActions({ id, status }: { id: string; status: string })
       <a href={`/api/admin/quotes/${id}/pdf`} target="_blank" rel="noopener noreferrer" className={btn}>
         <Download className="size-4" /> PDF
       </a>
-      <Link href={`/admin/finance/quotes/${id}/edit`} className={btn}>
+      <Link href={`/admin/billing/quotes/${id}/edit`} className={btn}>
         <PenLine className="size-4" /> Edit
       </Link>
       {status !== "accepted" && (
@@ -51,7 +51,7 @@ export function QuoteViewActions({ id, status }: { id: string; status: string })
       <button
         className={btn}
         disabled={busy !== null}
-        onClick={() => run("convert", () => convertQuoteToInvoiceAction(id), "Converted to invoice.", (i) => `/admin/finance/invoices/${i}`)}
+        onClick={() => run("convert", () => convertQuoteToInvoiceAction(id), "Converted to invoice.", (i) => `/admin/billing/invoices/${i}`)}
       >
         {busy === "convert" ? <Loader2 className="size-4 animate-spin" /> : <ArrowRightLeft className="size-4" />} Convert to invoice
       </button>

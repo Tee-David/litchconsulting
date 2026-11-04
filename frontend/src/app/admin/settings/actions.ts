@@ -51,9 +51,9 @@ export async function saveOrgSettingsAction(input: OrgSettingsInput): Promise<Ac
   }
 
   revalidatePath("/admin/settings");
-  revalidatePath("/admin/finance/invoices");
-  revalidatePath("/admin/finance/quotes");
-  revalidatePath("/admin/finance/receipts");
+  revalidatePath("/admin/billing/invoices");
+  revalidatePath("/admin/billing/quotes");
+  revalidatePath("/admin/billing");
   return { ok: true };
 }
 
