@@ -1,325 +1,172 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import {
-  Clock,
-  BadgeCheck,
-  LifeBuoy,
-  FileText,
-  ChevronRight,
-  PlusCircle,
-  ArrowUpRight,
-  Briefcase,
-  Calculator,
-  CalendarClock,
-  Video,
-} from "lucide-react";
-import { getSessionUser } from "@/lib/server-user";
-import { getClientForUser } from "@/lib/db/queries/clients";
-import { clientInvoiceStats, listClientInvoices } from "@/lib/db/queries/invoices";
-import { listClientTickets } from "@/lib/db/queries/tickets";
-import { listActiveClientRequests, listClientConsultations } from "@/lib/db/queries/requests";
-import { getCatalog } from "@/lib/services/catalog";
+import { Plus, RotateCcw } from "lucide-react";
+import { AttentionList, StatusChip, EmptyState } from "@/components/kit";
+import { PageHead, Panel, KV, Stepper, Initials, linkBtn } from "@/components/dashboard/ui";
+import { FileLink } from "@/components/dashboard/file-link";
+import { requestSteps, nowNext } from "@/components/dashboard/request-steps";
+import { getPortal, clientRequestRows, clientFiles, clientBilling } from "@/lib/requests/portal";
+import { clientAttention } from "@/lib/attention/client";
 import { formatMoney } from "@/lib/invoice/money";
-import { formatDateTime } from "@/lib/format-date";
-import { StatCard } from "@/components/admin/ui/stat-card";
-import { Badge, invoiceStatusTone } from "@/components/admin/ui/badge";
-import { EmptyState } from "@/components/admin/ui/empty-state";
-import { ActiveRequestCard } from "@/components/requests/active-request-card";
-import { TourWizardButton } from "@/components/tour/tour-wizard-button";
-import { BookConsultationButton } from "@/components/booking/book-consultation-button";
+import { balanceOf } from "@/lib/payments/amounts";
+import { formatDate } from "@/lib/format-date";
 
+export const metadata: Metadata = { title: "Home" };
 export const dynamic = "force-dynamic";
 
-/**
- * Action-first home (Omni-Agent inspo): "what do you need done" leads, live
- * request progress next, numbers and history below. Empty states guide the
- * first request instead of showing zeroes.
- */
-export default async function ClientDashboardPage() {
-  const user = await getSessionUser();
-  if (!user) redirect("/login?redirect=/dashboard");
-  if (user.role === "admin") redirect("/admin");
+function greeting() {
+  const h = Number(new Date().toLocaleString("en-NG", { timeZone: "Africa/Lagos", hour: "numeric", hour12: false }));
+  return h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening";
+}
 
-  const clientRow = await getClientForUser(user.id, user.email || "", user.name || undefined);
-
-  const [stats, invoices, tickets, activeRequests, consultations, catalog] = await Promise.all([
-    clientInvoiceStats(clientRow.id),
-    listClientInvoices(clientRow.id),
-    listClientTickets(clientRow.id),
-    listActiveClientRequests(clientRow.id),
-    listClientConsultations(clientRow.id, user.email),
-    getCatalog().catch(() => []),
+export default async function ClientHome() {
+  const portal = await getPortal();
+  if (!portal) redirect("/login?redirect=/dashboard");
+  const { user, client } = portal;
+  const [items, requests, files, billing] = await Promise.all([
+    clientAttention(client.id),
+    clientRequestRows(client.id),
+    clientFiles(client.id),
+    clientBilling(client.id),
   ]);
 
-  const recentInvoices = invoices.slice(0, 4);
-  const activeTickets = tickets.filter((t) => t.status !== "closed" && t.status !== "resolved");
-  const featuredServices = catalog.slice(0, 3);
-
-  // Booked calls that haven't happened yet, soonest first (query returns newest first).
-  const now = Date.now();
-  const upcomingConsultations = consultations
-    .filter((c) => c.status !== "cancelled" && c.startsAt && new Date(c.startsAt).getTime() >= now)
-    .sort((a, b) => new Date(a.startsAt!).getTime() - new Date(b.startsAt!).getTime())
-    .slice(0, 3);
-
-  const quickActionTile =
-    "flex flex-col items-start gap-2 rounded-xl border border-hairline px-3 py-3 text-left transition-colors hover:border-brand hover:bg-surface";
-
-  const firstName = (user.name || "Client").split(" ")[0];
-  const hour = new Date().getHours();
-  const greeting = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
-  const isNew = activeRequests.length === 0 && invoices.length === 0;
+  const active = requests.filter((r) => !["completed", "cancelled", "declined", "refunded"].includes(r.status));
+  const done = requests.filter((r) => r.status === "completed");
+  const year = new Date().getFullYear();
+  const paidThisYear = billing.invoices
+    .filter((i) => (i.paidAt ?? i.updatedAt).getFullYear() === year)
+    .reduce((s, i) => s + Number(i.amountPaid ?? 0), 0);
+  const outstanding = billing.invoices.filter((i) => ["sent", "viewed", "overdue", "partially_paid"].includes(i.status)).reduce((s, i) => s + balanceOf(i), 0);
+  const quotesOpen = billing.quotes.filter((q) => ["sent", "viewed"].includes(q.status)).length;
+  const team = [...new Map(active.flatMap((r) => r.team).map((t) => [t.id, t])).values()];
+  const firstName = (user.name || "").split(/\s+/)[0] || "there";
+  const fromUs = files.filter((f) => f.kind === "deliverable").slice(0, 4);
 
   return (
     <div className="space-y-6">
-      {/* Greeting */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="font-display text-xl font-bold tracking-tight text-ink sm:text-2xl">
-            {greeting}, {firstName}
-          </h1>
-          <p className="mt-1 text-sm text-body">
-            {isNew
-              ? "Welcome aboard — let's get your first engagement moving."
-              : "Here's where everything stands today."}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2.5 self-start">
-          <TourWizardButton />
-          <Link
-            href="/dashboard/requests/new"
-            data-tour="request-service"
-            className="inline-flex items-center gap-2 rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover keep-brand"
-          >
-            <PlusCircle className="size-4" /> Request a service
+      <PageHead
+        title={`${greeting()}, ${firstName}`}
+        lede={
+          items.length
+            ? `${items.length} ${items.length === 1 ? "thing needs" : "things need"} you. Everything else is with us.`
+            : requests.length
+              ? "Nothing needs you right now. Everything is with us."
+              : "Welcome to Litch. Start with a request and we take it from there."
+        }
+        actions={
+          <Link href="/dashboard/requests/new" className={linkBtn.primary} data-tour="new-request">
+            <Plus className="size-4" aria-hidden /> Request a service
           </Link>
-        </div>
-      </div>
+        }
+      />
 
-      {/* What do you need done? */}
-      <div data-tour="services" className="rounded-card border border-hairline bg-paper p-5">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="font-display text-sm font-bold text-ink">What do you need done?</h3>
-          <Link
-            href="/dashboard/requests/new"
-            className="text-sm font-medium text-brand hover:underline"
-          >
-            All services
-          </Link>
-        </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-3">
-          {featuredServices.map((s) => (
-            <Link
-              key={s.slug}
-              href={`/dashboard/requests/new?service=${s.slug}`}
-              className="group flex flex-col rounded-xl border border-hairline p-4 transition-colors hover:border-brand/40 hover:bg-surface"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <p className="text-sm font-bold text-ink">{s.name}</p>
-                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-brand-tint text-brand transition-colors group-hover:bg-brand group-hover:text-white">
-                  <ArrowUpRight className="size-3.5" />
-                </span>
-              </div>
-              <p className="mt-1 flex-1 text-xs leading-relaxed text-body">{s.tagline}</p>
-              <p className="mt-3 text-xs font-bold text-brand">
-                {s.pricingMode === "fixed" && s.priceNgn
-                  ? `From ${formatMoney(Number(s.priceNgn))}`
-                  : "Get A Quote"}
-              </p>
-            </Link>
-          ))}
-        </div>
-      </div>
-
-      {/* Active engagements */}
-      {activeRequests.length > 0 && (
-        <div data-tour="active-requests">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <h3 className="font-display text-sm font-bold text-ink">Your active services</h3>
-            <Link href="/dashboard/requests" className="text-sm font-medium text-brand hover:underline">
-              View all
-            </Link>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            {activeRequests.slice(0, 4).map((req) => (
-              <ActiveRequestCard key={req.id} req={req} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* KPI Stats */}
-      <div data-tour="client-kpis" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard
-          label="Active Services"
-          value={activeRequests.length}
-          icon={Briefcase}
-          hint={activeRequests.length ? "In progress now" : "None yet"}
-        />
-        <StatCard label="Payments Completed" value={formatMoney(stats.paid)} icon={BadgeCheck} />
-        <StatCard label="Balance Outstanding" value={formatMoney(stats.outstanding)} icon={Clock} />
-        <StatCard
-          label="Active Tickets"
-          value={activeTickets.length}
-          icon={LifeBuoy}
-          hint={`${tickets.length} submitted`}
-        />
-      </div>
-
-      {/* Main Content Grid */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          {/* Recent billing */}
-          <div data-tour="billing" className="rounded-card border border-hairline bg-paper">
-            <div className="flex items-center justify-between border-b border-hairline px-5 py-4">
-              <h3 className="font-display text-sm font-bold text-ink">Recent Billing</h3>
-              <Link href="/dashboard/invoices" className="text-sm font-medium text-brand hover:underline">
-                View all billing
+      <div data-tour="attention">
+        <AttentionList
+          items={items}
+          emptyTitle={requests.length ? "Nothing needs you" : "No requests yet"}
+          emptyWhy={requests.length ? "Everything is with us. When we need you to approve, pay or upload something, it shows up here first." : "Tell us what you need. Fixed-price services start straight away; others get a quote within a working day."}
+          emptyAction={
+            requests.length ? undefined : (
+              <Link href="/dashboard/requests/new" className={linkBtn.primary}>
+                Request a service
               </Link>
-            </div>
-            {recentInvoices.length === 0 ? (
-              <div className="p-6">
-                <EmptyState
-                  icon={FileText}
-                  title="No documents yet"
-                  description="Invoices and receipts appear here the moment a request is priced or paid."
-                />
-              </div>
-            ) : (
-              <div className="divide-y divide-hairline">
-                {recentInvoices.map((inv) => (
-                  <Link
-                    key={inv.id}
-                    href={`/dashboard/invoices/${inv.id}`}
-                    className="flex items-center justify-between gap-3 px-5 py-3.5 transition-colors hover:bg-surface"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="truncate text-sm font-semibold text-ink">
-                          {inv.projectTitle || "Consulting Services"}
-                        </p>
-                        <Badge tone={inv.kind === "quote" ? "neutral" : "brand"} className="px-1.5 py-0 text-[10px]">
-                          {inv.kind}
-                        </Badge>
-                      </div>
-                      <p className="mt-0.5 text-xs text-muted">
-                        {inv.number} · Issued {inv.issueDate}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-semibold tabular-nums text-ink">
-                        {formatMoney(Number(inv.total), inv.currency)}
-                      </span>
-                      <Badge tone={invoiceStatusTone(inv.status)}>{inv.status}</Badge>
-                      <ChevronRight className="size-4 shrink-0 text-muted" />
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+            )
+          }
+        />
+      </div>
 
-        {/* Right column: consultations + tools + quick actions */}
-        <div className="space-y-6">
-          {upcomingConsultations.length > 0 && (
-            <div className="rounded-card border border-hairline bg-paper p-5">
-              <div className="mb-3 flex items-center gap-2.5">
-                <span className="grid size-9 place-items-center rounded-full bg-brand-tint text-brand">
-                  <CalendarClock className="size-4.5" />
-                </span>
-                <div>
-                  <h3 className="font-display text-sm font-bold text-ink">Upcoming consultations</h3>
-                  <p className="text-xs text-muted">Your booked calls</p>
-                </div>
-              </div>
-              <ul className="space-y-2.5">
-                {upcomingConsultations.map((c) => (
-                  <li
-                    key={c.id}
-                    className="flex items-center justify-between gap-3 rounded-xl border border-hairline px-3 py-2.5"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-ink">
-                        {formatDateTime(c.startsAt)}
-                      </p>
-                      <p className="text-xs capitalize text-muted">{c.status}</p>
-                    </div>
-                    {c.meetingUrl && (
-                      <a
-                        href={c.meetingUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-brand px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-brand-hover keep-brand"
-                      >
-                        <Video className="size-3.5" /> Join
-                      </a>
-                    )}
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0 space-y-6">
+          {active.slice(0, 3).map((r) => {
+            const nn = nowNext(r.status);
+            return (
+              <Panel
+                key={r.id}
+                tour="request-card"
+                title={r.serviceName}
+                sub={r.number}
+                right={
+                  <Link href={`/dashboard/requests/${r.id}`} className={linkBtn.ghost}>
+                    Open
+                  </Link>
+                }
+              >
+                <Stepper steps={requestSteps({ status: r.status, pricingMode: r.pricingMode, reviewRound: r.reviewRound })} />
+                <p className="mt-4 text-sm text-body">
+                  <b className="text-ink">Now:</b> {nn.now}. <b className="text-ink">Next:</b> {nn.next}.
+                </p>
+              </Panel>
+            );
+          })}
+          {active.length > 3 ? (
+            <Link href="/dashboard/requests" className={linkBtn.ghost}>
+              See all {active.length} open requests
+            </Link>
+          ) : null}
+
+          <Panel title="Recent files from us" right={<Link href="/dashboard/files" className={linkBtn.ghost}>All files</Link>}>
+            {fromUs.length ? (
+              <ul className="space-y-2">
+                {fromUs.map((f) => (
+                  <li key={f.id}>
+                    <FileLink
+                      href={`/api/dashboard/files/${f.id}`}
+                      name={f.fileName}
+                      meta={`${f.stage === "draft" ? "Draft" : "Final"} · ${formatDate(f.createdAt)} · ${f.requestNumber}`}
+                      chip={f.stage === "draft" ? <StatusChip domain="deliverable" status="draft" audience="client" size="sm" /> : null}
+                      blocked={f.scanStatus === "infected"}
+                    />
                   </li>
                 ))}
               </ul>
-            </div>
-          )}
-
-          <div data-tour="quick-actions" className="rounded-card border border-hairline bg-paper p-5">
-            <h3 className="mb-3 font-display text-sm font-bold text-ink">Quick Actions</h3>
-            <div className="grid grid-cols-2 gap-2">
-              <Link href="/dashboard/requests/new" className={quickActionTile}>
-                <PlusCircle className="size-5 text-brand" />
-                <span className="text-xs font-semibold leading-tight text-ink">Request a service</span>
-              </Link>
-              <BookConsultationButton className={quickActionTile}>
-                <CalendarClock className="size-5 text-brand" />
-                <span className="text-xs font-semibold leading-tight text-ink">Book consultation</span>
-              </BookConsultationButton>
-              <Link href="/dashboard/support?new=true" className={quickActionTile}>
-                <LifeBuoy className="size-5 text-brand" />
-                <span className="text-xs font-semibold leading-tight text-ink">Get support</span>
-              </Link>
-            </div>
-          </div>
-
-          <div data-tour="tools" className="rounded-card border border-hairline bg-paper p-5">
-            <div className="flex items-center gap-2.5">
-              <span className="grid size-9 place-items-center rounded-full bg-brand-tint text-brand">
-                <Calculator className="size-4.5" />
-              </span>
-              <div>
-                <h3 className="font-display text-sm font-bold text-ink">Free tools</h3>
-                <p className="text-xs text-muted">PAYE, VAT, CIT & more</p>
-              </div>
-            </div>
-            <p className="mt-3 text-xs leading-relaxed text-body">
-              Run quick Nigerian tax and loan calculations — the same NTA-2025 rates we use in your
-              engagements. Find them in the calculator icon on the top bar.
-            </p>
-          </div>
-
-          <div className="rounded-card border border-hairline bg-paper p-5">
-            <div className="mb-4 flex items-center justify-between">
-              <h3 className="font-display text-sm font-bold text-ink">Profile Snapshot</h3>
-              <Link href="/dashboard/settings" className="text-xs font-semibold text-brand hover:underline">
-                Edit
-              </Link>
-            </div>
-            <div className="space-y-3.5 text-sm">
-              <div>
-                <p className="text-xs text-muted">Client Name</p>
-                <p className="mt-0.5 font-medium text-ink">{clientRow.name || "—"}</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted">Company</p>
-                <p className="mt-0.5 font-medium text-ink">{clientRow.company || "—"}</p>
-              </div>
-              {clientRow.taxId && (
-                <div>
-                  <p className="text-xs text-muted">Tax ID / RC Number</p>
-                  <p className="mt-0.5 font-medium text-ink">{clientRow.taxId}</p>
-                </div>
-              )}
-            </div>
-          </div>
+            ) : (
+              <EmptyState compact title="No files from us yet" why="Drafts and final files appear here the moment we send them." />
+            )}
+          </Panel>
         </div>
+
+        <aside className="space-y-6">
+          <Panel title="Billing" right={<Link href="/dashboard/billing" className={linkBtn.ghost}>Billing</Link>}>
+            <KV
+              rows={[
+                [`Paid in ${year}`, formatMoney(paidThisYear)],
+                ["Outstanding", formatMoney(outstanding)],
+                ["Quotes to answer", String(quotesOpen)],
+              ]}
+            />
+          </Panel>
+
+          <Panel title="Your team at Litch">
+            {team.length ? (
+              <ul className="space-y-3">
+                {team.map((t) => (
+                  <li key={t.id} className="flex items-center gap-3">
+                    <Initials name={t.name} />
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-ink">{t.name}</p>
+                      <p className="text-xs text-muted">Replies within a working day</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-body">We assign a named person as soon as your request starts. Until then, Support reaches the whole team.</p>
+            )}
+            <Link href="/dashboard/support" className={`${linkBtn.small} mt-4 w-full`}>
+              Message us
+            </Link>
+          </Panel>
+
+          <Panel title="Need something else?">
+            <p className="text-sm text-body">
+              {done.length ? `Start a new request. Your files from ${done[0].serviceName} can come with it.` : "Start another request at any time."}
+            </p>
+            <Link href={done.length ? "/dashboard/files" : "/dashboard/requests/new"} className={`${linkBtn.small} mt-4 w-full`}>
+              <RotateCcw className="size-3.5" aria-hidden /> Request again or add a service
+            </Link>
+          </Panel>
+        </aside>
       </div>
     </div>
   );
