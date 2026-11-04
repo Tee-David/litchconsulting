@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { after } from "next/server";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   invoice,
@@ -64,6 +64,9 @@ export async function createRequestAction(input: {
   serviceSlug: string;
   details: string;
   intake?: Record<string, unknown>;
+  /** Follow-on ("Request again" / "Add a service"): the earlier request, and which of its files to bring. */
+  parentRequestId?: string;
+  carryDocumentIds?: string[];
 }): Promise<ActionResult> {
   const user = await requireClient();
   if (!user) return { ok: false, error: "Please sign in to request a service." };
@@ -73,6 +76,26 @@ export async function createRequestAction(input: {
   if (!input.details?.trim()) return { ok: false, error: "Tell us a little about what you need." };
 
   const clientRow = await getClientForUser(user.id, user.email, user.name);
+
+  // Follow-on: the parent must be this client's; carried files must be on it.
+  let parent: { id: string; number: string } | null = null;
+  let carry: (typeof serviceRequestDocument.$inferSelect)[] = [];
+  if (input.parentRequestId) {
+    const [p] = await db
+      .select({ id: serviceRequest.id, number: serviceRequest.number })
+      .from(serviceRequest)
+      .where(and(eq(serviceRequest.id, input.parentRequestId), eq(serviceRequest.clientId, clientRow.id), isNull(serviceRequest.deletedAt)));
+    if (!p) return { ok: false, error: "We could not find the earlier request." };
+    parent = p;
+    const ids = (input.carryDocumentIds ?? []).slice(0, 50);
+    if (ids.length) {
+      carry = await db
+        .select()
+        .from(serviceRequestDocument)
+        .where(and(eq(serviceRequestDocument.requestId, p.id), inArray(serviceRequestDocument.id, ids), isNull(serviceRequestDocument.supersededById)));
+      carry = carry.filter((d) => d.scanStatus !== "infected");
+    }
+  }
   const number = await nextRequestNumber();
   const isFixed = service.pricingMode === "fixed" && service.priceNgn;
 
@@ -126,16 +149,34 @@ export async function createRequestAction(input: {
         requiredDocuments: service.requiredDocuments,
         stepLabels: service.stepLabels,
         invoiceId,
+        parentRequestId: parent?.id ?? null,
       })
       .returning({ id: serviceRequest.id });
+
+    // Carried files: new rows pointing at the same private objects (no copy).
+    if (carry.length) {
+      await tx.insert(serviceRequestDocument).values(
+        carry.map((d) => ({
+          requestId: row.id,
+          kind: "client_upload",
+          fileName: d.fileName,
+          contentType: d.contentType,
+          sizeBytes: d.sizeBytes,
+          r2Key: d.r2Key,
+          scanStatus: d.scanStatus,
+          uploadedByRole: d.uploadedByRole,
+          uploadedByName: d.uploadedByName ? `${d.uploadedByName} (from ${parent!.number})` : `From ${parent!.number}`,
+        })),
+      );
+    }
 
     await tx.insert(serviceRequestEvent).values({
       requestId: row.id,
       type: "created",
       toStatus: isFixed ? "pending_payment" : "quote_requested",
       message: isFixed
-        ? `Request submitted for ${service.name}.`
-        : `Request submitted for ${service.name} — we'll send your quote within 2 business days.`,
+        ? `Request submitted for ${service.name}.${parent ? ` Follow-on to ${parent.number}${carry.length ? `, with ${carry.length} file${carry.length === 1 ? "" : "s"} carried over` : ""}.` : ""}`
+        : `Request submitted for ${service.name} — we'll send your quote within 2 business days.${parent ? ` Follow-on to ${parent.number}.` : ""}`,
       visibility: "client",
       actorRole: "client",
       actorName: clientRow.name,

@@ -45,12 +45,15 @@ export function RequestStepper({
   mode,
   initialDraft,
   initialStep = 0,
+  followOn,
 }: {
   service: StepperService;
   mode: "public" | "portal";
   initialDraft?: Pick<RequestDraft, "details" | "intake"> | null;
   /** e.g. resume straight at the review step after the signup round-trip */
   initialStep?: number;
+  /** Follow-on work: link to the earlier request and carry its files over. */
+  followOn?: { parentRequestId: string; carryDocumentIds: string[] } | null;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -103,6 +106,7 @@ export function RequestStepper({
         serviceSlug: service.slug,
         details: details.trim(),
         intake: { timeline: timeline || undefined, companySize: companySize || undefined },
+        ...(followOn ? { parentRequestId: followOn.parentRequestId, carryDocumentIds: followOn.carryDocumentIds } : {}),
       });
       if (!res.ok) {
         setError(res.error || "Something went wrong — please try again.");
