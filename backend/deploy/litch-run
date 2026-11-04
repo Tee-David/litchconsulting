@@ -15,4 +15,8 @@ set +a
 # --scope pins Doppler's config lookup: without it Doppler stats the CURRENT
 # directory, which fails ("stat .: permission denied") for units without a
 # WorkingDirectory the litch user can read. The token alone selects the config.
-exec doppler run --scope /srv/projects/litchconsulting --no-check-version --no-fallback -- bash -c 'set -a; . /etc/litch/env; set +a; exec "$@"' litch-run "$@"
+# --config-dir: Doppler otherwise writes ~/.doppler, and $HOME (the project
+# root) is read-only inside the sandboxed units; data/.home is writable.
+exec doppler run --scope /srv/projects/litchconsulting \
+  --config-dir /srv/projects/litchconsulting/data/.home/.doppler \
+  --no-check-version --no-fallback -- bash -c 'set -a; . /etc/litch/env; set +a; exec "$@"' litch-run "$@"
