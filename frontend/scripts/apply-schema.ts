@@ -272,6 +272,14 @@ const STATEMENTS = [
     "updated_at" timestamp with time zone DEFAULT now() NOT NULL)`,
   `CREATE UNIQUE INDEX IF NOT EXISTS "email_outbox_dedupe_uidx" ON "email_outbox" ("dedupe_key")`,
   `CREATE INDEX IF NOT EXISTS "email_outbox_status_idx" ON "email_outbox" ("status", "created_at")`,
+  // ---- Shared rate-limit counters (lib/rate-limit.ts; swept by /api/cron/sweep) ----
+  `CREATE TABLE IF NOT EXISTS "rate_limit" (
+    "key" text NOT NULL,
+    "window_start" bigint NOT NULL,
+    "count" integer DEFAULT 0 NOT NULL,
+    "expires_at" timestamp with time zone NOT NULL,
+    PRIMARY KEY ("key", "window_start"))`,
+  `CREATE INDEX IF NOT EXISTS "rate_limit_expires_idx" ON "rate_limit" ("expires_at")`,
 ];
 
 /**

@@ -6,7 +6,7 @@ import { recentNotifications } from "@/lib/db/queries/notifications";
 export const dynamic = "force-dynamic";
 
 /**
- * Server-side role gate. The edge middleware only checks session presence;
+ * Server-side role gate. The edge proxy (src/proxy.ts) only checks session presence;
  * here we enforce that the user is actually an admin (else bounce to the
  * client portal), then render the admin shell.
  */

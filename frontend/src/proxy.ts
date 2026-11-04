@@ -9,7 +9,7 @@ import { getSessionCookie } from "better-auth/cookies";
  */
 const PROTECTED = ["/dashboard", "/admin"];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const needsAuth = PROTECTED.some((p) => pathname === p || pathname.startsWith(p + "/"));
   if (!needsAuth) return NextResponse.next();

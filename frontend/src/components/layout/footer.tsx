@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, type SVGProps } from "react";
+import { useRef, useState, type SVGProps } from "react";
 import Link from "next/link";
 import { ArrowRight, ArrowUpRight, Check } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
 import { site, legal } from "@/lib/content";
 import { newsletterSchema } from "@/lib/schemas";
+import { Turnstile, type TurnstileHandle } from "@/components/ui/turnstile";
 
 /* Inline brand glyphs (lucide in this project doesn't export these). */
 function WhatsAppIcon(props: SVGProps<SVGSVGElement>) {
@@ -48,6 +49,8 @@ export function Footer() {
   const [email, setEmail] = useState("");
   const [done, setDone] = useState(false);
   const [error, setError] = useState("");
+  const [tsToken, setTsToken] = useState<string | null>(null);
+  const ts = useRef<TurnstileHandle>(null);
 
   const subscribe = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,13 +64,17 @@ export function Footer() {
       const res = await fetch("/api/newsletter", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(parsed.data),
+        body: JSON.stringify({ ...parsed.data, turnstileToken: tsToken }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(res.status === 403 || res.status === 429 ? j?.error : undefined);
+      }
       setDone(true);
       setEmail("");
-    } catch {
-      setError("Something went wrong. Try again.");
+    } catch (e) {
+      ts.current?.reset();
+      setError((e instanceof Error && e.message) || "Something went wrong. Try again.");
     }
   };
 
@@ -106,6 +113,7 @@ export function Footer() {
                     Subscribe <ArrowRight className="size-4" />
                   </button>
                 </div>
+                <Turnstile ref={ts} onToken={setTsToken} action="newsletter" className="mt-2" />
                 {error && <p className="mt-2 text-xs text-red-500 dark:text-red-300">{error}</p>}
               </form>
             )}

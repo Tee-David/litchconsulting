@@ -34,7 +34,7 @@ const STEPS = [
  * The request wizard (sidebar-progress inspo). Two modes:
  * - "public"  (/request/[slug]): steps 1–2, then the account wall — the draft
  *   is stashed in localStorage and the visitor continues at
- *   /dashboard/requests/new?resume=1 (middleware sends them through
+ *   /dashboard/requests/new?resume=1 (the proxy sends them through
  *   login/signup with the redirect preserved).
  * - "portal"  (/dashboard/requests/new): the full flow — review shows the
  *   priced summary and submit creates the request (fixed-price → straight to

@@ -1,6 +1,45 @@
 import type { NextConfig } from "next";
 
+const isDev = process.env.NODE_ENV !== "production";
+
+/**
+ * Content-Security-Policy. Every origin here is one the app really loads from:
+ *  - R2: public assets (r2.dev) and private presigned GET/PUT (*.r2.cloudflarestorage.com)
+ *  - Unsplash imagery, Google profile avatars, Google Fonts (gallery component)
+ *  - Cloudflare Turnstile (public forms), Vercel Live toolbar (preview deploys)
+ * Paystack checkout and Google OAuth are top-level redirects, which CSP does not
+ * restrict. 'unsafe-inline' scripts are needed for Next's inline bootstrap
+ * (no nonce pipeline yet); 'unsafe-eval' only in dev for React Refresh.
+ */
+const csp = [
+  "default-src 'self'",
+  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ""} https://challenges.cloudflare.com https://vercel.live`,
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "img-src 'self' data: blob: https://images.unsplash.com https://*.r2.dev https://*.r2.cloudflarestorage.com https://lh3.googleusercontent.com https://vercel.live https://vercel.com",
+  "media-src 'self' blob: https://*.r2.dev https://*.r2.cloudflarestorage.com",
+  "connect-src 'self' https://*.r2.cloudflarestorage.com https://*.r2.dev https://challenges.cloudflare.com https://vercel.live wss://ws-us3.pusher.com",
+  "frame-src 'self' blob: https://challenges.cloudflare.com https://vercel.live https://*.r2.cloudflarestorage.com",
+  "worker-src 'self' blob:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "frame-ancestors 'none'",
+  ...(isDev ? [] : ["upgrade-insecure-requests"]),
+].join("; ");
+
+const securityHeaders = [
+  { key: "Content-Security-Policy", value: csp },
+  { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains; preload" },
+  { key: "X-Frame-Options", value: "DENY" },
+  { key: "X-Content-Type-Options", value: "nosniff" },
+  { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+  { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=(), payment=(self)" },
+];
+
 const nextConfig: NextConfig = {
+  async headers() {
+    return [{ source: "/:path*", headers: securityHeaders }];
+  },
   images: {
     // Unsplash URLs are already sized via query params; serve them directly so
     // the optimizer can't fail on certain device sizes (fixes broken images on mobile).

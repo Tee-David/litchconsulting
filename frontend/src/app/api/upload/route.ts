@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCurrentUserId } from "@/lib/server-user";
 import { uploadObject, r2Configured } from "@/lib/r2";
+import { rateLimit, RATE_LIMITS, tooManyRequests } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -37,6 +38,8 @@ const slug = () => Math.random().toString(36).slice(2, 10);
 export async function POST(req: Request) {
   const uid = await getCurrentUserId();
   if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const limited = await rateLimit(`upload:${uid}`, RATE_LIMITS.upload);
+  if (!limited.ok) return tooManyRequests(limited);
   if (!r2Configured) return NextResponse.json({ error: "Uploads are not configured yet." }, { status: 503 });
 
   let form: FormData;

@@ -48,11 +48,23 @@ export function ExportMenu<T>({
   }
 
   async function toXLSX() {
-    const XLSX = await import("xlsx");
-    const ws = XLSX.utils.aoa_to_sheet([headers, ...matrix()]);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Sheet1");
-    XLSX.writeFile(wb, `${filename}.xlsx`);
+    // write-excel-file replaces SheetJS `xlsx@0.18.5` (unmaintained on npm,
+    // known prototype-pollution/ReDoS advisories). Numbers and dates stay typed
+    // so Excel can sum/sort them; everything else is written as text.
+    const { default: writeXlsxFile } = await import("write-excel-file/browser");
+    const cell = (v: unknown) =>
+      v === null || v === undefined || v === ""
+        ? null
+        : typeof v === "number" || typeof v === "boolean" || v instanceof Date
+          ? { value: v }
+          : { value: String(v) };
+    await writeXlsxFile(
+      [
+        headers.map((h) => ({ value: h, fontWeight: "bold" as const })),
+        ...matrix().map((row) => row.map(cell)),
+      ],
+      { sheet: "Sheet1", stickyRowsCount: 1 },
+    ).toFile(`${filename}.xlsx`);
     setOpen(false);
   }
 

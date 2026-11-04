@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { contactSchema, serviceOptions } from "@/lib/schemas";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { Turnstile, type TurnstileHandle } from "@/components/ui/turnstile";
 
 const field =
   "w-full rounded-xl border border-hairline bg-paper px-3.5 py-2.5 text-sm text-ink outline-none transition-colors placeholder:text-muted focus:border-brand focus:ring-2 focus:ring-brand/15";
@@ -18,6 +19,8 @@ export function ContactForm() {
   const [errors, setErrors] = useState<Errors>({});
   const [err, setErr] = useState<string | null>(null);
   const [service, setService] = useState("");
+  const [tsToken, setTsToken] = useState<string | null>(null);
+  const ts = useRef<TurnstileHandle>(null);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -47,12 +50,16 @@ export function ContactForm() {
       const res = await fetch("/api/contact", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(parsed.data),
+        body: JSON.stringify({ ...parsed.data, turnstileToken: tsToken }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(res.status === 403 || res.status === 429 ? j?.error : undefined);
+      }
       setDone(true);
-    } catch {
-      setErr("Something went wrong. Please try again or email us directly.");
+    } catch (e) {
+      ts.current?.reset();
+      setErr((e instanceof Error && e.message) || "Something went wrong. Please try again or email us directly.");
     } finally {
       setLoading(false);
     }
@@ -112,6 +119,7 @@ export function ContactForm() {
 
       {err && <p className="mt-3 text-sm text-red-600">{err}</p>}
 
+      <Turnstile ref={ts} onToken={setTsToken} action="contact" className="mt-4" />
       <button
         type="submit"
         disabled={loading}

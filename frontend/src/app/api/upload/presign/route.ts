@@ -3,6 +3,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getCurrentUserId } from "@/lib/server-user";
 import { r2Configured, publicUrl, r2Config } from "@/lib/r2";
+import { rateLimit, RATE_LIMITS, tooManyRequests } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -43,6 +44,8 @@ const slug = () => Math.random().toString(36).slice(2, 10);
 export async function POST(req: Request) {
   const uid = await getCurrentUserId();
   if (!uid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const limited = await rateLimit(`uploadPresign:${uid}`, RATE_LIMITS.uploadPresign);
+  if (!limited.ok) return tooManyRequests(limited);
   if (!r2Configured) return NextResponse.json({ error: "Uploads are not configured yet." }, { status: 503 });
 
   const { kind = "doc", contentType = "", size = 0 } = await req.json().catch(() => ({}));

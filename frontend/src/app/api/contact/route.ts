@@ -4,14 +4,22 @@ import { site } from "@/lib/content";
 import { db } from "@/lib/db/client";
 import { lead } from "@/lib/db/schema";
 import { sendEmail, emailLayout } from "@/lib/email";
+import { rateLimit, RATE_LIMITS, callerKey, callerIp, tooManyRequests } from "@/lib/rate-limit";
+import { verifyTurnstile, turnstileTokenFrom } from "@/lib/turnstile";
 
 export async function POST(req: Request) {
+  const limited = await rateLimit(callerKey(req.headers, "contact"), RATE_LIMITS.contact);
+  if (!limited.ok) return tooManyRequests(limited);
+
   let body: unknown;
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
+
+  const human = await verifyTurnstile(turnstileTokenFrom(body), callerIp(req.headers));
+  if (!human.ok) return NextResponse.json({ error: human.error }, { status: 403 });
 
   const parsed = contactSchema.safeParse(body);
   if (!parsed.success) {

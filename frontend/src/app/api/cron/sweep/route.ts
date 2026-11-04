@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, eq, inArray, isNotNull, lt } from "drizzle-orm";
+import { and, eq, isNotNull, lt } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   payment,
@@ -11,6 +11,7 @@ import {
 } from "@/lib/db/schema";
 import { sendEmail, emailLayout } from "@/lib/email";
 import { notifyAdmin } from "@/lib/notify";
+import { sweepRateLimits } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export async function GET(req: Request) {
   const dayAgo = new Date(now - 24 * 60 * 60 * 1000);
   const twoDaysAgo = new Date(now - 48 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
-  const summary = { abandoned: 0, nudged: 0, quoteReminders: 0, purged: 0 };
+  const summary = { abandoned: 0, nudged: 0, quoteReminders: 0, purged: 0, rateLimitRows: 0 };
 
   // 1. Stale checkout attempts.
   const stale = await db
@@ -129,6 +130,9 @@ export async function GET(req: Request) {
     .returning({ id: serviceRequest.id });
   summary.purged =
     purgedClients.length + purgedInvoices.length + purgedTickets.length + purgedRequests.length;
+
+  // 5. Expired rate-limit windows.
+  summary.rateLimitRows = await sweepRateLimits().catch(() => 0);
 
   return NextResponse.json({ ok: true, ...summary });
 }

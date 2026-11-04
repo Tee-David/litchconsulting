@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { invoice, serviceRequest } from "@/lib/db/schema";
 import { initInvoicePayment } from "@/lib/payments/init";
+import { rateLimit, RATE_LIMITS, callerKey, tooManyRequests } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -12,6 +13,9 @@ export const dynamic = "force-dynamic";
  * payer may not have an account.
  */
 export async function POST(req: Request) {
+  const limited = await rateLimit(callerKey(req.headers, "payInit"), RATE_LIMITS.payInit);
+  if (!limited.ok) return tooManyRequests(limited);
+
   let token: unknown;
   try {
     ({ token } = await req.json());

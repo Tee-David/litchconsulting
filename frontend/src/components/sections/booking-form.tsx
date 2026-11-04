@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Clock,
@@ -17,6 +17,7 @@ import {
 import { serviceOptions } from "@/lib/schemas";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { Turnstile, type TurnstileHandle } from "@/components/ui/turnstile";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const TIME_SLOTS = [
@@ -58,6 +59,9 @@ export function BookingForm() {
   const [time, setTime] = useState<string | null>(null);
   const [details, setDetails] = useState({ name: "", email: "", note: "" });
   const [status, setStatus] = useState<"idle" | "sending" | "error">("idle");
+  const [errMsg, setErrMsg] = useState<string | null>(null);
+  const [tsToken, setTsToken] = useState<string | null>(null);
+  const ts = useRef<TurnstileHandle>(null);
 
   // Build the calendar grid (Mon-first).
   const grid = useMemo(() => {
@@ -104,12 +108,19 @@ export function BookingForm() {
           email: details.email,
           service,
           message,
+          turnstileToken: tsToken,
         }),
       });
-      if (!res.ok) throw new Error();
+      if (!res.ok) {
+        const j = (await res.json().catch(() => null)) as { error?: string } | null;
+        throw new Error(res.status === 403 || res.status === 429 ? j?.error : undefined);
+      }
       setStep(3);
       setStatus("idle");
-    } catch {
+      setErrMsg(null);
+    } catch (e) {
+      ts.current?.reset();
+      setErrMsg((e instanceof Error && e.message) || null);
       setStatus("error");
     }
   };
@@ -345,8 +356,9 @@ export function BookingForm() {
                 />
               </div>
               {status === "error" && (
-                <p className="text-sm text-red-500">Something went wrong. Please try again.</p>
+                <p className="text-sm text-red-500">{errMsg ?? "Something went wrong. Please try again."}</p>
               )}
+              <Turnstile ref={ts} onToken={setTsToken} action="booking" />
               <div className="mt-auto flex items-center justify-between pt-4">
                 <button onClick={() => setStep(1)} className="inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-ink">
                   <ArrowLeft className="size-4" /> Back
