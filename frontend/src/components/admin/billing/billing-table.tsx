@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Ban, Download, FileText, Send, Trash2 } from "lucide-react";
@@ -202,9 +203,9 @@ export function BillingTable({ docs }: { docs: BillingDoc[] }) {
             title="No quotes or invoices yet"
             why="A quote starts every job: when the client accepts it, the invoice and pay link follow."
             action={
-              <a href="/admin/billing/quotes/new" className="text-sm font-medium text-accent hover:underline">
+              <Link href="/admin/billing/quotes/new" className="text-sm font-medium text-accent hover:underline">
                 Write the first quote
-              </a>
+              </Link>
             }
           />
         }
