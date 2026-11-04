@@ -166,14 +166,14 @@ export async function rejectTransferAction(input: z.infer<typeof rejectSchema>):
 
 const depositSchema = z.object({ invoiceId: uuid, percent: z.number().int().min(10).max(90).nullable() });
 
-/** Make an invoice a deposit invoice (percent due now), or a plain one again. */
+/** Ask for a deposit (percent due up front) on an invoice or quote, or remove it. A quote carries it to its invoice. */
 export async function setDepositAction(input: z.infer<typeof depositSchema>): Promise<Res> {
   const me = await actor("billing");
   if (!me) return DENIED;
   const parsed = depositSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "A deposit is between 10% and 90%." };
   const [inv] = await db.select().from(invoice).where(eq(invoice.id, parsed.data.invoiceId)).limit(1);
-  if (!inv || inv.kind !== "invoice") return { ok: false, error: "Invoice not found." };
+  if (!inv) return { ok: false, error: "Document not found." };
   if (num(inv.amountPaid) > 0) return { ok: false, error: "Money has already been paid on this invoice, so its terms are fixed." };
   if (inv.parentInvoiceId) return { ok: false, error: "A balance invoice cannot also be a deposit invoice." };
   await db.update(invoice).set({ depositPercent: parsed.data.percent, updatedAt: new Date() }).where(eq(invoice.id, inv.id));

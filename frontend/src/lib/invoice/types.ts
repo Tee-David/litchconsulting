@@ -31,6 +31,10 @@ export type InvoiceData = {
   publicToken?: string | null;
   /** Formatted date the invoice was paid (drives the in-paper PAID banner). */
   paidAt?: string | null;
+  /** Deposit invoice / quote with deposit terms: percent due up front. */
+  deposit?: { percent: number } | null;
+  /** Money received so far (part payments, deposits). */
+  amountPaid?: number | null;
 };
 
 export const INVOICE_STATUSES = ["draft", "sent", "paid", "overdue", "void"] as const;

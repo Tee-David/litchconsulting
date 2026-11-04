@@ -3,6 +3,7 @@ import { computeTotals, formatMoney } from "@/lib/invoice/money";
 import { issuer as defaultIssuer, type Issuer } from "@/lib/invoice/issuer";
 import type { InvoiceData } from "@/lib/invoice/types";
 import { notoFontCss, signatureSvgDataUri, markSvgDataUri } from "./assets";
+import { acceptLine, docTitle, metaFor, settlementRows, stampFor } from "../doc-extras";
 
 /**
  * Self-contained HTML for the invoice/receipt/quote, styled with inline CSS that
@@ -17,16 +18,6 @@ const BODY = "#5b6474";
 const MUTED = "#8a92a6";
 const HAIR = "#e6e8f0";
 const TINT = "#eef1fb";
-
-const STATUS_STAMP: Record<string, { label: string; color: string }> = {
-  paid: { label: "PAID", color: "#16a34a" },
-  sent: { label: "SENT", color: "#d97706" },
-  overdue: { label: "OVERDUE", color: "#dc2626" },
-  draft: { label: "DRAFT", color: "#8a92a6" },
-  void: { label: "VOID", color: "#8a92a6" },
-  accepted: { label: "ACCEPTED", color: "#16a34a" },
-  declined: { label: "DECLINED", color: "#dc2626" },
-};
 
 const esc = (v: unknown) =>
   String(v ?? "")
@@ -50,14 +41,16 @@ export function invoiceHtml({
 }): string {
   const isReceipt = variant === "receipt";
   const isQuote = variant === "quote";
-  const title = isQuote ? "QUOTE" : isReceipt ? "RECEIPT" : "INVOICE";
+  const title = docTitle(variant, data);
   const totals = computeTotals(data.items);
   const fmt = (n: number) => formatMoney(n, data.currency);
   // Receipts already brand themselves paid (header "PAID ✓" + "Total Paid"), so
   // the banner is invoice-only. When it shows, the diagonal stamp is dropped —
   // same rule as the on-screen preview, so the replica stays 1:1.
   const showBanner = showPaidBanner && data.status === "paid" && !isReceipt;
-  const stamp = showBanner ? undefined : STATUS_STAMP[data.status];
+  const stamp = stampFor(data, showBanner);
+  const settle = settlementRows(variant, data);
+  const accept = acceptLine(variant, data);
   const sig = signatureSvgDataUri();
   const mark = markSvgDataUri();
 
@@ -80,12 +73,7 @@ export function invoiceHtml({
           )
           .join("");
 
-  const meta = [
-    { label: "Invoice No.", value: data.number },
-    { label: "Issued", value: data.issueDate },
-    ...(data.dueDate ? [{ label: "Due", value: data.dueDate }] : []),
-    ...(data.projectTitle ? [{ label: "Project", value: data.projectTitle }] : []),
-  ]
+  const meta = metaFor(variant, data)
     .map(
       (m) => `
       <div>
@@ -95,7 +83,7 @@ export function invoiceHtml({
     )
     .join("");
 
-  const grandLabel = isQuote ? "Total" : isReceipt ? "Total Paid" : "Total Due";
+  const grandLabel = isQuote || data.deposit ? (isReceipt ? "Total Paid" : "Total") : isReceipt ? "Total Paid" : "Total Due";
 
   return `<!doctype html>
 <html><head><meta charset="utf-8"><style>
@@ -195,8 +183,20 @@ table{width:100%;border-collapse:collapse}
       <div style="display:flex;justify-content:space-between;align-items:center;background:${BRAND};color:#fff;padding:10px 12px;border-radius:4px;margin-top:8px;font-weight:700">
         <span>${grandLabel} (${esc(data.currency)})</span><span style="font-variant-numeric:tabular-nums">${esc(fmt(totals.total))}</span>
       </div>
+      ${settle
+        .map(
+          (r) =>
+            `<div style="display:flex;justify-content:space-between;padding:4px 0;${r.strong ? `border-top:1px solid ${HAIR};font-weight:700` : ""}"><span style="${r.strong ? "" : `color:${BODY}`}">${esc(r.label)}</span><span style="font-variant-numeric:tabular-nums">${esc(r.value)}</span></div>`,
+        )
+        .join("")}
     </div>
   </div>
+
+  ${
+    accept
+      ? `<div style="position:relative;margin-top:18px;background:${TINT};color:${BRAND};border-radius:8px;padding:12px 16px"><b>Accept online.</b> <span style="color:${BODY}">${esc(accept.replace(/^Accept online in one click: /, ""))}</span></div>`
+      : ""
+  }
 
   ${
     !isReceipt && !isQuote && data.paymentUrl

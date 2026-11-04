@@ -387,6 +387,8 @@ export async function convertQuoteToInvoiceAction(id: string): Promise<ActionRes
         subtotal: q.subtotal,
         taxTotal: q.taxTotal,
         total: q.total,
+        // Deposit terms on the quote carry over to its invoice.
+        depositPercent: q.depositPercent,
         publicToken: randomUUID(),
         createdByUserId: uid,
       })

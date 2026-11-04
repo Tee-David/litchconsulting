@@ -1,14 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
-import { useRouter } from "next/navigation";
-import { type ColumnDef } from "@tanstack/react-table";
-import { Select } from "@/components/ui/select";
-import { DataTable } from "@/components/admin/ui/data-table";
-import { Badge, type BadgeTone } from "@/components/admin/ui/badge";
-import { EmptyState } from "@/components/admin/ui/empty-state";
-import { formatDateTime } from "@/lib/format-date";
-import { ScrollText } from "lucide-react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { Download, ScrollText } from "lucide-react";
+import { DataTable, EmptyState, type BulkAction, type TableFilter, type TableView } from "@/components/kit";
+import { downloadCsv } from "@/components/admin/ui/csv";
 
 export type AuditItem = {
   id: string;
@@ -20,140 +16,117 @@ export type AuditItem = {
   createdAt: string;
 };
 
-/** Colour the action badge by intent — deletes/voids read as destructive. */
-function actionTone(action: string): BadgeTone {
-  if (/delete|purge|void|erase|refund|cancel|declin/i.test(action)) return "danger";
-  if (/paid|applied|restore|publish|deliver/i.test(action)) return "success";
-  if (/status|merge|invite/i.test(action)) return "info";
-  return "neutral";
+/** Plain-words names for the action codes written by recordAudit(). */
+const PHRASE: Record<string, string> = {
+  "client.deleted": "Moved a client to Trash",
+  "client.bulk_deleted": "Moved clients to Trash",
+  "client.restored": "Restored clients",
+  "client.purged": "Deleted clients for good",
+  "client.erased": "Erased a client (NDPA)",
+  "client.data_exported": "Exported a client's data (NDPA)",
+  "client.ai_mode_changed": "Changed a client's AI mode",
+  "client.ai_erased": "Erased a client's AI data",
+  "request.status_changed": "Moved a request",
+  "request.assigned": "Assigned a request",
+  "request.unassigned": "Removed someone from a request",
+  "request.item_created": "Asked a client for something",
+  "request.draft_sent": "Sent a draft for client review",
+  "request.deliverable_final": "Published final files",
+  "request.deliverable_draft": "Uploaded a draft",
+  "request.deliverable_published": "Published a deliverable",
+  "request.trashed": "Moved requests to Trash",
+  "request.restored": "Restored requests",
+  "invoice.status_changed": "Changed an invoice's status",
+  "invoice.reminder_sent": "Sent a payment reminder",
+  "invoice.deposit_set": "Set a deposit on an invoice",
+  "invoice.balance_created": "Created a balance invoice",
+  "invoice.trashed": "Moved invoices to Trash",
+  "invoice.bulk_voided": "Voided invoices",
+  "invoice.deleted": "Deleted an invoice",
+  "quote.follow_up_sent": "Followed up on a quote",
+  "payment.applied": "Marked an invoice paid",
+  "payment.recorded_manual": "Recorded a payment by hand",
+  "payment.removed_manual": "Removed a hand-recorded payment",
+  "payment.transfer_confirmed": "Confirmed a bank transfer",
+  "payment.transfer_rejected": "Rejected a bank transfer proof",
+  "email.retried": "Resent a failed email",
+  "backup.created": "Ran a database backup",
+  "backup.restore_test": "Ran a restore test",
+  "trash.restored": "Restored items from Trash",
+  "trash.purged": "Emptied items from Trash",
+  "user.deleted": "Deleted a user",
+};
+export const phrase = (a: string) => PHRASE[a] ?? a.replace(/[._]/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+
+function summary(meta: Record<string, unknown> | null): string {
+  if (!meta) return "";
+  if (typeof meta.from === "string" && typeof meta.to === "string") return `${meta.from} → ${meta.to}`;
+  const keys = ["number", "client", "invoice", "amount", "reason", "status", "to", "count", "fileName", "file", "pass", "error"];
+  return keys
+    .filter((k) => meta[k] !== undefined && meta[k] !== null && meta[k] !== "")
+    .map((k) => `${k}: ${Array.isArray(meta[k]) ? (meta[k] as unknown[]).join(", ") : String(meta[k])}`)
+    .join(" · ")
+    .slice(0, 160);
 }
 
-/** Compact one-line summary of the meta payload. */
-function metaSummary(meta: Record<string, unknown> | null): string {
-  if (!meta) return "—";
-  const parts = Object.entries(meta)
-    .filter(([, v]) => v !== null && v !== undefined && v !== "")
-    .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : String(v)}`);
-  return parts.length ? parts.join(" · ") : "—";
-}
+const MONEY = /invoice|payment|quote|billing/;
+const PEOPLE = /user|access|invit|role|ai_mode|erase|export|assign/;
+const AI = /sage|ai_|analysis|litchai/;
 
-export function AuditView({
-  rows,
-  entities,
-  actions,
-  filterEntity,
-  filterAction,
-}: {
-  rows: AuditItem[];
-  entities: string[];
-  actions: string[];
-  filterEntity: string;
-  filterAction: string;
-}) {
-  const router = useRouter();
-
-  function applyFilters(next: { entity?: string; action?: string }) {
-    const entity = next.entity ?? filterEntity;
-    const action = next.action ?? filterAction;
-    const params = new URLSearchParams();
-    if (entity && entity !== "all") params.set("entity", entity);
-    if (action && action !== "all") params.set("action", action);
-    const qs = params.toString();
-    router.push(qs ? `/admin/audit?${qs}` : "/admin/audit");
-  }
-
+export function AuditView({ rows }: { rows: AuditItem[] }) {
   const columns = useMemo<ColumnDef<AuditItem, unknown>[]>(
     () => [
       {
+        id: "createdAt",
         accessorKey: "createdAt",
         header: "When",
-        cell: ({ row }) => (
-          <span className="whitespace-nowrap text-xs text-muted">
-            {formatDateTime(row.original.createdAt)}
-          </span>
-        ),
+        meta: { label: "When", mobile: "meta" },
+        cell: ({ row }) => <span className="whitespace-nowrap text-body">{new Date(row.original.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>,
       },
-      {
-        accessorKey: "actorName",
-        header: "Actor",
-        cell: ({ row }) => (
-          <span className="font-medium text-ink">{row.original.actorName || "System"}</span>
-        ),
-      },
-      {
-        accessorKey: "action",
-        header: "Action",
-        cell: ({ row }) => (
-          <Badge tone={actionTone(row.original.action)} className="normal-case">
-            {row.original.action}
-          </Badge>
-        ),
-      },
-      {
-        accessorKey: "entity",
-        header: "Entity",
-        cell: ({ row }) => (
-          <span className="text-body">
-            {row.original.entity}
-            {row.original.entityId ? (
-              <span className="ml-1 font-mono text-[11px] text-muted">
-                {row.original.entityId.slice(0, 8)}
-              </span>
-            ) : null}
-          </span>
-        ),
-      },
-      {
-        id: "meta",
-        header: "Details",
-        enableSorting: false,
-        cell: ({ row }) => (
-          <span className="block max-w-md truncate text-xs text-body" title={metaSummary(row.original.meta)}>
-            {metaSummary(row.original.meta)}
-          </span>
-        ),
-      },
+      { id: "actor", accessorFn: (r) => r.actorName ?? "System", header: "Who", meta: { label: "Who", mobile: "subtitle" }, cell: ({ row }) => <span className="font-medium text-ink">{row.original.actorName ?? "System"}</span> },
+      { id: "action", accessorFn: (r) => phrase(r.action), header: "Action", meta: { label: "Action", mobile: "title", hideable: false }, cell: ({ row }) => <span className="text-ink">{phrase(row.original.action)}</span> },
+      { id: "record", accessorFn: (r) => `${r.entity} ${r.entityId ?? ""}`, header: "Record", meta: { label: "Record", mobile: "hidden" }, cell: ({ row }) => <span className="text-body">{row.original.entity}</span> },
+      { id: "change", accessorFn: (r) => summary(r.meta), header: "Change", meta: { label: "Change", mobile: "meta" }, cell: ({ row }) => <span className="block max-w-[340px] whitespace-normal break-words font-mono text-xs text-body">{summary(row.original.meta)}</span> },
     ],
     [],
   );
-
+  const views: TableView<AuditItem>[] = [
+    { id: "all", label: "All", predicate: () => true },
+    { id: "money", label: "Money", predicate: (r) => MONEY.test(r.action) || MONEY.test(r.entity) },
+    { id: "people", label: "People and access", predicate: (r) => PEOPLE.test(r.action) || r.entity === "user" },
+    { id: "ai", label: "AI", predicate: (r) => AI.test(r.action) || /sage/i.test(r.actorName ?? "") },
+    { id: "data", label: "Deletes and data rights", predicate: (r) => /delete|purge|erase|trash|export/.test(r.action) },
+  ];
+  const filters = useMemo<TableFilter<AuditItem>[]>(() => {
+    const ents = [...new Set(rows.map((r) => r.entity))].sort();
+    const actors = [...new Set(rows.map((r) => r.actorName ?? "System"))].sort();
+    return [
+      { id: "entity", label: "Record type", options: ents.map((e) => ({ value: e, label: e })), match: (r, v) => r.entity === v },
+      { id: "actor", label: "Who", options: actors.map((a) => ({ value: a, label: a })), match: (r, v) => (r.actorName ?? "System") === v },
+    ];
+  }, [rows]);
+  const bulk: BulkAction<AuditItem>[] = [
+    {
+      id: "csv",
+      label: "Export CSV",
+      icon: <Download className="size-4" />,
+      run: (sel) => downloadCsv("audit-log", ["When", "Who", "Action", "Code", "Record", "Record id", "Change"], sel.map((r) => [r.createdAt, r.actorName ?? "System", phrase(r.action), r.action, r.entity, r.entityId ?? "", JSON.stringify(r.meta ?? {})])),
+    },
+  ];
   return (
     <DataTable
+      label="Audit log"
+      storageKey="admin-audit"
       columns={columns}
       data={rows}
-      searchPlaceholder="Search actor, action, entity…"
-      initialPageSize={25}
-      emptyState={
-        <EmptyState
-          icon={ScrollText}
-          title="No audit entries"
-          description="Destructive and important admin actions will appear here as they happen."
-        />
-      }
-      toolbar={
-        <>
-          <Select
-            value={filterEntity}
-            onChange={(v) => applyFilters({ entity: v })}
-            aria-label="Filter by entity"
-            className="w-40"
-            options={[
-              { value: "all", label: "All entities" },
-              ...entities.map((e) => ({ value: e, label: e })),
-            ]}
-          />
-          <Select
-            value={filterAction}
-            onChange={(v) => applyFilters({ action: v })}
-            aria-label="Filter by action"
-            className="w-52"
-            options={[
-              { value: "all", label: "All actions" },
-              ...actions.map((a) => ({ value: a, label: a })),
-            ]}
-          />
-        </>
-      }
+      getRowId={(r) => r.id}
+      views={views}
+      filters={filters}
+      urlState
+      bulkActions={bulk}
+      searchPlaceholder="Search person, action or record"
+      searchText={(r) => `${r.actorName ?? ""} ${phrase(r.action)} ${r.action} ${r.entity} ${summary(r.meta)}`}
+      emptyState={<EmptyState icon={<ScrollText />} title="Nothing logged yet" why="Consequential actions (payments, deletions, status moves, access changes) are recorded here with who did them." />}
     />
   );
 }

@@ -1,41 +1,35 @@
-import Link from "next/link";
-import { UserPlus, Send, CheckCircle2, Bell } from "lucide-react";
-import { recentNotifications } from "@/lib/db/queries/notifications";
-import { PageHeader } from "@/components/admin/ui/page-header";
-import { EmptyState } from "@/components/admin/ui/empty-state";
-import { formatDateTime } from "@/lib/format-date";
+import { requireArea } from "@/lib/server-user";
+import { CATEGORIES, getPrefs, listNotifications } from "@/lib/notifications";
+import { PageHead } from "@/components/admin/ui/surface";
+import { PushToggle } from "@/components/admin/push-toggle";
+import { NotificationList, PrefsMatrix } from "@/components/admin/notifications-center";
 
 export const dynamic = "force-dynamic";
 
-const ICON = { lead: UserPlus, invoice_sent: Send, invoice_paid: CheckCircle2 } as const;
-
+/** Every notification for the signed-in admin, plus their per-category delivery preferences. */
 export default async function NotificationsPage() {
-  const items = await recentNotifications(50);
+  const me = await requireArea("home", "/admin/notifications");
+  const [items, prefs] = await Promise.all([listNotifications(me.id, { limit: 200 }), getPrefs(me.id)]);
+  const labels = Object.fromEntries(Object.entries(CATEGORIES).map(([k, v]) => [k, v.label]));
 
   return (
-    <div className="space-y-6">
-      <PageHeader title="Notifications" description="Recent activity across your practice." />
-      {items.length === 0 ? (
-        <EmptyState icon={Bell} title="No notifications yet" description="New leads and invoice activity will appear here." />
-      ) : (
-        <div className="divide-y divide-hairline overflow-hidden rounded-card border border-hairline bg-paper">
-          {items.map((n) => {
-            const Icon = (n.type in ICON) ? ICON[n.type as keyof typeof ICON] : Bell;
-            return (
-              <Link key={n.id} href={n.href} className="flex items-start gap-3 px-5 py-4 transition-colors hover:bg-surface">
-                <span className="mt-0.5 grid size-9 shrink-0 place-items-center rounded-full bg-brand-tint text-brand">
-                  <Icon className="size-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-ink">{n.title}</p>
-                  <p className="truncate text-sm text-body">{n.description}</p>
-                </div>
-                <span className="shrink-0 text-xs text-muted">{formatDateTime(n.at)}</span>
-              </Link>
-            );
-          })}
-        </div>
-      )}
+    <div className="space-y-5">
+      <PageHead title="Notifications" lede="Everything the platform told you, newest first, and how you want to hear about each kind." actions={<PushToggle />} />
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
+        <NotificationList
+          labels={labels}
+          items={items.map((n) => ({
+            id: n.id,
+            category: n.category,
+            title: n.title,
+            body: n.body,
+            link: n.link,
+            read: Boolean(n.readAt),
+            createdAt: n.createdAt.toISOString(),
+          }))}
+        />
+        <PrefsMatrix prefs={prefs.map((p) => ({ ...p, label: CATEGORIES[p.category].label, hint: CATEGORIES[p.category].hint }))} />
+      </div>
     </div>
   );
 }
