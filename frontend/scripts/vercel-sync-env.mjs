@@ -54,6 +54,13 @@ const KEYS = [
   "CRON_SECRET",
   "GOOGLE_CLIENT_ID",
   "GOOGLE_CLIENT_SECRET",
+  // Paystack: PAYSTACK_MODE picks the PAYSTACK_TEST_* / PAYSTACK_LIVE_* pair
+  // (lib/paystack.ts). Both pairs ship so flipping the mode needs no re-sync.
+  "PAYSTACK_MODE",
+  "PAYSTACK_TEST_SECRET_KEY",
+  "PAYSTACK_TEST_PUBLIC_KEY",
+  "PAYSTACK_LIVE_SECRET_KEY",
+  "PAYSTACK_LIVE_PUBLIC_KEY",
   "PAYSTACK_SECRET_KEY",
   "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY",
   // Cal.com — booking modal (public link) + webhook that mirrors bookings into
