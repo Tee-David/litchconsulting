@@ -6,5 +6,5 @@ After=network-online.target postgresql.service
 Type=oneshot
 User=litch
 Group=litch
-WorkingDirectory=/srv/litch/app/backend
-ExecStart=/usr/local/bin/litch-run /srv/litch/venv/bin/python -c "from litchai.queue import heartbeat; heartbeat.defer()"
+WorkingDirectory=/srv/projects/litchconsulting/app/backend
+ExecStart=/usr/local/bin/litch-run /srv/projects/litchconsulting/venv/bin/python -c "from litchai.queue import heartbeat; heartbeat.defer()"

@@ -173,7 +173,9 @@ backend/
 
 ## Deployment — Oracle Cloud VM
 
-LitchAI runs on its own OCI VM under systemd. It is **never** deployed to Vercel.
+LitchAI runs on the **WDC Projects** OCI VM under systemd, from `/srv/projects/litchconsulting`
+(one folder per project on that host). It is **never** deployed to Vercel. `deploy/bootstrap.sh`
+rebuilds the host from a blank Ubuntu 24.04 ARM image.
 
 | Unit | Runs |
 | --- | --- |
@@ -183,7 +185,8 @@ LitchAI runs on its own OCI VM under systemd. It is **never** deployed to Vercel
 | `litchai-heartbeat.timer` | `litchai.heartbeat` every 10 min — OCI idle-reclaim guard |
 
 Install a unit by copying it to `/etc/systemd/system/`, then `daemon-reload` and
-`systemctl enable --now <unit>`. Environment comes from `/etc/litchai/env`.
+`systemctl enable --now <unit>`. Every unit starts through `litch-run`, which injects secrets from
+Doppler (read-only service token) and host settings from `/etc/litch/env`.
 
 Queue state lives in Postgres, so a VM restart loses nothing — the worker resumes and long scans
 pick up from the last completed extraction chunk (re-runs are idempotent).
@@ -203,9 +206,10 @@ frontend (Vercel)  ──CF-Access-Client-Id/Secret──▶  ai.litchconsulting
   `CF-Access-Client-Secret`) — no interactive login on that path.
 - Client document uploads travel as a **blind-relay envelope**: Vercel forwards ciphertext and
   never holds a usable plaintext or decrypt key. The private key sits `0600` root-owned on the VM
-  at `/etc/litchai/blind-relay.key`, wired in via `LITCHAI_PRIVATE_KEY_PATH`.
+  at `/etc/litch/blind-relay.key` (root-owned, group-readable by the service user), wired in via
+  `LITCHAI_PRIVATE_KEY_PATH`.
 
-### Environment (`/etc/litchai/env`)
+### Environment (Doppler + `/etc/litch/env`)
 
 | Variable | Purpose |
 | --- | --- |
@@ -213,8 +217,8 @@ frontend (Vercel)  ──CF-Access-Client-Id/Secret──▶  ai.litchconsulting
 | `LITCHAI_PRIVATE_KEY_PATH` | Blind-relay decrypt key on disk |
 | `R2_BUCKET` | Private R2 bucket for backups |
 
-Backups additionally require an `rclone` remote named `r2:` holding the Cloudflare R2 S3
-credentials.
+Backups use the Litch-scoped R2 S3 credentials from Doppler; `backup.sh` builds the `rclone`
+remote `r2:` from them at runtime (no credentials file on disk).
 
 ---
 

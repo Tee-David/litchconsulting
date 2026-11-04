@@ -1,6 +1,17 @@
 # LitchAI Operations Runbook (Phase 6)
 
-Hardening procedures for the OCI VM. Companion to `plans/checklist.md` Phase 6.
+Hardening procedures for the **WDC Projects** OCI VM (web3aether tenancy, Frankfurt).
+
+## Host layout
+
+One folder per project under `/srv/projects/<name>`, each run by its own system user.
+LitchAI lives in `/srv/projects/litchconsulting` (`app/` checkout, `venv/`, `data/uploads/`
+ciphertext, `backups/`) and runs as user `litch`. Secrets are injected at start by
+`litch-run` (`doppler run`, read-only service token in `/etc/litch/doppler.env`); host-local
+settings sit in `/etc/litch/env`. Postgres 16 + pgvector, ClamAV and Ollama are native,
+loopback-only services. `deploy/bootstrap.sh` rebuilds the whole host from a blank image.
+
+Run anything as the app: `sudo -u litch /usr/local/bin/litch-run <cmd>` (from a dir litch can read, e.g. `cd /tmp`).
 
 ## Backups (nightly pg_dump → R2)
 
@@ -10,19 +21,18 @@ Hardening procedures for the OCI VM. Companion to `plans/checklist.md` Phase 6.
   (`litchai.ops.backup.select_for_deletion`: 7 daily / 4 weekly / 6 monthly).
 - Install: copy the units to `/etc/systemd/system/`, then
   `systemctl enable --now litchai-backup.timer`.
-- Requires in `/etc/litchai/env`: `LITCHAI_DATABASE_URL`, `R2_BUCKET`, and an
-  `rclone` remote named `r2:` (Cloudflare R2 S3 credentials).
+- Requires (via Doppler + `/etc/litch/env`): `LITCHAI_DATABASE_URL`, `R2_BUCKET`, and
+  the R2 S3 credentials; `backup.sh` builds the `rclone` remote `r2:` from them at runtime.
 
 ## Restore drill (do this quarterly)
 
-1. Spin up a throwaway Postgres container:
-   `docker run -d --name litchai-restore -e POSTGRES_PASSWORD=x -p 5433:5432 pgvector/pgvector:pg16`
-2. Create extensions: `psql … -c 'CREATE EXTENSION vector; CREATE EXTENSION pg_trgm;'`
+1. Create a throwaway database: `sudo -u postgres createdb litchai_restore`
+2. Create extensions: `sudo -u postgres psql -d litchai_restore -c 'CREATE EXTENSION vector; CREATE EXTENSION pg_trgm;'`
 3. Pull the latest dump from R2: `rclone copy r2:$R2_BUCKET/litchai/<latest>.dump .`
-4. Restore: `pg_restore --no-owner --dbname postgresql://…:5433/postgres <latest>.dump`
+4. Restore: `sudo -u postgres pg_restore --no-owner -d litchai_restore <latest>.dump`
 5. Verify row counts against production for `documents`, `line_items`,
    `category_memory`; run `.venv/bin/pytest` pointed at the restored DB if desired.
-6. Tear down the container. Record the drill date + outcome here.
+6. Drop it: `sudo -u postgres dropdb litchai_restore`. Record the drill date + outcome here.
 
 ## Simulated VM restart (queue resilience)
 
@@ -47,7 +57,7 @@ there, the job died without recording a failure.
 **Diagnose:**
 - `journalctl -u litchai-worker -n 100 --no-pager` — look for a traceback ending
   the last `ingest_document` run.
-- Queue state: `sudo docker exec litchai-postgres psql -U litchai -d litchai -c
+- Queue state: `sudo -u postgres psql -d litchai -c
   "select id, task_name, status, attempts from procrastinate_jobs order by id desc limit 10"`.
   A `failed` job whose document is still `extracting` is the classic stuck case.
 - Doc state: `… -c "select id, filename, status, progress->>'reason' from documents order by id"`.

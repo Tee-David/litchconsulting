@@ -9,8 +9,8 @@ Wants=network-online.target
 [Service]
 User=litch
 Group=litch
-WorkingDirectory=/srv/litch/app/backend
-ExecStart=/usr/local/bin/litch-run /srv/litch/venv/bin/procrastinate --app=litchai.queue.queue worker
+WorkingDirectory=/srv/projects/litchconsulting/app/backend
+ExecStart=/usr/local/bin/litch-run /srv/projects/litchconsulting/venv/bin/procrastinate --app=litchai.queue.queue worker
 Restart=on-failure
 RestartSec=5
 Nice=5
@@ -22,8 +22,8 @@ ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
 # LibreOffice needs a writable HOME for its profile.
-Environment=HOME=/srv/litch/data/.home
-ReadWritePaths=/srv/litch/data /srv/litch/backups
+Environment=HOME=/srv/projects/litchconsulting/data/.home
+ReadWritePaths=/srv/projects/litchconsulting/data /srv/projects/litchconsulting/backups
 
 [Install]
 WantedBy=multi-user.target

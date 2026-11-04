@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# LitchAI — one-shot VM bootstrap for the OCI "Projects" instance.
+# LitchAI — one-shot bootstrap for the OCI "WDC Projects" instance (web3aether tenancy).
 #
 # Rebuilds the whole LitchAI host from a blank Ubuntu 24.04 aarch64 image.
 # Idempotent: safe to re-run after a partial failure or to pick up changes.
 #
-# Layout (mirrors the wlmify "one folder per project" convention):
-#   /srv/litch/app       git checkout of the repo (backend + frontend tax config)
-#   /srv/litch/venv      Python virtualenv
-#   /srv/litch/data      ciphertext store (LITCHAI_STORAGE_DIR)
-#   /srv/litch/backups   local pg_dump staging (pushed to R2 nightly)
+# Layout: one folder per project under /srv/projects/<name>, each with its own
+# system user. LitchAI lives in /srv/projects/litchconsulting:
+#   /srv/projects/litchconsulting/app       git checkout of the repo (backend + frontend tax config)
+#   /srv/projects/litchconsulting/venv      Python virtualenv
+#   /srv/projects/litchconsulting/data      ciphertext store (LITCHAI_STORAGE_DIR)
+#   /srv/projects/litchconsulting/backups   local pg_dump staging (pushed to R2 nightly)
 #   /etc/litch/          doppler.env (service token, 0600) + env (non-secret)
 #
 # Secrets never live on disk in clear: every unit runs under `doppler run`
@@ -19,7 +20,7 @@
 set -euo pipefail
 
 APP_USER=litch
-ROOT=/srv/litch
+ROOT=/srv/projects/litchconsulting
 REPO=${REPO:-https://github.com/Tee-David/litchconsulting.git}
 BRANCH=${BRANCH:-main}
 PG_DB=litchai
@@ -49,6 +50,7 @@ sysctl -w vm.swappiness=10 >/dev/null
 echo 'vm.swappiness=10' > /etc/sysctl.d/99-litch.conf
 
 log "Service user + folders"
+install -d -m 0755 /srv/projects
 id -u "$APP_USER" >/dev/null 2>&1 || useradd --system --create-home --home-dir "$ROOT" --shell /usr/sbin/nologin "$APP_USER"
 install -d -o "$APP_USER" -g "$APP_USER" -m 0750 "$ROOT" "$ROOT/data" "$ROOT/data/.home" "$ROOT/data/uploads" "$ROOT/backups" "$ROOT/models"
 chmod 0700 "$ROOT/data"

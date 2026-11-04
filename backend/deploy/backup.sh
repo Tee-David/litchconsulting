@@ -18,10 +18,10 @@ export RCLONE_CONFIG_R2_SECRET_ACCESS_KEY="${R2_SECRET_ACCESS_KEY:-${R2_SECRET_K
 export RCLONE_CONFIG_R2_ENDPOINT="https://${R2_ACCOUNT_ID:?R2_ACCOUNT_ID not set}.r2.cloudflarestorage.com"
 export RCLONE_CONFIG_R2_NO_CHECK_BUCKET=true
 
-BACKUP_DIR="${LITCHAI_BACKUP_DIR:-/srv/litch/backups}"
+BACKUP_DIR="${LITCHAI_BACKUP_DIR:-/srv/projects/litchconsulting/backups}"
 STAMP="$(date -u +%Y-%m-%d)"
 DUMP="${BACKUP_DIR}/litchai-${STAMP}.dump"
-VENV="${LITCHAI_VENV:-/srv/litch/venv}"
+VENV="${LITCHAI_VENV:-/srv/projects/litchconsulting/venv}"
 
 mkdir -p "$BACKUP_DIR"
 

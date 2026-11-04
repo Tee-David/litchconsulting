@@ -8,8 +8,8 @@ Wants=network-online.target
 [Service]
 User=litch
 Group=litch
-WorkingDirectory=/srv/litch/app/backend
-ExecStart=/usr/local/bin/litch-run /srv/litch/venv/bin/uvicorn litchai.api:app --host 127.0.0.1 --port 8000
+WorkingDirectory=/srv/projects/litchconsulting/app/backend
+ExecStart=/usr/local/bin/litch-run /srv/projects/litchconsulting/venv/bin/uvicorn litchai.api:app --host 127.0.0.1 --port 8000
 Restart=on-failure
 RestartSec=3
 # 2 OCPU / 12 GB box shared with Postgres, Ollama, ClamAV, LibreOffice.
@@ -20,7 +20,7 @@ NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-ReadWritePaths=/srv/litch/data /srv/litch/backups
+ReadWritePaths=/srv/projects/litchconsulting/data /srv/projects/litchconsulting/backups
 
 [Install]
 WantedBy=multi-user.target
