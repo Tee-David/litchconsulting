@@ -30,6 +30,8 @@ export default async function ClientInvoiceDetailPage({
   const data = await getClientInvoice(id, clientRow.id);
 
   if (!data) notFound();
+  // Quotes have their own review-and-accept page.
+  if (data.invoice.kind === "quote") redirect(`/dashboard/quotes/${id}`);
 
   const issuer = await getIssuer();
   const invoiceData = toInvoiceData(data.invoice, data.items);
@@ -61,7 +63,7 @@ export default async function ClientInvoiceDetailPage({
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between border-b border-hairline pb-5">
         <div className="space-y-1.5">
           <Link
-            href="/dashboard/invoices"
+            href="/dashboard/billing"
             className="inline-flex items-center gap-1 text-sm font-semibold text-muted hover:text-ink transition-colors"
           >
             <ArrowLeft className="size-4" />

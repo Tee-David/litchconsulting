@@ -1,39 +1,45 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/server-user";
-import { getClientForUser } from "@/lib/db/queries/clients";
-import { recentClientNotifications } from "@/lib/db/queries/notifications";
-import { ClientShell } from "@/components/client/client-shell";
+import { homeFor, roleOf } from "@/lib/access";
+import { getPortal, clientBilling } from "@/lib/requests/portal";
+import { clientAttention } from "@/lib/attention/client";
+import { unreadCount } from "@/lib/notifications";
+import { isPayable } from "@/lib/payments/amounts";
+import { ClientFrame } from "@/components/dashboard/client-frame";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Client portal shell. Server guard: signed out → /login; admins and staff →
+ * their own home (the portal is for clients only).
+ */
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await getSessionUser();
-  if (!user) {
-    redirect("/login?callbackUrl=/dashboard");
-  }
+  if (!user) redirect("/login?redirect=/dashboard");
+  if (user.banned) redirect("/login?banned=1");
+  const role = roleOf(user);
+  if (role !== "client") redirect(homeFor(role));
 
-  // Admin redirect
-  if (user.role === "admin") {
-    redirect("/admin");
-  }
+  const portal = await getPortal();
+  if (!portal) redirect("/login?redirect=/dashboard");
 
-  // Get or link the client record
-  const clientRow = await getClientForUser(user.id, user.email || "", user.name || undefined);
-
-  // Fetch client notifications
-  const notifications = await recentClientNotifications(clientRow.id);
-
-  // Pass user matching ClientUser interface
-  const clientUser = {
-    name: user.name,
-    email: user.email,
-    image: user.image,
-    role: user.role,
-  };
+  // Badge counts. Failures here must never take the whole portal down.
+  const [attention, unread, billing] = await Promise.all([
+    clientAttention(portal.client.id).catch(() => []),
+    unreadCount(user.id).catch(() => 0),
+    clientBilling(portal.client.id).catch(() => null),
+  ]);
+  const toPay = billing
+    ? billing.invoices.filter((i) => isPayable(i) && !billing.pendingTransfers.has(i.id)).length +
+      billing.quotes.filter((q) => ["sent", "viewed"].includes(q.status)).length
+    : 0;
 
   return (
-    <ClientShell user={clientUser} notifications={notifications}>
+    <ClientFrame
+      user={{ name: user.name, email: user.email, sub: portal.client.company || "Client" }}
+      counts={{ attention: attention.length, unread, billing: toPay }}
+    >
       {children}
-    </ClientShell>
+    </ClientFrame>
   );
 }

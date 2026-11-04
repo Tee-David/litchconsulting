@@ -195,7 +195,7 @@ export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
         data-tour="support-kb"
         className="rounded-card border border-hairline bg-gradient-to-b from-brand-tint/60 to-paper px-6 py-10 text-center sm:px-10 sm:py-14"
       >
-        <div className="mx-auto mb-4 grid size-12 place-items-center rounded-full bg-brand text-white keep-brand">
+        <div className="mx-auto mb-4 grid size-12 place-items-center rounded-full bg-act text-act-ink">
           <LifeBuoy className="size-6" />
         </div>
         <h1 className="font-display text-2xl font-bold text-ink sm:text-3xl">How can we help?</h1>
@@ -214,7 +214,7 @@ export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
             }}
             placeholder="Search for an answer — e.g. “how do I pay an invoice?”"
             aria-label="Search help articles"
-            className="h-12 w-full rounded-full border border-hairline bg-paper pl-11 pr-11 text-sm text-ink shadow-sm outline-none placeholder:text-muted focus:border-brand focus:ring-2 focus:ring-brand/15"
+            className="h-12 w-full rounded-full border border-hairline bg-paper pl-11 pr-11 text-sm text-ink shadow-sm outline-none placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20"
           />
           {helpQuery && (
             <button
@@ -247,7 +247,7 @@ export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
                     }}
                     className="group flex flex-col items-start rounded-card border border-hairline bg-paper p-5 text-left transition-all hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-md"
                   >
-                    <span className="mb-3 grid size-10 place-items-center rounded-xl bg-brand-tint text-brand transition-colors group-hover:bg-brand group-hover:text-white">
+                    <span className="mb-3 grid size-10 place-items-center rounded-xl bg-brand-tint text-brand transition-colors group-hover:bg-act group-hover:text-act-ink">
                       <Icon className="size-5" />
                     </span>
                     <span className="font-display text-sm font-bold text-ink">{c.label}</span>
@@ -356,7 +356,7 @@ export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
         <button
           type="button"
           onClick={() => setIsModalOpen(true)}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover keep-brand"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-act px-4 py-2.5 text-sm font-semibold text-act-ink transition-colors hover:bg-act-hover keep-brand"
         >
           <Plus className="size-4" />
           Contact support
@@ -376,7 +376,7 @@ export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 aria-label="Search your tickets"
-                className="h-9 w-full rounded-lg border border-hairline bg-paper pl-9 pr-3 text-sm text-ink outline-none placeholder:text-muted focus:border-brand"
+                className="h-9 w-full rounded-lg border border-hairline bg-paper pl-9 pr-3 text-sm text-ink outline-none placeholder:text-muted focus:border-accent"
               />
             </div>
             <Select
@@ -473,7 +473,7 @@ export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
             <h3 className="mb-4 font-display text-lg font-bold text-ink">Open a Support Ticket</h3>
 
             {error && (
-              <div className="mb-4 flex items-center gap-2 rounded-xl bg-red-500/10 p-3.5 text-sm font-semibold text-red-600 dark:text-red-400">
+              <div className="mb-4 flex items-center gap-2 rounded-xl bg-bad-soft p-3.5 text-sm font-semibold text-bad">
                 <AlertCircle className="size-4 shrink-0" />
                 <span>{error}</span>
               </div>
@@ -494,7 +494,7 @@ export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
                   value={subject}
                   onChange={(e) => setSubject(e.target.value)}
                   disabled={isPending}
-                  className="w-full rounded-xl border border-hairline bg-paper px-3.5 py-2.5 text-sm text-ink placeholder:text-muted focus:border-brand focus:outline-none"
+                  className="w-full rounded-xl border border-hairline bg-paper px-3.5 py-2.5 text-sm text-ink placeholder:text-muted focus:border-accent focus:outline-none"
                 />
               </div>
 
@@ -545,7 +545,7 @@ export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   disabled={isPending}
-                  className="w-full resize-none rounded-xl border border-hairline bg-paper px-3.5 py-2.5 text-sm text-ink placeholder:text-muted focus:border-brand focus:outline-none"
+                  className="w-full resize-none rounded-xl border border-hairline bg-paper px-3.5 py-2.5 text-sm text-ink placeholder:text-muted focus:border-accent focus:outline-none"
                 />
               </div>
 
@@ -561,7 +561,7 @@ export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
                 <button
                   type="submit"
                   disabled={isPending}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-50 keep-brand"
+                  className="inline-flex items-center gap-1.5 rounded-xl bg-act px-4 py-2.5 text-sm font-semibold text-act-ink transition-colors hover:bg-act-hover disabled:opacity-50 keep-brand"
                 >
                   {isPending && <Loader2 className="size-4 animate-spin" />}
                   Submit Ticket

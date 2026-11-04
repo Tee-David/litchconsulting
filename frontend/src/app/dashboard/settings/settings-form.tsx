@@ -3,8 +3,8 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, CheckCircle2, AlertCircle, Mail } from "lucide-react";
-import { updateClientSettingsAction, updateDigestPreferenceAction } from "./actions";
-import { cn } from "@/lib/utils";
+import Link from "next/link";
+import { updateClientSettingsAction } from "./actions";
 
 type SettingsFormProps = {
   initialData: {
@@ -30,19 +30,6 @@ export function SettingsForm({ initialData }: SettingsFormProps) {
   const [phone, setPhone] = useState(initialData.phone || "");
   const [taxId, setTaxId] = useState(initialData.taxId || "");
   const [address, setAddress] = useState(initialData.address || "");
-
-  // Email preferences (weekly digest opt-out — saves immediately on toggle).
-  const [digestOptOut, setDigestOptOut] = useState(initialData.digestOptOut);
-  const [digestPending, startDigestTransition] = useTransition();
-
-  const toggleDigest = (nextEnabled: boolean) => {
-    const optOut = !nextEnabled;
-    setDigestOptOut(optOut);
-    startDigestTransition(async () => {
-      const res = await updateDigestPreferenceAction(optOut);
-      if (!res.ok) setDigestOptOut(!optOut); // revert on failure
-    });
-  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,14 +66,14 @@ export function SettingsForm({ initialData }: SettingsFormProps) {
 
       <form onSubmit={handleSubmit} className="p-6 space-y-5">
         {success && (
-          <div className="flex items-center gap-2 rounded-xl bg-emerald-500/10 p-4 text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+          <div className="flex items-center gap-2 rounded-xl bg-good-soft p-4 text-sm font-semibold text-good">
             <CheckCircle2 className="size-5 shrink-0" />
             <span>Profile and billing settings updated successfully!</span>
           </div>
         )}
 
         {error && (
-          <div className="flex items-center gap-2 rounded-xl bg-red-500/10 p-4 text-sm font-semibold text-red-600 dark:text-red-400">
+          <div className="flex items-center gap-2 rounded-xl bg-bad-soft p-4 text-sm font-semibold text-bad">
             <AlertCircle className="size-5 shrink-0" />
             <span>{error}</span>
           </div>
@@ -120,7 +107,7 @@ export function SettingsForm({ initialData }: SettingsFormProps) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             disabled={isPending}
-            className="w-full rounded-xl border border-hairline bg-paper px-3.5 py-2.5 text-sm text-ink placeholder:text-muted focus:border-brand focus:outline-none"
+            className="w-full rounded-xl border border-hairline bg-paper px-3.5 py-2.5 text-sm text-ink placeholder:text-muted focus:border-accent focus:outline-none"
           />
         </div>
 
@@ -137,7 +124,7 @@ export function SettingsForm({ initialData }: SettingsFormProps) {
               value={company}
               onChange={(e) => setCompany(e.target.value)}
               disabled={isPending}
-              className="w-full rounded-xl border border-hairline bg-paper px-3.5 py-2.5 text-sm text-ink placeholder:text-muted focus:border-brand focus:outline-none"
+              className="w-full rounded-xl border border-hairline bg-paper px-3.5 py-2.5 text-sm text-ink placeholder:text-muted focus:border-accent focus:outline-none"
             />
           </div>
 
@@ -153,7 +140,7 @@ export function SettingsForm({ initialData }: SettingsFormProps) {
               value={taxId}
               onChange={(e) => setTaxId(e.target.value)}
               disabled={isPending}
-              className="w-full rounded-xl border border-hairline bg-paper px-3.5 py-2.5 text-sm text-ink placeholder:text-muted focus:border-brand focus:outline-none"
+              className="w-full rounded-xl border border-hairline bg-paper px-3.5 py-2.5 text-sm text-ink placeholder:text-muted focus:border-accent focus:outline-none"
             />
           </div>
         </div>
@@ -170,7 +157,7 @@ export function SettingsForm({ initialData }: SettingsFormProps) {
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             disabled={isPending}
-            className="w-full rounded-xl border border-hairline bg-paper px-3.5 py-2.5 text-sm text-ink placeholder:text-muted focus:border-brand focus:outline-none"
+            className="w-full rounded-xl border border-hairline bg-paper px-3.5 py-2.5 text-sm text-ink placeholder:text-muted focus:border-accent focus:outline-none"
           />
         </div>
 
@@ -186,7 +173,7 @@ export function SettingsForm({ initialData }: SettingsFormProps) {
             value={address}
             onChange={(e) => setAddress(e.target.value)}
             disabled={isPending}
-            className="w-full rounded-xl border border-hairline bg-paper px-3.5 py-2.5 text-sm text-ink placeholder:text-muted focus:border-brand focus:outline-none resize-none"
+            className="w-full rounded-xl border border-hairline bg-paper px-3.5 py-2.5 text-sm text-ink placeholder:text-muted focus:border-accent focus:outline-none resize-none"
           />
         </div>
 
@@ -194,7 +181,7 @@ export function SettingsForm({ initialData }: SettingsFormProps) {
           <button
             type="submit"
             disabled={isPending}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-act px-5 py-2.5 text-sm font-semibold text-act-ink transition-colors hover:bg-act-hover disabled:opacity-50"
           >
             {isPending && <Loader2 className="size-4 animate-spin" />}
             Save Changes
@@ -211,35 +198,19 @@ export function SettingsForm({ initialData }: SettingsFormProps) {
           Email preferences
         </h3>
         <p className="text-xs text-muted mt-1">
-          Control the summary emails we send you.
+          The weekly summary, and how you hear about quotes, drafts, payments and replies, now live in one place.
         </p>
       </div>
-      <div className="flex items-center justify-between gap-4 p-6">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-ink">Weekly summary</p>
-          <p className="mt-0.5 text-xs text-muted">
-            A short recap of your active requests, amounts due, and deliverables ready to review.
-          </p>
-        </div>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={!digestOptOut}
-          aria-label="Weekly summary email"
-          disabled={digestPending}
-          onClick={() => toggleDigest(digestOptOut)}
-          className={cn(
-            "relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-60",
-            !digestOptOut ? "bg-brand" : "bg-hairline",
-          )}
+      <div className="flex flex-wrap items-center justify-between gap-4 p-6">
+        <p className="text-sm text-body">
+          Weekly summary: <b className="text-ink">{initialData.digestOptOut ? "off" : "on"}</b>
+        </p>
+        <Link
+          href="/dashboard/notifications?tab=prefs"
+          className="inline-flex h-10 items-center rounded-ctl border border-line-strong px-3.5 text-sm font-medium text-ink hover:bg-surface"
         >
-          <span
-            className={cn(
-              "inline-block size-4 transform rounded-full bg-white transition-transform",
-              !digestOptOut ? "translate-x-6" : "translate-x-1",
-            )}
-          />
-        </button>
+          Notification preferences
+        </Link>
       </div>
     </div>
     </div>

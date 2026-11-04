@@ -12,12 +12,15 @@ import { initializeTransaction, koboFromTotal, mintReference, paystackConfigured
  */
 export async function initInvoicePayment(
   inv: Invoice,
-  opts?: { requestId?: string | null; email?: string | null }
+  opts?: { requestId?: string | null; email?: string | null; /** Part payment (deposit/balance). Defaults to the whole outstanding balance. */ amount?: number }
 ): Promise<{ ok: boolean; url?: string; error?: string }> {
   if (!paystackConfigured()) return { ok: false, error: "Online payment isn't available yet — use the bank transfer details on the invoice." };
   if (inv.kind !== "invoice") return { ok: false, error: "Quotes can't be paid — convert to an invoice first." };
   if (inv.status === "paid") return { ok: false, error: "This invoice is already paid." };
-  if (!["sent", "overdue"].includes(inv.status)) return { ok: false, error: "This invoice isn't payable yet." };
+  if (!["sent", "viewed", "overdue", "partially_paid"].includes(inv.status)) return { ok: false, error: "This invoice isn't payable yet." };
+  const balance = Math.round((Number(inv.total) - Number(inv.amountPaid ?? 0)) * 100) / 100;
+  const amount = opts?.amount ?? balance;
+  if (!(amount > 0) || amount > balance + 0.005) return { ok: false, error: "That amount can't be paid on this invoice." };
   if (inv.currency !== "NGN") return { ok: false, error: "Online payment is only available for NGN invoices." };
 
   const email = opts?.email || inv.billToEmail;
@@ -37,7 +40,7 @@ export async function initInvoicePayment(
       invoiceId: inv.id,
       requestId: opts?.requestId ?? null,
       clientId: inv.clientId,
-      amount: inv.total,
+      amount: amount.toFixed(2),
       currency: inv.currency,
       status: "initialized",
     })
@@ -45,7 +48,7 @@ export async function initInvoicePayment(
 
   const init = await initializeTransaction({
     email,
-    amountKobo: koboFromTotal(inv.total),
+    amountKobo: koboFromTotal(amount),
     reference,
     callbackUrl: `${baseUrl}/pay/callback`,
     metadata: { invoiceId: inv.id, requestId: opts?.requestId ?? null, clientId: inv.clientId },

@@ -97,7 +97,7 @@ export function SupportThreadClient({ ticketId, messages, ticketStatus }: Suppor
                     className={`rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap ${
                       isAdminSender
                         ? "bg-paper border border-hairline text-ink rounded-tl-none"
-                        : "bg-brand text-white rounded-tr-none"
+                        : "bg-act text-act-ink rounded-tr-none"
                     }`}
                   >
                     {m.body}
@@ -120,13 +120,13 @@ export function SupportThreadClient({ ticketId, messages, ticketStatus }: Suppor
       {/* Composer Area */}
       <div className="border-t border-hairline p-4 space-y-3 bg-paper">
         {ticketStatus === "closed" && (
-          <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 p-2 rounded-xl text-center">
+          <p className="text-xs font-semibold text-warn bg-warn-soft p-2 rounded-xl text-center">
             Note: This ticket is currently closed. Sending a reply will automatically re-open it.
           </p>
         )}
 
         {error && (
-          <p className="text-xs font-semibold text-red-600 dark:text-red-400 bg-red-500/10 p-2 rounded-xl text-center">
+          <p className="text-xs font-semibold text-bad bg-bad-soft p-2 rounded-xl text-center">
             {error}
           </p>
         )}
@@ -144,13 +144,13 @@ export function SupportThreadClient({ ticketId, messages, ticketStatus }: Suppor
               }
             }}
             disabled={isPending}
-            className="flex-1 rounded-xl border border-hairline bg-paper px-3.5 py-2.5 text-sm text-ink placeholder:text-muted focus:border-brand focus:outline-none resize-none max-h-24 min-h-[42px]"
+            className="flex-1 rounded-xl border border-hairline bg-paper px-3.5 py-2.5 text-sm text-ink placeholder:text-muted focus:border-accent focus:outline-none resize-none max-h-24 min-h-[42px]"
           />
           <button
             type="submit"
             disabled={isPending || !replyText.trim()}
             aria-label={isPending ? "Sending reply" : "Send reply"}
-            className="inline-flex size-[42px] items-center justify-center rounded-xl bg-brand text-white transition-colors hover:bg-brand-hover disabled:opacity-50 shrink-0"
+            className="inline-flex size-[42px] items-center justify-center rounded-xl bg-act text-act-ink transition-colors hover:bg-act-hover disabled:opacity-50 shrink-0"
           >
             {isPending ? (
               <Loader2 className="size-4 animate-spin" />

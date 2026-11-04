@@ -8,6 +8,10 @@ import { getSessionUser } from "@/lib/server-user";
 import { getClientForUser } from "@/lib/db/queries/clients";
 import { nextTicketNumber } from "@/lib/db/queries/tickets";
 import { sendEmail, emailLayout } from "@/lib/email";
+import { notifyFirm } from "@/lib/requests/people";
+
+const esc = (v: string) =>
+  v.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 type ActionResult = { ok: boolean; id?: string; error?: string };
 
@@ -77,7 +81,7 @@ export async function createClientTicketAction(input: {
   // Send email to firm alerting them about the new ticket
   const html = emailLayout(`
     <p style="margin:0 0 14px;"><strong>New Support Ticket Created</strong></p>
-    <p style="margin:0 0 14px;">A new support ticket has been opened by <strong>${clientRow.name}</strong> (${clientRow.company || "No Company"}).</p>
+    <p style="margin:0 0 14px;">A new support ticket has been opened by <strong>${esc(clientRow.name)}</strong> (${esc(clientRow.company || "No Company")}).</p>
     <table style="width:100%;border-collapse:collapse;margin:0 0 20px;">
       <tr>
         <td style="padding:6px 0;font-weight:600;width:100px;">Ticket No:</td>
@@ -85,7 +89,7 @@ export async function createClientTicketAction(input: {
       </tr>
       <tr>
         <td style="padding:6px 0;font-weight:600;">Subject:</td>
-        <td style="padding:6px 0;">${input.subject.trim()}</td>
+        <td style="padding:6px 0;">${esc(input.subject.trim())}</td>
       </tr>
       <tr>
         <td style="padding:6px 0;font-weight:600;">Category:</td>
@@ -93,7 +97,7 @@ export async function createClientTicketAction(input: {
       </tr>
     </table>
     <div style="background:#f5f6fa;padding:14px;border-radius:8px;border:1px solid #e6e8f0;font-style:italic;">
-      "${input.message.trim()}"
+      "${esc(input.message.trim())}"
     </div>
     <p style="margin:20px 0 0;"><a href="${process.env.BETTER_AUTH_URL || "https://litchconsulting.com"}/admin/help-desk" style="display:inline-block;background:#0a196d;color:#fff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:9999px;">View in Help Desk</a></p>
   `);
@@ -102,6 +106,15 @@ export async function createClientTicketAction(input: {
     to: adminEmail,
     subject: `[${number}] New Support Ticket: ${input.subject.trim()}`,
     html,
+  });
+
+  await notifyFirm(input.requestId ?? null, {
+    category: "support",
+    title: `New support question from ${clientRow.company || clientRow.name}`,
+    body: `${number} · ${input.subject.trim().slice(0, 150)}`,
+    dedupeKey: `ticket-new:${id}`,
+    adminLink: "/admin/help-desk",
+    staffLink: input.requestId ? `/work/requests/${input.requestId}` : "/work/conversations",
   });
 
   revalidatePath("/dashboard/support");
@@ -149,9 +162,9 @@ export async function replyClientTicketAction(ticketId: string, body: string): P
   // Send email notify to firm
   const html = emailLayout(`
     <p style="margin:0 0 14px;"><strong>New Reply on Ticket ${t.number}</strong></p>
-    <p style="margin:0 0 14px;"><strong>${clientRow.name}</strong> has replied to the support thread:</p>
+    <p style="margin:0 0 14px;"><strong>${esc(clientRow.name)}</strong> has replied to the support thread:</p>
     <div style="background:#f5f6fa;padding:14px;border-radius:8px;border:1px solid #e6e8f0;font-style:italic;margin-bottom:20px;">
-      "${body.trim()}"
+      "${esc(body.trim())}"
     </div>
     <p style="margin:0;"><a href="${process.env.BETTER_AUTH_URL || "https://litchconsulting.com"}/admin/help-desk" style="display:inline-block;background:#0a196d;color:#fff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:9999px;">Reply in Help Desk</a></p>
   `);
@@ -160,6 +173,15 @@ export async function replyClientTicketAction(ticketId: string, body: string): P
     to: adminEmail,
     subject: `Re: [${t.number}] ${t.subject}`,
     html,
+  });
+
+  await notifyFirm(t.requestId ?? null, {
+    category: "support",
+    title: `${clientRow.company || clientRow.name} replied on ${t.number}`,
+    body: body.trim().slice(0, 200),
+    dedupeKey: `ticket-reply:${ticketId}:${now.getTime()}`,
+    adminLink: "/admin/help-desk",
+    staffLink: t.requestId ? `/work/requests/${t.requestId}` : "/work/conversations",
   });
 
   revalidatePath(`/dashboard/support/${ticketId}`);
