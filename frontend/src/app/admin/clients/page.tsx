@@ -1,35 +1,26 @@
-import Link from "next/link";
-import { Users } from "lucide-react";
-import { listClients } from "@/lib/db/queries/clients";
-import { PageHeader } from "@/components/admin/ui/page-header";
-import { EmptyState } from "@/components/admin/ui/empty-state";
+import { requireArea } from "@/lib/server-user";
+import { PageHead } from "@/components/admin/ui/surface";
 import { NewClientButton } from "@/components/admin/client/new-client-button";
-import { ClientList } from "@/components/admin/client/client-list";
+import { ClientTable } from "@/components/admin/client/client-table";
+import { listClientRows } from "../_lib/clients-data";
 
 export const dynamic = "force-dynamic";
 
 export default async function ClientsPage() {
-  const clients = await listClients();
-
+  await requireArea("clients", "/admin/clients");
+  const rows = await listClientRows();
   return (
-    <div className="space-y-6">
-      <PageHeader title="Clients" description="Your client directory — add new clients and bill them on invoices.">
-        <NewClientButton />
-      </PageHeader>
-
-      {/* The tour anchors the directory itself, so it wraps both branches —
-          an empty directory still has something to point at. */}
-      <div data-tour="clients-table">
-        {clients.length === 0 ? (
-          <EmptyState
-            icon={Users}
-            title="No clients yet"
-            description="Add your first client with the New client button. Clients you bill on invoices also appear here automatically."
-          />
-        ) : (
-          <ClientList clients={clients} />
-        )}
-      </div>
+    <div>
+      <PageHead
+        title="Clients"
+        lede="Every company we work for, with what they owe and how their data is handled."
+        actions={
+          <div data-tour="new-client">
+            <NewClientButton />
+          </div>
+        }
+      />
+      <ClientTable rows={rows} />
     </div>
   );
 }
