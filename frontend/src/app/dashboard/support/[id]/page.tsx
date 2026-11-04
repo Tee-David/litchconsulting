@@ -5,6 +5,7 @@ import { getSessionUser } from "@/lib/server-user";
 import { getClientForUser } from "@/lib/db/queries/clients";
 import { getClientTicket } from "@/lib/db/queries/tickets";
 import { Badge } from "@/components/admin/ui/badge";
+import { StatusChip } from "@/components/kit";
 import { SupportThreadClient } from "./support-thread-client";
 
 export const dynamic = "force-dynamic";
@@ -28,20 +29,8 @@ export default async function ClientSupportTicketDetailPage({
 
   const { ticket, messages } = data;
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "open":
-        return <Badge tone="info">Open</Badge>;
-      case "pending":
-        return <Badge tone="warning">Pending</Badge>;
-      case "resolved":
-        return <Badge tone="success">Resolved</Badge>;
-      case "closed":
-        return <Badge tone="neutral">Closed</Badge>;
-      default:
-        return <Badge tone="neutral">{status}</Badge>;
-    }
-  };
+  // Phrased for the client: "With Litch" / "Your reply needed" / "Solved".
+  const getStatusBadge = (status: string) => <StatusChip domain="ticket" status={status} audience="client" />;
 
   const getPriorityBadge = (priority: string) => {
     switch (priority) {
