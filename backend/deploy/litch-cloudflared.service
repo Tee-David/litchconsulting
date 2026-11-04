@@ -1,0 +1,20 @@
+# Cloudflare Tunnel — the ONLY ingress to the LitchAI API (ai.litchconsulting.com
+# -> 127.0.0.1:8000, routed on Cloudflare's side and fronted by Cloudflare Access).
+# The tunnel token comes from Doppler (CLOUDFLARE_TUNNEL_TOKEN) via litch-run.
+[Unit]
+Description=Cloudflare Tunnel for LitchAI
+After=network-online.target litchai-api.service
+Wants=network-online.target
+
+[Service]
+User=litch
+Group=litch
+ExecStart=/usr/local/bin/litch-run bash -c 'TUNNEL_TOKEN="$CLOUDFLARE_TUNNEL_TOKEN" exec cloudflared tunnel --no-autoupdate run'
+Restart=always
+RestartSec=5
+CPUQuota=30%
+MemoryMax=256M
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

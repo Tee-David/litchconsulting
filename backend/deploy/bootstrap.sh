@@ -163,7 +163,7 @@ install -m 0644 "$ROOT"/app/backend/deploy/*.service "$ROOT"/app/backend/deploy/
 install -m 0755 "$ROOT/app/backend/deploy/backup.sh" /usr/local/bin/litchai-backup
 install -m 0755 "$ROOT/app/backend/deploy/litch-run" /usr/local/bin/litch-run
 systemctl daemon-reload
-systemctl enable --now litchai-api litchai-worker litchai-backup.timer litchai-heartbeat.timer
+systemctl enable --now litchai-api litchai-worker litch-cloudflared litchai-backup.timer litchai-heartbeat.timer
 
 # ---------------------------------------------------------------- firewall
 log "Firewall: SSH only inbound (the tunnel is outbound)"
