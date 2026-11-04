@@ -1,19 +1,29 @@
-# LitchAI Procrastinate worker — install: sudo cp to /etc/systemd/system/, daemon-reload, enable --now
-# Queue state lives in Postgres (survives restarts); one worker on the 2-OCPU box.
+# LitchAI Procrastinate worker — installed by bootstrap.sh. Queue state lives
+# in Postgres (survives restarts); one worker on the 2-OCPU box. Runs docling
+# and LibreOffice, so it gets the bigger memory budget.
 [Unit]
 Description=LitchAI Procrastinate worker
-After=network.target docker.service
+After=network-online.target postgresql.service ollama.service clamav-daemon.service
+Wants=network-online.target
 
 [Service]
-User=ubuntu
-# Same ciphertext store as the API — the worker reads envelopes from it.
-StateDirectory=litchai
-StateDirectoryMode=0700
-EnvironmentFile=/etc/litchai/env
-WorkingDirectory=/home/ubuntu/litchconsulting/backend
-ExecStart=/home/ubuntu/litchai/venv/bin/procrastinate --app=litchai.queue.queue worker
+User=litch
+Group=litch
+WorkingDirectory=/srv/litch/app/backend
+ExecStart=/usr/local/bin/litch-run /srv/litch/venv/bin/procrastinate --app=litchai.queue.queue worker
 Restart=on-failure
 RestartSec=5
+Nice=5
+CPUQuota=150%
+MemoryHigh=3G
+MemoryMax=4G
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+# LibreOffice needs a writable HOME for its profile.
+Environment=HOME=/srv/litch/data/.home
+ReadWritePaths=/srv/litch/data /srv/litch/backups
 
 [Install]
 WantedBy=multi-user.target

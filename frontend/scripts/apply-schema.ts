@@ -255,6 +255,23 @@ const STATEMENTS = [
   // ---- Admin → client document feedback (return-for-correction) ----
   `ALTER TABLE "service_request_document" ADD COLUMN IF NOT EXISTS "correction_reason" text`,
   `ALTER TABLE "service_request_document" ADD COLUMN IF NOT EXISTS "correction_requested_at" timestamp with time zone`,
+  // ---- Email outbox (logged, deduped, retryable sends — lib/email.ts) ----
+  `CREATE TABLE IF NOT EXISTS "email_outbox" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "dedupe_key" text NOT NULL,
+    "to" text NOT NULL,
+    "subject" text NOT NULL,
+    "status" text DEFAULT 'queued' NOT NULL,
+    "attempts" integer DEFAULT 0 NOT NULL,
+    "retryable" boolean DEFAULT true NOT NULL,
+    "payload" jsonb,
+    "last_error" text,
+    "duration_ms" integer,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "sent_at" timestamp with time zone,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "email_outbox_dedupe_uidx" ON "email_outbox" ("dedupe_key")`,
+  `CREATE INDEX IF NOT EXISTS "email_outbox_status_idx" ON "email_outbox" ("status", "created_at")`,
 ];
 
 /**

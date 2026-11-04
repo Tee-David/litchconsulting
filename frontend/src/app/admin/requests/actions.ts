@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
@@ -166,9 +167,9 @@ export async function adminSetRequestStatusAction(
   const email = await clientEmailFor(req.clientId);
   if (email) {
     if (negative) {
-      void emailRequestTerminal(req, email, toStatus as "cancelled" | "declined" | "refunded", note);
+      after(() => emailRequestTerminal(req, email, toStatus as "cancelled" | "declined" | "refunded", note));
     } else {
-      void emailStatusChanged(req, email, toStatus as RequestStatus, note);
+      after(() => emailStatusChanged(req, email, toStatus as RequestStatus, note));
     }
   }
   revalidateRequest(requestId);
@@ -198,7 +199,7 @@ export async function adminAddNoteAction(
 
   if (visibility === "client") {
     const email = await clientEmailFor(req.clientId);
-    if (email) void emailStatusChanged(req, email, req.status as RequestStatus, message.trim());
+    if (email) after(() => emailStatusChanged(req, email, req.status as RequestStatus, message.trim()));
   }
   revalidateRequest(requestId);
   return { ok: true };
@@ -287,7 +288,7 @@ export async function adminRecordDeliverableAction(input: {
   });
 
   const email = await clientEmailFor(req.clientId);
-  if (email) void emailDeliverableReady(req, email, input.fileName);
+  if (email) after(() => emailDeliverableReady(req, email, input.fileName));
   revalidateRequest(req.id);
   return { ok: true };
 }
@@ -660,7 +661,7 @@ export async function adminRequestDocumentCorrectionAction(
   });
 
   const to = await clientEmailFor(req.clientId);
-  if (to) void emailCorrectionRequested(req, to, doc.fileName, trimmed);
+  if (to) after(() => emailCorrectionRequested(req, to, doc.fileName, trimmed));
   await recordAudit({
     action: "request.correction_requested",
     entity: "request",

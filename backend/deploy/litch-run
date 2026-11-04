@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Run a command with LitchAI secrets from Doppler, then host-local settings.
+#
+#   litch-run <command> [args...]
+#
+# Order matters: Doppler (litch-consulting/prd, read-only service token in
+# /etc/litch/doppler.env) is injected first; /etc/litch/env is sourced on top,
+# so host-specific paths (storage dir, socket DB URL, venv) always win over
+# whatever the shared config says. Nothing is written to disk.
+set -euo pipefail
+set -a
+# shellcheck disable=SC1091
+. /etc/litch/doppler.env
+set +a
+exec doppler run --no-check-version --no-fallback -- bash -c 'set -a; . /etc/litch/env; set +a; exec "$@"' litch-run "$@"

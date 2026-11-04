@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
@@ -144,8 +145,8 @@ export async function createRequestAction(input: {
 
   const [req] = await db.select().from(serviceRequest).where(eq(serviceRequest.id, requestId));
   const clientEmail = clientRow.email || user.email;
-  if (clientEmail) void emailRequestSubmitted(req, clientEmail, clientRow.name);
-  void alertAdminNewRequest(req, clientRow.name);
+  if (clientEmail) after(() => emailRequestSubmitted(req, clientEmail, clientRow.name));
+  after(() => alertAdminNewRequest(req, clientRow.name));
   revalidateRequest(requestId);
 
   // Fixed-price: hand back the Paystack URL so the stepper redirects straight in.
@@ -216,11 +217,13 @@ export async function cancelRequestAction(requestId: string, reason?: string): P
   });
 
   const clientEmail = clientRow.email || user.email;
-  if (clientEmail) void emailRequestTerminal(req, clientEmail, "cancelled", reason);
-  void notifyAdmin({
-    subject: `Request ${req.number} cancelled by client`,
-    html: `<p><strong>${clientRow.name}</strong> cancelled <strong>${req.number}</strong> (${req.serviceName}).${reason ? ` Reason: ${reason}` : ""}</p>`,
-  });
+  if (clientEmail) after(() => emailRequestTerminal(req, clientEmail, "cancelled", reason));
+  after(() =>
+    notifyAdmin({
+      subject: `Request ${req.number} cancelled by client`,
+      html: `<p><strong>${clientRow.name}</strong> cancelled <strong>${req.number}</strong> (${req.serviceName}).${reason ? ` Reason: ${reason}` : ""}</p>`,
+    }),
+  );
   revalidateRequest(requestId);
   return { ok: true, id: requestId };
 }
@@ -259,11 +262,13 @@ export async function declineQuoteRequestAction(requestId: string, reason: strin
   });
 
   const clientEmail = clientRow.email || user.email;
-  if (clientEmail) void emailRequestTerminal(req, clientEmail, "declined", reason);
-  void notifyAdmin({
-    subject: `Quote declined on ${req.number}`,
-    html: `<p><strong>${clientRow.name}</strong> declined the quote for <strong>${req.serviceName}</strong>. Reason: ${reason.trim()}</p>`,
-  });
+  if (clientEmail) after(() => emailRequestTerminal(req, clientEmail, "declined", reason));
+  after(() =>
+    notifyAdmin({
+      subject: `Quote declined on ${req.number}`,
+      html: `<p><strong>${clientRow.name}</strong> declined the quote for <strong>${req.serviceName}</strong>. Reason: ${reason.trim()}</p>`,
+    }),
+  );
   revalidateRequest(requestId);
   return { ok: true, id: requestId };
 }
@@ -343,7 +348,7 @@ export async function recordRequestDocumentAction(input: {
     });
   });
 
-  void alertAdminDocumentUploaded(req, input.fileName);
+  after(() => alertAdminDocumentUploaded(req, input.fileName));
 
   // All required slots filled? Auto-advance awaiting_documents → in_progress.
   if (req.status === "awaiting_documents") {
@@ -383,7 +388,7 @@ export async function recordRequestDocumentAction(input: {
             actorRole: "system",
           },
         ]);
-        void alertAdminDocumentsComplete(req);
+        after(() => alertAdminDocumentsComplete(req));
       }
     }
   }
@@ -416,10 +421,12 @@ export async function approveCloseRequestAction(requestId: string): Promise<Acti
     });
   });
 
-  void notifyAdmin({
-    subject: `✅ ${req.number} approved & closed by client`,
-    html: `<p><strong>${clientRow.name}</strong> approved and closed <strong>${req.number}</strong> (${req.serviceName}).</p>`,
-  });
+  after(() =>
+    notifyAdmin({
+      subject: `✅ ${req.number} approved & closed by client`,
+      html: `<p><strong>${clientRow.name}</strong> approved and closed <strong>${req.number}</strong> (${req.serviceName}).</p>`,
+    }),
+  );
   revalidateRequest(requestId);
   return { ok: true, id: requestId };
 }
@@ -447,7 +454,7 @@ export async function postRequestMessageAction(
     actorRole: "client",
     actorName: clientRow.name,
   });
-  void alertAdminClientMessage(req, trimmed, clientRow.name);
+  after(() => alertAdminClientMessage(req, trimmed, clientRow.name));
   revalidateRequest(requestId);
   return { ok: true, id: requestId };
 }

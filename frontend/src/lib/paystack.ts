@@ -3,8 +3,8 @@ import { createHmac, timingSafeEqual, randomBytes } from "node:crypto";
 
 /**
  * Paystack REST client (redirect/Standard flow — no client SDK, no popup).
- * Direct server-to-Paystack calls only; test vs live is purely which secret
- * key is present in the environment. Degrades gracefully when unconfigured
+ * Direct server-to-Paystack calls only; test vs live is chosen by
+ * PAYSTACK_MODE (see paystackMode below). Degrades gracefully when unconfigured
  * (mirrors emailConfigured / r2Configured).
  *
  * Contract notes (verified against Paystack docs):
@@ -17,8 +17,49 @@ import { createHmac, timingSafeEqual, randomBytes } from "node:crypto";
 
 const BASE = "https://api.paystack.co";
 
+export type PaystackMode = "test" | "live";
+
+/**
+ * Active mode. Test unless PAYSTACK_MODE explicitly says "live" — the failure
+ * mode of a typo must be "no real money moves", never the reverse.
+ */
+export function paystackMode(): PaystackMode {
+  return process.env.PAYSTACK_MODE?.trim().toLowerCase() === "live" ? "live" : "test";
+}
+
+/**
+ * Mode-scoped keys (`PAYSTACK_TEST_*` / `PAYSTACK_LIVE_*`), selected by
+ * PAYSTACK_MODE. A key whose prefix does not match the mode (e.g. an sk_test_
+ * key under PAYSTACK_LIVE_SECRET_KEY) is treated as absent: fail closed.
+ * The legacy single `PAYSTACK_SECRET_KEY` is honoured only when no mode-scoped
+ * secret is set at all.
+ */
+function modeKey(kind: "SECRET" | "PUBLIC"): string {
+  const mode = paystackMode();
+  const value = process.env[`PAYSTACK_${mode.toUpperCase()}_${kind}_KEY`]?.trim() || "";
+  if (!value) return "";
+  const prefix = `${kind === "SECRET" ? "sk" : "pk"}_${mode}_`;
+  return value.startsWith(prefix) ? value : "";
+}
+
+function hasModeScopedSecret(): boolean {
+  return Boolean(process.env.PAYSTACK_TEST_SECRET_KEY || process.env.PAYSTACK_LIVE_SECRET_KEY);
+}
+
 function secretKey(): string {
+  if (hasModeScopedSecret()) return modeKey("SECRET");
   return process.env.PAYSTACK_SECRET_KEY || "";
+}
+
+/** Public key for the active mode — safe to hand to a browser. */
+export function paystackPublicKey(): string {
+  if (hasModeScopedSecret()) return modeKey("PUBLIC");
+  return process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY || "";
+}
+
+/** Server-only accessor for the integrations status probe. */
+export function paystackSecretKeyForProbe(): string {
+  return secretKey();
 }
 
 export function paystackConfigured(): boolean {

@@ -1,11 +1,24 @@
 import "server-only";
+import { randomUUID } from "node:crypto";
 import nodemailer from "nodemailer";
+import { and, eq, gt, isNotNull, lt, sql } from "drizzle-orm";
 import { site } from "@/lib/content";
+import { db } from "@/lib/db/client";
+import { emailOutbox } from "@/lib/db/schema";
 
 /**
  * Transactional email over SMTP (Truehost). Values come from SMTP_* env vars.
  * Degrades gracefully when unconfigured (logs instead of throwing) so local
  * dev and previews don't break.
+ *
+ * EVERY SEND GOES THROUGH THE OUTBOX (`email_outbox`): a row is written before
+ * the SMTP call and settled after, so a message that fails behind the response
+ * still leaves a trace someone can find, and `/api/cron/outbox` can retry it.
+ *
+ * CALLERS MUST NOT FIRE-AND-FORGET. On Vercel a `void sendX()` can be frozen
+ * mid-handshake when the response returns (Truehost spends ~20s authenticating).
+ * Use `after(() => sendX())` from `next/server` for anything that should not
+ * block the response, or `await` it when the caller needs the outcome.
  */
 const host = process.env.SMTP_HOST;
 const port = Number(process.env.SMTP_PORT || 465);
@@ -23,7 +36,13 @@ function getTransport() {
       host,
       port,
       secure: port === 465, // SSL on 465, STARTTLS otherwise
+      requireTLS: port !== 465, // never fall back to plaintext on 587
       auth: { user, pass },
+      // Bounded, but generous: this host has been measured at ~20s for AUTH.
+      // Unbounded defaults let a sick server hang a function until it is killed.
+      connectionTimeout: 15_000,
+      greetingTimeout: 30_000,
+      socketTimeout: 45_000,
     });
   }
   return transporter;
@@ -31,21 +50,176 @@ function getTransport() {
 
 export type MailAttachment = { filename: string; content: Buffer; contentType?: string };
 
-export async function sendEmail(opts: {
+export type EmailMessage = {
   to: string | string[];
   subject: string;
   html?: string;
   text?: string;
   replyTo?: string;
   attachments?: MailAttachment[];
-}): Promise<{ delivered: boolean }> {
+  /**
+   * Names the EVENT this mail is about (e.g. `invoice-sent:<id>:<ts>`). A
+   * second send with the same key is skipped once the first succeeded or is
+   * still in flight. Omit for genuinely one-off mail; a random key is used.
+   */
+  dedupeKey?: string;
+};
+
+const MAX_ATTEMPTS = 5;
+/** A queued row older than this is assumed dead (function killed mid-send). */
+const IN_FLIGHT_MS = 10 * 60_000;
+
+/** Short, secret-free error string for the ledger. */
+function errText(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e);
+  return raw.replace(/\s+/g, " ").slice(0, 300);
+}
+
+type Opened = { kind: "row"; id: string } | { kind: "duplicate" } | { kind: "unlogged" };
+
+/**
+ * Claim the outbox row for this event. A previously FAILED (or stale queued)
+ * row is re-claimed so the event can be retried; a sent or in-flight one is a
+ * duplicate. A database failure never blocks mail: we send unlogged.
+ */
+async function openRow(msg: EmailMessage, dedupeKey: string): Promise<Opened> {
+  const to = Array.isArray(msg.to) ? msg.to.join(", ") : msg.to;
+  const retryable = !msg.attachments?.length;
+  const payload = retryable
+    ? { to: msg.to, subject: msg.subject, html: msg.html, text: msg.text, replyTo: msg.replyTo }
+    : null;
+  try {
+    const inserted = await db
+      .insert(emailOutbox)
+      .values({ dedupeKey, to, subject: msg.subject, retryable, payload, attempts: 1 })
+      .onConflictDoNothing({ target: emailOutbox.dedupeKey })
+      .returning({ id: emailOutbox.id });
+    if (inserted[0]) return { kind: "row", id: inserted[0].id };
+
+    const staleBefore = new Date(Date.now() - IN_FLIGHT_MS);
+    const reclaimed = await db
+      .update(emailOutbox)
+      .set({
+        status: "queued",
+        attempts: sql`${emailOutbox.attempts} + 1`,
+        payload,
+        retryable,
+        lastError: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(emailOutbox.dedupeKey, dedupeKey),
+          sql`(${emailOutbox.status} IN ('failed','skipped') OR (${emailOutbox.status} = 'queued' AND ${emailOutbox.updatedAt} < ${staleBefore}))`,
+        ),
+      )
+      .returning({ id: emailOutbox.id });
+    return reclaimed[0] ? { kind: "row", id: reclaimed[0].id } : { kind: "duplicate" };
+  } catch (e) {
+    console.warn("[email] outbox unavailable — sending unlogged:", errText(e));
+    return { kind: "unlogged" };
+  }
+}
+
+async function settleRow(
+  id: string,
+  status: "sent" | "failed" | "skipped",
+  fields: { error?: string; durationMs?: number } = {},
+) {
+  try {
+    await db
+      .update(emailOutbox)
+      .set({
+        status,
+        lastError: fields.error ?? null,
+        durationMs: fields.durationMs ?? null,
+        sentAt: status === "sent" ? new Date() : null,
+        // The body is kept only while the row may need a resend.
+        ...(status === "sent" ? { payload: null } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(emailOutbox.id, id));
+  } catch (e) {
+    console.warn("[email] could not settle outbox row:", errText(e));
+  }
+}
+
+/**
+ * The one door every outbound email leaves through. Same contract as before:
+ * throws when the SMTP send fails (callers already wrap it), returns
+ * `{ delivered:false }` when SMTP is unconfigured, and now also
+ * `{ delivered:false, duplicate:true }` when this event was already mailed.
+ */
+export async function sendEmail(opts: EmailMessage): Promise<{ delivered: boolean; duplicate?: boolean }> {
+  const { dedupeKey, ...mail } = opts;
+  const opened = await openRow(opts, dedupeKey ?? `adhoc:${randomUUID()}`);
+  if (opened.kind === "duplicate") return { delivered: false, duplicate: true };
+  const rowId = opened.kind === "row" ? opened.id : null;
+
   const t = getTransport();
   if (!t) {
     console.info(`[email] SMTP not configured — skipping "${opts.subject}" to`, opts.to);
+    if (rowId) await settleRow(rowId, "skipped", { error: "SMTP is not configured on this deployment." });
     return { delivered: false };
   }
-  await t.sendMail({ from: FROM, ...opts });
-  return { delivered: true };
+
+  const started = Date.now();
+  try {
+    await t.sendMail({ from: FROM, ...mail });
+    if (rowId) await settleRow(rowId, "sent", { durationMs: Date.now() - started });
+    return { delivered: true };
+  } catch (e) {
+    if (rowId) await settleRow(rowId, "failed", { error: errText(e), durationMs: Date.now() - started });
+    throw e;
+  }
+}
+
+/**
+ * Resend failed, replayable outbox rows (cron: /api/cron/outbox). Bounded per
+ * run and per row (MAX_ATTEMPTS), only for the last 3 days — older failures
+ * need a human, not a robot mailing a stale notice.
+ */
+export async function retryFailedEmails(limit = 20): Promise<{ tried: number; sent: number; failed: number }> {
+  const t = getTransport();
+  if (!t) return { tried: 0, sent: 0, failed: 0 };
+  const since = new Date(Date.now() - 3 * 24 * 60 * 60_000);
+  const rows = await db
+    .select()
+    .from(emailOutbox)
+    .where(
+      and(
+        eq(emailOutbox.status, "failed"),
+        eq(emailOutbox.retryable, true),
+        isNotNull(emailOutbox.payload),
+        lt(emailOutbox.attempts, MAX_ATTEMPTS),
+        gt(emailOutbox.createdAt, since),
+      ),
+    )
+    .orderBy(emailOutbox.createdAt)
+    .limit(limit);
+
+  let sent = 0;
+  let failed = 0;
+  for (const row of rows) {
+    const p = row.payload as Pick<EmailMessage, "to" | "subject" | "html" | "text" | "replyTo">;
+    // Claim it first so two overlapping cron runs cannot both resend.
+    const claimed = await db
+      .update(emailOutbox)
+      .set({ status: "queued", attempts: sql`${emailOutbox.attempts} + 1`, updatedAt: new Date() })
+      .where(and(eq(emailOutbox.id, row.id), eq(emailOutbox.status, "failed")))
+      .returning({ id: emailOutbox.id });
+    if (!claimed[0]) continue;
+    const started = Date.now();
+    try {
+      await t.sendMail({ from: FROM, ...p });
+      await settleRow(row.id, "sent", { durationMs: Date.now() - started });
+      sent++;
+    } catch (e) {
+      await settleRow(row.id, "failed", { error: errText(e), durationMs: Date.now() - started });
+      failed++;
+    }
+  }
+  return { tried: rows.length, sent, failed };
 }
 
 /* ─────────────────────────────  Templating  ─────────────────────────────

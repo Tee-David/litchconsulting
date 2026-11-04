@@ -1,9 +1,10 @@
 [Unit]
 Description=LitchAI idle-reclaim heartbeat (defers litchai.heartbeat)
-After=network-online.target
+After=network-online.target postgresql.service
 
 [Service]
 Type=oneshot
-EnvironmentFile=/etc/litchai/env
-ExecStart=/home/ubuntu/litchconsulting/backend/.venv/bin/python -c "from litchai.queue import heartbeat; heartbeat.defer()"
-User=ubuntu
+User=litch
+Group=litch
+WorkingDirectory=/srv/litch/app/backend
+ExecStart=/usr/local/bin/litch-run /srv/litch/venv/bin/python -c "from litchai.queue import heartbeat; heartbeat.defer()"

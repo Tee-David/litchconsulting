@@ -549,6 +549,40 @@ export const auditLog = pgTable(
   ]
 );
 
+/**
+ * Email outbox — every outbound message writes a row BEFORE it is sent and is
+ * settled after (lib/email.ts sendEmail). `dedupe_key` names the event, so a
+ * retry of the same event can never mail somebody twice.
+ *
+ * `payload` (subject/html/text/replyTo) is kept ONLY while a row is unsent, so
+ * the retry cron can resend it; it is nulled the moment the send succeeds —
+ * the outbox is a delivery ledger, not a second copy of the mailbox. Messages
+ * with attachments (invoice/receipt PDFs) are not replayable (`retryable`
+ * false): their PDF is rebuilt by re-running the action, not from this row.
+ */
+export const emailOutbox = pgTable(
+  "email_outbox",
+  {
+    id: id(),
+    dedupeKey: text("dedupe_key").notNull(),
+    to: text("to").notNull(),
+    subject: text("subject").notNull(),
+    status: text("status").default("queued").notNull(), // queued | sent | failed | skipped
+    attempts: integer("attempts").default(0).notNull(),
+    retryable: boolean("retryable").default(true).notNull(),
+    payload: jsonb("payload"),
+    lastError: text("last_error"),
+    durationMs: integer("duration_ms"),
+    createdAt: createdAt(),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex("email_outbox_dedupe_uidx").on(t.dedupeKey),
+    index("email_outbox_status_idx").on(t.status, t.createdAt),
+  ]
+);
+
 /** Web-push subscriptions (admin alerting in v1). One row per browser. */
 export const pushSubscription = pgTable(
   "push_subscription",

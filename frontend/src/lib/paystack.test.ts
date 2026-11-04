@@ -1,6 +1,14 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { createHmac } from "node:crypto";
-import { isValidWebhookSignature, koboFromTotal, mintReference, paystackConfigured } from "./paystack";
+import {
+  isValidWebhookSignature,
+  koboFromTotal,
+  mintReference,
+  paystackConfigured,
+  paystackMode,
+  paystackPublicKey,
+  paystackSecretKeyForProbe,
+} from "./paystack";
 
 // Deliberately NOT shaped like a real key: a literal `sk_test_…` here trips
 // GitHub's secret scanner and blocks the push. HMAC doesn't care about shape.
@@ -80,6 +88,66 @@ describe("paystackConfigured / isValidWebhookSignature", () => {
     const reserialised = JSON.stringify(JSON.parse(raw), null, 2);
     expect(isValidWebhookSignature(raw, sig)).toBe(true);
     expect(isValidWebhookSignature(reserialised, sig)).toBe(false);
+  });
+});
+
+describe("PAYSTACK_MODE key selection", () => {
+  // Built by concatenation so no literal resembles a real key (secret scanner).
+  const k = (kind: "sk" | "pk", mode: "test" | "live") => `${kind}_${mode}_` + "fixture";
+  const NAMES = [
+    "PAYSTACK_MODE",
+    "PAYSTACK_SECRET_KEY",
+    "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY",
+    "PAYSTACK_TEST_SECRET_KEY",
+    "PAYSTACK_TEST_PUBLIC_KEY",
+    "PAYSTACK_LIVE_SECRET_KEY",
+    "PAYSTACK_LIVE_PUBLIC_KEY",
+  ];
+  const saved: Record<string, string | undefined> = {};
+
+  beforeEach(() => {
+    for (const n of NAMES) {
+      saved[n] = process.env[n];
+      delete process.env[n];
+    }
+    process.env.PAYSTACK_TEST_SECRET_KEY = k("sk", "test");
+    process.env.PAYSTACK_TEST_PUBLIC_KEY = k("pk", "test");
+    process.env.PAYSTACK_LIVE_SECRET_KEY = k("sk", "live");
+    process.env.PAYSTACK_LIVE_PUBLIC_KEY = k("pk", "live");
+  });
+
+  afterEach(() => {
+    for (const n of NAMES) {
+      if (saved[n] === undefined) delete process.env[n];
+      else process.env[n] = saved[n];
+    }
+  });
+
+  it("defaults to test mode when PAYSTACK_MODE is unset or unrecognised", () => {
+    expect(paystackMode()).toBe("test");
+    process.env.PAYSTACK_MODE = "LIEV";
+    expect(paystackMode()).toBe("test");
+    expect(paystackPublicKey()).toBe(k("pk", "test"));
+  });
+
+  it("selects the live pair only when PAYSTACK_MODE=live", () => {
+    process.env.PAYSTACK_MODE = " Live ";
+    expect(paystackMode()).toBe("live");
+    expect(paystackPublicKey()).toBe(k("pk", "live"));
+    expect(paystackSecretKeyForProbe()).toBe(k("sk", "live"));
+  });
+
+  it("fails closed when a key's prefix does not match the mode", () => {
+    process.env.PAYSTACK_MODE = "live";
+    process.env.PAYSTACK_LIVE_SECRET_KEY = k("sk", "test");
+    expect(paystackConfigured()).toBe(false);
+  });
+
+  it("ignores the legacy PAYSTACK_SECRET_KEY once mode-scoped keys exist", () => {
+    process.env.PAYSTACK_MODE = "live";
+    delete process.env.PAYSTACK_LIVE_SECRET_KEY;
+    process.env.PAYSTACK_SECRET_KEY = SECRET;
+    expect(paystackConfigured()).toBe(false);
   });
 });
 

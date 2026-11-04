@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { newsletterSchema } from "@/lib/schemas";
 import { site } from "@/lib/content";
 import { db } from "@/lib/db/client";
@@ -25,11 +25,14 @@ export async function POST(req: Request) {
     console.error("[newsletter] lead insert failed:", err);
   }
 
-  void sendEmail({
-    to: process.env.CONTACT_TO_EMAIL || site.email,
-    subject: "New newsletter subscriber",
-    html: `<p>New subscriber: <strong>${email}</strong></p>`,
-  }).catch((err) => console.error("[newsletter] email send failed:", err));
+  after(() =>
+    sendEmail({
+      to: process.env.CONTACT_TO_EMAIL || site.email,
+      subject: "New newsletter subscriber",
+      html: `<p>New subscriber: <strong>${email}</strong></p>`,
+      dedupeKey: `newsletter:${email.toLowerCase()}`,
+    }).catch((err) => console.error("[newsletter] email send failed:", err)),
+  );
 
   return NextResponse.json({ ok: true, delivered: true });
 }

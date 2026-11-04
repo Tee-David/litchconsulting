@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/reminders",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/outbox",
+      "schedule": "30 6 * * *"
     }
   ]
 }

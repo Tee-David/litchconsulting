@@ -1,21 +1,26 @@
-# LitchAI API — install: sudo cp to /etc/systemd/system/, daemon-reload, enable --now
-# Loopback bind only: the Cloudflare tunnel is the sole ingress (PRD §12.5).
+# LitchAI API — installed by bootstrap.sh. Loopback bind only: the Cloudflare
+# tunnel is the sole ingress. Secrets via litch-run (Doppler, read-only token).
 [Unit]
 Description=LitchAI API (FastAPI, loopback only)
-After=network.target docker.service
+After=network-online.target postgresql.service ollama.service clamav-daemon.service
+Wants=network-online.target
 
 [Service]
-User=ubuntu
-# Creates /var/lib/litchai (0700, owned by User=) before start. Without this the
-# ciphertext store can't be created — the service user can't mkdir under
-# /var/lib — and every document upload 500s with PermissionError.
-StateDirectory=litchai
-StateDirectoryMode=0700
-EnvironmentFile=/etc/litchai/env
-WorkingDirectory=/home/ubuntu/litchconsulting/backend
-ExecStart=/home/ubuntu/litchai/venv/bin/uvicorn litchai.api:app --host 127.0.0.1 --port 8000
+User=litch
+Group=litch
+WorkingDirectory=/srv/litch/app/backend
+ExecStart=/usr/local/bin/litch-run /srv/litch/venv/bin/uvicorn litchai.api:app --host 127.0.0.1 --port 8000
 Restart=on-failure
 RestartSec=3
+# 2 OCPU / 12 GB box shared with Postgres, Ollama, ClamAV, LibreOffice.
+CPUQuota=150%
+MemoryHigh=2G
+MemoryMax=3G
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/srv/litch/data /srv/litch/backups
 
 [Install]
 WantedBy=multi-user.target

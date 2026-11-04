@@ -1,10 +1,11 @@
 [Unit]
-Description=LitchAI nightly Postgres backup → Cloudflare R2
-After=network-online.target
+Description=LitchAI nightly Postgres backup -> Cloudflare R2
+After=network-online.target postgresql.service
 Wants=network-online.target
 
 [Service]
 Type=oneshot
-EnvironmentFile=/etc/litchai/env
-ExecStart=/home/ubuntu/litchconsulting/backend/deploy/backup.sh
-User=ubuntu
+User=litch
+Group=litch
+Nice=10
+ExecStart=/usr/local/bin/litch-run /usr/local/bin/litchai-backup

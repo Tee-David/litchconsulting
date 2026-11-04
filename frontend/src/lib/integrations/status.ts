@@ -4,6 +4,7 @@ import { HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
 import { db } from "@/lib/db/client";
 import { pushSubscription } from "@/lib/db/schema";
 import { r2Config, r2Configured, r2PrivateConfigured } from "@/lib/r2";
+import { paystackMode, paystackSecretKeyForProbe } from "@/lib/paystack";
 
 /**
  * Live status for every service the platform integrates with.
@@ -141,17 +142,17 @@ const notConfigured = (what: string) => ({
 
 /** Paystack: `/balance` is the cheapest call that proves the key is live. */
 async function paystack() {
-  if (!hasAll("PAYSTACK_SECRET_KEY")) return notConfigured("No secret key set — invoices can't be paid online.");
+  const key = paystackSecretKeyForProbe();
+  const mode = paystackMode();
+  if (!key) return notConfigured(`No valid ${mode}-mode secret key set — invoices can't be paid online.`);
   return probe(async () => {
     const res = await fetch("https://api.paystack.co/balance", {
-      headers: { Authorization: `Bearer ${env("PAYSTACK_SECRET_KEY")}` },
+      headers: { Authorization: `Bearer ${key}` },
       cache: "no-store",
       signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
     });
     if (res.status === 401) return { state: "degraded" as const, detail: "Key rejected (401) — it may be rotated or revoked." };
     if (!res.ok) return { state: "degraded" as const, detail: `Paystack returned HTTP ${res.status}.` };
-    // Test vs live is purely which key is present (lib/paystack.ts).
-    const mode = env("PAYSTACK_SECRET_KEY")!.startsWith("sk_live") ? "live" : "test";
     return { state: "connected" as const, detail: `Authenticated — ${mode} mode.` };
   });
 }
@@ -391,7 +392,11 @@ export async function getIntegrationStatuses(): Promise<IntegrationStatus[]> {
       name: "Paystack",
       group: "Payments & scheduling",
       description: "Collects invoice payments online and verifies them by webhook.",
-      envKeys: [envGroup("PAYSTACK_SECRET_KEY")],
+      envKeys: [
+        envGroup("PAYSTACK_MODE"),
+        envGroup(`PAYSTACK_${paystackMode().toUpperCase()}_SECRET_KEY`, "PAYSTACK_SECRET_KEY"),
+        envGroup(`PAYSTACK_${paystackMode().toUpperCase()}_PUBLIC_KEY`, "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY"),
+      ],
       docsUrl: "https://paystack.com/docs/api/",
       configHref: "/admin/finance/invoices",
       ...pay,
