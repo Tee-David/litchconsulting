@@ -52,7 +52,8 @@ log "Service user + folders"
 id -u "$APP_USER" >/dev/null 2>&1 || useradd --system --create-home --home-dir "$ROOT" --shell /usr/sbin/nologin "$APP_USER"
 install -d -o "$APP_USER" -g "$APP_USER" -m 0750 "$ROOT" "$ROOT/data" "$ROOT/data/.home" "$ROOT/backups" "$ROOT/models"
 chmod 0700 "$ROOT/data"
-install -d -m 0750 /etc/litch
+# root-owned, but the litch group must be able to traverse it and read env.
+install -d -o root -g "$APP_USER" -m 0750 /etc/litch
 
 # ---------------------------------------------------------------- Doppler CLI
 log "Doppler CLI"
@@ -64,11 +65,11 @@ if ! command -v doppler >/dev/null; then
   apt-get update -y && apt-get install -y doppler
 fi
 if [ -n "${DOPPLER_TOKEN:-}" ]; then
-  umask 077
-  printf 'DOPPLER_TOKEN=%s\n' "$DOPPLER_TOKEN" > /etc/litch/doppler.env
-  chown root:"$APP_USER" /etc/litch/doppler.env && chmod 0640 /etc/litch/doppler.env
+  ( umask 077; printf 'DOPPLER_TOKEN=%s\n' "$DOPPLER_TOKEN" > /etc/litch/doppler.env )
 fi
 [ -s /etc/litch/doppler.env ] || { echo "Missing /etc/litch/doppler.env — re-run with DOPPLER_TOKEN=..."; exit 1; }
+# Always (re)apply: a token placed by hand is root-only, which locks the units out.
+chown root:"$APP_USER" /etc/litch/doppler.env && chmod 0640 /etc/litch/doppler.env
 
 # Non-secret, host-local settings (override anything Doppler says for these).
 cat > /etc/litch/env <<EOF
