@@ -68,7 +68,7 @@ export function settlementRows(variant: DocVariant, data: InvoiceData): SettleRo
       { label: `Deposit due now (${data.deposit.percent}%)`, value: fmt(due) },
       ...(paid > 0 ? [{ label: "Paid", value: `−${fmt(paid)}` }] : []),
       { label: "Deposit balance", value: fmt(Math.max(0, due - paid)), strong: true },
-      { label: `Balance of the job, invoiced on delivery`, value: fmt(Math.max(0, total - Math.max(paid, due))) },
+      { label: "Balance, due on delivery", value: fmt(Math.max(0, total - Math.max(paid, due))) },
     ];
   }
   if (paid > 0 && data.status !== "paid") {

@@ -14,9 +14,6 @@ import { InvoicePaymentsCard } from "@/components/admin/invoice/invoice-payments
 import { InvoiceTimeline } from "@/components/admin/invoice/invoice-timeline";
 import { StatusChip } from "@/components/kit";
 import { DepositCard } from "@/components/admin/billing/deposit-card";
-import { db } from "@/lib/db/client";
-import { invoice as invoiceTable } from "@/lib/db/schema";
-import { and, eq, isNull } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -33,13 +30,6 @@ export default async function ViewInvoicePage({ params }: { params: Promise<{ id
   // Part-paid is a real state the status column can't express on its own.
   const paid = num(inv.amountPaid);
   const partial = inv.status !== "paid" && paid > 0 && paid < num(inv.total);
-  const pick = { id: invoiceTable.id, number: invoiceTable.number, status: invoiceTable.status, total: invoiceTable.total };
-  const [[parentRow], [childRow]] = await Promise.all([
-    inv.parentInvoiceId ? db.select(pick).from(invoiceTable).where(eq(invoiceTable.id, inv.parentInvoiceId)).limit(1) : Promise.resolve([]),
-    db.select(pick).from(invoiceTable).where(and(eq(invoiceTable.parentInvoiceId, inv.id), isNull(invoiceTable.deletedAt))).limit(1),
-  ]);
-  const linkOf = (r?: { id: string; number: string; status: string; total: string }) => (r ? { ...r, total: num(r.total) } : null);
-
   return (
     <div className="space-y-5">
       <Link href="/admin/billing?view=invoices" className="inline-flex items-center gap-1.5 text-sm font-medium text-body hover:text-ink">
@@ -63,14 +53,11 @@ export default async function ViewInvoicePage({ params }: { params: Promise<{ id
         <div className="space-y-5">
           <DepositCard
             invoiceId={inv.id}
-            number={inv.number}
             status={inv.status}
             currency={inv.currency}
             total={num(inv.total)}
             paid={paid}
             depositPercent={inv.depositPercent}
-            parent={linkOf(parentRow)}
-            child={linkOf(childRow)}
           />
           <InvoicePaymentsCard
             invoiceId={inv.id}

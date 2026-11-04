@@ -129,7 +129,7 @@ export async function recentNotifications(limit = 20): Promise<NotificationItem[
       title:
         p.status === "duplicate_success" ? "Double payment — refund needed" : "Payment amount mismatch",
       description: `Reference ${p.reference}`,
-      href: `/admin/finance/invoices/${p.invoiceId}`,
+      href: `/admin/billing/invoices/${p.invoiceId}`,
       at: (p.updatedAt as Date).toISOString(),
     });
   }
@@ -155,7 +155,7 @@ export async function recentNotifications(limit = 20): Promise<NotificationItem[
         type: "invoice_paid",
         title: `Invoice ${inv.number} paid`,
         description: who,
-        href: `/admin/finance/invoices/${inv.id}`,
+        href: `/admin/billing/invoices/${inv.id}`,
         at: (inv.paidAt as Date).toISOString(),
       });
     } else if (inv.sentAt) {
@@ -164,7 +164,7 @@ export async function recentNotifications(limit = 20): Promise<NotificationItem[
         type: "invoice_sent",
         title: `Invoice ${inv.number} sent`,
         description: who,
-        href: `/admin/finance/invoices/${inv.id}`,
+        href: `/admin/billing/invoices/${inv.id}`,
         at: (inv.sentAt as Date).toISOString(),
       });
     }
@@ -271,7 +271,7 @@ export async function clientActivity(clientId: string, limit = 50): Promise<Noti
     });
   }
   for (const inv of invoices) {
-    const base = inv.kind === "quote" ? "/admin/finance/quotes" : "/admin/finance/invoices";
+    const base = inv.kind === "quote" ? "/admin/billing/quotes" : "/admin/billing";
     if (inv.paidAt) {
       items.push({
         id: `inv-paid-${inv.id}`,
@@ -301,7 +301,7 @@ export async function clientActivity(clientId: string, limit = 50): Promise<Noti
       type: flagged ? "payment_flagged" : "payment",
       title: flagged ? `Payment flagged — ${p.status.replace(/_/g, " ")}` : "Payment received",
       description: `${p.reference} · ${p.currency} ${p.amountSettled ?? p.amount}`,
-      href: `/admin/finance/invoices/${p.invoiceId}`,
+      href: `/admin/billing/invoices/${p.invoiceId}`,
       at: (p.updatedAt as Date).toISOString(),
     });
   }
