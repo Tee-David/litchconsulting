@@ -81,6 +81,12 @@ export const client = pgTable(
     notes: text("notes"),
     // Weekly client digest email opt-out (client toggles it in portal settings).
     digestOptOut: boolean("digest_opt_out").notNull().default(false),
+    // AI privacy per client: cloud_masked (cloud models see masked samples) |
+    // local_only (never leaves the VM). Who set it and why, for the audit trail.
+    aiMode: text("ai_mode").notNull().default("cloud_masked"),
+    aiModeReason: text("ai_mode_reason"),
+    aiModeSetBy: text("ai_mode_set_by"),
+    aiModeSetAt: timestamp("ai_mode_set_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: deletedAt(),
@@ -125,6 +131,9 @@ export const invoice = pgTable(
     taxTotal: numeric("tax_total", { precision: 14, scale: 2 }).notNull().default("0"),
     total: numeric("total", { precision: 14, scale: 2 }).notNull().default("0"),
     amountPaid: numeric("amount_paid", { precision: 14, scale: 2 }).notNull().default("0"),
+    // Deposit flow: the balance invoice points at the deposit invoice it settles.
+    parentInvoiceId: uuid("parent_invoice_id"),
+    depositPercent: integer("deposit_percent"),
 
     createdByUserId: text("created_by_user_id"),
     createdAt: createdAt(),
@@ -367,6 +376,10 @@ export const serviceRequest = pgTable(
     cancelReason: text("cancel_reason"),
     deliveredAt: timestamp("delivered_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    // Follow-on work ("request again" / "add a service") links to the original.
+    parentRequestId: uuid("parent_request_id"),
+    // Client draft review: current round (0 = no draft sent yet).
+    reviewRound: integer("review_round").notNull().default(0),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: deletedAt(),
@@ -436,6 +449,8 @@ export const serviceRequestDocument = pgTable(
     // correction (client-visible reason). Cleared when the client re-uploads.
     correctionReason: text("correction_reason"),
     correctionRequestedAt: timestamp("correction_requested_at", { withTimezone: true }),
+    // Deliverables only: draft (client reviews it) | final (delivered).
+    stage: text("stage"),
     createdAt: createdAt(),
   },
   (t) => [
@@ -470,11 +485,17 @@ export const payment = pgTable(
     rawEvent: jsonb("raw_event"), // last webhook/verify payload
     paidAt: timestamp("paid_at", { withTimezone: true }),
     verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    // Bank transfer: proof uploaded by the client, confirmed by an admin.
+    proofKey: text("proof_key"),
+    proofFileName: text("proof_file_name"),
+    confirmedBy: text("confirmed_by"),
+    confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
   (t) => [
     index("payment_invoice_idx").on(t.invoiceId),
+    index("payment_request_idx").on(t.requestId),
     index("payment_status_idx").on(t.status),
     index("payment_created_idx").on(t.createdAt),
   ]
@@ -630,6 +651,145 @@ export const sageMessage = pgTable(
   (t) => [index("sage_message_conversation_idx").on(t.conversationId, t.createdAt)]
 );
 
+/* ───────────────────── Redesign: roles, flow and notifications ───────────────────── */
+
+/**
+ * Invitations (staff and client colleagues). Single-use: only the SHA-256 of a
+ * 32-byte random token is stored; the email is fixed by the invitation, so the
+ * link cannot be redeemed for a different account.
+ */
+export const invitation = pgTable(
+  "invitation",
+  {
+    id: id(),
+    email: text("email").notNull(),
+    role: text("role").notNull(), // staff | client (admin is promoted, never invited)
+    clientId: uuid("client_id"), // client colleague: joins this client company
+    tokenHash: text("token_hash").notNull(),
+    message: text("message"),
+    invitedBy: text("invited_by").notNull(), // user.id
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    redeemedAt: timestamp("redeemed_at", { withTimezone: true }),
+    redeemedBy: text("redeemed_by"),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    lastSentAt: timestamp("last_sent_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("invitation_token_uidx").on(t.tokenHash),
+    index("invitation_email_idx").on(t.email),
+  ]
+);
+
+/** Staff assignment: a staff member sees only the requests assigned here. */
+export const requestAssignment = pgTable(
+  "request_assignment",
+  {
+    id: id(),
+    requestId: uuid("request_id").notNull(),
+    userId: text("user_id").notNull(), // staff user.id
+    assignedBy: text("assigned_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("request_assignment_uidx").on(t.requestId, t.userId),
+    index("request_assignment_user_idx").on(t.userId),
+  ]
+);
+
+/** Asks for information or documents at any time: open, supplied, received. */
+export const requestItem = pgTable(
+  "request_item",
+  {
+    id: id(),
+    requestId: uuid("request_id").notNull(),
+    kind: text("kind").notNull(), // info | document
+    title: text("title").notNull(),
+    detail: text("detail"),
+    status: text("status").notNull().default("open"), // open | supplied | received | cancelled
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    answer: text("answer"),
+    documentId: uuid("document_id"), // service_request_document when kind=document
+    createdBy: text("created_by"),
+    suppliedAt: timestamp("supplied_at", { withTimezone: true }),
+    receivedAt: timestamp("received_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("request_item_request_idx").on(t.requestId, t.status)]
+);
+
+/** Client draft review rounds: approve, or ask for changes (round counter). */
+export const reviewRound = pgTable(
+  "review_round",
+  {
+    id: id(),
+    requestId: uuid("request_id").notNull(),
+    round: integer("round").notNull(),
+    documentId: uuid("document_id"), // the draft deliverable reviewed
+    sentAt: timestamp("sent_at", { withTimezone: true }).defaultNow().notNull(),
+    decision: text("decision"), // approved | changes | null (pending)
+    comments: jsonb("comments"), // [{ text, anchor? }]
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    decidedBy: text("decided_by"),
+  },
+  (t) => [uniqueIndex("review_round_uidx").on(t.requestId, t.round)]
+);
+
+/** In-app notifications (the bell). The same events drive email and push. */
+export const notification = pgTable(
+  "notification",
+  {
+    id: id(),
+    userId: text("user_id").notNull(),
+    category: text("category").notNull(), // actions | progress | billing | support | team
+    title: text("title").notNull(),
+    body: text("body"),
+    link: text("link"),
+    dedupeKey: text("dedupe_key"),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    index("notification_user_idx").on(t.userId, t.createdAt),
+    uniqueIndex("notification_dedupe_uidx").on(t.userId, t.dedupeKey),
+  ]
+);
+
+/** Per-user, per-category delivery: immediate | digest | off, per channel. */
+export const notificationPref = pgTable(
+  "notification_pref",
+  {
+    id: id(),
+    userId: text("user_id").notNull(),
+    category: text("category").notNull(),
+    mode: text("mode").notNull().default("immediate"), // immediate | digest | off
+    email: boolean("email").notNull().default(true),
+    push: boolean("push").notNull().default(true),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("notification_pref_uidx").on(t.userId, t.category)]
+);
+
+/**
+ * Service chosen before sign-up, saved server-side so it survives email
+ * verification on another device. Claimed by the verified user.
+ */
+export const requestDraft = pgTable(
+  "request_draft",
+  {
+    id: id(),
+    email: text("email"),
+    serviceSlug: text("service_slug"),
+    answers: jsonb("answers"),
+    claimedByUserId: text("claimed_by_user_id"),
+    claimedAt: timestamp("claimed_at", { withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("request_draft_email_idx").on(t.email)]
+);
+
 export type Client = typeof client.$inferSelect;
 export type Invoice = typeof invoice.$inferSelect;
 export type InvoiceItem = typeof invoiceItem.$inferSelect;
@@ -651,3 +811,10 @@ export type ClientNote = typeof clientNote.$inferSelect;
 export type SageConversation = typeof sageConversation.$inferSelect;
 export type SageMessage = typeof sageMessage.$inferSelect;
 export type AuditLog = typeof auditLog.$inferSelect;
+export type Invitation = typeof invitation.$inferSelect;
+export type RequestAssignment = typeof requestAssignment.$inferSelect;
+export type RequestItem = typeof requestItem.$inferSelect;
+export type ReviewRound = typeof reviewRound.$inferSelect;
+export type Notification = typeof notification.$inferSelect;
+export type NotificationPref = typeof notificationPref.$inferSelect;
+export type RequestDraft = typeof requestDraft.$inferSelect;

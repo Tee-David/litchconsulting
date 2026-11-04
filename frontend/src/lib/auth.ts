@@ -9,8 +9,9 @@ import { pool } from "./db/pg-pool";
  * connect used to hang Better Auth's session check for ~2 min and cascade into
  * "a server error occurred" across pages.
  *
- * Litch uses just two roles: `admin` (firm staff) and `client` (default).
- * Admin accounts are seeded/promoted manually; self-signup is always a client.
+ * Roles: `admin` (owners), `staff` (team members, assigned work only) and
+ * `client` (default). Self-signup is always a client; admin/staff come from
+ * invitations or Settings → Access. See lib/access.ts for what each can do.
  */
 
 const googleId = process.env.GOOGLE_CLIENT_ID;
@@ -83,14 +84,16 @@ export const auth = betterAuth({
     : {},
   user: {
     additionalFields: {
-      // admin | client — drives dashboard vs admin routing. Not settable at
-      // signup in practice (self-signup is forced to "client" in the UI/action);
-      // input:true keeps the field writable when seeding an admin.
+      // admin | staff | client (lib/access.ts). NEVER client-writable:
+      // with input:true anyone could POST /api/auth/sign-up/email with
+      // {"role":"admin"} and get an admin account. Roles are set server-side
+      // only — invitations (lib/invitations.ts), Settings → Access, or a direct
+      // DB update (scripts/seed-users.ts).
       role: {
         type: "string",
         required: false,
         defaultValue: "client",
-        input: true,
+        input: false,
       },
       // admin moderation flag — when true, guarded layouts bounce the user out.
       banned: {

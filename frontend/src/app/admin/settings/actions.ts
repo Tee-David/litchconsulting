@@ -1,5 +1,8 @@
 "use server";
 
+import { randomBytes } from "node:crypto";
+import { isRole as isAccessRole, type Role as AccessRole } from "@/lib/access";
+
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { and, eq, sql, inArray } from "drizzle-orm";
@@ -105,25 +108,24 @@ export async function createAdminUserAction(input: {
 
   const name = input.name.trim();
   const email = input.email.trim().toLowerCase();
-  const password = input.password || Math.random().toString(36).slice(-10) + "A1!";
+  // Temporary password when none is given: 18 random bytes, base64url.
+  const password = input.password || randomBytes(18).toString("base64url") + "A1!";
 
   if (!name || !email) {
     return { ok: false, error: "Name and email are required" };
   }
 
   try {
-    const signup = await auth.api.signUpEmail({
-      body: {
-        email,
-        password,
-        name,
-        role: "admin",
-      },
-    });
+    // The role is never accepted from a sign-up body (lib/auth.ts): create the
+    // account as a client, then promote it server-side.
+    const signup = await auth.api.signUpEmail({ body: { email, password, name } });
 
     if (!signup?.user) {
       return { ok: false, error: "Could not create user" };
     }
+    await db.update(user).set({ role: "admin" }).where(eq(user.id, signup.user.id));
+    const me = await getSessionUser();
+    await recordAudit({ action: "user.created_admin", entity: "user", entityId: signup.user.id, actorId: me?.id });
 
     revalidatePath("/admin/settings");
     return { ok: true, userId: signup.user.id };
@@ -144,9 +146,9 @@ export async function createAdminUserAction(input: {
  * Better Auth's tables use camelCase columns ("userId") — there is no user_id.
  */
 
-const ROLES = ["admin", "client"] as const;
-type Role = (typeof ROLES)[number];
-const isRole = (r: string): r is Role => (ROLES as readonly string[]).includes(r);
+// Supported roles come from lib/access.ts (admin | staff | client).
+type Role = AccessRole;
+const isRole = (r: string): r is Role => isAccessRole(r);
 
 type ChangeKind = "delete" | "ban" | "unban" | "role";
 
