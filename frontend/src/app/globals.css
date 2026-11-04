@@ -18,12 +18,49 @@
   /* Neutrals */
   --color-ink: #0a0e1a;
   --color-night: #0a0e1a; /* always-dark surfaces (does NOT flip in dark mode) */
-  --color-body: #5b6474;
-  --color-muted: #8a92a6;
+  --color-body: #4f5869; /* 4.5:1+ on paper/surface */
+  --color-muted: #6b7386; /* secondary text, 4.5:1 on paper */
+  --color-faint: #8a92a6; /* placeholders, disabled — never body copy */
   --color-hairline: #e6e8f0;
+  --color-line-strong: #d2d7e5; /* inputs, dividers that must read */
   --color-surface: #f5f6fa;
   --color-cloud: #fbfbfe;
   --color-paper: #ffffff;
+  --color-desk: #eceef5; /* app canvas behind cards */
+
+  /* Primary action (one per view). Navy in light, brighter blue in dark. */
+  --color-act: #0a196d;
+  --color-act-hover: #0c1f8c;
+  --color-act-ink: #ffffff;
+
+  /* Status — mean status and nothing else (chips, queue severity, toasts). */
+  --color-good: #11734a;
+  --color-good-soft: #e3f4eb;
+  --color-warn: #975400;
+  --color-warn-soft: #fdf0d8;
+  --color-bad: #b42318;
+  --color-bad-soft: #fde7e5;
+  --color-info: #2540c4;
+  --color-info-soft: #eaeefc;
+  --color-neutral: #4a5263;
+  --color-neutral-soft: #eef0f5;
+  --color-violet: #6a3fb8; /* drafts, local-only AI */
+  --color-violet-soft: #f1eafb;
+
+  /* Workbench diff overlay */
+  --color-diff-new: #dcf3e5;
+  --color-diff-new-line: #1f9d5c;
+  --color-diff-chg: #fdeec9;
+  --color-diff-chg-line: #c98500;
+  --color-diff-sel: rgb(37 64 196 / 0.10);
+  --color-diff-sel-line: #2540c4;
+  --color-grid-line: #e3e6ef;
+  --color-grid-head: #f3f4f8;
+
+  /* Overlays */
+  --color-scrim: rgb(8 12 30 / 0.42);
+  --color-toast: #0f1630;
+  --color-toast-ink: #eef1fb;
 
   /* Fonts (bound to next/font CSS vars) */
   --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
@@ -31,6 +68,7 @@
 
   /* Radii — the site's "rounded" language */
   --radius-card: 1.25rem;
+  --radius-ctl: 0.625rem; /* inputs, buttons, chips (10px) */
   --radius-xl2: 2rem;
   --radius-hero: 2.5rem;
 
@@ -56,14 +94,47 @@
    Brand blue stays constant. */
 .dark {
   --color-ink: #eef1fb;
-  --color-body: #aab4c9;
-  --color-muted: #7c8299;
+  --color-body: #b3bccf;
+  --color-muted: #8f97ad;
+  --color-faint: #737b93;
   --color-hairline: #232c46;
+  --color-line-strong: #323d5e;
   --color-surface: #131a2e;
   --color-cloud: #0d1426;
   --color-paper: #0b1020;
+  --color-desk: #070a14;
   --color-brand-tint: #151f42;
   --color-brand-soft: #1c2857;
+
+  --color-act: #3654dc;
+  --color-act-hover: #4664ea;
+  --color-act-ink: #ffffff;
+
+  --color-good: #5fd39a;
+  --color-good-soft: #0f2e21;
+  --color-warn: #f2b54a;
+  --color-warn-soft: #33240a;
+  --color-bad: #ff8a7e;
+  --color-bad-soft: #3a1513;
+  --color-info: #8ea3ff;
+  --color-info-soft: #18224a;
+  --color-neutral: #b3bccf;
+  --color-neutral-soft: #1a2238;
+  --color-violet: #c3a6ff;
+  --color-violet-soft: #2a1d48;
+
+  --color-diff-new: #123826;
+  --color-diff-new-line: #3ccf86;
+  --color-diff-chg: #3a2c0b;
+  --color-diff-chg-line: #f0b23a;
+  --color-diff-sel: rgb(110 140 255 / 0.16);
+  --color-diff-sel-line: #8ea3ff;
+  --color-grid-line: #1f2842;
+  --color-grid-head: #111830;
+
+  --color-scrim: rgb(0 0 0 / 0.6);
+  --color-toast: #e9edfb;
+  --color-toast-ink: #0a0e1a;
 
   --background: #0a0e1a;
   --foreground: var(--color-ink);
@@ -366,4 +437,19 @@ body {
   .animate-\[marquee_28s_linear_infinite\] {
     animation: none;
   }
+}
+
+/* Kit: Sheet entrance (bottom sheet on phones, side panel on ≥ sm). */
+@keyframes sheet-in {
+  from { transform: translateY(14px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+@media (min-width: 40rem) {
+  @keyframes sheet-in {
+    from { transform: translateX(18px); opacity: 0; }
+    to { transform: none; opacity: 1; }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  @keyframes sheet-in { from { opacity: 0; } to { opacity: 1; } }
 }

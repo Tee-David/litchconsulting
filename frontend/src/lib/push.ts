@@ -55,3 +55,24 @@ export async function pushAdmins(payload: PushPayload): Promise<void> {
     })
   );
 }
+
+/** Send a push to every subscribed browser of the given users (any role). */
+export async function pushToUsers(userIds: string[], payload: PushPayload): Promise<void> {
+  if (!pushConfigured() || userIds.length === 0) return;
+  const subs = await db.select().from(pushSubscription).where(inArray(pushSubscription.userId, userIds));
+  if (subs.length === 0) return;
+  const wp = await webpush();
+  const body = JSON.stringify(payload);
+  await Promise.all(
+    subs.map(async (sub) => {
+      try {
+        await wp.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, body);
+      } catch (err) {
+        const status = (err as { statusCode?: number })?.statusCode;
+        if (status === 404 || status === 410) {
+          await db.delete(pushSubscription).where(eq(pushSubscription.id, sub.id));
+        }
+      }
+    }),
+  );
+}

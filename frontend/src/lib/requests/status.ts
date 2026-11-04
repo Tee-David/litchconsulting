@@ -6,18 +6,23 @@ import type { BadgeTone } from "@/components/admin/ui/badge";
  * displaySteps below). The invoice owns the money; the request owns the work.
  *
  *  fixed:  submit → pending_payment ─┐
- *  quote:  submit → quote_requested ─(admin sends invoice)→ pending_payment
+ *  quote:  submit → quote_requested ─(admin sends quote)→ quote_sent
+ *          ─(client accepts: invoice + pay link)→ pending_payment
+ *          (legacy: quote_requested → pending_payment when an invoice is sent directly)
  *  pending_payment ─(paid)→ awaiting_documents (→ in_progress if no docs required)
  *  awaiting_documents ─(all required slots filled)→ in_progress → [in_review]
+ *      → [client_review ─(approved)→ delivered | ─(changes)→ in_progress, round+1]
  *      → delivered → completed
  *  terminals: cancelled (pre-pay) · declined (quote path) · refunded (post-pay)
  */
 export const REQUEST_STATUSES = [
   "quote_requested",
+  "quote_sent",
   "pending_payment",
   "awaiting_documents",
   "in_progress",
   "in_review",
+  "client_review",
   "delivered",
   "completed",
   "cancelled",
@@ -29,12 +34,16 @@ export type RequestStatus = (typeof REQUEST_STATUSES)[number];
 
 /** Server-enforced transition map — every status action must consult this. */
 export const LEGAL_TRANSITIONS: Record<RequestStatus, RequestStatus[]> = {
-  quote_requested: ["pending_payment", "declined", "cancelled"],
+  quote_requested: ["quote_sent", "pending_payment", "declined", "cancelled"],
+  // quote_requested = quote withdrawn for revision
+  quote_sent: ["pending_payment", "quote_requested", "declined", "cancelled"],
   // quote_requested revert covers "invoice voided while awaiting payment"
   pending_payment: ["awaiting_documents", "in_progress", "cancelled", "quote_requested"],
   awaiting_documents: ["in_progress", "refunded"],
-  in_progress: ["in_review", "delivered", "refunded"],
-  in_review: ["in_progress", "delivered", "refunded"],
+  in_progress: ["in_review", "client_review", "delivered", "refunded"],
+  in_review: ["in_progress", "client_review", "delivered", "refunded"],
+  // in_progress = client asked for changes (review_round + 1)
+  client_review: ["delivered", "in_progress", "refunded"],
   delivered: ["completed", "in_progress", "refunded"], // in_progress = revision
   completed: [],
   cancelled: [],
@@ -54,10 +63,12 @@ export function canTransition(from: string, to: string): boolean {
 /** Human label for any status (fallback when no per-service override). */
 export const STATUS_LABELS: Record<RequestStatus, string> = {
   quote_requested: "Quote requested",
-  pending_payment: "Pending payment",
+  quote_sent: "Quote sent",
+  pending_payment: "Awaiting payment",
   awaiting_documents: "Awaiting documents",
   in_progress: "In progress",
-  in_review: "In review",
+  in_review: "Internal review",
+  client_review: "Client review",
   delivered: "Delivered",
   completed: "Completed",
   cancelled: "Cancelled",
@@ -73,6 +84,8 @@ export function requestStatusTone(status: string): BadgeTone {
       return "success";
     case "in_progress":
     case "in_review":
+    case "quote_sent":
+    case "client_review":
       return "info";
     case "pending_payment":
     case "awaiting_documents":
@@ -108,10 +121,10 @@ export type DisplayStep = {
  * vertical timeline instead (the tracker hides itself).
  */
 const MILESTONES: Array<{ key: string; label: string; statuses: RequestStatus[] }> = [
-  { key: "requested", label: "Requested", statuses: ["quote_requested"] },
+  { key: "requested", label: "Requested", statuses: ["quote_requested", "quote_sent"] },
   { key: "payment", label: "Payment", statuses: ["pending_payment"] },
   { key: "documents", label: "Documents", statuses: ["awaiting_documents"] },
-  { key: "in_progress", label: "In progress", statuses: ["in_progress", "in_review"] },
+  { key: "in_progress", label: "In progress", statuses: ["in_progress", "in_review", "client_review"] },
   { key: "delivered", label: "Delivered", statuses: ["delivered", "completed"] },
 ];
 
