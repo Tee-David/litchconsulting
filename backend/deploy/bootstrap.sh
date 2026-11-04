@@ -81,7 +81,7 @@ LITCHAI_OLLAMA_HOST=http://127.0.0.1:11434
 LITCHAI_CLAMAV_HOST=127.0.0.1
 LITCHAI_CLAMAV_PORT=3310
 LITCHAI_PRIVATE_KEY_PATH=/etc/litch/blind-relay.key
-LITCHAI_DATABASE_URL=postgresql:///$PG_DB?host=/var/run/postgresql
+LITCHAI_DATABASE_URL=postgresql://$PG_USER@/$PG_DB?host=/var/run/postgresql
 EOF
 chmod 0644 /etc/litch/env
 
@@ -158,11 +158,17 @@ fi
 sudo -u "$APP_USER" "$ROOT/venv/bin/pip" install --upgrade pip wheel
 # CPU-only PyTorch FIRST: docling otherwise pulls the CUDA build — several GB of
 # nvidia-* wheels that can never run on this GPU-less ARM box.
-sudo -u "$APP_USER" "$ROOT/venv/bin/pip" install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+# pip treats an installed CUDA torch of the same version as "satisfied", so a
+# plain install never swaps it: force the +cpu build whenever it isn't already.
+if ! sudo -u "$APP_USER" "$ROOT/venv/bin/python" -c "import torch,sys; sys.exit(0 if '+cpu' in torch.__version__ else 1)" 2>/dev/null; then
+  sudo -u "$APP_USER" "$ROOT/venv/bin/pip" install --force-reinstall --no-deps torch torchvision \
+    --index-url https://download.pytorch.org/whl/cpu
+fi
 sudo -u "$APP_USER" "$ROOT/venv/bin/pip" install -e "$ROOT/app/backend[vm]"
-# Drop any CUDA wheels a previous run left behind.
-sudo -u "$APP_USER" "$ROOT/venv/bin/pip" freeze | grep -iE '^(nvidia-|cuda-)' | cut -d= -f1 \
+# Drop any CUDA wheels a previous run left behind (safe now torch is +cpu).
+sudo -u "$APP_USER" "$ROOT/venv/bin/pip" freeze | grep -iE '^(nvidia-|cuda-|triton)' | cut -d= -f1 \
   | xargs -r sudo -u "$APP_USER" "$ROOT/venv/bin/pip" uninstall -y || true
+sudo -u "$APP_USER" "$ROOT/venv/bin/python" -c "import torch, docling; print('torch', torch.__version__)"
 
 log "systemd units"
 install -m 0644 "$ROOT"/app/backend/deploy/*.service "$ROOT"/app/backend/deploy/*.timer /etc/systemd/system/
