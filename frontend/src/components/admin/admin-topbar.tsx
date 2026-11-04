@@ -1,17 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Menu, Search, LogOut, Home, Bell, UserPlus, Send, CheckCircle2, LifeBuoy, MessageSquare, Inbox, AlertTriangle, CalendarClock } from "lucide-react";
+import { ChevronRight, Home, LogOut, Menu, Search, UserRound } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
-import { CalculatorButton } from "@/components/calculators/calculator-launcher";
 import { TourLauncher } from "@/components/tour/tour-launcher";
+import { NotificationBell } from "@/components/kit";
 import { signOut } from "@/lib/auth-client";
-import { activeNavItem } from "./nav";
-import type { NotificationItem } from "@/lib/db/queries/notifications";
+import { SageIcon } from "./sage-icon";
+import { crumbsFor } from "./nav";
 import { cn } from "@/lib/utils";
-import { initialsOf, timeAgo } from "@/components/ui/avatar";
 
 export type AdminUser = {
   name?: string | null;
@@ -20,172 +19,53 @@ export type AdminUser = {
   role?: string | null;
 };
 
-const NOTIF_ICON = { 
-  lead: UserPlus, 
-  invoice_sent: Send, 
-  invoice_paid: CheckCircle2,
-  ticket_created: LifeBuoy,
-  ticket_replied: MessageSquare,
-  request: Inbox,
-  payment: CheckCircle2,
-  payment_flagged: AlertTriangle,
-  consultation: CalendarClock
-} as const;
-
-
-const SEEN_KEY = "litch:notif-seen";
-
-function NotificationBell({ notifications }: { notifications: NotificationItem[] }) {
-  const [open, setOpen] = useState(false);
-  const [lastSeen, setLastSeen] = useState<number>(0);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    try {
-      setLastSeen(Number(localStorage.getItem(SEEN_KEY) || 0));
-    } catch {}
-  }, []);
-  useEffect(() => {
-    const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
-
-  const unread = notifications.filter((n) => new Date(n.at).getTime() > lastSeen).length;
-
-  function markAllRead() {
-    const now = Date.now();
-    try {
-      localStorage.setItem(SEEN_KEY, String(now));
-    } catch {}
-    setLastSeen(now);
-  }
-
-  function toggle() {
-    setOpen((o) => {
-      if (!o && unread > 0) markAllRead();
-      return !o;
-    });
-  }
-
-  return (
-    <div className="relative" ref={ref}>
-      <button
-        type="button"
-        aria-label="Notifications"
-        onClick={toggle}
-        className="relative grid size-9 place-items-center rounded-full border border-hairline text-body transition-colors hover:bg-surface hover:text-ink"
-      >
-        <Bell className="size-4.5" />
-        {unread > 0 && (
-          <span className="absolute -right-0.5 -top-0.5 grid min-w-[16px] place-items-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-4 text-white">
-            {unread > 9 ? "9+" : unread}
-          </span>
-        )}
-      </button>
-      {open && (
-        <div className="absolute right-0 mt-2 w-80 overflow-hidden rounded-2xl border border-hairline bg-paper shadow-xl shadow-black/10">
-          <div className="flex items-center justify-between border-b border-hairline px-4 py-3">
-            <p className="text-sm font-semibold text-ink">Notifications</p>
-            {notifications.length > 0 && (
-              <button onClick={markAllRead} className="text-xs font-medium text-brand hover:underline">
-                Mark all read
-              </button>
-            )}
-          </div>
-          {notifications.length === 0 ? (
-            <div className="px-4 py-8 text-center">
-              <p className="text-sm text-body">You&rsquo;re all caught up.</p>
-              <p className="mt-1 text-xs text-muted">New activity will show up here.</p>
-            </div>
-          ) : (
-            <ul className="max-h-80 divide-y divide-hairline overflow-y-auto">
-              {notifications.slice(0, 6).map((n) => {
-                const Icon = NOTIF_ICON[n.type];
-                return (
-                  <li key={n.id}>
-                    <Link
-                      href={n.href}
-                      onClick={() => setOpen(false)}
-                      className="flex items-start gap-3 px-4 py-3 transition-colors hover:bg-surface"
-                    >
-                      <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full bg-brand-tint text-brand">
-                        <Icon className="size-4" />
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-ink">{n.title}</p>
-                        <p className="truncate text-xs text-body">{n.description}</p>
-                      </div>
-                      <span className="shrink-0 text-[11px] text-muted">{timeAgo(n.at)}</span>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-          <Link
-            href="/admin/notifications"
-            onClick={() => setOpen(false)}
-            className="block border-t border-hairline px-4 py-3 text-center text-sm font-medium text-brand transition-colors hover:bg-surface"
-          >
-            View all notifications
-          </Link>
-        </div>
-      )}
-    </div>
-  );
+/** Ask the ⌘K palette to open (it listens for this event). */
+export function openCommandPalette() {
+  window.dispatchEvent(new Event("litch:palette"));
 }
 
-function AccountDropdown({ user }: { user: AdminUser }) {
+function AccountMenu({ user }: { user: AdminUser }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    const onDoc = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
-
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
   return (
-    <div className="relative" ref={ref}>
+    <div className="relative hidden sm:block" ref={ref}>
       <button
         type="button"
         aria-label="Account menu"
+        aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="grid size-9 place-items-center overflow-hidden rounded-full bg-brand text-xs font-semibold text-white ring-2 ring-hairline transition-transform hover:scale-105"
+        className="grid size-10 place-items-center rounded-ctl border border-hairline bg-paper text-ink hover:bg-surface"
       >
-        {user.image ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={user.image} alt="" className="size-full object-cover" />
-        ) : (
-          initialsOf(user.name, user.email)
-        )}
+        <UserRound className="size-[18px]" />
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 w-56 overflow-hidden rounded-2xl border border-hairline bg-paper p-1.5 shadow-xl shadow-black/10">
-          <div className="px-3 py-2.5">
+        <div role="menu" className="absolute right-0 z-50 mt-2 w-60 rounded-card border border-hairline bg-paper p-1.5 shadow-xl">
+          <div className="px-3 py-2">
             <p className="truncate text-sm font-semibold text-ink">{user.name || "Admin"}</p>
             {user.email && <p className="truncate text-xs text-muted">{user.email}</p>}
           </div>
           <div className="my-1 h-px bg-hairline" />
-          <Link
-            href="/"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-surface"
-          >
-            <Home className="size-4 text-muted" />
-            Back to site
+          <Link role="menuitem" href="/" onClick={() => setOpen(false)} className="flex items-center gap-2.5 rounded-ctl px-3 py-2 text-sm text-ink hover:bg-surface">
+            <Home className="size-4 text-muted" /> Back to the website
           </Link>
           <button
+            role="menuitem"
             type="button"
             onClick={() => void signOut().then(() => (window.location.href = "/login"))}
-            className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-500/10 dark:text-red-400"
+            className="flex w-full items-center gap-2.5 rounded-ctl px-3 py-2 text-sm text-bad hover:bg-bad-soft"
           >
-            <LogOut className="size-4" />
-            Sign out
+            <LogOut className="size-4" /> Sign out
           </button>
         </div>
       )}
@@ -193,50 +73,78 @@ function AccountDropdown({ user }: { user: AdminUser }) {
   );
 }
 
-export function AdminTopbar({
-  onMenuClick,
-  user,
-  notifications,
-}: {
-  onMenuClick: () => void;
-  user: AdminUser;
-  notifications: NotificationItem[];
-}) {
-  const pathname = usePathname();
-  const title = activeNavItem(pathname)?.label ?? "Dashboard";
+/**
+ * Topbar: breadcrumb, ⌘K search, the bell, Ask Sage. On phones the search and
+ * Sage collapse to icon buttons and the hamburger opens the drawer.
+ */
+export function AdminTopbar({ onMenuClick, user }: { onMenuClick: () => void; user: AdminUser }) {
+  const pathname = usePathname() ?? "/admin";
+  const crumbs = crumbsFor(pathname);
+  const [mac, setMac] = useState(false);
+  useEffect(() => setMac(/Mac|iPhone|iPad/.test(navigator.platform)), []);
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-hairline bg-paper/85 px-4 backdrop-blur-md sm:px-6">
+    <header className="sticky top-0 z-30 flex h-[62px] items-center gap-2 border-b border-hairline bg-paper/90 px-3 backdrop-blur-md sm:gap-2.5 sm:px-6">
       <button
         type="button"
         onClick={onMenuClick}
         aria-label="Open menu"
         data-tour="mobile-menu"
-        className="grid size-9 shrink-0 place-items-center rounded-lg text-body transition-colors hover:bg-surface hover:text-ink lg:hidden"
+        className="grid size-10 shrink-0 place-items-center rounded-ctl text-ink hover:bg-surface lg:hidden"
       >
         <Menu className="size-5" />
       </button>
 
-      <h1 className="truncate font-display text-base font-bold tracking-tight text-ink sm:text-lg">{title}</h1>
-
-      <div className="ml-auto flex items-center gap-2 sm:gap-3">
-        <div className="relative hidden sm:block">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
-          <input
-            type="search"
-            placeholder="Search…"
-            className={cn(
-              "h-9 w-44 rounded-full border border-hairline bg-surface pl-9 pr-3 text-sm text-ink outline-none transition-all",
-              "placeholder:text-muted focus:w-60 focus:border-brand lg:w-56",
+      <nav aria-label="Breadcrumb" className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden whitespace-nowrap text-[13px]">
+        {crumbs.map((c, i) => (
+          <Fragment key={`${c.label}-${i}`}>
+            {i > 0 && <ChevronRight aria-hidden className="size-3.5 shrink-0 text-faint" />}
+            {c.href ? (
+              <Link href={c.href} className={cn("text-muted hover:text-ink", i < crumbs.length - 2 && "hidden sm:inline")}>
+                {c.label}
+              </Link>
+            ) : (
+              <span aria-current="page" className="truncate font-semibold text-ink">
+                {c.label}
+              </span>
             )}
-          />
-        </div>
+          </Fragment>
+        ))}
+      </nav>
+
+      <button
+        type="button"
+        onClick={openCommandPalette}
+        data-tour="search"
+        aria-label="Search clients, requests and invoices"
+        className="flex h-10 shrink-0 items-center gap-2 rounded-ctl border border-line-strong bg-cloud px-2.5 text-[13.5px] text-muted hover:text-ink max-md:w-10 max-md:justify-center md:w-56 lg:w-64"
+      >
+        <Search className="size-4 shrink-0" />
+        <span className="hidden min-w-0 flex-1 truncate text-left md:inline">Search clients, requests, invoices</span>
+        <kbd className="hidden rounded border border-hairline bg-paper px-1.5 font-sans text-[11px] text-muted md:inline">{mac ? "⌘K" : "Ctrl K"}</kbd>
+      </button>
+
+      <div className="hidden sm:block">
         <TourLauncher />
-        <CalculatorButton isAdmin={true} tone="dark" className="size-9 border border-hairline" />
-        <ThemeToggle />
-        <NotificationBell notifications={notifications} />
-        <AccountDropdown user={user} />
       </div>
+      <div className="hidden sm:block">
+        <ThemeToggle />
+      </div>
+      <div data-tour="bell">
+        <NotificationBell allHref="/admin/notifications" />
+      </div>
+      {!pathname.startsWith("/admin/sage") && (
+        <Link
+          href="/admin/sage"
+          data-tour="sage"
+          aria-label="Ask Sage"
+          className="inline-flex h-10 shrink-0 items-center gap-2 rounded-ctl border border-line-strong bg-paper px-2.5 text-[13.5px] font-semibold text-ink hover:bg-surface max-sm:w-10 max-sm:justify-center"
+        >
+          <SageIcon className="size-[18px] text-accent" />
+          <span className="hidden sm:inline">Ask Sage</span>
+        </Link>
+      )}
+      <AccountMenu user={user} />
     </header>
   );
 }

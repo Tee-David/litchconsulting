@@ -18,14 +18,15 @@ import {
   CornerDownLeft,
   type LucideIcon,
 } from "lucide-react";
-import { NAV_ITEMS } from "@/components/admin/nav";
+import { NAV_ITEMS, type NavItem } from "@/components/admin/nav";
 import { commandSearch, type CommandHit } from "@/app/admin/command-actions";
 import { cn } from "@/lib/utils";
 
 type QuickAction = { label: string; href: string; icon: LucideIcon; keywords?: string };
 
 const QUICK_ACTIONS: QuickAction[] = [
-  { label: "New invoice", href: "/admin/finance/invoices/new", icon: FileText, keywords: "create bill" },
+  { label: "New invoice", href: "/admin/billing/invoices/new", icon: FileText, keywords: "create bill" },
+  { label: "New quote", href: "/admin/billing/quotes/new", icon: FileText, keywords: "create estimate" },
   { label: "New request", href: "/request", icon: Inbox, keywords: "create service" },
   { label: "New client", href: "/admin/clients", icon: UserPlus, keywords: "create add" },
   { label: "Ask Sage", href: "/admin/sage", icon: Sparkles, keywords: "ai assistant chat knowledge" },
@@ -45,7 +46,7 @@ const itemCls =
  * hand-rolled, brand-tokened overlay (shouldFilter=false — static groups are
  * filtered locally, server hits are already matched).
  */
-export function CommandPalette() {
+export function CommandPalette({ items = NAV_ITEMS }: { items?: NavItem[] } = {}) {
   const router = useRouter();
   const [mounted, setMounted] = useState(false);
   const [open, setOpen] = useState(false);
@@ -64,8 +65,13 @@ export function CommandPalette() {
         setOpen((o) => !o);
       }
     };
+    const openIt = () => setOpen(true);
     document.addEventListener("keydown", down);
-    return () => document.removeEventListener("keydown", down);
+    window.addEventListener("litch:palette", openIt);
+    return () => {
+      document.removeEventListener("keydown", down);
+      window.removeEventListener("litch:palette", openIt);
+    };
   }, []);
 
   // Escape closes.
@@ -114,7 +120,7 @@ export function CommandPalette() {
   }
 
   const ql = query.trim().toLowerCase();
-  const navFiltered = NAV_ITEMS.filter((n) => !ql || n.label.toLowerCase().includes(ql));
+  const navFiltered = items.filter((n) => !ql || n.label.toLowerCase().includes(ql));
   const quickFiltered = QUICK_ACTIONS.filter(
     (a) => !ql || a.label.toLowerCase().includes(ql) || a.keywords?.includes(ql),
   );
