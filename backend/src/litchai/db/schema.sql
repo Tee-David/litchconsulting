@@ -226,3 +226,53 @@ CREATE TABLE IF NOT EXISTS audit_log (
     created_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS audit_log_entity_idx ON audit_log (entity, entity_id);
+
+-- Model-router call log (Phase 3.4): one row per provider attempt, failures and
+-- fallbacks included. Stores the HASH of the (masked) payload, never the payload.
+CREATE TABLE IF NOT EXISTS ai_provider_calls (
+    id              bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    created_at      timestamptz NOT NULL DEFAULT now(),
+    conversation_id text,
+    task            text NOT NULL,
+    provider        text NOT NULL,
+    model           text NOT NULL,
+    kind            text NOT NULL CHECK (kind IN ('cloud','local')),
+    payload_hash    text NOT NULL,
+    masked          boolean NOT NULL DEFAULT false,
+    local_only      boolean NOT NULL DEFAULT false,
+    input_tokens    int,
+    output_tokens   int,
+    latency_ms      int,
+    status          text NOT NULL,
+    fallback_from   text,
+    fallback_reason text,
+    error           text
+);
+CREATE INDEX IF NOT EXISTS ai_provider_calls_time_idx ON ai_provider_calls (created_at DESC);
+CREATE INDEX IF NOT EXISTS ai_provider_calls_conv_idx ON ai_provider_calls (conversation_id);
+
+-- Per-provider daily usage (UTC day) + "exhausted until" when a provider reports
+-- its daily allowance is gone. Survives API restarts.
+CREATE TABLE IF NOT EXISTS ai_provider_quota (
+    provider        text NOT NULL,
+    day             date NOT NULL,
+    requests        int NOT NULL DEFAULT 0,
+    tokens          bigint NOT NULL DEFAULT 0,
+    exhausted_until timestamptz,
+    PRIMARY KEY (provider, day)
+);
+
+-- Workbench conversations (Phase 3.5/3.7). The whole conversation (attached
+-- documents, workbook versions, pending/accepted operation batches, messages)
+-- is one JSON document; ``mask_state`` holds the VM-only token map and is never
+-- returned by the API.
+CREATE TABLE IF NOT EXISTS wb_conversation (
+    id          text PRIMARY KEY,
+    client_id   uuid,
+    ai_mode     text NOT NULL DEFAULT 'cloud_masked',
+    state       jsonb NOT NULL,
+    mask_state  jsonb NOT NULL DEFAULT '{}'::jsonb,
+    created_at  timestamptz NOT NULL DEFAULT now(),
+    updated_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS wb_conversation_client_idx ON wb_conversation (client_id);
