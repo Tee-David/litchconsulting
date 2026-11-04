@@ -51,9 +51,16 @@ import { DocDownloadButton } from "./doc-download-button";
 import { ActivityList } from "./activity-list";
 import { BillingExport } from "./billing-export";
 
+import { requireArea } from "@/lib/server-user";
+import { PrivacyPanel } from "@/components/admin/client/privacy-panel";
+import { AiModeTag } from "@/components/admin/client/client-table";
+import { db } from "@/lib/db/client";
+import { payment as paymentTable, serviceRequest as requestTable, serviceRequestDocument as docTable } from "@/lib/db/schema";
+import { eq as eqOp, sql as sqlOp } from "drizzle-orm";
+
 export const dynamic = "force-dynamic";
 
-const TABS = ["overview", "services", "billing", "documents", "support", "activity"] as const;
+const TABS = ["overview", "services", "billing", "documents", "support", "activity", "privacy"] as const;
 type Tab = (typeof TABS)[number];
 
 const PORTAL_BADGE: Record<PortalStatus, { label: string; tone: BadgeTone }> = {
@@ -87,6 +94,7 @@ export default async function ClientHubPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ tab?: string }>;
 }) {
+  await requireArea("clients", "/admin/clients");
   const { id } = await params;
   const tabParam = (await searchParams).tab;
   const tab: Tab = TABS.includes(tabParam as Tab) ? (tabParam as Tab) : "overview";
@@ -141,9 +149,8 @@ export default async function ClientHubPage({
           <Avatar name={displayName} email={clientRow.email} size={14} />
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-display text-xl font-bold tracking-tight text-ink sm:text-2xl">
-                {displayName}
-              </h2>
+              <h1 className="font-display text-[1.6rem] font-bold leading-tight tracking-tight text-ink">{displayName}</h1>
+              <AiModeTag mode={clientRow.aiMode} />
               <Badge tone={portal.tone}>{portal.label}</Badge>
               {overdueAmount > 0 && (
                 <Badge tone="danger">{formatMoney(overdueAmount)} overdue</Badge>
@@ -211,6 +218,7 @@ export default async function ClientHubPage({
           { label: "Documents", value: "documents" },
           { label: "Support", value: "support", count: openTickets.length },
           { label: "Activity", value: "activity" },
+          { label: "Privacy and data", value: "privacy" },
         ]}
       />
 
@@ -230,6 +238,19 @@ export default async function ClientHubPage({
       {tab === "documents" && <DocumentsTab clientId={id} />}
       {tab === "support" && <SupportTab tickets={tickets} />}
       {tab === "activity" && <ActivityTab clientId={id} />}
+      {tab === "privacy" && (
+        <PrivacyTab
+          clientId={id}
+          name={displayName}
+          aiMode={clientRow.aiMode}
+          reason={clientRow.aiModeReason}
+          setBy={clientRow.aiModeSetBy}
+          setAt={clientRow.aiModeSetAt ? clientRow.aiModeSetAt.toISOString() : null}
+          requests={requests.length}
+          tickets={tickets.length}
+          invoices={invoices.length}
+        />
+      )}
     </div>
   );
 }
@@ -748,4 +769,36 @@ function SupportTab({ tickets }: { tickets: Awaited<ReturnType<typeof listClient
 async function ActivityTab({ clientId }: { clientId: string }) {
   const items = await clientActivity(clientId, 50);
   return <ActivityList items={items} />;
+}
+
+async function PrivacyTab(props: {
+  clientId: string;
+  name: string;
+  aiMode: string;
+  reason: string | null;
+  setBy: string | null;
+  setAt: string | null;
+  requests: number;
+  tickets: number;
+  invoices: number;
+}) {
+  const [[files], [pays]] = await Promise.all([
+    db
+      .select({ n: sqlOp<number>`count(*)` })
+      .from(docTable)
+      .innerJoin(requestTable, eqOp(requestTable.id, docTable.requestId))
+      .where(eqOp(requestTable.clientId, props.clientId)),
+    db.select({ n: sqlOp<number>`count(*)` }).from(paymentTable).where(eqOp(paymentTable.clientId, props.clientId)),
+  ]);
+  return (
+    <PrivacyPanel
+      clientId={props.clientId}
+      name={props.name}
+      aiMode={props.aiMode}
+      reason={props.reason}
+      setBy={props.setBy}
+      setAt={props.setAt}
+      counts={{ requests: props.requests, files: Number(files?.n ?? 0), tickets: props.tickets, invoices: props.invoices, payments: Number(pays?.n ?? 0) }}
+    />
+  );
 }
