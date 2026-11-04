@@ -1,31 +1,21 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { CreditCard, Loader2, XCircle, ThumbsUp, LifeBuoy } from "lucide-react";
-import { Modal } from "@/components/admin/ui/modal";
-import { Select } from "@/components/ui/select";
-import {
-  initRequestPaymentAction,
-  cancelRequestAction,
-  declineQuoteRequestAction,
-  approveCloseRequestAction,
-} from "../actions";
+import { LifeBuoy, ThumbsUp, XCircle } from "lucide-react";
+import { Button, ConfirmSheet, Sheet } from "@/components/kit";
+import { useToast } from "@/components/admin/ui/toaster";
+import { cancelRequestAction, declineQuoteRequestAction, approveCloseRequestAction } from "../actions";
 
 /**
- * Per-status client actions on a request (cancel-order inspo: reasons first,
- * then the action). Post-payment exits route to support — no self-serve
- * refunds by design.
+ * Secondary per-status actions on a request. The primary move (pay, review,
+ * upload) lives in the "Your move" card; payment always goes through
+ * /dashboard/billing/pay so the deposit and transfer options are offered.
+ * Post-payment exits route to support — no self-serve refunds by design.
  */
 
-const CANCEL_REASONS = [
-  "I changed my mind",
-  "I picked the wrong service",
-  "Timing doesn't work right now",
-  "Cost is higher than expected",
-  "Other",
-];
+const REASONS = ["I changed my mind", "I picked the wrong service", "Timing does not work right now", "Cost is higher than expected", "Other"];
 
 export function RequestActions({
   requestId,
@@ -39,157 +29,107 @@ export function RequestActions({
   pricingMode: string;
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  const [payBusy, setPayBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [dialog, setDialog] = useState<"cancel" | "decline" | null>(null);
-  const [reason, setReason] = useState(CANCEL_REASONS[0]);
+  const toast = useToast();
+  const [dialog, setDialog] = useState<"cancel" | "decline" | "close" | null>(null);
+  const [reason, setReason] = useState(REASONS[0]);
   const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
 
-  const canPay = status === "pending_payment";
-  const canCancel = ["quote_requested", "pending_payment"].includes(status);
+  const canCancel = ["quote_requested", "quote_sent", "pending_payment"].includes(status);
   const canDecline = pricingMode === "quote" && status === "pending_payment";
-  const canApprove = status === "delivered";
-  const paidStage = !["quote_requested", "pending_payment", "cancelled", "declined"].includes(status);
+  const canClose = status === "delivered";
+  const paidStage = !["quote_requested", "quote_sent", "pending_payment", "cancelled", "declined"].includes(status);
+  const reasonText = () => (reason === "Other" ? note.trim() : note.trim() ? `${reason}: ${note.trim()}` : reason);
 
-  async function pay() {
-    setPayBusy(true);
-    setError(null);
-    const res = await initRequestPaymentAction(requestId);
-    if (res.ok && res.payUrl) {
-      window.location.assign(res.payUrl);
-      return;
-    }
-    setError(res.error || "Could not start payment.");
-    setPayBusy(false);
-  }
-
-  function run(action: () => Promise<{ ok: boolean; error?: string }>) {
-    setError(null);
-    startTransition(async () => {
-      const res = await action();
-      if (res.ok) {
-        setDialog(null);
-        router.refresh();
-      } else {
-        setError(res.error || "Something went wrong.");
-      }
-    });
-  }
-
-  const reasonText = () => (reason === "Other" ? note : note ? `${reason} — ${note}` : reason);
+  const submitReason = async () => {
+    if (reason === "Other" && !note.trim()) return setErr("Tell us the reason in a few words.");
+    setBusy(true);
+    setErr(null);
+    const res = dialog === "decline" ? await declineQuoteRequestAction(requestId, reasonText()) : await cancelRequestAction(requestId, reasonText());
+    setBusy(false);
+    if (!res.ok) return setErr(res.error || "That did not work. Try again.");
+    toast.success(dialog === "decline" ? `Quote declined on ${requestNumber}` : `${requestNumber} cancelled`);
+    setDialog(null);
+    router.refresh();
+  };
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex flex-wrap items-center gap-2">
-        {canPay && (
-          <button
-            type="button"
-            onClick={() => void pay()}
-            disabled={payBusy}
-            className="inline-flex items-center gap-1.5 rounded-full bg-brand px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
-          >
-            {payBusy ? <Loader2 className="size-4 animate-spin" /> : <CreditCard className="size-4" />}
-            Complete payment
-          </button>
-        )}
-        {canApprove && (
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => run(() => approveCloseRequestAction(requestId))}
-            className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-60"
-          >
-            {pending ? <Loader2 className="size-4 animate-spin" /> : <ThumbsUp className="size-4" />}
-            Approve &amp; close
-          </button>
-        )}
-        {canDecline && (
-          <button
-            type="button"
-            onClick={() => setDialog("decline")}
-            className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-paper px-4 py-2.5 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/20"
-          >
-            <XCircle className="size-4" /> Decline quote
-          </button>
-        )}
-        {canCancel && !canDecline && (
-          <button
-            type="button"
-            onClick={() => setDialog("cancel")}
-            className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-paper px-4 py-2.5 text-sm font-semibold text-body transition-colors hover:bg-surface"
-          >
-            <XCircle className="size-4 text-muted" /> Cancel request
-          </button>
-        )}
-        {paidStage && (
-          <Link
-            href={`/dashboard/support?new=true&request=${encodeURIComponent(requestId)}`}
-            className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-paper px-4 py-2.5 text-sm font-semibold text-body transition-colors hover:bg-surface"
-          >
-            <LifeBuoy className="size-4 text-muted" /> Contact support
-          </Link>
-        )}
-      </div>
-      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+    <div className="flex flex-wrap items-center gap-2">
+      {canClose ? (
+        <Button variant="secondary" onClick={() => setDialog("close")}>
+          <ThumbsUp className="size-4" aria-hidden /> Confirm and close
+        </Button>
+      ) : null}
+      {canDecline ? (
+        <Button variant="ghost" onClick={() => setDialog("decline")}>
+          <XCircle className="size-4" aria-hidden /> Decline quote
+        </Button>
+      ) : canCancel ? (
+        <Button variant="ghost" onClick={() => setDialog("cancel")}>
+          <XCircle className="size-4" aria-hidden /> Cancel request
+        </Button>
+      ) : null}
+      {paidStage ? (
+        <Link
+          href={`/dashboard/support?new=true&request=${encodeURIComponent(requestId)}`}
+          className="inline-flex h-10 items-center gap-1.5 rounded-ctl px-3 text-sm font-medium text-body hover:bg-surface hover:text-ink"
+        >
+          <LifeBuoy className="size-4" aria-hidden /> Contact support
+        </Link>
+      ) : null}
 
-      <Modal
-        open={dialog !== null}
+      <ConfirmSheet
+        open={dialog === "close"}
         onClose={() => setDialog(null)}
+        title="Close this request?"
+        body="Confirm you have your final files and are happy with the work. You can still download everything from Files, and request it again later."
+        confirmLabel="Confirm and close"
+        onConfirm={async () => {
+          const r = await approveCloseRequestAction(requestId);
+          if (!r.ok) throw new Error(r.error || "Could not close the request.");
+          toast.success(`${requestNumber} closed. Thank you.`);
+          router.refresh();
+        }}
+      />
+
+      <Sheet
+        open={dialog === "cancel" || dialog === "decline"}
+        onClose={() => setDialog(null)}
+        dismissible={!busy}
+        size="sm"
         title={dialog === "decline" ? "Decline this quote?" : "Cancel this request?"}
+        description={dialog === "decline" ? "Telling us why helps us quote better next time." : "This stops the request before any work begins. You can start a new one at any time."}
+        footer={
+          <>
+            <Button variant="ghost" onClick={() => setDialog(null)} disabled={busy}>Keep it</Button>
+            <Button variant="danger" onClick={submitReason} disabled={busy}>
+              {busy ? "Working…" : dialog === "decline" ? "Decline quote" : "Cancel request"}
+            </Button>
+          </>
+        }
       >
-        <div className="space-y-4">
-          <p className="text-sm text-body">
-            {dialog === "decline"
-              ? "No hard feelings — telling us why helps us quote better next time."
-              : "This stops the request before any work begins. You can always start a new one."}
-          </p>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-muted">Choose a reason</label>
-            <Select
-              value={reason}
-              onChange={setReason}
-              options={CANCEL_REASONS.map((r) => ({ value: r, label: r }))}
-              aria-label="Choose a reason"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold text-muted">
-              Anything else? {dialog === "decline" && reason === "Other" ? "(required)" : "(optional)"}
+        <fieldset className="space-y-2">
+          <legend className="mb-1 text-sm font-medium text-ink">Reason</legend>
+          {REASONS.map((r) => (
+            <label key={r} className="flex items-center gap-2 text-sm text-body">
+              <input type="radio" name="reason" value={r} checked={reason === r} onChange={() => setReason(r)} className="size-4 accent-[var(--color-act)]" />
+              {r}
             </label>
-            <textarea
-              rows={2}
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
-              className="w-full rounded-xl border border-hairline bg-paper px-3 py-2.5 text-sm text-ink outline-none focus:border-brand"
-            />
-          </div>
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setDialog(null)}
-              className="rounded-full border border-hairline bg-paper px-4 py-2 text-sm font-semibold text-body hover:bg-surface"
-            >
-              Keep it
-            </button>
-            <button
-              type="button"
-              disabled={pending || (dialog === "decline" && reason === "Other" && !note.trim())}
-              onClick={() =>
-                run(() =>
-                  dialog === "decline"
-                    ? declineQuoteRequestAction(requestId, reasonText())
-                    : cancelRequestAction(requestId, reasonText())
-                )
-              }
-              className="inline-flex items-center gap-1.5 rounded-full bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
-            >
-              {pending && <Loader2 className="size-4 animate-spin" />}
-              {dialog === "decline" ? "Decline quote" : "Cancel request"}
-            </button>
-          </div>
-        </div>
-      </Modal>
+          ))}
+        </fieldset>
+        <label className="mt-4 block text-sm font-medium text-ink" htmlFor="reason-note">
+          Anything else? {reason === "Other" ? "(required)" : "(optional)"}
+        </label>
+        <textarea
+          id="reason-note"
+          rows={3}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          className="mt-1.5 w-full rounded-ctl border border-line-strong bg-paper px-3 py-2 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+        />
+        {err ? <p role="alert" className="mt-2 text-sm text-bad">{err}</p> : null}
+      </Sheet>
     </div>
   );
 }

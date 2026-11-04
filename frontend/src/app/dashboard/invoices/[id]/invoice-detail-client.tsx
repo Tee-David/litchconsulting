@@ -3,7 +3,6 @@
 import { useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Download, Check, X, Loader2 } from "lucide-react";
-import { PayButton } from "@/components/pay/pay-button";
 import { acceptQuoteAction, declineQuoteAction } from "../actions";
 
 type InvoiceDetailClientProps = {
@@ -18,7 +17,6 @@ export function InvoiceDetailClient({
   invoiceId,
   kind,
   status,
-  publicToken,
   invoiceNumber,
 }: InvoiceDetailClientProps) {
   const router = useRouter();
@@ -87,8 +85,13 @@ export function InvoiceDetailClient({
         )}
 
         {/* Invoice Payment Action — Paystack checkout via the public token */}
-        {kind === "invoice" && ["sent", "overdue"].includes(status) && publicToken && (
-          <PayButton token={publicToken} label="Pay Now" />
+        {kind === "invoice" && ["sent", "viewed", "overdue", "partially_paid"].includes(status) && (
+          <a
+            href={`/dashboard/billing/pay?invoice=${invoiceId}`}
+            className="inline-flex h-10 items-center gap-1.5 rounded-ctl bg-act px-4 text-sm font-semibold text-act-ink hover:bg-act-hover"
+          >
+            {status === "partially_paid" ? "Pay the balance" : "Pay now"}
+          </a>
         )}
 
         {/* PDF Download Action */}

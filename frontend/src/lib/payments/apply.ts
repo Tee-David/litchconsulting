@@ -95,8 +95,9 @@ export async function applySuccessfulPayment(
     const [inv] = await db.select().from(invoice).where(eq(invoice.id, pay.invoiceId));
     if (!inv) return { outcome: "not_found" as const };
 
-    // 2. Amount/currency must match what the invoice asked for.
-    const expectedKobo = koboFromTotal(inv.total);
+    // 2. Amount/currency must match what THIS attempt asked for (the payment
+    //    row's amount — the whole balance, or a deposit/part payment).
+    const expectedKobo = koboFromTotal(pay.amount);
     const currencyOk = (data.currency ?? "NGN").toUpperCase() === inv.currency.toUpperCase();
     if ((data.amount ?? 0) < expectedKobo || !currencyOk) {
       await db
@@ -123,6 +124,14 @@ export async function applySuccessfulPayment(
         href: `${baseUrl()}/admin/finance/invoices/${inv.id}`,
       });
       return { outcome: "duplicate_success" as const, invoiceId: inv.id };
+    }
+
+    // 4a. A part payment (deposit) that leaves a balance.
+    const paidSoFar = Number(inv.amountPaid ?? 0) + Number(pay.amount);
+    if (paidSoFar < Number(inv.total) - 0.005) {
+      const { applyInvoicePartPaid } = await import("@/lib/payments/partial");
+      const requestId = await applyInvoicePartPaid(inv, Number(pay.amount), { via, paymentRequestId: pay.requestId });
+      return { outcome: "applied" as const, invoiceId: inv.id, requestId, publicToken: inv.publicToken };
     }
 
     // 4. The real thing.
