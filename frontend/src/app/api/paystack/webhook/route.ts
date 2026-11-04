@@ -10,9 +10,10 @@ export const dynamic = "force-dynamic";
 
 /**
  * Paystack webhook. Signature = HMAC-SHA512 of the RAW body with the secret
- * key. Paystack retries non-200 responses for 72 hours, so once we've
- * verified the signature we always return 200 — idempotency in
- * applySuccessfulPayment makes replays harmless.
+ * key of the active PAYSTACK_MODE. Paystack retries non-200 responses for 72
+ * hours: we return 200 once the event is handled (or is one we deliberately
+ * ignore), and 503 when handling FAILED, so a lost write is retried instead of
+ * silently dropped. Idempotency in applySuccessfulPayment makes replays harmless.
  */
 export async function POST(req: Request) {
   const raw = await req.text();
@@ -90,9 +91,14 @@ export async function POST(req: Request) {
         break; // ignore other events in v1
     }
   } catch (err) {
-    // We've persisted enough to reconcile (payment rows/flags); returning 200
-    // stops the 72h retry storm. The failure is logged for follow-up.
-    console.error("[paystack] webhook handler error:", err);
+    // FAIL CLOSED. A thrown error means the payment may NOT have been
+    // recorded (e.g. the database was unreachable). Acking 200 here would
+    // tell Paystack to stop retrying and the customer's money would never
+    // reach their invoice. applySuccessfulPayment is idempotent (conditional
+    // UPDATE on the payment row), so a retry is always safe — let Paystack
+    // redeliver (3-min x4, then hourly for 72h).
+    console.error("[paystack] webhook handler error — returning 503 for retry:", err);
+    return NextResponse.json({ error: "temporarily unavailable" }, { status: 503 });
   }
 
   return NextResponse.json({ ok: true });

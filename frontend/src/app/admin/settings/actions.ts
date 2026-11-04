@@ -2,9 +2,10 @@
 
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { eq, sql, inArray } from "drizzle-orm";
+import { and, eq, sql, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { orgSettings, user } from "@/lib/db/schema";
+import { client, orgSettings, user } from "@/lib/db/schema";
+import { recordAudit } from "@/lib/audit";
 import { isAdmin as checkIsAdmin, getSessionUser } from "@/lib/server-user";
 import { auth } from "@/lib/auth";
 
@@ -131,18 +132,69 @@ export async function createAdminUserAction(input: {
   }
 }
 
-/** Delete a user by ID. */
-export async function deleteUserAction(userId: string): Promise<ActionResult> {
-  if (!(await checkIsAdmin())) return { ok: false, error: "Unauthorized" };
+/* ─────────────────────────  User management  ─────────────────────────
+ *
+ * Every user-management write goes through `guardUserChange`, which enforces:
+ *   - the caller is an admin;
+ *   - the role is one we actually support (no free-text privilege strings);
+ *   - an admin cannot delete, ban or demote THEMSELVES (lock-out by accident);
+ *   - the change can never leave the platform with zero active admins.
+ * Each change is audit-logged. Banning also revokes the user's sessions, so a
+ * ban takes effect immediately rather than when their cookie expires.
+ * Better Auth's tables use camelCase columns ("userId") — there is no user_id.
+ */
 
+const ROLES = ["admin", "client"] as const;
+type Role = (typeof ROLES)[number];
+const isRole = (r: string): r is Role => (ROLES as readonly string[]).includes(r);
+
+type ChangeKind = "delete" | "ban" | "unban" | "role";
+
+async function guardUserChange(
+  userIds: string[],
+  kind: ChangeKind,
+  role?: string,
+): Promise<{ ok: true; meId: string } | { ok: false; error: string }> {
+  const me = await getSessionUser();
+  if (!me || !(await checkIsAdmin())) return { ok: false, error: "Unauthorized" };
+  const ids = [...new Set(userIds.filter(Boolean))];
+  if (ids.length === 0) return { ok: false, error: "No users selected." };
+  if (kind === "role" && (!role || !isRole(role))) return { ok: false, error: "Unknown role." };
+
+  const removesAdminPower = kind === "delete" || kind === "ban" || (kind === "role" && role !== "admin");
+  if (!removesAdminPower) return { ok: true, meId: me.id };
+
+  if (ids.includes(me.id)) {
+    return { ok: false, error: "You can't remove your own admin access. Ask another admin." };
+  }
+  const admins = await db
+    .select({ id: user.id })
+    .from(user)
+    .where(and(eq(user.role, "admin"), sql`coalesce(${user.banned}, false) = false`));
+  const remaining = admins.filter((a) => !ids.includes(a.id));
+  if (remaining.length === 0) {
+    return { ok: false, error: "This would leave no active admin. Promote someone else first." };
+  }
+  return { ok: true, meId: me.id };
+}
+
+async function revokeSessions(tx: Pick<typeof db, "execute">, ids: string[]) {
+  await tx.execute(sql`DELETE FROM "session" WHERE "userId" IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})`);
+}
+
+async function deleteUsers(ids: string[], meId: string): Promise<ActionResult> {
   try {
-    // Cascading delete across Better Auth tables for this user via database transactions
     await db.transaction(async (tx) => {
-      await tx.execute(sql`DELETE FROM "session" WHERE "userId" = ${userId} OR "user_id" = ${userId}`);
-      await tx.execute(sql`DELETE FROM "account" WHERE "userId" = ${userId} OR "user_id" = ${userId}`);
-      await tx.execute(sql`DELETE FROM "user" WHERE "id" = ${userId}`);
+      await revokeSessions(tx, ids);
+      await tx.execute(sql`DELETE FROM "account" WHERE "userId" IN (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})`);
+      // Keep the client's business records (invoices, requests); just unlink
+      // the login so nothing points at a user that no longer exists.
+      await tx.update(client).set({ userId: null }).where(inArray(client.userId, ids));
+      await tx.delete(user).where(inArray(user.id, ids));
     });
-
+    for (const id of ids) {
+      await recordAudit({ action: "user.deleted", entity: "user", entityId: id, actorId: meId });
+    }
     revalidatePath("/admin/settings");
     return { ok: true };
   } catch (err) {
@@ -150,12 +202,15 @@ export async function deleteUserAction(userId: string): Promise<ActionResult> {
   }
 }
 
-/** Toggle banned state for a user. */
-export async function toggleUserBanAction(userId: string, isBanned: boolean): Promise<ActionResult> {
-  if (!(await checkIsAdmin())) return { ok: false, error: "Unauthorized" };
-
+async function setBanned(ids: string[], banned: boolean, meId: string): Promise<ActionResult> {
   try {
-    await db.update(user).set({ banned: isBanned }).where(eq(user.id, userId));
+    await db.transaction(async (tx) => {
+      await tx.update(user).set({ banned }).where(inArray(user.id, ids));
+      if (banned) await revokeSessions(tx, ids);
+    });
+    for (const id of ids) {
+      await recordAudit({ action: banned ? "user.banned" : "user.unbanned", entity: "user", entityId: id, actorId: meId });
+    }
     revalidatePath("/admin/settings");
     return { ok: true };
   } catch (err) {
@@ -163,17 +218,38 @@ export async function toggleUserBanAction(userId: string, isBanned: boolean): Pr
   }
 }
 
-/** Change a user's role. */
-export async function changeUserRoleAction(userId: string, role: string): Promise<ActionResult> {
-  if (!(await checkIsAdmin())) return { ok: false, error: "Unauthorized" };
-
+async function setRole(ids: string[], role: Role, meId: string): Promise<ActionResult> {
   try {
-    await db.update(user).set({ role }).where(eq(user.id, userId));
+    await db.update(user).set({ role }).where(inArray(user.id, ids));
+    for (const id of ids) {
+      await recordAudit({ action: "user.role_changed", entity: "user", entityId: id, actorId: meId, meta: { role } });
+    }
     revalidatePath("/admin/settings");
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Could not update user role" };
   }
+}
+
+/** Delete a user by ID. */
+export async function deleteUserAction(userId: string): Promise<ActionResult> {
+  const g = await guardUserChange([userId], "delete");
+  if (!g.ok) return g;
+  return deleteUsers([userId], g.meId);
+}
+
+/** Toggle banned state for a user. */
+export async function toggleUserBanAction(userId: string, isBanned: boolean): Promise<ActionResult> {
+  const g = await guardUserChange([userId], isBanned ? "ban" : "unban");
+  if (!g.ok) return g;
+  return setBanned([userId], isBanned, g.meId);
+}
+
+/** Change a user's role. */
+export async function changeUserRoleAction(userId: string, role: string): Promise<ActionResult> {
+  const g = await guardUserChange([userId], "role", role);
+  if (!g.ok) return g;
+  return setRole([userId], role as Role, g.meId);
 }
 
 export type ProfileInput = { name?: string; image?: string | null };
@@ -207,48 +283,24 @@ export async function updateOwnProfileAction(input: ProfileInput): Promise<Actio
 
 /** Bulk delete users. */
 export async function bulkDeleteUsersAction(userIds: string[]): Promise<ActionResult> {
-  if (!(await checkIsAdmin())) return { ok: false, error: "Unauthorized" };
   if (!userIds || userIds.length === 0) return { ok: true };
-
-  try {
-    await db.transaction(async (tx) => {
-      // Clean up sessions and accounts
-      await tx.execute(sql`DELETE FROM "session" WHERE "userId" IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)}) OR "user_id" IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`);
-      await tx.execute(sql`DELETE FROM "account" WHERE "userId" IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)}) OR "user_id" IN (${sql.join(userIds.map(id => sql`${id}`), sql`, `)})`);
-      await tx.delete(user).where(inArray(user.id, userIds));
-    });
-
-    revalidatePath("/admin/settings");
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Could not delete users" };
-  }
+  const g = await guardUserChange(userIds, "delete");
+  if (!g.ok) return g;
+  return deleteUsers([...new Set(userIds)], g.meId);
 }
 
 /** Bulk toggle banned state for users. */
 export async function bulkToggleBanUsersAction(userIds: string[], isBanned: boolean): Promise<ActionResult> {
-  if (!(await checkIsAdmin())) return { ok: false, error: "Unauthorized" };
   if (!userIds || userIds.length === 0) return { ok: true };
-
-  try {
-    await db.update(user).set({ banned: isBanned }).where(inArray(user.id, userIds));
-    revalidatePath("/admin/settings");
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Could not update users status" };
-  }
+  const g = await guardUserChange(userIds, isBanned ? "ban" : "unban");
+  if (!g.ok) return g;
+  return setBanned([...new Set(userIds)], isBanned, g.meId);
 }
 
 /** Bulk change roles for users. */
 export async function bulkChangeRoleUsersAction(userIds: string[], role: string): Promise<ActionResult> {
-  if (!(await checkIsAdmin())) return { ok: false, error: "Unauthorized" };
   if (!userIds || userIds.length === 0) return { ok: true };
-
-  try {
-    await db.update(user).set({ role }).where(inArray(user.id, userIds));
-    revalidatePath("/admin/settings");
-    return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Could not update users roles" };
-  }
+  const g = await guardUserChange(userIds, "role", role);
+  if (!g.ok) return g;
+  return setRole([...new Set(userIds)], role as Role, g.meId);
 }
