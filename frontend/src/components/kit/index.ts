@@ -10,3 +10,4 @@ export {
   type AttentionActionResult,
   type AttentionIcon,
 } from "./attention-list";
+export { NotificationBell } from "./notification-bell";
