@@ -32,8 +32,9 @@ log() { printf '\n\033[1;34m==> %s\033[0m\n' "$*"; }
 # ---------------------------------------------------------------- base system
 log "Base packages"
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -y
-apt-get install -y --no-install-recommends \
+# Wait (up to 30 min) for unattended-upgrades instead of failing on its lock.
+apt-get -o DPkg::Lock::Timeout=1800 update -y
+apt-get -o DPkg::Lock::Timeout=1800 install -y --no-install-recommends \
   git curl ca-certificates gnupg build-essential pkg-config \
   python3 python3-venv python3-dev \
   postgresql postgresql-contrib postgresql-16-pgvector \
@@ -64,7 +65,7 @@ if ! command -v doppler >/dev/null; then
     | gpg --dearmor -o /usr/share/keyrings/doppler-archive-keyring.gpg
   echo "deb [signed-by=/usr/share/keyrings/doppler-archive-keyring.gpg] https://packages.doppler.com/public/cli/deb/debian any-version main" \
     > /etc/apt/sources.list.d/doppler-cli.list
-  apt-get update -y && apt-get install -y doppler
+  apt-get -o DPkg::Lock::Timeout=1800 update -y && apt-get -o DPkg::Lock::Timeout=1800 install -y doppler
 fi
 if [ -n "${DOPPLER_TOKEN:-}" ]; then
   ( umask 077; printf 'DOPPLER_TOKEN=%s\n' "$DOPPLER_TOKEN" > /etc/litch/doppler.env )
