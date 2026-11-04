@@ -50,7 +50,7 @@ echo 'vm.swappiness=10' > /etc/sysctl.d/99-litch.conf
 
 log "Service user + folders"
 id -u "$APP_USER" >/dev/null 2>&1 || useradd --system --create-home --home-dir "$ROOT" --shell /usr/sbin/nologin "$APP_USER"
-install -d -o "$APP_USER" -g "$APP_USER" -m 0750 "$ROOT" "$ROOT/data" "$ROOT/data/.home" "$ROOT/backups" "$ROOT/models"
+install -d -o "$APP_USER" -g "$APP_USER" -m 0750 "$ROOT" "$ROOT/data" "$ROOT/data/.home" "$ROOT/data/uploads" "$ROOT/backups" "$ROOT/models"
 chmod 0700 "$ROOT/data"
 # root-owned, but the litch group must be able to traverse it and read env.
 install -d -o root -g "$APP_USER" -m 0750 /etc/litch
@@ -73,7 +73,7 @@ chown root:"$APP_USER" /etc/litch/doppler.env && chmod 0640 /etc/litch/doppler.e
 
 # Non-secret, host-local settings (override anything Doppler says for these).
 cat > /etc/litch/env <<EOF
-LITCHAI_STORAGE_DIR=$ROOT/data
+LITCHAI_STORAGE_DIR=$ROOT/data/uploads
 LITCHAI_BACKUP_DIR=$ROOT/backups
 LITCHAI_VENV=$ROOT/venv
 LITCHAI_TAX_CONFIG=$ROOT/app/frontend/src/lib/tax/nigeria-tax-config.json
