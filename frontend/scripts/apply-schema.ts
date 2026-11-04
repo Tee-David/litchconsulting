@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { Pool } from "pg";
 
-function ssl() {
+export function ssl() {
   // Always verify against the committed CA (operator directive): env cert wins
   // (rotation), else the repo cert file — never bare system CAs.
   const cert = process.env.COCKROACH_CA_CERT || process.env.COCKROACHDB_CERT;
@@ -13,7 +13,15 @@ function ssl() {
   };
 }
 
-const STATEMENTS = [
+export const STATEMENTS = [
+  // ---- Leads (contact / booking / newsletter / calculators / templates) ----
+  `CREATE TABLE IF NOT EXISTS "lead" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "email" text NOT NULL,
+    "name" text,
+    "source" text DEFAULT 'newsletter' NOT NULL,
+    "detail" text,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL)`,
   `CREATE TABLE IF NOT EXISTS "client" (
     "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
     "user_id" text, "name" text NOT NULL, "company" text, "email" text,
@@ -318,4 +326,7 @@ async function main() {
   console.log("Done.");
   process.exit(0);
 }
-main().catch((e) => { console.error("ERROR:", e.message); process.exit(1); });
+// Run only when executed directly (restore-backup.ts imports STATEMENTS/ssl).
+if (/apply-schema\.ts$/.test(process.argv[1] ?? "")) {
+  main().catch((e) => { console.error("ERROR:", e.message); process.exit(1); });
+}
