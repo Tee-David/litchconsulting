@@ -7,7 +7,7 @@ import { getSessionCookie } from "better-auth/cookies";
  * unauthenticated users to /login with a return path. Full session validation
  * and role checks (admin) still happen server-side in the layouts/pages.
  */
-const PROTECTED = ["/dashboard", "/admin"];
+const PROTECTED = ["/dashboard", "/admin", "/work"];
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -26,5 +26,5 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/admin/:path*"],
+  matcher: ["/dashboard/:path*", "/admin/:path*", "/work/:path*"],
 };
