@@ -44,6 +44,8 @@ export function toInvoiceData(inv: Invoice, items: InvoiceItem[]): InvoiceData {
     paymentUrl: inv.publicToken ? `${SITE_BASE}/i/${inv.publicToken}` : null,
     publicToken: inv.publicToken,
     paidAt: inv.paidAt ? formatDate(inv.paidAt) : null,
+    deposit: inv.depositPercent ? { percent: inv.depositPercent } : null,
+    amountPaid: num(inv.amountPaid),
   };
 }
 

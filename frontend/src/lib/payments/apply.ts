@@ -107,7 +107,7 @@ export async function applySuccessfulPayment(
       await notifyAdmin({
         subject: `⚠️ Payment amount mismatch on ${inv.number}`,
         html: `<p>Paystack reported <strong>${(data.amount ?? 0) / 100} ${data.currency ?? "?"}</strong> for invoice <strong>${inv.number}</strong> (expected ${inv.total} ${inv.currency}). Reference <code>${reference}</code> via ${via}. The invoice was NOT marked paid.</p>`,
-        href: `${baseUrl()}/admin/finance/invoices/${inv.id}`,
+        href: `${baseUrl()}/admin/billing/invoices/${inv.id}`,
       });
       return { outcome: "flagged_amount_mismatch" as const, invoiceId: inv.id };
     }
@@ -121,7 +121,7 @@ export async function applySuccessfulPayment(
       await notifyAdmin({
         subject: `⚠️ Double payment on ${inv.number} — refund needed`,
         html: `<p>Invoice <strong>${inv.number}</strong> was already paid, but Paystack charge <code>${reference}</code> also succeeded. Refund it from the Paystack dashboard.</p>`,
-        href: `${baseUrl()}/admin/finance/invoices/${inv.id}`,
+        href: `${baseUrl()}/admin/billing/invoices/${inv.id}`,
       });
       return { outcome: "duplicate_success" as const, invoiceId: inv.id };
     }
@@ -298,13 +298,13 @@ export async function applyInvoicePaid(
     html: `<p><strong>${inv.currency} ${inv.total}</strong> received on invoice <strong>${inv.number}</strong>${
       req ? ` for request <strong>${req.number}</strong> (${req.serviceName})` : ""
     } via ${opts.via}.</p>`,
-    href: `${baseUrl()}/admin/finance/invoices/${inv.id}`,
+    href: `${baseUrl()}/admin/billing/invoices/${inv.id}`,
   });
 
   try {
     const { revalidatePath } = await import("next/cache");
-    revalidatePath("/admin/finance/invoices");
-    revalidatePath("/admin/finance/receipts");
+    revalidatePath("/admin/billing");
+    revalidatePath("/admin/billing/payments");
     revalidatePath("/admin/requests");
     revalidatePath("/admin");
     revalidatePath("/dashboard");

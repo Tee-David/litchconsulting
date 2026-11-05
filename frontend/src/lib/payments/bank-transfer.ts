@@ -77,17 +77,37 @@ export async function submitTransferProof(input: {
     category: "billing",
     title: `Transfer to confirm on ${inv.number}`,
     body: `${inv.billToCompany || inv.billToName || "A client"} uploaded a bank transfer receipt (${formatMoney(amount, inv.currency)}). Check the bank and confirm.`,
-    link: `/admin/finance/invoices/${inv.id}`,
+    link: `/admin/billing/payments?proof=${row.id}`,
     dedupeKey: `transfer-proof:${row.id}`,
   }).catch((e) => console.error("[transfer] notify failed:", e));
   return { ok: true, paymentId: row.id, amount };
 }
 
-/** Admin confirms the money arrived. Idempotent (conditional claim). */
-export async function confirmTransferPayment(paymentId: string, admin: { id: string; name: string }) {
+/**
+ * Admin confirms the money arrived. Idempotent (conditional claim).
+ * `opts.amount` records what actually landed when it differs from what the
+ * client said (a short transfer becomes a part payment); `opts.receivedOn`
+ * (YYYY-MM-DD) is the date it reached the account.
+ */
+export async function confirmTransferPayment(
+  paymentId: string,
+  admin: { id: string; name: string },
+  opts: { amount?: number; receivedOn?: string; note?: string } = {},
+) {
+  const received = opts.receivedOn && /^\d{4}-\d{2}-\d{2}$/.test(opts.receivedOn) ? new Date(`${opts.receivedOn}T12:00:00Z`) : new Date();
+  const settled = opts.amount && opts.amount > 0 ? opts.amount.toFixed(2) : null;
   const claimed = await db
     .update(payment)
-    .set({ status: "success", confirmedBy: admin.id, confirmedAt: new Date(), paidAt: new Date(), verifiedAt: new Date(), amountSettled: sql`${payment.amount}`, updatedAt: new Date() })
+    .set({
+      status: "success",
+      confirmedBy: admin.id,
+      confirmedAt: new Date(),
+      paidAt: received,
+      verifiedAt: new Date(),
+      amountSettled: settled ?? sql`${payment.amount}`,
+      ...(opts.note ? { rawEvent: { confirmNote: opts.note.slice(0, 500), confirmedByName: admin.name } } : {}),
+      updatedAt: new Date(),
+    })
     .where(and(eq(payment.id, paymentId), eq(payment.provider, "bank_transfer"), eq(payment.status, "pending")))
     .returning();
   if (!claimed.length) return { ok: false as const, error: "This transfer was already handled." };
@@ -95,7 +115,7 @@ export async function confirmTransferPayment(paymentId: string, admin: { id: str
   const [inv] = await db.select().from(invoice).where(eq(invoice.id, pay.invoiceId));
   if (!inv) return { ok: false as const, error: "Invoice not found." };
 
-  const amount = Number(pay.amount);
+  const amount = Number(pay.amountSettled ?? pay.amount);
   if (Number(inv.amountPaid ?? 0) + amount < Number(inv.total) - 0.005) {
     const { applyInvoicePartPaid } = await import("@/lib/payments/partial");
     await applyInvoicePartPaid(inv, amount, { via: "bank_transfer", paymentRequestId: pay.requestId });

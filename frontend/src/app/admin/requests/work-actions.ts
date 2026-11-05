@@ -19,6 +19,8 @@ import { canTransition, STATUS_LABELS, type RequestStatus } from "@/lib/requests
 import { actor, DENIED, failure } from "../_lib/guard";
 import { simpleEmail, escapeHtml } from "../_lib/mail";
 import { adminSetRequestStatusAction } from "./actions";
+import { createItem, markItemReceived, reopenItemSupplied } from "@/lib/requests/items";
+import { sendDraftForReview } from "@/lib/requests/review";
 
 /*
  * Request work (R2.2): assignment, asks (request_item), deliverables with a
@@ -202,43 +204,16 @@ export async function createAskAction(input: z.infer<typeof askSchema>): Promise
   const { canWorkOnRequest } = await import("@/lib/server-user");
   if (!(await canWorkOnRequest(requestId))) return DENIED;
   try {
-    const r = await loadReq(requestId);
-    if (!r) return { ok: false, error: "This request no longer exists." };
-    const [item] = await db
-      .insert(requestItem)
-      .values({ requestId, kind, title, detail: detail || null, dueAt: dueAt ? new Date(`${dueAt}T17:00:00+01:00`) : null, createdBy: me.id })
-      .returning();
-    await db.insert(serviceRequestEvent).values({
+    const r = await createItem({
       requestId,
-      type: "note",
-      message: `We asked for ${kind === "document" ? "a document" : "information"}: ${title}`,
-      visibility: "client",
-      actorRole: "admin",
-      actorName: me.displayName,
+      kind,
+      title,
+      detail,
+      dueAt: dueAt ? new Date(`${dueAt}T17:00:00+01:00`) : null,
+      actor: { userId: me.id, name: me.displayName },
     });
-    const link = `/dashboard/requests/${requestId}`;
-    await notifyUsers({
-      userIds: [r.userId],
-      category: "actions",
-      title: kind === "document" ? `Please upload: ${title}` : `Please answer: ${title}`,
-      body: detail || `For ${r.serviceName} (${r.number}).`,
-      link,
-      dedupeKey: `ask:${item.id}`,
-      email: {
-        subject: kind === "document" ? `One document needed: ${title}` : `One question about your request: ${title}`,
-        html: simpleEmail({
-          heading: kind === "document" ? "We need one document from you" : "We have one question for you",
-          paragraphs: [
-            `To carry on with <strong>${escapeHtml(r.serviceName)}</strong> we need: <strong>${escapeHtml(title)}</strong>.`,
-            ...(detail ? [escapeHtml(detail)] : []),
-          ],
-          rows: [{ label: "Request", value: r.number }, ...(dueAt ? [{ label: "Due", value: dueAt }] : [])],
-          cta: { href: link, label: kind === "document" ? "Upload it" : "Answer" },
-          why: `You got this because ${me.displayName}, who works on your request, asked for it. Action emails cannot be switched off completely because they have a due date.`,
-        }),
-      },
-    });
-    await recordAudit({ action: "request.item_created", entity: "request", entityId: requestId, meta: { number: r.number, kind, title } });
+    if (!r.ok) return { ok: false, error: r.error };
+    await recordAudit({ action: "request.item_created", entity: "request", entityId: requestId, meta: { kind, title } });
     touch([requestId]);
     return { ok: true, message: `Ask sent. The client sees “${title}” on their Home.` };
   } catch (e) {
@@ -260,15 +235,21 @@ export async function setAskStatusAction(input: z.infer<typeof itemStatusSchema>
   if (!(await canWorkOnRequest(it.requestId))) return DENIED;
   const to = parsed.data.status;
   const prev = it.status;
+  if (to === "received") {
+    const r = await markItemReceived(it.id, { userId: me.id, name: me.displayName });
+    if (!r.ok) return { ok: false, error: r.error };
+    touch([it.requestId]);
+    return { ok: true, message: "Marked received. The client sees it ticked.", undoId: `${it.id}:${prev}` };
+  }
   await db
     .update(requestItem)
-    .set({ status: to, receivedAt: to === "received" ? new Date() : null, updatedAt: new Date() })
+    .set({ status: to, receivedAt: null, updatedAt: new Date() })
     .where(eq(requestItem.id, it.id));
   if (to !== prev) {
     await db.insert(serviceRequestEvent).values({
       requestId: it.requestId,
       type: "note",
-      message: to === "received" ? `Received: ${it.title}` : to === "cancelled" ? `No longer needed: ${it.title}` : `Asked again: ${it.title}`,
+      message: to === "cancelled" ? `No longer needed: ${it.title}` : `Asked again: ${it.title}`,
       visibility: "client",
       actorRole: "admin",
       actorName: me.displayName,
@@ -289,7 +270,7 @@ export async function setAskStatusAction(input: z.infer<typeof itemStatusSchema>
   touch([it.requestId]);
   return {
     ok: true,
-    message: to === "received" ? "Marked received. The client sees it ticked." : to === "cancelled" ? "Ask cancelled." : "Re-opened. The client was asked again.",
+    message: to === "cancelled" ? "Ask cancelled." : "Re-opened. The client was asked again.",
     undoId: `${it.id}:${prev}`,
   };
 }
@@ -301,6 +282,11 @@ export async function undoAskStatusAction(undoId: string): Promise<Res> {
   if (!uuid.safeParse(id).success || !["open", "supplied", "received", "cancelled"].includes(prev)) return { ok: false, error: "Nothing to undo." };
   const [it] = await db.select().from(requestItem).where(eq(requestItem.id, id)).limit(1);
   if (!it) return { ok: false, error: "Nothing to undo." };
+  if (it.status === "received" && prev === "supplied") {
+    await reopenItemSupplied(id);
+    touch([it.requestId]);
+    return { ok: true, message: "Undone." };
+  }
   await db.update(requestItem).set({ status: prev, receivedAt: prev === "received" ? it.receivedAt ?? new Date() : null, updatedAt: new Date() }).where(eq(requestItem.id, id));
   touch([it.requestId]);
   return { ok: true, message: "Undone." };
@@ -443,50 +429,8 @@ export async function sendDraftForReviewAction(requestId: string, documentId: st
   if (!r) return { ok: false, error: "This request no longer exists." };
   const [doc] = await db.select().from(serviceRequestDocument).where(and(eq(serviceRequestDocument.id, documentId), eq(serviceRequestDocument.requestId, requestId))).limit(1);
   if (!doc || doc.kind !== "deliverable") return { ok: false, error: "Choose a draft deliverable." };
-  if (r.status !== "client_review" && !canTransition(r.status, "client_review")) {
-    return { ok: false, error: `A request in ${STATUS_LABELS[r.status as RequestStatus] ?? r.status} cannot go to client review. Move it to In progress first.` };
-  }
-  try {
-    const round = r.reviewRound + 1;
-    const now = new Date();
-    await db.transaction(async (tx) => {
-      await tx.insert(reviewRound).values({ requestId, round, documentId, sentAt: now });
-      await tx.update(serviceRequest).set({ status: "client_review", reviewRound: round, updatedAt: now }).where(eq(serviceRequest.id, requestId));
-      await tx.update(serviceRequestDocument).set({ stage: "draft" }).where(eq(serviceRequestDocument.id, documentId));
-      await tx.insert(serviceRequestEvent).values({
-        requestId,
-        type: "status_changed",
-        fromStatus: r.status,
-        toStatus: "client_review",
-        message: `Draft ${doc.fileName} is ready for your review (round ${round}).`,
-        visibility: "client",
-        actorRole: "admin",
-        actorName: me.displayName,
-      });
-    });
-    const link = `/dashboard/requests/${requestId}`;
-    await notifyUsers({
-      userIds: [r.userId],
-      category: "actions",
-      title: `Your draft is ready to review (round ${round})`,
-      body: `${r.serviceName}: approve it, or tell us what to change.`,
-      link,
-      dedupeKey: `review-sent:${requestId}:${round}`,
-      email: {
-        subject: `Draft ready for your review: ${r.serviceName} (round ${round})`,
-        html: simpleEmail({
-          heading: "Your draft is ready to review",
-          paragraphs: [`The draft for <strong>${escapeHtml(r.serviceName)}</strong> is ready. Approve it, or tell us what to change.`],
-          rows: [{ label: "Request", value: r.number }, { label: "File", value: doc.fileName }, { label: "Round", value: String(round) }],
-          cta: { href: link, label: "Review the draft" },
-          why: "You got this because a draft on your request is waiting for your approval.",
-        }),
-      },
-    });
-    await recordAudit({ action: "request.draft_sent", entity: "request", entityId: requestId, meta: { number: r.number, round, file: doc.fileName } });
-    touch([requestId]);
-    return { ok: true, message: `Sent for review, round ${round}. The client was told.` };
-  } catch (e) {
-    return failure(e, "The draft was not sent. Try again.");
-  }
+  const res = await sendDraftForReview({ requestId, documentId, actor: { userId: me.id, name: me.displayName } });
+  if (!res.ok) return { ok: false, error: res.error };
+  touch([requestId]);
+  return { ok: true, message: `Sent for review, round ${res.round}. The client was told.` };
 }

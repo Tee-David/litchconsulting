@@ -74,7 +74,10 @@ export function HelpDeskView({
   messages,
   assignees = [],
   aiConfigured = false,
+  initialTicketId = null,
 }: {
+  /** Open this ticket's thread first (from Home: "Reply"). */
+  initialTicketId?: string | null;
   tickets: TicketRow[];
   messages: TicketMessageRow[];
   /** Admin roster for the assignee picker. */
@@ -90,13 +93,15 @@ export function HelpDeskView({
   const [q, setQ] = useState("");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [categoryFilter, setCategoryFilter] = useState("all");
-  const [selectedId, setSelectedId] = useState<string | null>(tickets[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    (initialTicketId && tickets.some((t) => t.id === initialTicketId) ? initialTicketId : null) ?? tickets[0]?.id ?? null,
+  );
   const [reply, setReply] = useState("");
   const [notify, setNotify] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [newOpen, setNewOpen] = useState(false);
   const [draft, setDraft] = useState<NewTicketInput>(EMPTY_TICKET);
-  const [pane, setPane] = useState<Pane>("list");
+  const [pane, setPane] = useState<Pane>(initialTicketId ? "thread" : "list");
   const [selectedTicketIds, setSelectedTicketIds] = useState<string[]>([]);
 
   function toggleTicketSelect(id: string) {

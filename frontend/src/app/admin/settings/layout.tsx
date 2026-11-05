@@ -1,21 +1,21 @@
-import { Tabs } from "@/components/admin/ui/tabs";
+import { requireArea } from "@/lib/server-user";
+import { PageHead } from "@/components/admin/ui/surface";
+import { SettingsNav } from "@/components/admin/settings/settings-nav";
 
-const SETTINGS_TABS = [
-  { label: "General", href: "/admin/settings" },
-  { label: "Integrations", href: "/admin/settings/integrations" },
-];
+export const dynamic = "force-dynamic";
 
 /**
- * Settings workspace shell. Integrations lives here as a tab rather than a
- * top-level sidebar entry — it's configuration, and the sidebar stays lean.
- * Mirrors the Finance layout's route-based tabs.
+ * Settings: firm details and users, team and access (owned by the access
+ * page), notifications, backups with a restore test, and integrations with
+ * live health. Each section has its own URL.
  */
-export default function SettingsLayout({ children }: { children: React.ReactNode }) {
+export default async function SettingsLayout({ children }: { children: React.ReactNode }) {
+  await requireArea("settings", "/admin/settings");
   return (
-    <div className="space-y-6">
+    <div>
+      <PageHead title="Settings" lede="How the firm and the platform run." />
       <div data-tour="settings-tabs">
-        <h1 className="mb-4 font-display text-xl font-bold tracking-tight text-ink sm:text-2xl">Settings</h1>
-        <Tabs tabs={SETTINGS_TABS} />
+        <SettingsNav />
       </div>
       {children}
     </div>

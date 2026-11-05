@@ -2,19 +2,10 @@ import { CheckCircle2 } from "lucide-react";
 import { computeTotals, formatMoney } from "@/lib/invoice/money";
 import { issuer as defaultIssuer, type Issuer } from "@/lib/invoice/issuer";
 import type { InvoiceData } from "@/lib/invoice/types";
+import { acceptLine, docTitle, metaFor, settlementRows, stampFor } from "@/lib/invoice/doc-extras";
 
 const BRAND = "#0a196d";
 const PAID = "#16a34a";
-
-const STATUS_STAMP: Record<string, { label: string; color: string }> = {
-  paid: { label: "PAID", color: "#16a34a" },
-  sent: { label: "SENT", color: "#d97706" },
-  overdue: { label: "OVERDUE", color: "#dc2626" },
-  draft: { label: "DRAFT", color: "#8a92a6" },
-  void: { label: "VOID", color: "#8a92a6" },
-  accepted: { label: "ACCEPTED", color: "#16a34a" },
-  declined: { label: "DECLINED", color: "#dc2626" },
-};
 
 /**
  * On-screen invoice — an always-"paper" document (white, dark ink) so it reads
@@ -47,7 +38,9 @@ export function InvoicePreview({
   // richer paid indicator (it carries the date) and the two would collide/read
   // as redundant. Every renderer applies this same rule, so parity holds.
   const showBanner = showPaidBanner && data.status === "paid";
-  const stamp = showBanner ? undefined : STATUS_STAMP[data.status];
+  const stamp = stampFor(data, showBanner);
+  const settle = settlementRows(variant, data);
+  const accept = acceptLine(variant, data);
 
   return (
     <div className="relative mx-auto w-full max-w-3xl overflow-hidden rounded-card border border-hairline bg-white p-4 text-[#0a0e1a] shadow-sm sm:p-6 md:p-9">
@@ -107,17 +100,16 @@ export function InvoicePreview({
           </p>
         </div>
         <div className="text-right">
-          <p className="text-2xl font-extrabold tracking-tight sm:text-3xl">{isQuote ? "QUOTE" : "INVOICE"}</p>
+          <p className="text-2xl font-extrabold tracking-tight sm:text-3xl">{docTitle(variant, data)}</p>
           <span className="ml-auto mt-1.5 block h-[3px] w-16 rounded" style={{ background: BRAND }} />
         </div>
       </div>
 
       {/* Meta */}
       <div className="mt-7 grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <Meta label="Invoice No." value={data.number} />
-        <Meta label="Issued" value={data.issueDate} />
-        {data.dueDate && <Meta label="Due" value={data.dueDate} />}
-        {data.projectTitle && <Meta label="Project" value={data.projectTitle} />}
+        {metaFor(variant, data).map((m) => (
+          <Meta key={m.label} label={m.label} value={m.value} />
+        ))}
       </div>
 
       {/* Bill to */}
@@ -181,11 +173,24 @@ export function InvoicePreview({
             className="mt-2 flex items-center justify-between rounded px-3 py-2.5 font-bold text-white"
             style={{ background: BRAND }}
           >
-            <span>{isQuote ? "Total" : "Total Due"} ({data.currency})</span>
+            <span>{isQuote || data.deposit ? "Total" : "Total Due"} ({data.currency})</span>
             <span className="tabular-nums">{fmt(totals.total)}</span>
           </div>
+          {settle.map((r) => (
+            <div key={r.label} className={`flex items-center justify-between py-1 text-sm ${r.strong ? "border-t border-[#e6e8f0] font-bold" : ""}`}>
+              <span className={r.strong ? "" : "text-[#5b6474]"}>{r.label}</span>
+              <span className="tabular-nums">{r.value}</span>
+            </div>
+          ))}
         </div>
       </div>
+
+      {/* Quote: accept online */}
+      {accept && (
+        <div className="relative mt-5 rounded-lg px-4 py-3 text-sm" style={{ background: "#eef1fb", color: BRAND }}>
+          <b>Accept online.</b> <span className="text-[#5b6474]">{accept.replace(/^Accept online in one click: /, "")}</span>
+        </div>
+      )}
 
       {/* Pay */}
       {!isQuote && data.paymentUrl && (
