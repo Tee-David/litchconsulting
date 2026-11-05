@@ -15,6 +15,8 @@ export type ClientRowLite = {
   late: number;
   aiMode: string;
   hasPortal: boolean;
+  /** ISO time the erasure was scheduled (30-day hold), or null. */
+  erasureRequestedAt: string | null;
   lastActivity: string;
   createdAt: string;
 };
@@ -48,6 +50,7 @@ export async function listClientRows(): Promise<ClientRowLite[]> {
     late: Math.max(0, Number(late)),
     aiMode: c.aiMode,
     hasPortal: Boolean(c.userId),
+    erasureRequestedAt: c.erasureRequestedAt ? c.erasureRequestedAt.toISOString() : null,
     lastActivity: new Date(last ?? c.updatedAt).toISOString(),
     createdAt: c.createdAt.toISOString(),
   }));
