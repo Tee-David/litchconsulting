@@ -1,12 +1,14 @@
 """Model router (Phase 3.1) — one provider chain behind the ``Provider`` protocol.
 
-Default chain (override with ``LITCHAI_PROVIDER_CHAIN=groq,cerebras,sambanova,local``):
+Default chain (override with ``LITCHAI_PROVIDER_CHAIN=groq,cloudflare,cerebras,sambanova,local``):
 
 1. **Groq** ``openai/gpt-oss-120b`` (``reasoning_effort=medium``: on ``low`` gpt-oss
    often writes its JSON into the reasoning channel and leaves ``content`` empty) — ``GROQ_API_KEY``
-2. **Cerebras** ``gpt-oss-120b`` — ``CEREBRAS_API_KEY``
-3. **SambaNova** ``Meta-Llama-3.3-70B-Instruct`` — ``SAMBANOVA_API_KEY``
-4. **Local** — llama-server when ``LITCHAI_LLAMA_SERVER_URL`` is set (OpenAI-compatible
+2. **Cloudflare Workers AI** ``@cf/openai/gpt-oss-120b`` — ``CLOUDFLARE_ACCOUNT_ID`` +
+   ``CLOUDFLARE_API_TOKEN`` (or ``LITCHAI_CF_AI_TOKEN``)
+3. **Cerebras** ``gpt-oss-120b`` — ``CEREBRAS_API_KEY``
+4. **SambaNova** ``Meta-Llama-3.3-70B-Instruct`` — ``SAMBANOVA_API_KEY``
+5. **Local** — llama-server when ``LITCHAI_LLAMA_SERVER_URL`` is set (OpenAI-compatible
    ``/v1``), else Ollama at ``LITCHAI_OLLAMA_HOST`` (``LITCHAI_LOCAL_MODEL``, default
    ``gemma3:4b``).
 
@@ -141,6 +143,18 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
             daily_tokens=_int_env("LITCHAI_SAMBANOVA_DAILY_TOKENS"),
         ),
     }
+    # Cloudflare Workers AI (OpenAI-compatible), on Litch's own Cloudflare account.
+    cf_acct = e.get("CLOUDFLARE_ACCOUNT_ID") or ""
+    cf_key = e.get("LITCHAI_CF_AI_TOKEN") or e.get("CLOUDFLARE_API_TOKEN") or None
+    specs["cloudflare"] = ProviderSpec(
+        name="cloudflare", kind="cloud",
+        model=e.get("LITCHAI_CF_AI_MODEL") or "@cf/openai/gpt-oss-120b",
+        base_url=f"https://api.cloudflare.com/client/v4/accounts/{cf_acct}/ai/v1",
+        api_key=cf_key if cf_acct else None,
+        params={"reasoning_effort": "medium"},
+        daily_requests=_int_env("LITCHAI_CF_AI_DAILY_REQUESTS"),
+        daily_tokens=_int_env("LITCHAI_CF_AI_DAILY_TOKENS"),
+    )
     llama_url = e.get("LITCHAI_LLAMA_SERVER_URL", "").rstrip("/")
     if llama_url:
         specs["local"] = ProviderSpec(
@@ -168,7 +182,8 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
 
     order = [s.strip() for s in (e.get("LITCHAI_PROVIDER_CHAIN") or "").split(",") if s.strip()]
     if not order:
-        order = ["groq", "cerebras", "sambanova", *(["chat"] if "chat" in specs else []), "local"]
+        order = ["groq", "cloudflare", "cerebras", "sambanova",
+                 *(["chat"] if "chat" in specs else []), "local"]
     return [specs[n] for n in order if n in specs]
 
 

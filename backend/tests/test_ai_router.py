@@ -138,7 +138,8 @@ def test_default_specs_from_env_and_legacy_chat():
         "LITCHAI_CHAT_MODEL": "gpt-oss-120b",
     })
     by = {s.name: s for s in specs}
-    assert [s.name for s in specs] == ["groq", "cerebras", "sambanova", "local"]
+    assert [s.name for s in specs] == ["groq", "cloudflare", "cerebras", "sambanova", "local"]
+    assert not by["cloudflare"].configured  # no CLOUDFLARE_ACCOUNT_ID in this env
     assert by["groq"].params["reasoning_effort"] == "medium"
     assert by["cerebras"].api_key == "c"
     assert by["sambanova"].configured is False

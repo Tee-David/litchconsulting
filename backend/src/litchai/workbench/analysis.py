@@ -326,12 +326,31 @@ def paye_annual(cfg: dict, chargeable: float) -> tuple[float, list[dict[str, Any
     return round(tax, 2), bands
 
 
+# Inputs tax_compute reads, per kind (anything else is refused, never ignored).
+TAX_INPUT_KEYS: dict[str, set[str]] = {
+    "cit": {"net_profit_per_accounts", "profit_before_tax", "disallowable_addbacks", "addbacks",
+            "other_deductions", "deductions", "capital_allowance_assets", "capital_allowances",
+            "turnover", "total_fixed_assets", "professional_services"},
+    "vat": {"standard_rated_sales", "standard_rated_purchases", "vat_credit_brought_forward",
+            "amounts_include_vat"},
+    "wht": {"deductions", "vendor", "category", "payee_type", "gross_amount"},
+    "paye": {"employees", "name", "gross_annual", "pension", "nhf", "rent_paid"},
+}
+
+
 def tax_compute(ctx: ToolContext, *, kind: str, inputs: dict[str, Any] | None = None,
                 write: bool = False, new_sheet_name: str | None = None) -> ToolOutput:
     """CIT / VAT / WHT / PAYE from the shared config. ``write`` lays the
     computation out with the matching template compiler as a new sheet."""
     cfg = load_tax_config()
     p = inputs or {}
+    allowed = TAX_INPUT_KEYS.get(kind)
+    if allowed is None:
+        raise ToolError("kind must be cit, vat, wht or paye")
+    unknown = sorted(set(p) - allowed)
+    if unknown:
+        # An unknown key would silently count as 0 and give a wrong tax figure.
+        raise ToolError(f"unknown {kind} inputs {unknown}; valid inputs: {sorted(allowed)}")
 
     def num(key: str, default: float = 0.0) -> float:
         v = p.get(key, default)
@@ -438,7 +457,8 @@ def tax_compute(ctx: ToolContext, *, kind: str, inputs: dict[str, Any] | None = 
         employees = p.get("employees") or [{"name": p.get("name", "Employee"),
                                             "gross_annual": num("gross_annual"),
                                             "pension": p.get("pension", True),
-                                            "nhf": p.get("nhf", False)}]
+                                            "nhf": p.get("nhf", False),
+                                            "rent_paid": num("rent_paid")}]
         rows, total = [], 0.0
         for e in employees:
             gross = to_number(e.get("gross_annual")) or 0.0

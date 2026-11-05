@@ -296,7 +296,7 @@ def markdown(summary: dict[str, Any]) -> str:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--provider", action="append", default=[],
-                    help="groq | cerebras | sambanova | local | chat | none (repeatable)")
+                    help="groq | cloudflare | cerebras | sambanova | local | chat | none (repeatable)")
     ap.add_argument("--verify", action="store_true", help="run the oracles only (offline)")
     ap.add_argument("--task", action="append", default=[], help="task id (repeatable)")
     ap.add_argument("--category", action="append", default=[])
