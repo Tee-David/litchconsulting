@@ -16,6 +16,8 @@ dependencies = [
   "uvicorn>=0.30",
   "cryptography>=42",   # blind-relay envelope decrypt (PRD §12.6)
   "httpx>=0.27",        # Ollama provider/embedder client (Phase 3 AI harness)
+  "duckdb>=1.1",        # workbench query_sql: read-only SQL over sheet tables
+  "sqlglot>=25",        # workbench query_sql: parse + allow-list the SQL before it runs
 ]
 
 [project.optional-dependencies]
