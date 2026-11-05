@@ -15,7 +15,7 @@ const API = "https://api.vercel.com";
 
 // Only what the WEB APP reads at runtime. Deliberately excluded: BETTER_AUTH_URL
 // (localhost), deployment/infra credentials (VERCEL_TOKEN, GITHUB_PAT,
-// CLOUDFLARE_*, OCI_*, LITCH_SSH_*) and LITCHAI_DATABASE_URL — those belong to
+// CLOUDFLARE_*, WDC_VM_*, WDC_OCI_*) and LITCHAI_DATABASE_URL — those belong to
 // the VM/CI, and shipping them to the app would widen the blast radius for no
 // benefit. Anything the app calls `process.env.X` for MUST be listed here or it
 // silently degrades in prod (this is how Sage shipped with LITCHAI_API_URL unset).
