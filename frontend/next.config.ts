@@ -77,6 +77,9 @@ const nextConfig: NextConfig = {
       { source: "/admin/billing/receipts", destination: "/admin/billing?view=paid", permanent: true },
       { source: "/admin/billing/invoices", destination: "/admin/billing?view=invoices", permanent: false },
       { source: "/admin/billing/quotes", destination: "/admin/billing?view=quotes", permanent: false },
+      { source: "/legal/privacy", destination: "/legal/privacy-policy", permanent: true },
+      { source: "/privacy", destination: "/legal/privacy-policy", permanent: true },
+      { source: "/legal/cookies", destination: "/legal/cookie-policy", permanent: true },
     ];
   },
   outputFileTracingIncludes: {

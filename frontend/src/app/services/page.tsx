@@ -9,6 +9,8 @@ import { PageHero } from "@/components/ui/page-hero";
 import { Stats } from "@/components/sections/stats";
 import { Contact } from "@/components/sections/contact";
 import { services } from "@/lib/content";
+import { JsonLd } from "@/components/seo/json-ld";
+import { breadcrumbLd } from "@/lib/seo/jsonld";
 
 export const metadata: Metadata = {
   title: "Services",
@@ -21,6 +23,7 @@ export default function ServicesPage() {
     <>
       <Header overlay />
       <main className="flex-1">
+        <JsonLd data={breadcrumbLd([["Services", "/services"]])} />
         <PageHero
           eyebrow="Our services"
           title="One firm for the full financial picture."

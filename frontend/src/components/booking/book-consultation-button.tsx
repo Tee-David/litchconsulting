@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from "react";
 import Link from "next/link";
 import { getCalApi } from "@calcom/embed-react";
+import { useConsent } from "@/lib/consent";
 
 /**
  * Opens the Cal.com booking flow in a popup **modal** (no page navigation),
@@ -24,8 +25,12 @@ export function BookConsultationButton({
   children: ReactNode;
   className?: string;
 }) {
+  // Cal.com loads its own scripts and cookies: only after the visitor allows
+  // third-party embeds (cookie settings). Until then the button goes to /book.
+  const consent = useConsent();
+  const allowed = Boolean(consent?.embeds);
   useEffect(() => {
-    if (!CAL_LINK) return;
+    if (!CAL_LINK || !allowed) return;
     void (async () => {
       const cal = await getCalApi({ namespace: CAL_NAMESPACE });
       cal("ui", {
@@ -37,10 +42,10 @@ export function BookConsultationButton({
         },
       });
     })();
-  }, []);
+  }, [allowed]);
 
   // Fallback: no Cal link configured → deep-link to the /book page.
-  if (!CAL_LINK) {
+  if (!CAL_LINK || !allowed) {
     return (
       <Link href="/book" className={className}>
         {children}

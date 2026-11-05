@@ -6,6 +6,7 @@ import { PagePreloader } from "@/components/ui/page-preloader";
 import { RouteProgress } from "@/components/ui/route-progress";
 import { Toaster } from "@/components/admin/ui/toaster";
 import { ConfirmProvider } from "@/components/ui/confirm-dialog";
+import { ConsentBanner } from "@/components/consent/consent-banner";
 
 export function Providers({ children }: PropsWithChildren) {
   useEffect(() => {
@@ -21,6 +22,7 @@ export function Providers({ children }: PropsWithChildren) {
           <RouteProgress />
           <PagePreloader />
           {children}
+          <ConsentBanner />
         </ConfirmProvider>
       </Toaster>
     </ThemeProvider>

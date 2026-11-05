@@ -38,7 +38,7 @@ export default function BookPage() {
 
         <section className="container-page py-12 md:py-16">
           <div className="mx-auto max-w-4xl">
-            {calLink ? <CalBooking calLink={calLink} /> : <BookingForm />}
+            {calLink ? <CalBooking calLink={calLink} fallback={<BookingForm />} /> : <BookingForm />}
           </div>
         </section>
       </main>

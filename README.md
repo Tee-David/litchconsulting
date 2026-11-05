@@ -7,7 +7,7 @@
 ![Better Auth](https://img.shields.io/badge/Better_Auth-1.6-0a196d?style=flat-square)
 ![Drizzle](https://img.shields.io/badge/Drizzle-ORM-C5F74F?logo=drizzle&style=flat-square)
 ![CockroachDB](https://img.shields.io/badge/CockroachDB-PostgreSQL-6933FF?logo=cockroachlabs&style=flat-square)
-![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&style=flat-square)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&style=flat-square)
 ![FastAPI](https://img.shields.io/badge/FastAPI-pipeline-009688?logo=fastapi&style=flat-square)
 ![pgvector](https://img.shields.io/badge/pgvector-RAG-4169E1?logo=postgresql&style=flat-square)
 ![Cloudflare R2](https://img.shields.io/badge/Cloudflare_R2-storage-F38020?logo=cloudflare&style=flat-square)
@@ -18,7 +18,7 @@
 
 Litch Consulting delivers financial reporting, modelling, taxation, forensic accounting, data
 analytics and advisory. This repository holds **two separately deployed applications**: the
-client-facing web platform — a polished marketing site *and* a role-gated admin dashboard with
+web platform — a marketing site, a client portal, a staff workspace and an admin dashboard with
 an invoicing engine — and **LitchAI**, a deterministic Python pipeline that compiles client
 financial documents into formula-driven Excel deliverables.
 
@@ -32,12 +32,12 @@ financial documents into formula-driven Excel deliverables.
 The single most important thing to understand about this repo: `frontend/` and `backend/` are
 **not** a conventional web-app-plus-API pair. `frontend/` is a full-stack Next.js application
 that owns its own data and needs no API server to run. `backend/` is an independent document
-compiler that only the admin ever reaches, on its own machine.
+compiler and AI engine that only the web app reaches, on its own machine.
 
 | | `frontend/` | `backend/` (LitchAI) |
 | --- | --- | --- |
-| What it is | Marketing site + admin dashboard + invoicing | Financial-document → Excel compiler |
-| Stack | Next.js 16, React 19, TypeScript | Python 3.11+, FastAPI, openpyxl |
+| What it is | Marketing site + client portal + staff workspace + admin + invoicing | Document → Excel compiler, workbench engine, Sage |
+| Stack | Next.js 16, React 19, TypeScript | Python 3.12, FastAPI, openpyxl, DuckDB |
 | Data | CockroachDB via Drizzle | Its own Postgres (pgvector + pg_trgm) |
 | Deploys to | **Vercel** (push to `main`) | **Its own OCI VM** — never Vercel |
 | Reached at | `www.litchconsulting.com` | `ai.litchconsulting.com`, via Cloudflare Tunnel |
@@ -72,6 +72,7 @@ compiler that only the admin ever reaches, on its own machine.
                     |  litchai-api (FastAPI, 127.0.0.1:8000)    |
                     |  litchai-worker (Procrastinate)           |
                     |  Postgres: pgvector + pg_trgm             |
+                    |  llama-server (local model, 127.0.0.1)    |
                     +-------------------------------------------+
 ```
 
@@ -85,7 +86,7 @@ inbound ports are open. The frontend authenticates machine-to-machine with a Clo
 | --- | --- |
 | Framework | Next.js 16, React 19, TypeScript (strict) |
 | Styling | Tailwind CSS v4 (CSS-first tokens), framer-motion |
-| Auth | Better Auth (email/password + optional Google OAuth), roles `admin \| client` |
+| Auth | Better Auth (email/password + optional Google OAuth), roles `admin \| staff \| client`, two-step sign-in (required for admin and staff) |
 | Database | CockroachDB (Postgres-compatible) |
 | ORM | Drizzle (app tables); Better Auth owns the `user` table |
 | Charts | Recharts wrappers (`components/charts/*`) |
@@ -95,7 +96,8 @@ inbound ports are open. The frontend authenticates machine-to-machine with a Clo
 | Storage | Cloudflare R2 — public bucket for assets, private bucket for client documents |
 | Payments | Paystack (redirect flow) |
 | Booking | Cal.com embed |
-| LitchAI | Python 3.11+, FastAPI, openpyxl, Procrastinate, pgvector |
+| LitchAI | Python 3.12, FastAPI, openpyxl, Procrastinate, pgvector, DuckDB |
+| AI models | Groq → Cloudflare Workers AI → Cerebras → SambaNova → local llama-server (masked; per-client local-only) |
 | Secrets | Doppler (`litch-consulting`) |
 | Deploy | Vercel (web) · Oracle Cloud VM (LitchAI) |
 
@@ -113,10 +115,18 @@ Split-view builder → live HTML preview → branded PDF → SMTP delivery → p
 page with Paystack. Receipts reuse the same document with `variant="receipt"`, so preview and PDF
 never drift. Money totals are always recomputed server-side.
 
-**Admin dashboard**
-Requests pipeline, clients, finance (invoices, quotes, receipts, accounting, models), reports,
-blog, templates, Analyses, integrations, help desk and settings — all reads are React Server
-Components querying Drizzle directly; all writes are `isAdmin()`-guarded server actions.
+**Three dashboards, three roles**
+`/admin` for admins (requests, clients, billing, help desk, Sage, the workbench, settings, audit,
+trash), `/work` for staff (only the requests assigned to them, never money amounts), and
+`/dashboard` for clients (requests, quotes, payments, files, support). One access map in
+`lib/access.ts` decides who can open what; every page and server action checks it on the server.
+Invitations make staff and client-colleague accounts; two-step sign-in is enforced on the server
+for admin and staff; Settings → Team and access manages roles and assignments.
+
+**Analyses workbench**
+A spreadsheet workbench at `/admin/analyses` (and `/work/analyses` for assigned files) where Sage
+works beside the grid: it proposes changes as a diff the person accepts, edits or rejects, and
+every accepted change is recomputed before it is saved.
 
 **Sage**
 An admin assistant at `/admin/sage` that answers grounded questions over a firm knowledge
@@ -134,8 +144,9 @@ launcher, and confetti on completion — reduced-motion aware throughout.
 
 **Operational safety nets**
 Soft delete with a `/admin/trash` restore surface, an append-only audit log at `/admin/audit`,
-nightly R2 database backups with rotation, a weekly client digest with opt-out, and a ⌘K command
-palette for cross-entity search.
+nightly JSON backups to the private R2 bucket with an in-app restore test, an email outbox with
+retries, NDPA erasure with a 30-day hold, a cookie notice and a data-processing register, and a
+⌘K command palette for cross-entity search.
 
 ---
 
@@ -144,16 +155,16 @@ palette for cross-entity search.
 ```
 litchconsulting/
 ├── frontend/                 The Next.js web platform — deploys to Vercel
-│   ├── src/app/              Routes: marketing, (auth), admin, dashboard, api, i/[token]
-│   ├── src/components/       ui/, layout/, sections/, admin/, charts/, tour/, calculators/
-│   ├── src/lib/              auth, server-user, db (schema+queries), invoice/*, litchai/*, audit
+│   ├── src/app/              Routes: marketing, (auth), invite, account, admin, work, dashboard, api, i/[token]
+│   ├── src/components/       kit/, ui/, layout/, sections/, admin/, dashboard/, access/, auth/, tour/
+│   ├── src/lib/              access, auth, server-user, two-step, invitations, email-templates, db, invoice, litchai
 │   ├── scripts/              apply-schema, seed-users, vercel-sync-env, inspect-db
 │   ├── certs/                CockroachDB cluster CA cert
 │   └── README.md             → setup, env, schema workflow, gotchas
 ├── backend/                  LitchAI — deploys to its own OCI VM
-│   ├── src/litchai/          compilers/, categorize/, ai/, db/, ops/, extraction/, validation/
+│   ├── src/litchai/          compilers/, categorize/, ai/ (router, harness), workbench/, db/, ops/, review/
 │   ├── tests/                golden-fixture suite (needs LibreOffice)
-│   ├── deploy/               systemd units, backup script, ops runbook
+│   ├── deploy/               systemd units (api, worker, llama, backup, heartbeat), bootstrap, runbook
 │   └── README.md             → setup, tests, API surface, VM deployment
 └── CLAUDE.md                 Working guidance for Claude in this repo
 ```
@@ -184,6 +195,7 @@ cd backend
 python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
 .venv/bin/pytest             # golden-fixture suite — requires LibreOffice (`soffice`) on PATH
+.venv/bin/ruff check src tests
 ```
 
 See [`backend/README.md`](backend/README.md).
@@ -195,7 +207,7 @@ See [`backend/README.md`](backend/README.md).
 | App | Platform | Trigger |
 | --- | --- | --- |
 | `frontend/` | Vercel | Push to `main` (Vercel's git integration) |
-| `backend/` | Oracle Cloud VM | Deployed on the VM via systemd units (`litchai-api`, `litchai-worker`) — **never Vercel** |
+| `backend/` | Oracle Cloud VM, `/srv/projects/litchconsulting` | systemd units (`litchai-api`, `litchai-worker`, `litchai-llama`, timers) — **never Vercel** |
 
 Env vars are managed in **Doppler** (`litch-consulting`) and synced to Vercel with
 `scripts/vercel-sync-env.mjs`. Don't sync `BETTER_AUTH_URL` — Better Auth infers the URL from the
@@ -205,13 +217,19 @@ Because the web app and the live site share one CockroachDB cluster, **schema ch
 immediately once applied** — no redeploy needed. Apply them with `scripts/apply-schema.ts`, never
 `drizzle-kit push` (it hangs on CockroachDB introspection).
 
-Three Vercel cron jobs are declared in `frontend/vercel.json`, each guarded by `CRON_SECRET`:
+Five Vercel cron jobs are declared in `frontend/vercel.json`, each guarded by `CRON_SECRET`:
 
-| Path | Schedule | Purpose |
+| Path | Schedule (UTC) | Purpose |
 | --- | --- | --- |
-| `/api/cron/sweep` | `0 7 * * *` | Purge soft-deleted rows older than 30 days |
-| `/api/cron/backup` | `30 3 * * *` | CockroachDB → private R2 bucket, with rotation |
+| `/api/cron/outbox` | `30 6 * * *` | Retry failed emails from the outbox (last 3 days, max 5 tries) |
+| `/api/cron/sweep` | `0 7 * * *` | Purge Trash older than 30 days, run due client erasures, nudge unpaid requests, flag overdue quotes, clear rate-limit rows |
+| `/api/cron/reminders` | `0 9 * * *` | Staged invoice due / overdue reminders |
+| `/api/cron/backup` | `30 3 * * *` | Business tables → JSON snapshot in the private R2 bucket |
 | `/api/cron/digest` | `0 8 * * 1` | Weekly client digest email (opt-out aware) |
+
+GitHub Actions: `.github/workflows/ci.yml` runs on every push and pull request (frontend types,
+lint errors and unit tests; backend ruff error gate and pytest with LibreOffice).
+`vercel-deploy.yml` deploys `main`.
 
 ---
 

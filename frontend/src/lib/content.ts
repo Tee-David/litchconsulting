@@ -710,36 +710,59 @@ export const contactPage = {
 };
 
 const LEGAL_UPDATED = "2 July 2026";
+const PRIVACY_UPDATED = "5 November 2026";
 export const legalImage = U("1450101499163-c8848c66ca85", 1200);
 
 export const legal = [
   {
     slug: "privacy-policy",
     title: "Privacy Policy",
-    updated: LEGAL_UPDATED,
+    updated: PRIVACY_UPDATED,
     intro:
-      "This Privacy Policy explains how Litch Consulting Limited collects, uses, and protects the personal information you share with us through this website and our services.",
+      "This Privacy Policy explains how Litch Consulting Limited (\"Litch\", \"we\") collects, uses, shares and protects personal data through this website, the client portal and our services, under the Nigeria Data Protection Act (NDPA) 2023 and the General Application and Implementation Directive (GAID) 2025.",
     sections: [
-      { heading: "Information we collect", body: [
-        "We collect information you provide directly; such as your name, email address, phone number, company details, and any information contained in messages, enquiries, booking requests, or documents you send us.",
-        "We also collect limited technical information automatically, including your IP address, browser type, device information, and how you interact with the site, through cookies and similar technologies.",
+      { heading: "Who we are", body: [
+        "Litch Consulting Limited, Lagos, Nigeria, is the data controller for the personal data described here. Contact our data protection lead at info@litchconsulting.com.",
       ] },
-      { heading: "How we use your information", body: [
-        "We use your information to respond to enquiries, arrange and deliver consultations, provide our financial services, send information you request, improve our website, and meet our legal and regulatory obligations.",
-        "Where you upload financial documents through a secure portal, we use them solely to provide the services you have engaged us for.",
+      { heading: "What we collect", body: [
+        "Account details: your name, email, password (stored only as a secure hash) and, for firm staff, two-step sign-in secrets (encrypted). When you sign in we record the time, IP address and device, to protect your account.",
+        "Engagement details: your company details (RC number, TIN, billing address), what you ask us to do, your messages, and the financial documents you upload. These can include personal data about other people, such as employees, customers or suppliers named in your records.",
+        "Billing details: invoices, payments and transfer proofs. Card payments are handled by Paystack; we never see or store card numbers.",
+        "Website enquiries: what you send through the contact, booking or newsletter forms.",
       ] },
-      { heading: "How we protect your information", body: [
-        "We apply appropriate technical and organisational measures to safeguard your information, including encrypted transmission and restricted access. Financial documents are treated with strict confidentiality.",
-        "No method of transmission or storage is completely secure, but we take reasonable steps to protect your data and to limit access to those who need it to serve you.",
+      { heading: "Why we use it, and our lawful basis", body: [
+        "To deliver the services you engage us for: contract.",
+        "To keep financial, tax and accounting records the law requires: legal obligation.",
+        "To keep the service secure, prevent fraud, keep an audit log and improve how we work: legitimate interest, balanced against your rights.",
+        "To send the newsletter and to load the third-party booking calendar: consent, which you can withdraw at any time.",
       ] },
-      { heading: "Sharing your information", body: [
-        "We do not sell your personal information. We may share it with trusted service providers who help us operate the site and deliver our services, and where required by law or regulation.",
+      { heading: "AI-assisted analysis", body: [
+        "We use AI models to help analyse the documents you send us and to answer questions about our own knowledge. Before anything reaches a cloud model, client identifiers are masked. A client can ask us to keep their data local-only, in which case it is processed only on our own server and never sent to a cloud model. AI never sends anything to a client on its own: a person at Litch reviews every result.",
+      ] },
+      { heading: "Who processes data for us", body: [
+        "Vercel (website and app hosting), Cockroach Labs (database), Cloudflare R2 (encrypted document, deliverable and backup storage), Groq, Cloudflare Workers AI, Cerebras and SambaNova (AI models, masked data only; we use the first one available), our own Oracle Cloud server (document pipeline and local AI models), Paystack (card payments), Truehost (email delivery), Google (only if you choose \"Continue with Google\") and Cal.com (the booking calendar, only if you allow it).",
+        "Some of these process data outside Nigeria. Where they do, we rely on their data processing agreements and standard contractual safeguards, and we send them only what they need.",
+        "We do not sell personal data, and we do not use it for advertising.",
+      ] },
+      { heading: "How long we keep it", body: [
+        "Financial and engagement records, including invoices, receipts and the documents behind our work: 6 years after the engagement or financial year ends, as Nigerian tax and accounting law requires.",
+        "Items you or we delete go to a trash area and are removed for good after 30 days.",
+        "When a client asks us to erase their data, we schedule it with a 30-day hold (so it can be cancelled if requested by mistake), then erase everything the law does not require us to keep.",
+        "Website enquiries and the newsletter: up to 2 years from the last contact, or until you unsubscribe.",
+      ] },
+      { heading: "How we protect it", body: [
+        "Encryption in transit and at rest, private storage reached only through short-lived signed links, two-step sign-in for every Litch staff account, access limited to the people working on your engagement, and an audit log of consequential actions.",
       ] },
       { heading: "Your rights", body: [
-        "You may request access to, correction of, or deletion of your personal information, and you may object to certain processing. To exercise these rights, contact us using the details below.",
+        "You can ask to see the personal data we hold about you, correct it, have it erased, restrict or object to our use of it, receive a copy in a portable format, and withdraw any consent you gave.",
+        "To make a request, email info@litchconsulting.com from the address on your account, or use Support in your client portal. We confirm who you are, then reply within 30 days. There is no fee.",
+        "If you are not satisfied with our answer, you can complain to the Nigeria Data Protection Commission (ndpc.gov.ng).",
       ] },
-      { heading: "Contact us", body: [
-        "If you have questions about this Privacy Policy or how we handle your information, email info@litchconsulting.com.",
+      { heading: "Cookies", body: [
+        "We use only cookies that are needed to run the site. See the Cookie Policy for details and to change your choice.",
+      ] },
+      { heading: "Changes and contact", body: [
+        "We update this policy when what we do changes; the date at the top shows the latest version. Questions: info@litchconsulting.com.",
       ] },
     ],
   },
@@ -774,18 +797,23 @@ export const legal = [
   {
     slug: "cookie-policy",
     title: "Cookie Policy",
-    updated: LEGAL_UPDATED,
+    updated: PRIVACY_UPDATED,
     intro:
       "This Cookie Policy explains how Litch Consulting uses cookies and similar technologies on this website.",
     sections: [
       { heading: "What cookies are", body: [
         "Cookies are small text files stored on your device when you visit a website. They help the site function, remember your preferences, and understand how the site is used.",
       ] },
-      { heading: "How we use cookies", body: [
-        "We use essential cookies to make the site work (for example, to keep you signed in to secure areas), preference cookies to remember choices such as light or dark mode, and analytics cookies to understand how visitors use the site so we can improve it.",
+      { heading: "Cookies we use", body: [
+        "Strictly necessary: your sign-in session and two-step sign-in cookies, security checks (Cloudflare Turnstile on public forms), and your cookie choice itself (litch_consent). These are always on, because the site cannot work without them.",
+        "Preferences: your light or dark theme and table settings, stored in your browser. They never leave your device.",
+        "We do not use analytics, advertising or tracking cookies.",
+      ] },
+      { heading: "Third-party booking calendar", body: [
+        "The consultation calendar is provided by Cal.com, which sets its own cookies. It loads only after you allow it. Until then you can still book through our form.",
       ] },
       { heading: "Managing cookies", body: [
-        "You can control and delete cookies through your browser settings. Disabling some cookies may affect how parts of the site function, such as staying signed in to the client portal.",
+        "Change your choice at any time with \"Cookie settings\" at the bottom of every page. You can also delete cookies in your browser; deleting the session cookie signs you out.",
       ] },
       { heading: "Contact us", body: [
         "If you have questions about our use of cookies, email info@litchconsulting.com.",
