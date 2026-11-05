@@ -87,6 +87,10 @@ export const client = pgTable(
     aiModeReason: text("ai_mode_reason"),
     aiModeSetBy: text("ai_mode_set_by"),
     aiModeSetAt: timestamp("ai_mode_set_at", { withTimezone: true }),
+    // NDPA erasure: requested (30-day hold, cancellable) -> erased by the sweep.
+    erasureRequestedAt: timestamp("erasure_requested_at", { withTimezone: true }),
+    erasureRequestedBy: text("erasure_requested_by"),
+    erasedAt: timestamp("erased_at", { withTimezone: true }),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: deletedAt(),

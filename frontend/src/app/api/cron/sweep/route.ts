@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { and, eq, isNotNull, lt } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, lt } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   payment,
@@ -12,6 +12,8 @@ import {
 import { sendEmail, emailLayout } from "@/lib/email";
 import { notifyAdmin } from "@/lib/notify";
 import { sweepRateLimits } from "@/lib/rate-limit";
+import { recordAudit } from "@/lib/audit";
+import { eraseClientData, ERASURE_HOLD_DAYS } from "@/lib/privacy/erase";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +24,9 @@ export const dynamic = "force-dynamic";
  * 2. `pending_payment` requests stalled >24h → one nudge email to the client
  *    (tracked by a `note` event so it never repeats).
  * 3. `quote_requested` older than 48h → admin reminder (their SLA is 2 days).
- * 4. Trash purge — rows soft-deleted more than 30 days ago are hard-deleted.
+ * 4. Trash purge — rows soft-deleted more than 30 days ago are hard-deleted
+ *    (except erased clients: their anonymous row anchors the kept finance records).
+ * 5. NDPA erasures whose 30-day hold has passed are carried out.
  */
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
@@ -35,7 +39,7 @@ export async function GET(req: Request) {
   const dayAgo = new Date(now - 24 * 60 * 60 * 1000);
   const twoDaysAgo = new Date(now - 48 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
-  const summary = { abandoned: 0, nudged: 0, quoteReminders: 0, purged: 0, rateLimitRows: 0 };
+  const summary = { abandoned: 0, nudged: 0, quoteReminders: 0, purged: 0, erased: 0, erasureFailures: 0, rateLimitRows: 0 };
 
   // 1. Stale checkout attempts.
   const stale = await db
@@ -114,7 +118,7 @@ export async function GET(req: Request) {
   // 4. Trash purge — anything soft-deleted >30 days ago is gone for good.
   const purgedClients = await db
     .delete(client)
-    .where(and(isNotNull(client.deletedAt), lt(client.deletedAt, thirtyDaysAgo)))
+    .where(and(isNotNull(client.deletedAt), lt(client.deletedAt, thirtyDaysAgo), isNull(client.erasedAt)))
     .returning({ id: client.id });
   const purgedInvoices = await db
     .delete(invoice)
@@ -131,7 +135,36 @@ export async function GET(req: Request) {
   summary.purged =
     purgedClients.length + purgedInvoices.length + purgedTickets.length + purgedRequests.length;
 
-  // 5. Expired rate-limit windows.
+  // 5. Erasures due (hold passed, not cancelled). One failure never blocks the rest.
+  const holdCutoff = new Date(now - ERASURE_HOLD_DAYS * 24 * 60 * 60 * 1000);
+  const due = await db
+    .select()
+    .from(client)
+    .where(and(isNotNull(client.erasureRequestedAt), lt(client.erasureRequestedAt, holdCutoff), isNull(client.erasedAt)));
+  for (const c of due) {
+    try {
+      const report = await eraseClientData(c);
+      await recordAudit({
+        action: "client.erased",
+        entity: "client",
+        entityId: c.id,
+        actorName: "Scheduled erasure",
+        meta: { client: c.company || c.name, scheduledBy: c.erasureRequestedBy, ...report },
+      });
+      summary.erased++;
+    } catch (e) {
+      console.error("[sweep] erasure failed", c.id, e);
+      summary.erasureFailures++;
+    }
+  }
+  if (summary.erasureFailures) {
+    await notifyAdmin({
+      subject: `${summary.erasureFailures} scheduled erasure${summary.erasureFailures > 1 ? "s" : ""} failed`,
+      html: "<p>The nightly sweep could not finish a scheduled client erasure. It retries tomorrow; check the client's Privacy tab and the audit log.</p>",
+    }).catch(() => {});
+  }
+
+  // 6. Expired rate-limit windows.
   summary.rateLimitRows = await sweepRateLimits().catch(() => 0);
 
   return NextResponse.json({ ok: true, ...summary });

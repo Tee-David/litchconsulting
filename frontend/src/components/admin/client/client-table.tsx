@@ -41,7 +41,12 @@ export function ClientTable({ rows }: { rows: ClientRowLite[] }) {
         meta: { label: "Client", mobile: "title", hideable: false },
         cell: ({ row: { original: c } }) => (
           <span className="block min-w-0">
-            <span className="block truncate font-semibold text-ink">{c.name}</span>
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="truncate font-semibold text-ink">{c.name}</span>
+              {c.erasureRequestedAt ? (
+                <span className="shrink-0 rounded-full bg-bad-soft px-1.5 text-[11px] font-semibold leading-5 text-bad">Erasure pending</span>
+              ) : null}
+            </span>
             <span className="block truncate text-xs text-muted">{c.contact ?? c.email ?? "No contact"}</span>
           </span>
         ),
@@ -74,6 +79,7 @@ export function ClientTable({ rows }: { rows: ClientRowLite[] }) {
     { id: "active", label: "Active", predicate: (c) => c.openRequests > 0 },
     { id: "owing", label: "Owing", predicate: (c) => c.owes > 0 },
     { id: "local", label: "Local-only AI", predicate: (c) => c.aiMode === "local_only" },
+    { id: "erasure", label: "Erasure pending", predicate: (c) => c.erasureRequestedAt !== null },
     { id: "all", label: "All", predicate: () => true },
   ];
 

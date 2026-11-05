@@ -423,6 +423,10 @@ export const STATEMENTS = [
     "user_id" text NOT NULL,
     "verified_at" timestamp with time zone DEFAULT now() NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS "session_two_step_user_idx" ON "session_two_step" ("user_id")`,
+  // NDPA erasure with a 30-day hold (scheduled -> cancel or erased by the sweep).
+  `ALTER TABLE "client" ADD COLUMN IF NOT EXISTS "erasure_requested_at" timestamp with time zone`,
+  `ALTER TABLE "client" ADD COLUMN IF NOT EXISTS "erasure_requested_by" text`,
+  `ALTER TABLE "client" ADD COLUMN IF NOT EXISTS "erased_at" timestamp with time zone`,
 ];
 
 /**
