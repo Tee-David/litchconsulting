@@ -61,3 +61,74 @@ class PgTelemetry:
                     event.latency_ms, event.attempt, event.cache_hit, event.status, event.error,
                 ),
             )
+
+
+class PgCallLog:
+    """Router call log → ``ai_provider_calls`` (payload hash only, never content)."""
+
+    def __init__(self, conn: psycopg.Connection) -> None:
+        self.conn = conn
+
+    def record(self, rec: Any) -> None:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO ai_provider_calls (conversation_id, task, provider, model, kind, "
+                "payload_hash, masked, local_only, input_tokens, output_tokens, latency_ms, "
+                "status, fallback_from, fallback_reason, error) "
+                "VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                (
+                    rec.conversation_id, rec.task, rec.provider, rec.model, rec.kind,
+                    rec.payload_hash, rec.masked, rec.local_only, rec.input_tokens,
+                    rec.output_tokens, rec.latency_ms, rec.status, rec.fallback_from,
+                    rec.fallback_reason, rec.error,
+                ),
+            )
+
+
+class PgQuota:
+    """Daily per-provider usage in ``ai_provider_quota`` (UTC day)."""
+
+    def __init__(self, conn: psycopg.Connection) -> None:
+        self.conn = conn
+
+    def usage(self, provider: str) -> tuple[int, int]:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT requests, tokens FROM ai_provider_quota "
+                "WHERE provider = %s AND day = (now() AT TIME ZONE 'utc')::date",
+                (provider,),
+            )
+            row = cur.fetchone()
+        return (int(row["requests"]), int(row["tokens"])) if row else (0, 0)
+
+    def record(self, provider: str, tokens: int) -> None:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO ai_provider_quota (provider, day, requests, tokens) "
+                "VALUES (%s, (now() AT TIME ZONE 'utc')::date, 1, %s) "
+                "ON CONFLICT (provider, day) DO UPDATE SET "
+                "requests = ai_provider_quota.requests + 1, "
+                "tokens = ai_provider_quota.tokens + EXCLUDED.tokens",
+                (provider, max(0, tokens)),
+            )
+
+    def exhausted_until(self, provider: str) -> float | None:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "SELECT max(exhausted_until) AS until FROM ai_provider_quota "
+                "WHERE provider = %s AND exhausted_until > now()",
+                (provider,),
+            )
+            row = cur.fetchone()
+        until = row["until"] if row else None
+        return until.timestamp() if until else None
+
+    def mark_exhausted(self, provider: str, until: float) -> None:
+        with self.conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO ai_provider_quota (provider, day, exhausted_until) "
+                "VALUES (%s, (now() AT TIME ZONE 'utc')::date, to_timestamp(%s)) "
+                "ON CONFLICT (provider, day) DO UPDATE "
+                "SET exhausted_until = EXCLUDED.exhausted_until",
+                (provider, until),
+            )
