@@ -1,0 +1,43 @@
+# LitchAI local model (llama.cpp llama-server) — installed by deploy/install-llama.sh.
+# Loopback only; the API reaches it at LITCHAI_LLAMA_SERVER_URL=http://127.0.0.1:8081.
+# Model and flags live in /etc/litch/llama.env so a model swap needs no unit edit.
+#
+# 2 OCPU / 12 GB aarch64 box shared with Postgres, the API, the worker, ClamAV and
+# LibreOffice: the model gets both cores but runs niced and as an idle-ish CPU
+# weight, so a request to the API or Postgres always wins the CPU. Memory is
+# capped well under the box so a too-large model fails here, not the host.
+[Unit]
+Description=LitchAI local model (llama-server, loopback only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=litch
+Group=litch
+EnvironmentFile=/etc/litch/llama.env
+ExecStart=/srv/projects/litchconsulting/llama.cpp/build/bin/llama-server \
+  --host 127.0.0.1 --port ${LLAMA_PORT} \
+  --model ${LLAMA_MODEL} --alias ${LLAMA_ALIAS} \
+  --ctx-size ${LLAMA_CTX} --threads ${LLAMA_THREADS} --threads-batch ${LLAMA_THREADS} \
+  --parallel 1 --batch-size 512 --ubatch-size 256 \
+  --n-gpu-layers 0 --jinja --no-webui --metrics \
+  $LLAMA_EXTRA_ARGS
+Restart=on-failure
+RestartSec=5
+# A cold load of a 4B Q4 model from disk takes a while on this box.
+TimeoutStartSec=300
+Nice=10
+CPUWeight=20
+CPUQuota=190%
+MemoryHigh=5G
+MemoryMax=6G
+LimitMEMLOCK=infinity
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ReadOnlyPaths=/srv/projects/litchconsulting/models /srv/projects/litchconsulting/llama.cpp
+
+[Install]
+WantedBy=multi-user.target
