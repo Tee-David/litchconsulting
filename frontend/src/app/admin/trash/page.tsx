@@ -1,4 +1,4 @@
-import { desc, isNotNull } from "drizzle-orm";
+import { and, desc, isNotNull, isNull } from "drizzle-orm";
 import { requireArea } from "@/lib/server-user";
 import { db } from "@/lib/db/client";
 import { client, invoice, serviceRequest, ticket } from "@/lib/db/schema";
@@ -9,12 +9,13 @@ export const dynamic = "force-dynamic";
 
 /**
  * Trash — soft-deleted clients, requests, invoices and tickets, restorable for
- * 30 days before the sweep cron purges them for good.
+ * 30 days before the sweep cron purges them for good. Erased clients are not
+ * shown: their anonymous row anchors kept finance records and must stay.
  */
 export default async function TrashPage() {
   await requireArea("trash", "/admin/trash");
   const [clients, requests, invoices, tickets] = await Promise.all([
-    db.select().from(client).where(isNotNull(client.deletedAt)).orderBy(desc(client.deletedAt)).limit(500),
+    db.select().from(client).where(and(isNotNull(client.deletedAt), isNull(client.erasedAt))).orderBy(desc(client.deletedAt)).limit(500),
     db.select().from(serviceRequest).where(isNotNull(serviceRequest.deletedAt)).orderBy(desc(serviceRequest.deletedAt)).limit(500),
     db.select().from(invoice).where(isNotNull(invoice.deletedAt)).orderBy(desc(invoice.deletedAt)).limit(500),
     db.select().from(ticket).where(isNotNull(ticket.deletedAt)).orderBy(desc(ticket.deletedAt)).limit(500),

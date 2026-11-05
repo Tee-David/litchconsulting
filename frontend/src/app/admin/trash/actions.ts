@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, inArray, isNotNull } from "drizzle-orm";
+import { and, inArray, isNotNull, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { client, invoice, invoiceItem, serviceRequest, ticket, ticketMessage } from "@/lib/db/schema";
@@ -26,7 +26,7 @@ export async function restoreTrashAction(items: z.infer<typeof list>): Promise<R
   if (!parsed.success) return { ok: false, error: "Select something to restore." };
   const p = parsed.data;
   const ids = (t: string) => group(p, t);
-  if (ids("client").length) await db.update(client).set({ deletedAt: null }).where(inArray(client.id, ids("client")));
+  if (ids("client").length) await db.update(client).set({ deletedAt: null }).where(and(inArray(client.id, ids("client")), isNull(client.erasedAt)));
   if (ids("request").length) await db.update(serviceRequest).set({ deletedAt: null }).where(inArray(serviceRequest.id, ids("request")));
   if (ids("invoice").length) await db.update(invoice).set({ deletedAt: null }).where(inArray(invoice.id, ids("invoice")));
   if (ids("ticket").length) await db.update(ticket).set({ deletedAt: null }).where(inArray(ticket.id, ids("ticket")));
@@ -48,7 +48,7 @@ export async function purgeTrashAction(items: z.infer<typeof list>): Promise<Res
   const kept: string[] = [];
   await db.transaction(async (tx) => {
     const c = group(p, "client");
-    if (c.length) n += (await tx.delete(client).where(and(inArray(client.id, c), isNotNull(client.deletedAt))).returning({ id: client.id })).length;
+    if (c.length) n += (await tx.delete(client).where(and(inArray(client.id, c), isNotNull(client.deletedAt), isNull(client.erasedAt))).returning({ id: client.id })).length;
     const r = group(p, "request");
     if (r.length) n += (await tx.delete(serviceRequest).where(and(inArray(serviceRequest.id, r), isNotNull(serviceRequest.deletedAt))).returning({ id: serviceRequest.id })).length;
     const t = group(p, "ticket");

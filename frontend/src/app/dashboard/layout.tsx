@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/lib/server-user";
 import { homeFor, roleOf } from "@/lib/access";
-import { getPortal, clientBilling } from "@/lib/requests/portal";
+import { getPortal, clientBilling, portalErasureDue } from "@/lib/requests/portal";
+import { ErasureScheduled } from "@/components/dashboard/erasure-scheduled";
 import { clientAttention } from "@/lib/attention/client";
 import { unreadCount } from "@/lib/notifications";
 import { isPayable } from "@/lib/payments/amounts";
@@ -21,7 +22,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (role !== "client") redirect(homeFor(role));
 
   const portal = await getPortal();
-  if (!portal) redirect("/login?redirect=/dashboard");
+  if (!portal) {
+    // Erasure scheduled: the portal is closed until it runs (or is cancelled).
+    const due = await portalErasureDue();
+    if (due) return <ErasureScheduled dueAt={due.toISOString()} />;
+    redirect("/login?redirect=/dashboard");
+  }
 
   // Badge counts. Failures here must never take the whole portal down.
   const [attention, unread, billing] = await Promise.all([

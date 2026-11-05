@@ -33,6 +33,7 @@ import { EditClientButton } from "@/components/admin/client/edit-client-button";
 import { Badge, invoiceStatusTone, type BadgeTone } from "@/components/admin/ui/badge";
 import { StatCard } from "@/components/admin/ui/stat-card";
 import { QueryTabs } from "@/components/admin/ui/tabs";
+import { ERASURE_HOLD_DAYS } from "@/lib/privacy/erase";
 import { EmptyState } from "@/components/admin/ui/empty-state";
 import { GroupedBars } from "@/components/charts";
 import { Avatar } from "@/components/ui/avatar";
@@ -156,6 +157,11 @@ export default async function ClientHubPage({
                 <Badge tone="danger">{formatMoney(overdueAmount)} overdue</Badge>
               )}
               {duplicates.length > 0 && <Badge tone="warning">possible duplicate</Badge>}
+              {clientRow.erasureRequestedAt && (
+                <Badge tone="danger">
+                  Erasure on {formatDate(new Date(clientRow.erasureRequestedAt.getTime() + ERASURE_HOLD_DAYS * 86_400_000))}
+                </Badge>
+              )}
             </div>
             <p className="mt-0.5 text-sm text-body">
               {clientRow.company && clientRow.name !== clientRow.company ? `${clientRow.name} · ` : ""}
@@ -246,6 +252,7 @@ export default async function ClientHubPage({
           reason={clientRow.aiModeReason}
           setBy={clientRow.aiModeSetBy}
           setAt={clientRow.aiModeSetAt ? clientRow.aiModeSetAt.toISOString() : null}
+          erasureDueAt={clientRow.erasureRequestedAt ? new Date(clientRow.erasureRequestedAt.getTime() + ERASURE_HOLD_DAYS * 86_400_000).toISOString() : null}
           requests={requests.length}
           tickets={tickets.length}
           invoices={invoices.length}
@@ -778,6 +785,7 @@ async function PrivacyTab(props: {
   reason: string | null;
   setBy: string | null;
   setAt: string | null;
+  erasureDueAt: string | null;
   requests: number;
   tickets: number;
   invoices: number;
@@ -798,6 +806,7 @@ async function PrivacyTab(props: {
       reason={props.reason}
       setBy={props.setBy}
       setAt={props.setAt}
+      erasureDueAt={props.erasureDueAt}
       counts={{ requests: props.requests, files: Number(files?.n ?? 0), tickets: props.tickets, invoices: props.invoices, payments: Number(pays?.n ?? 0) }}
     />
   );
