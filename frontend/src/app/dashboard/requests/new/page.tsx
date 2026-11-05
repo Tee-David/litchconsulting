@@ -17,7 +17,7 @@ export const dynamic = "force-dynamic";
  * - ?from=<id>&add=1 "Add a service": pick any service, still linked + files
  * - bare             a service picker
  */
-export default async function NewRequestPage({ searchParams }: { searchParams: Promise<{ from?: string; add?: string }> }) {
+export default async function NewRequestPage({ searchParams }: { searchParams: Promise<{ from?: string; add?: string; draft?: string }> }) {
   const portal = await getPortal();
   if (!portal) redirect("/login?redirect=/dashboard/requests/new");
   const sp = await searchParams;
@@ -36,5 +36,15 @@ export default async function NewRequestPage({ searchParams }: { searchParams: P
       };
     }
   }
-  return <NewRequestClient services={catalog.map(toStepperService)} parent={parent} addMode={sp.add === "1"} />;
+  // R1.6: a draft saved before sign-up and claimed by /account/continue.
+  let serverDraft: { serviceSlug: string; details: string; intake: { timeline?: string; companySize?: string }; savedAt: number } | null = null;
+  if (sp.draft) {
+    const { claimedDraft } = await import("@/app/get-started/draft");
+    const row = await claimedDraft(sp.draft, portal.user.id).catch(() => null);
+    if (row?.serviceSlug) {
+      const a = (row.answers ?? {}) as { details?: string; timeline?: string; companySize?: string };
+      serverDraft = { serviceSlug: row.serviceSlug, details: a.details ?? "", intake: { timeline: a.timeline, companySize: a.companySize }, savedAt: row.updatedAt.getTime() };
+    }
+  }
+  return <NewRequestClient services={catalog.map(toStepperService)} parent={parent} addMode={sp.add === "1"} serverDraft={serverDraft} />;
 }

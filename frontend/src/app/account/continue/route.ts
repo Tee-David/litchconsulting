@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
     try {
       const { claimDraft } = await import("@/app/get-started/draft");
       const row = await claimDraft(draft, { id: u.id, email: u.email, name: u.name });
-      if (row?.serviceSlug) return to(`/get-started/resume?draft=${row.id}`);
+      if (row?.serviceSlug) return to(`/dashboard/requests/new?draft=${row.id}`);
     } catch (err) {
       console.error("[continue] draft claim failed:", err);
     }

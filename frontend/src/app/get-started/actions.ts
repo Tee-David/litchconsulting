@@ -19,10 +19,11 @@ type Res = { ok: true; draftId: string } | { ok: false; error: string };
 const RULE = { limit: 20, windowSeconds: 3600 };
 const PRIVACY_NOTICE_VERSION = "privacy-ndpa-2023";
 
-async function guard(scope: string, turnstileToken: unknown): Promise<string | null> {
+async function guard(scope: string, turnstileToken: unknown, opts: { turnstile?: boolean } = {}): Promise<string | null> {
   const h = await headers();
   const limited = await rateLimit(callerKey(h, scope), RULE);
   if (!limited.ok) return "Too many tries from this connection. Wait a little and try again.";
+  if (opts.turnstile === false) return null;
   const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim();
   const ts = await verifyTurnstile(turnstileToken, ip);
   if (!ts.ok) return ts.error;
@@ -32,26 +33,33 @@ async function guard(scope: string, turnstileToken: unknown): Promise<string | n
 const chooseSchema = z.object({
   serviceSlug: z.string().min(1).max(80),
   details: z.string().max(4000).optional(),
+  timeline: z.string().max(80).optional(),
+  companySize: z.string().max(80).optional(),
   draftId: z.string().optional(),
   turnstileToken: z.string().optional(),
 });
 
-/** Save the chosen service as a server-side draft; returns its id for the sign-up link. */
+/**
+ * Save the chosen service as a server-side draft; returns its id for the
+ * sign-up link. Rate-limited only: the sign-up form that follows carries the
+ * Turnstile check, and a draft on its own does nothing.
+ */
 export async function chooseServiceAction(input: z.infer<typeof chooseSchema>): Promise<Res> {
   const parsed = chooseSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Choose a service to continue." };
-  const blocked = await guard("get-started", parsed.data.turnstileToken);
+  const blocked = await guard("get-started", parsed.data.turnstileToken, { turnstile: false });
   if (blocked) return { ok: false, error: blocked };
   const catalog = await getCatalog().catch(() => []);
   const svc = catalog.find((s) => s.slug === parsed.data.serviceSlug);
   if (!svc) return { ok: false, error: "That service is not available right now. Choose another." };
   const details = parsed.data.details?.trim() || undefined;
+  const answers = { ...(details ? { details } : {}), ...(parsed.data.timeline ? { timeline: parsed.data.timeline } : {}), ...(parsed.data.companySize ? { companySize: parsed.data.companySize } : {}) };
   try {
     if (parsed.data.draftId && isDraftId(parsed.data.draftId)) {
-      const updated = await updateDraft(parsed.data.draftId, { serviceSlug: svc.slug, answers: details ? { details } : {} });
+      const updated = await updateDraft(parsed.data.draftId, { serviceSlug: svc.slug, answers });
       if (updated) return { ok: true, draftId: updated.id };
     }
-    const row = await createDraft({ serviceSlug: svc.slug, answers: details ? { details } : {} });
+    const row = await createDraft({ serviceSlug: svc.slug, answers });
     return { ok: true, draftId: row.id };
   } catch (err) {
     console.error("[get-started] draft save failed:", err);

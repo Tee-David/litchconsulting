@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 
 type Parent = { id: string; number: string; serviceName: string; serviceSlug: string; files: Array<{ id: string; name: string; from: "us" | "you" }> };
 
-export function NewRequestClient({ services, parent = null, addMode = false }: { services: StepperService[]; parent?: Parent | null; addMode?: boolean }) {
+export function NewRequestClient({ services, parent = null, addMode = false, serverDraft = null }: { services: StepperService[]; parent?: Parent | null; addMode?: boolean; serverDraft?: RequestDraft | null }) {
   const params = useSearchParams();
   const resume = params.get("resume") === "1";
   const preselect = params.get("service") ?? (parent && !addMode && services.some((s) => s.slug === parent.serviceSlug) ? parent.serviceSlug : null);
@@ -24,7 +24,10 @@ export function NewRequestClient({ services, parent = null, addMode = false }: {
 
   // Draft pickup happens client-side only (localStorage).
   useEffect(() => {
-    if (resume) {
+    if (serverDraft && services.some((s) => s.slug === serverDraft.serviceSlug)) {
+      setDraft(serverDraft);
+      setSlug(serverDraft.serviceSlug);
+    } else if (resume) {
       const d = loadRequestDraft();
       if (d && services.some((s) => s.slug === d.serviceSlug)) {
         setDraft(d);
@@ -32,7 +35,7 @@ export function NewRequestClient({ services, parent = null, addMode = false }: {
       }
     }
     setReady(true);
-  }, [resume, services]);
+  }, [resume, services, serverDraft]);
 
   if (!ready) return null;
   const selected = slug ? services.find((s) => s.slug === slug) : null;

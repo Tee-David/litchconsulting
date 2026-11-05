@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { computeTotals, formatMoney } from "@/lib/invoice/money";
 import { saveRequestDraft, clearRequestDraft, type RequestDraft } from "./draft";
 import { createRequestAction } from "@/app/dashboard/requests/actions";
+import { chooseServiceAction } from "@/app/get-started/actions";
 import { useToast } from "@/components/admin/ui/toaster";
 import type { StepperService } from "./stepper-utils";
 
@@ -96,7 +97,13 @@ export function RequestStepper({
       details: details.trim(),
       intake: { timeline: timeline || undefined, companySize: companySize || undefined },
     });
-    router.push("/dashboard/requests/new?resume=1");
+    // R1.6: also keep the draft on the server, so verifying the email on
+    // another device still lands on this request. localStorage stays as the
+    // same-device fallback if the save fails.
+    startTransition(async () => {
+      const res = await chooseServiceAction({ serviceSlug: service.slug, details: details.trim(), timeline: timeline || undefined, companySize: companySize || undefined });
+      router.push(res.ok ? `/signup?draft=${res.draftId}` : "/dashboard/requests/new?resume=1");
+    });
   }
 
   function submit() {
