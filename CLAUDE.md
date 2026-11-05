@@ -12,10 +12,11 @@ A polished marketing site **and** a role-gated admin dashboard with an invoicing
 - Repo: https://github.com/Tee-David/litchconsulting (`main`)
 - The web app lives in **`frontend/`** (Next.js full-stack). **`backend/`** is **LitchAI** — a
   separate Python pipeline that compiles client financial documents into formula-driven Excel
-  files (spec: `plans/prd.md`, progress: `plans/checklist.md`; `plans/` is gitignored). It
-  deploys to its own OCI VM, never to Vercel.
+  files and runs the AI engine behind Sage and the workbench. It deploys to its own OCI VM
+  (`/srv/projects/litchconsulting`), never to Vercel.
 - Reader-facing docs: `README.md` (root, two-app architecture), `frontend/README.md`,
-  `backend/README.md`. They must never cite `plans/` paths — that dir is gitignored.
+  `backend/README.md`, `backend/deploy/RUNBOOK.md`. Never cite the gitignored planning folder in
+  them.
 
 ## Stack
 
@@ -32,11 +33,17 @@ All mail is nodemailer/SMTP (`lib/email.ts`) — there is **no** Resend integrat
   Better Auth **owns and creates** the `user` table; `schema.ts` carries a read/admin
   **mapping** of it (used by settings user management) — never create/migrate it via
   `apply-schema.ts`, and let Better Auth handle signup/password flows.
-- **Writes:** **server actions** (`app/admin/**/actions.ts`), each guarded by `isAdmin()`.
+- **Writes:** **server actions**, each re-checking access on the server (`requireArea`/`hasAccess`
+  from `lib/server-user.ts`, or the admin `actor(area)` guard in `app/admin/_lib/guard.ts`).
   Money totals are always recomputed server-side (`lib/invoice/money.ts`).
-- **Auth:** Better Auth (`lib/auth.ts`), roles `admin | client` on the session user.
-  `lib/server-user.ts` has `getSessionUser/isAdmin`. Admin gate in `app/admin/layout.tsx`;
-  `/dashboard` redirects admins → `/admin`.
+- **Auth and roles:** Better Auth (`lib/auth.ts`), roles `admin | staff | client` (server-only
+  field). `lib/access.ts` is the one access map (`canAccess`, `accessMatrix`, `homeFor`):
+  admin → `/admin`, staff → `/work` (assigned requests only via `request_assignment`, never money),
+  client → `/dashboard`. Self sign-up makes clients; staff/admins/client colleagues come from
+  invitations (`lib/invitations.ts`, `/invite/[token]`). **Two-step sign-in is required for admin
+  and staff and enforced on the server**: a firm session without an authenticator or without a
+  passed code (`session_two_step`) is treated as signed out by `getSessionUser` and held at
+  `/account/two-step`. Every sign-in finishes at `/account/continue`.
 - **Schema:** `lib/db/schema.ts` — `lead, client, invoice, invoice_item, expense, payment, post,
   template, ticket, ticket_message, service_offering, service_request, service_request_event,
   service_request_document, consultation, client_note, audit_log, push_subscription,
@@ -101,13 +108,21 @@ All mail is nodemailer/SMTP (`lib/email.ts`) — there is **no** Resend integrat
   the assistant silently drifts behind the product.
 - **⌘K palette:** `components/admin/command-palette.tsx` (cmdk) + `app/admin/command-actions.ts`
   (admin-guarded cross-entity search over clients/requests/invoices).
-- **Crons** (`vercel.json`, each guarded by `CRON_SECRET`): `/api/cron/sweep` `0 7 * * *` (purge),
-  `/api/cron/backup` `30 3 * * *` (CockroachDB → private R2, rotation; Settings Backups card at
-  `app/admin/settings/backups-card.tsx` triggers it on demand), `/api/cron/digest` `0 8 * * 1`
-  (weekly client digest; opt-out via `client.digest_opt_out` on `/dashboard/settings`).
+- **Crons** (`vercel.json`, each guarded by `CRON_SECRET`): `/api/cron/outbox` `30 6 * * *`
+  (retry failed email), `/api/cron/sweep` `0 7 * * *` (Trash purge, due erasures, nudges, rate-limit
+  rows), `/api/cron/reminders` `0 9 * * *` (invoice reminders), `/api/cron/backup` `30 3 * * *`
+  (JSON snapshot to private R2 via `lib/backup/db-backup.ts`; Settings → Backups runs it on demand
+  and has a restore test), `/api/cron/digest` `0 8 * * 1` (weekly client digest).
+- **Emails:** every email is a template in `lib/email-templates.ts` (escaped plain-text builders,
+  "why you got this" footer, signed unsubscribe). All sends go through the outbox in `lib/email.ts`.
+- **Privacy:** cookie notice in `components/consent/*` (only necessary cookies; Cal.com after
+  consent). Record of processing in `lib/privacy/register.ts` → `/admin/settings/privacy`; keep it
+  and the privacy policy in `lib/content.ts` in step when you add a processor or data store.
+- **CI:** `.github/workflows/ci.yml` (tsc, eslint errors, vitest; backend ruff error gate + pytest).
 - **Tours:** `components/tour/*` (react-joyride) — registry, route-match, wait-for-target,
   cross-page controller, animated launcher, confetti. Anchors are `data-tour`; providers mount in
-  both shells. Reduced-motion aware.
+  the admin, staff and client shells; completion is stored per user and tour version. Bump a
+  tour's `version` when its stops change.
 - **Help desk:** 3-pane admin `/admin/help-desk` (list/thread/details, timeline, tags, team,
   type) + client hub `/dashboard/support`.
 

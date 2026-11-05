@@ -1,6 +1,6 @@
 # LitchAI — backend
 
-![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&style=flat-square)
+![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&style=flat-square)
 ![FastAPI](https://img.shields.io/badge/FastAPI-API-009688?logo=fastapi&style=flat-square)
 ![openpyxl](https://img.shields.io/badge/openpyxl-formula_compiler-1D6F42?style=flat-square)
 ![Procrastinate](https://img.shields.io/badge/Procrastinate-queue-4B8BBE?style=flat-square)
@@ -18,7 +18,8 @@ computed cell is a real Excel formula** — an auditable working paper, not a fl
 > **Core rule: no generative step ever touches a formula.**
 > Compilers are hand-written Python. A headless-LibreOffice recompute plus golden fixtures gate
 > every file before it reaches human review. The LLM's role is confined to categorisation
-> suggestions and the grounded Sage assistant — never to arithmetic.
+> suggestions, the grounded Sage assistant and workbench proposals that a person accepts and
+> that are recomputed before saving — never to unchecked arithmetic.
 
 This is a **standalone service**. It deploys to its own Oracle Cloud (OCI) VM and is **never**
 deployed to Vercel. The web platform in `frontend/` reaches it only through a Cloudflare Tunnel,
@@ -43,6 +44,10 @@ python3 -m venv .venv
 ```bash
 .venv/bin/pytest
 ```
+
+CI (`.github/workflows/ci.yml`) runs the same suite on Python 3.12 with `libreoffice-calc-nogui`,
+and gates on `ruff check --select E9,F63,F7,F82` (real errors); the wider lint backlog is reported
+but does not fail the build.
 
 The recompute tests require **LibreOffice** (`soffice`) on `PATH` — that binary is what proves the
 emitted formulas actually evaluate to the expected values.
@@ -177,6 +182,23 @@ backend/
 
 ---
 
+## AI models (router)
+
+`litchai/ai/router.py` keeps one provider chain behind a single interface. Default order
+(override with `LITCHAI_PROVIDER_CHAIN`):
+
+| Order | Provider | Model | Env |
+| --- | --- | --- | --- |
+| 1 | Groq | `openai/gpt-oss-120b` | `GROQ_API_KEY` |
+| 2 | Cloudflare Workers AI | `@cf/openai/gpt-oss-120b` | `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` (or `LITCHAI_CF_AI_TOKEN`) |
+| 3 | Cerebras | `gpt-oss-120b` | `CEREBRAS_API_KEY` |
+| 4 | SambaNova | `Meta-Llama-3.3-70B-Instruct` | `SAMBANOVA_API_KEY` |
+| 5 | Local | llama-server (`LITCHAI_LLAMA_SERVER_URL`), else Ollama (`LITCHAI_OLLAMA_HOST`) | `LITCHAI_LOCAL_MODEL` |
+
+The router pins one provider per conversation and falls back on timeout, rate limit, daily quota
+(`LITCHAI_<PROVIDER>_DAILY_REQUESTS/_TOKENS`) or invalid output, recording the reason. Every cloud
+call is masked first; clients set to **local only** never leave the VM. Every call is logged.
+
 ## Deployment — Oracle Cloud VM
 
 LitchAI runs on the **WDC Projects** OCI VM under systemd, from `/srv/projects/litchconsulting`
@@ -187,6 +209,8 @@ rebuilds the host from a blank Ubuntu 24.04 ARM image.
 | --- | --- |
 | `litchai-api.service` | `uvicorn litchai.api:app --host 127.0.0.1 --port 8000` |
 | `litchai-worker.service` | `procrastinate --app=litchai.queue.queue worker` |
+| `litchai-llama.service` | llama.cpp `llama-server` on 127.0.0.1:8081 (Q4_0 model, niced, no CPU quota) |
+| `litch-cloudflared.service` | Cloudflare Tunnel for `ai.litchconsulting.com` |
 | `litchai-backup.timer` | `deploy/backup.sh` — nightly `pg_dump` → R2 (02:30 UTC) |
 | `litchai-heartbeat.timer` | `litchai.heartbeat` every 10 min — OCI idle-reclaim guard |
 
@@ -222,9 +246,17 @@ frontend (Vercel)  ──CF-Access-Client-Id/Secret──▶  ai.litchconsulting
 | `LITCHAI_DATABASE_URL` | Postgres (needs the `vector` and `pg_trgm` extensions) |
 | `LITCHAI_PRIVATE_KEY_PATH` | Blind-relay decrypt key on disk |
 | `R2_BUCKET` | Private R2 bucket for backups |
+| `GROQ_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `CEREBRAS_API_KEY`, `SAMBANOVA_API_KEY` | Cloud model providers (see AI models) |
+| `LITCHAI_LLAMA_SERVER_URL`, `LITCHAI_LOCAL_MODEL`, `LITCHAI_OLLAMA_HOST` | Local model and embeddings |
+| `LITCHAI_PROVIDER_CHAIN` | Optional chain override |
 
 Backups use the Litch-scoped R2 S3 credentials from Doppler; `backup.sh` builds the `rclone`
 remote `r2:` from them at runtime (no credentials file on disk).
+
+Access to the VM and the OCI tenancy is described by variables in the gitignored repo-root
+`.env`, named `WDC_VM_*` (host name, IP, user, instance OCID, SSH key file) and `WDC_OCI_*` (tenancy,
+user, region, compartment, VCN/subnet, API key fingerprint and key file). Never paste their values
+into docs, commits or tickets.
 
 ---
 

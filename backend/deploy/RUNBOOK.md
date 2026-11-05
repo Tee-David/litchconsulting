@@ -8,10 +8,15 @@ One folder per project under `/srv/projects/<name>`, each run by its own system 
 LitchAI lives in `/srv/projects/litchconsulting` (`app/` checkout, `venv/`, `data/uploads/`
 ciphertext, `backups/`) and runs as user `litch`. Secrets are injected at start by
 `litch-run` (`doppler run`, read-only service token in `/etc/litch/doppler.env`); host-local
-settings sit in `/etc/litch/env`. Postgres 16 + pgvector, ClamAV and Ollama are native,
-loopback-only services. `deploy/bootstrap.sh` rebuilds the whole host from a blank image.
+settings sit in `/etc/litch/env`. Postgres 16 + pgvector, ClamAV, Ollama (embeddings) and
+llama-server (local chat model) are native, loopback-only services. `deploy/bootstrap.sh` rebuilds the whole host from a blank image.
 
 Run anything as the app: `sudo -u litch /usr/local/bin/litch-run <cmd>` (from a dir litch can read, e.g. `cd /tmp`).
+
+Access to the VM and the OCI tenancy is described by variables in the gitignored repo-root
+`.env`, named `WDC_VM_*` (host name, IP, user, instance OCID, SSH key file) and `WDC_OCI_*` (tenancy,
+user, region, compartment, VCN/subnet, API key fingerprint and key file). Never paste their values
+into docs, commits or tickets.
 
 ## Backups (nightly pg_dump → R2)
 
@@ -106,9 +111,11 @@ The endpoint returns per-entity counts for the erasure record.
 
 ## Local model (llama-server) and the bench
 
-The workbench and Sage try Groq → Cerebras → SambaNova → local. "Local" is Ollama
-until `LITCHAI_LLAMA_SERVER_URL` is set, then llama.cpp's `llama-server`
-(`litchai-llama.service`, 127.0.0.1:8081, niced, 6 GB cap). Clients on "local only"
+The workbench and Sage try Groq → Cloudflare Workers AI → Cerebras → SambaNova → local
+(`LITCHAI_PROVIDER_CHAIN` overrides). Workers AI needs `CLOUDFLARE_ACCOUNT_ID` and
+`CLOUDFLARE_API_TOKEN` in Doppler. "Local" is Ollama until `LITCHAI_LLAMA_SERVER_URL` is set,
+then llama.cpp's `llama-server` (`litchai-llama.service`, 127.0.0.1:8081, a Q4_0 model repacked
+for NEON, niced with a low CPU weight and no CPU quota, 6 GB memory cap). Clients on "local only"
 always use it.
 
 1. Install / rebuild / swap model (as root; idempotent):
@@ -128,7 +135,7 @@ always use it.
 
 ## Observability
 
-`GET /observability` (surfaced at `/admin/litchai/observability`): documents by
+`GET /observability` (surfaced at `/admin/analyses/observability`): documents by
 status, rejected count, needs-review total, per-rung hit rates, and the rung-4
 fallback rate. Richer SQL views (most-corrected categories, still-confusing
 narrations, LLM usage) are in `litchai.categorize.reports.SQL_VIEWS`.
