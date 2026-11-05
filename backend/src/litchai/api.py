@@ -58,6 +58,54 @@ def _default_embedder() -> Any:
     return OllamaEmbedder()
 
 
+def _default_router() -> Any:
+    """Workbench model chain (Groq → Cerebras → SambaNova → local). On the VM the
+    call log and daily quota persist in Postgres; elsewhere they stay in memory."""
+    from litchai.ai.router import build_router
+
+    if os.environ.get("LITCHAI_DATABASE_URL"):
+        from litchai.ai.pg import ConnectingCallLog, ConnectingQuota
+
+        return build_router(call_log=ConnectingCallLog(), quota=ConnectingQuota())
+    return build_router()
+
+
+def _default_categoriser(repo: Any, client_id: str | None) -> Any:
+    """The workbench's categorise_rows uses the real ladder (rungs 1–3: exact,
+    trigram, vector) when Postgres is wired; rung 4 (LLM) stays off here so a
+    large sheet never waits on the model. None → taxonomy-keyword fallback."""
+    conn = getattr(repo, "conn", None)
+    if conn is None:
+        return None
+    from litchai.categorize.ladder import classify
+    from litchai.categorize.pg_memory import PgMemoryStore
+    from litchai.taxonomy import load_taxonomy
+
+    store, taxonomy = PgMemoryStore(conn), load_taxonomy()
+    embedder: list[Any] = []
+
+    def run(normalized: str) -> tuple[str, str | None, float]:
+        if not embedder:
+            try:
+                embedder.append(_default_embedder())
+            except Exception:  # noqa: BLE001
+                embedder.append(None)
+        try:
+            d = classify(normalized, client_id=client_id, store=store, taxonomy=taxonomy,
+                         embedder=embedder[0])
+        except Exception:  # noqa: BLE001 — embedder down: rungs 1–2 only
+            d = classify(normalized, client_id=client_id, store=store, taxonomy=taxonomy)
+        return d.category_code, d.source, d.confidence
+
+    return run
+
+
+def _default_decryptor() -> Any:
+    from litchai.crypto import build_decryptor
+
+    return build_decryptor()
+
+
 class AssistantChatRequest(BaseModel):
     message: str
     history: list[dict[str, str]] | None = None
@@ -159,8 +207,23 @@ def create_app(
     provider_factory: ProviderFactory | None = None,
     embedder_factory: EmbedderFactory | None = None,
     chat_provider_factory: ProviderFactory | None = None,
+    router_factory: ProviderFactory | None = None,
+    decryptor: Callable[[bytes], bytes] | None = None,
+    workbench_gate: Callable[[bytes], Any] | None = None,
+    categoriser_factory: Callable[[Any, str | None], Any] | None = None,
 ) -> FastAPI:
     app = FastAPI(title="LitchAI", version=API_VERSION, lifespan=_lifespan)
+    # Workbench (Phase 3): model chain, blind-relay decrypt, recompute gate, ladder.
+    app.state.router_factory = router_factory or _default_router
+    app.state.ai_router = None
+    # Lazy: the key file is read on first use, never at import (a permissions
+    # problem then fails one workbench call, not API startup).
+    app.state.decryptor = decryptor or (lambda data: _default_decryptor()(data))
+    app.state.workbench_gate = workbench_gate  # None → LibreOffice (unverified without it)
+    app.state.categoriser_factory = categoriser_factory or _default_categoriser
+    from litchai.review.pack_cache import ReviewPackCache
+
+    app.state.review_packs = ReviewPackCache()
     app.state.repo_provider = repo_provider or _pg_provider
     app.state.store_provider = store_provider or _pg_store_provider
     app.state.provider_factory = provider_factory or _default_provider
@@ -572,6 +635,11 @@ def create_app(
             raise HTTPException(422, str(exc)) from exc
         finally:
             repo.release_compile_lock(engagement_id)
+        from litchai.review.pack_cache import engagement_fingerprint
+
+        fp = engagement_fingerprint(repo, engagement_id)
+        if fp and result.ok:
+            app.state.review_packs.put(engagement_id, fp, result.review_pack)
         pack = result.review_pack.to_dict()
         return {
             "ok": result.ok,
@@ -589,15 +657,25 @@ def create_app(
 
         from litchai.pipeline import compile_engagement
         from litchai.review.assistant import answer
+        from litchai.review.pack_cache import engagement_fingerprint
         from litchai.taxonomy import load_taxonomy
 
         if repo.get_engagement(engagement_id) is None:
             raise HTTPException(404, "engagement not found")
-        result = compile_engagement(
-            repo, engagement_id, taxonomy=load_taxonomy(), storage=app.state.storage
-        )
-        response = answer(question, result.review_pack, provider=app.state.provider_factory())
-        return asdict(response)
+        # Review pack cached per engagement version (3.8): unchanged line items /
+        # inputs answer from the cache; any change recompiles once.
+        fp = engagement_fingerprint(repo, engagement_id)
+        pack = app.state.review_packs.get(engagement_id, fp) if fp else None
+        cached = pack is not None
+        if pack is None:
+            result = compile_engagement(
+                repo, engagement_id, taxonomy=load_taxonomy(), storage=app.state.storage
+            )
+            pack = result.review_pack
+            if fp and result.ok:
+                app.state.review_packs.put(engagement_id, fp, pack)
+        response = answer(question, pack, provider=app.state.provider_factory())
+        return {**asdict(response), "review_pack_cached": cached}
 
     def _get_embedder():
         if app.state.embedder is None:
@@ -726,6 +804,9 @@ def create_app(
         result = reindex(repo, _get_embedder())
         return asdict(result)
 
+    from litchai.workbench.routes import register_workbench_routes
+
+    register_workbench_routes(app)
     return app
 
 
