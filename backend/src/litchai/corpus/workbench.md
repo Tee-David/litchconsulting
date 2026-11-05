@@ -1,8 +1,18 @@
 # The workbench — working on client spreadsheets with Sage
 
 These notes describe the workbench: the spreadsheet editor where an admin opens a
-client's files and works on them with Sage beside the grid. Open it from a request
-("Open in workbench") or from Analyses.
+client's files and works on them with Sage beside the grid. Admins open it from a
+request ("Open in workbench") or from Analyses, where recent workbench threads are
+listed and a new blank workbook can be started. Staff open it from Files in their
+workspace, only for requests assigned to them. On a phone, the Sheet / Sage switch
+shows the grid or the chat; Sage opens as a sheet from the bottom.
+
+Final actions are in the workbench header: Download XLSX, and Send to client, which
+saves the file to the request as a draft, sends it for client review (the next review
+round), or publishes it as the final deliverable. Every one of them recomputes the
+workbook first; if a formula errors, nothing is released and the cells are listed.
+Voice: hold the microphone button in the composer to talk; the words appear in the
+text box to edit before sending.
 
 ## What the workbench reads
 

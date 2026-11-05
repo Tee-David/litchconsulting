@@ -168,6 +168,7 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
         "citations": (final or {}).get("citations", []),
         "proposals": [p["id"] for p in (final or {}).get("proposals", [])],
         "attribution": (final or {}).get("attribution"),
+        "unverified_figures": (final or {}).get("unverified_figures") or [],
         "steps": [e for e in events if e["type"] in ("plan", "tool_call", "tool_result",
                                                       "fallback", "provider", "retry")][:60],
     })

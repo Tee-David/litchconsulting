@@ -357,6 +357,33 @@ def register_workbench_routes(app: FastAPI) -> None:
             return Response(content=data, media_type=XLSX_MIME, headers={
                 "Content-Disposition": f'attachment; filename="{name}.xlsx"'})
 
+    @app.get("/workbench/conversations/{conversation_id}/workbooks/{workbook_id}/verified.xlsx")
+    def verified_workbook(conversation_id: str, workbook_id: str) -> Response:
+        """The current version, through the recompute gate. Every final action
+        (download, save draft for the client, send) uses this. 409 with the errors
+        when the gate blocks; otherwise the bytes plus X-Gate-* headers. An
+        ``unverified`` gate (LibreOffice unavailable) is returned, never hidden."""
+        from litchai.workbench.ops import libreoffice_gate
+
+        with _workbench() as wb:
+            conv = _get(wb, conversation_id)
+            try:
+                data = wb.download(conv, workbook_id)
+                ref = conv.workbook_ref(workbook_id)
+            except (KeyError, WorkbenchError) as exc:
+                raise HTTPException(404, str(exc)) from exc
+        gate = (state.workbench_gate or libreoffice_gate)(data)
+        g = gate.to_dict()
+        if gate.status == "blocked":
+            raise HTTPException(409, {"message": "The recompute gate found formula errors.",
+                                      "gate": g})
+        name = os.path.splitext(ref.name)[0] or workbook_id
+        return Response(content=gate.recomputed or data, media_type=XLSX_MIME, headers={
+            "Content-Disposition": f'attachment; filename="{name}.xlsx"',
+            "X-Gate-Status": gate.status, "X-Gate-Formulas": str(gate.formulas),
+            "X-Gate-Version": str(len(ref.versions)),
+            "X-Gate-Detail": (gate.detail or "")[:200].encode("ascii", "replace").decode()})
+
     @app.get("/workbench/conversations/{conversation_id}/workbooks/{workbook_id}/sheets/{sheet}")
     def sheet_cells(conversation_id: str, workbook_id: str, sheet: str, r0: int = 1,
                     r1: int = 200, c0: int = 1, c1: int = 52) -> dict[str, Any]:

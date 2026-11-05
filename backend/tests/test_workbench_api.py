@@ -206,3 +206,20 @@ def test_review_pack_cache_follows_engagement_version():
     cache.put(eng.id, fp2, "pack-2")
     assert cache.get(eng.id, fp1) is None  # one live version per engagement
     assert engagement_fingerprint(repo, 9999) is None
+
+
+def test_verified_download_goes_through_the_gate(tmp_path):
+    app, _, doc, _ = _setup(tmp_path)
+    with queue.replace_connector(testing.InMemoryConnector()), _client(app) as c:
+        cid = c.post("/workbench/conversations", json={"document_ids": [doc.id]}
+                     ).json()["conversation"]["id"]
+        url = f"/workbench/conversations/{cid}/workbooks/doc-{doc.id}/verified.xlsx"
+        ok = c.get(url)
+        assert ok.status_code == 200 and ok.headers["x-gate-status"] == "passed"
+        assert load_workbook(io.BytesIO(ok.content)).sheetnames == ["Ledger", "Bank", "Notes"]
+        app.state.workbench_gate = lambda x: GateResult("blocked", errors=["P&L!C9: #REF!"])
+        blocked = c.get(url)
+        assert blocked.status_code == 409
+        assert blocked.json()["detail"]["gate"]["errors"] == ["P&L!C9: #REF!"]
+        assert c.get(f"/workbench/conversations/{cid}/workbooks/nope/verified.xlsx"
+                     ).status_code == 404
