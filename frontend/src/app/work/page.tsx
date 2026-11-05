@@ -6,6 +6,7 @@ import { PageHead, Panel, linkBtn } from "@/components/dashboard/ui";
 import { requireArea } from "@/lib/server-user";
 import { staffAttention } from "@/lib/attention/staff";
 import { staffRequestRows } from "@/lib/requests/work";
+import { Onboarding } from "@/components/access/onboarding";
 
 export const metadata: Metadata = { title: "My work" };
 export const dynamic = "force-dynamic";
@@ -30,6 +31,9 @@ export default async function StaffHome() {
         lede={`${items.length ? `${items.length} ${items.length === 1 ? "thing needs" : "things need"} you.` : "Nothing needs you right now."} You see the ${open.length} open ${open.length === 1 ? "request" : "requests"} assigned to you.`}
         actions={<Link href="/work/analyses" className={linkBtn.secondary}>Open files</Link>}
       />
+      {/* R1.5 first-run checklist: renders nothing once done or hidden. */}
+      <Onboarding />
+
       <div data-tour="attention">
         <AttentionList
           items={items}

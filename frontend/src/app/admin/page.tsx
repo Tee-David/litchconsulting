@@ -19,6 +19,7 @@ import {
   undoAttention,
 } from "./attention-actions";
 import { cn } from "@/lib/utils";
+import { Onboarding } from "@/components/access/onboarding";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +76,9 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
           </>
         }
       />
+
+      {/* R1.5 first-run checklist: renders nothing once done or hidden. */}
+      <Onboarding />
 
       <div data-tour="needs-action">
         <AttentionList

@@ -677,6 +677,7 @@ export const invitation = pgTable(
     redeemedBy: text("redeemed_by"),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
     lastSentAt: timestamp("last_sent_at", { withTimezone: true }),
+    access: text("access"), // client colleague: billing | reviewer | viewer
     createdAt: createdAt(),
   },
   (t) => [
@@ -794,6 +795,51 @@ export const requestDraft = pgTable(
   (t) => [index("request_draft_email_idx").on(t.email)]
 );
 
+/**
+ * Colleagues at a client company (R1.2). `client.user_id` stays the owner
+ * contact; everyone else who signs in for the company is a member here, so
+ * portal reads that resolve the client from the session see the same company.
+ */
+export const clientMember = pgTable(
+  "client_member",
+  {
+    id: id(),
+    clientId: uuid("client_id").notNull(),
+    userId: text("user_id").notNull(),
+    access: text("access").notNull().default("viewer"), // billing | reviewer | viewer
+    invitedBy: text("invited_by"),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("client_member_uidx").on(t.clientId, t.userId),
+    index("client_member_user_idx").on(t.userId),
+  ]
+);
+
+/** First-run onboarding and tour progress, per user (R1.5). Server-side so it follows the person across devices. */
+export const userOnboarding = pgTable("user_onboarding", {
+  userId: text("user_id").primaryKey(),
+  steps: jsonb("steps").notNull().default({}), // { [stepId]: ISO time done }
+  hiddenUntil: timestamp("hidden_until", { withTimezone: true }),
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  tours: jsonb("tours").notNull().default({}), // { [tourId]: { version, status, at } }
+  updatedAt: updatedAt(),
+});
+
+/**
+ * Sessions that passed the second factor (two-step sign-in). Admin and staff
+ * sessions without a row here are held at /account/two-step until verified.
+ */
+export const sessionTwoStep = pgTable(
+  "session_two_step",
+  {
+    sessionId: text("session_id").primaryKey(),
+    userId: text("user_id").notNull(),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [index("session_two_step_user_idx").on(t.userId)]
+);
+
 export type Client = typeof client.$inferSelect;
 export type Invoice = typeof invoice.$inferSelect;
 export type InvoiceItem = typeof invoiceItem.$inferSelect;
@@ -822,3 +868,5 @@ export type ReviewRound = typeof reviewRound.$inferSelect;
 export type Notification = typeof notification.$inferSelect;
 export type NotificationPref = typeof notificationPref.$inferSelect;
 export type RequestDraft = typeof requestDraft.$inferSelect;
+export type ClientMember = typeof clientMember.$inferSelect;
+export type UserOnboarding = typeof userOnboarding.$inferSelect;

@@ -1,7 +1,7 @@
 import "server-only";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { client, requestAssignment, serviceRequest, user } from "@/lib/db/schema";
+import { client, clientMember, requestAssignment, serviceRequest, user } from "@/lib/db/schema";
 import { notifyUsers, userIdsWithRole, type NotifyCategory } from "@/lib/notifications";
 
 /**
@@ -44,6 +44,9 @@ export async function clientUserIds(clientId: string): Promise<string[]> {
   const ids = new Set<string>();
   const [c] = await db.select({ userId: client.userId }).from(client).where(eq(client.id, clientId));
   if (c?.userId) ids.add(c.userId);
+  // Colleagues invited to the company (lib/invitations.ts).
+  const members = await db.select({ userId: clientMember.userId }).from(clientMember).where(eq(clientMember.clientId, clientId));
+  for (const m of members) ids.add(m.userId);
   const reqUsers = await db
     .selectDistinct({ userId: serviceRequest.userId })
     .from(serviceRequest)

@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { canAccess, homeFor, roleOf, type Area, type Role } from "@/lib/access";
+import { sessionVerified, twoStepRequired, twoStepStateFor, type TwoStepState } from "@/lib/two-step";
 
 export type SessionUser = {
   id: string;
@@ -15,14 +16,55 @@ export type SessionUser = {
   image?: string | null;
 };
 
+/** The raw Better Auth session (user + session row), deduped per request. */
+export const getAuthSession = cache(async () => {
+  try {
+    return await auth.api.getSession({ headers: await headers() });
+  } catch {
+    return null;
+  }
+});
+
+/**
+ * Two-step hold for this request's session (lib/two-step.ts): admin and staff
+ * sessions are held until the person has an authenticator AND this session
+ * passed the second factor. Clients are never held.
+ */
+export const twoStepState = cache(async (): Promise<TwoStepState> => {
+  const s = await getAuthSession();
+  if (!s?.user) return "ok";
+  const u = s.user as unknown as { role?: string; twoFactorEnabled?: boolean | null };
+  const role = roleOf(u);
+  if (!twoStepRequired(role)) return "ok";
+  const enabled = Boolean(u.twoFactorEnabled);
+  const verified = enabled ? await sessionVerified(s.session.id) : false;
+  return twoStepStateFor({ role, enabled, verified });
+});
+
+/**
+ * Signed-in user even while held at two-step — ONLY for the account pages
+ * that complete enrolment/verification. Never use it to authorise anything.
+ */
+export const getAccountUser = cache(async (): Promise<(SessionUser & { twoFactorEnabled: boolean; sessionId: string }) | null> => {
+  const s = await getAuthSession();
+  if (!s?.user) return null;
+  const u = s.user as unknown as SessionUser & { twoFactorEnabled?: boolean | null };
+  return { ...u, twoFactorEnabled: Boolean(u.twoFactorEnabled), sessionId: s.session.id };
+});
+
 /**
  * Full session user (server components / route handlers), or null.
  * `cache` dedupes the lookup within one request, so a page that checks access
  * in its layout, page and actions only hits Better Auth once.
+ *
+ * A firm session held at two-step counts as SIGNED OUT here, so every page
+ * guard, server action and route handler refuses it without knowing about
+ * two-step at all; requireArea sends the person to finish it.
  */
 export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
-  const session = await auth.api.getSession({ headers: await headers() });
+  const session = await getAuthSession();
   if (!session?.user) return null;
+  if ((await twoStepState()) !== "ok") return null;
   return session.user as unknown as SessionUser;
 });
 
@@ -64,7 +106,13 @@ export async function hasAccess(area: Area): Promise<boolean> {
  */
 export async function requireArea(area: Area, returnTo?: string): Promise<SessionUser & { role: Role }> {
   const u = await getSessionUser();
-  if (!u) redirect(returnTo ? `/login?redirect=${encodeURIComponent(returnTo)}` : "/login");
+  if (!u) {
+    const hold = await twoStepState();
+    const next = returnTo ? `?next=${encodeURIComponent(returnTo)}` : "";
+    if (hold === "enrol") redirect(`/account/two-step${next}`);
+    if (hold === "verify") redirect(`/account/two-step/verify${next}`);
+    redirect(returnTo ? `/login?redirect=${encodeURIComponent(returnTo)}` : "/login");
+  }
   if (u.banned) redirect("/login?banned=1");
   const role = roleOf(u);
   if (!canAccess(role, area)) redirect(homeFor(role));

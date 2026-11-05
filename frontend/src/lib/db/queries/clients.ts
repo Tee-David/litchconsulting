@@ -1,7 +1,7 @@
 import "server-only";
 import { and, desc, eq, isNull, isNotNull, ne, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { client } from "@/lib/db/schema";
+import { client, clientMember } from "@/lib/db/schema";
 
 export type ClientRow = typeof client.$inferSelect;
 
@@ -29,6 +29,15 @@ export async function getClient(id: string): Promise<ClientRow | null> {
 }
 
 export async function getClientForUser(userId: string, email: string, name?: string): Promise<ClientRow> {
+  // 0. A colleague invited to a company (client_member) belongs to that company.
+  const [member] = await db
+    .select({ c: client })
+    .from(clientMember)
+    .innerJoin(client, eq(client.id, clientMember.clientId))
+    .where(and(eq(clientMember.userId, userId), isNull(client.deletedAt)))
+    .limit(1);
+  if (member) return member.c;
+
   // 1. Try to find by userId
   let [c] = await db.select().from(client).where(eq(client.userId, userId)).limit(1);
   if (c) return c;

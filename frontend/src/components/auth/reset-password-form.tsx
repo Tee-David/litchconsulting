@@ -2,128 +2,92 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useSearchParams, useRouter } from "next/navigation";
-import { CheckCircle2 } from "lucide-react";
+import { useSearchParams } from "next/navigation";
+import { CheckCircle2, Clock, KeyRound } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
-import { FloatingInput } from "./ui";
-import { useToast } from "@/components/admin/ui/toaster";
+import { PasswordStrength, passwordIssue } from "./password-strength";
+import { AuthHeading, Callout, Field, SubmitButton, authErrorText } from "./ui";
 
+/**
+ * Choose a new password (R1.1): new → done, or a named "link expired" state.
+ * A reset signs the account out on every device (revokeSessionsOnPasswordReset)
+ * and a security notice email follows.
+ */
 export function ResetPasswordForm() {
-  const toast = useToast();
   const params = useSearchParams();
-  const router = useRouter();
   const token = params.get("token");
-  const linkError = params.get("error"); // e.g. INVALID_TOKEN from Better Auth
+  const linkError = params.get("error");
 
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const invalidLink = !token || Boolean(linkError);
+  const [errors, setErrors] = useState<{ password?: string; confirm?: string; form?: string }>({});
+  const [expired, setExpired] = useState(!token || Boolean(linkError));
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(null);
-    if (password.length < 8) {
-      setError("Password must be at least 8 characters.");
-      return;
-    }
-    if (password !== confirm) {
-      setError("Passwords don't match.");
-      return;
-    }
-    if (!token) {
-      setError("This reset link is invalid or has expired.");
-      return;
-    }
-    setLoading(true);
+    const issue = passwordIssue(password);
+    const next: typeof errors = {};
+    if (issue) next.password = issue;
+    if (password !== confirm) next.confirm = "The two passwords do not match.";
+    setErrors(next);
+    if (Object.keys(next).length || !token) return;
+    setBusy(true);
     const { error } = await authClient.resetPassword({ newPassword: password, token });
-    setLoading(false);
+    setBusy(false);
     if (error) {
-      const msg = error.message || "Could not reset password. Request a new link.";
-      setError(msg);
-      toast.error(msg);
-      return;
+      if (error.code === "INVALID_TOKEN" || /token/i.test(error.message ?? "")) return setExpired(true);
+      if (error.code === "PASSWORD_BREACHED") return setErrors({ password: authErrorText(error, "") });
+      return setErrors({ form: authErrorText(error, "Your password was not changed. Try again.") });
     }
-    toast.success("Password updated — redirecting to sign in…");
     setDone(true);
-    setTimeout(() => router.push("/login"), 1600);
   }
 
-  if (done) {
+  if (expired) {
     return (
-      <div>
-        <div className="mb-4 grid size-11 place-items-center rounded-full bg-brand-tint text-brand">
-          <CheckCircle2 className="size-5" />
-        </div>
-        <h1 className="font-display text-2xl font-bold tracking-tight text-ink">Password updated</h1>
-        <p className="mt-2 text-sm text-body">Redirecting you to sign in…</p>
+      <div className="flex flex-col gap-5">
+        <AuthHeading icon={<Clock />} tone="warn" title="This link has expired" lede="Reset links work once, for 1 hour. Ask for a new one; it takes a few seconds." />
+        <Link href="/forgot-password" className="keep-brand inline-flex h-11 items-center justify-center rounded-ctl bg-act px-4 text-[15px] font-semibold text-act-ink hover:bg-act-hover">
+          Send a new link
+        </Link>
       </div>
     );
   }
 
-  if (invalidLink) {
+  if (done) {
     return (
-      <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight text-ink">Link expired</h1>
-        <p className="mt-2 text-sm text-body">
-          This password reset link is invalid or has expired. Request a fresh one.
-        </p>
-        <Link
-          href="/forgot-password"
-          className="mt-6 inline-block rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
-        >
-          Request new link
+      <div className="flex flex-col gap-5">
+        <AuthHeading
+          icon={<CheckCircle2 />}
+          tone="good"
+          title="Password changed"
+          lede="You are signed out on every device, including this one, in case someone else had the old password. We emailed you a note in case this was not you."
+        />
+        <Link href="/login" className="keep-brand inline-flex h-11 items-center justify-center rounded-ctl bg-act px-4 text-[15px] font-semibold text-act-ink hover:bg-act-hover">
+          Sign in with the new password
         </Link>
       </div>
     );
   }
 
   return (
-    <div>
-      <h1 className="font-display text-2xl font-bold tracking-tight text-ink">Set a new password</h1>
-      <p className="mt-1.5 text-sm text-body">Choose a strong password you don&rsquo;t use elsewhere.</p>
-
-      <form onSubmit={onSubmit} className="mt-7 space-y-3">
-        <FloatingInput
-          id="password"
-          label="New password"
-          type="password"
-          placeholder="Create a strong password"
-          autoComplete="new-password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
-        <FloatingInput
-          id="confirm"
-          label="Confirm password"
-          type="password"
-          placeholder="Re-enter your password"
-          autoComplete="new-password"
-          required
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-        />
-
-        {error && <p className="text-sm text-red-600">{error}</p>}
-
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-xl bg-brand px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
-        >
-          {loading ? "Updating…" : "Update password"}
-        </button>
-      </form>
-
-      <p className="mt-7 text-center text-sm text-body">
-        <Link href="/login" className="font-semibold text-brand hover:underline">
-          Back to log in
-        </Link>
-      </p>
-    </div>
+    <form onSubmit={onSubmit} className="flex flex-col gap-5" noValidate>
+      <AuthHeading icon={<KeyRound />} title="Choose a new password" lede="Use one you do not use anywhere else." />
+      <div className="space-y-2">
+        <Field label="New password" type="password" autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)} error={errors.password} />
+        <PasswordStrength password={password} />
+      </div>
+      <Field label="Type it again" type="password" autoComplete="new-password" required value={confirm} onChange={(e) => setConfirm(e.target.value)} error={errors.confirm} />
+      <p className="text-[13px] text-muted">Saving signs you out on every other device too.</p>
+      {errors.form ? (
+        <Callout tone="bad" role="alert">
+          {errors.form}
+        </Callout>
+      ) : null}
+      <SubmitButton busy={busy} busyLabel="Saving…">
+        Save new password
+      </SubmitButton>
+    </form>
   );
 }
