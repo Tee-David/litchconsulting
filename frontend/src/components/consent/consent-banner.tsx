@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Cookie } from "lucide-react";
 import { onOpenConsentSettings, openConsentSettings, saveConsent, useConsent } from "@/lib/consent";
 import { cn } from "@/lib/utils";
@@ -10,9 +11,16 @@ import { cn } from "@/lib/utils";
  * Cookie notice (NDPA). Shown until the visitor chooses; re-opened from
  * "Cookie settings" in the footer. Strictly necessary cookies are always on;
  * the only optional category is the Cal.com booking calendar.
+ *
+ * Shown on the public site only. The signed-in app (admin, staff, client,
+ * account) sets strictly necessary cookies only and never loads Cal.com, so
+ * the notice there would only cover the page.
  */
+const APP_PREFIXES = ["/admin", "/work", "/dashboard", "/account", "/invite"];
 export function ConsentBanner() {
   const consent = useConsent();
+  const pathname = usePathname() ?? "/";
+  const inApp = APP_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
   const [mounted, setMounted] = useState(false);
   const [forced, setForced] = useState(false);
   const [embeds, setEmbeds] = useState(false);
@@ -32,7 +40,7 @@ export function ConsentBanner() {
   }, [consent]);
 
   if (!mounted) return null;
-  const open = forced || !consent;
+  const open = forced || (!consent && !inApp);
   if (!open) return null;
 
   function choose(allowEmbeds: boolean) {

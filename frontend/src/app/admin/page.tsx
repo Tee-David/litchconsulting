@@ -77,8 +77,6 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
         }
       />
 
-      {/* R1.5 first-run checklist: renders nothing once done or hidden. */}
-      <Onboarding />
 
       <div data-tour="needs-action">
         <AttentionList
@@ -93,6 +91,9 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
           }
         />
       </div>
+
+      {/* R1.5 first-run checklist: below the queue, so real work stays first. Renders nothing once done or hidden. */}
+      <Onboarding />
 
       <div data-tour="kpi-stats" className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-4">
         <Kpi

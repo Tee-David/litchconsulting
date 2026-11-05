@@ -62,8 +62,6 @@ export default async function ClientHome() {
         }
       />
 
-      {/* R1.5 first-run checklist: renders nothing once done or hidden. */}
-      <Onboarding />
 
       <div data-tour="attention">
         <AttentionList
@@ -79,6 +77,9 @@ export default async function ClientHome() {
           }
         />
       </div>
+
+      {/* R1.5 first-run checklist: below the queue, so real work stays first. Renders nothing once done or hidden. */}
+      <Onboarding />
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-6">

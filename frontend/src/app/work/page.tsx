@@ -29,10 +29,8 @@ export default async function StaffHome() {
       <PageHead
         title={`${greeting()}, ${first}`}
         lede={`${items.length ? `${items.length} ${items.length === 1 ? "thing needs" : "things need"} you.` : "Nothing needs you right now."} You see the ${open.length} open ${open.length === 1 ? "request" : "requests"} assigned to you.`}
-        actions={<Link href="/work/analyses" className={linkBtn.secondary}>Open files</Link>}
+        actions={<Link href="/work/analyses" className={linkBtn.primary}>Open workbench</Link>}
       />
-      {/* R1.5 first-run checklist: renders nothing once done or hidden. */}
-      <Onboarding />
 
       <div data-tour="attention">
         <AttentionList
@@ -41,6 +39,9 @@ export default async function StaffHome() {
           emptyWhy={rows.length ? "When a client supplies something, asks for changes or writes to you, it shows up here first." : "An admin assigns requests to you. They appear here and in My requests, with everything the client sends."}
         />
       </div>
+
+      {/* R1.5 first-run checklist: below the queue, so real work stays first. Renders nothing once done or hidden. */}
+      <Onboarding />
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <Panel title="My requests" sub={String(open.length)} right={<Link href="/work/requests" className={linkBtn.ghost}>All my requests</Link>}>
           {open.length ? (
