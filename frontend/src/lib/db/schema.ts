@@ -667,7 +667,7 @@ export const invitation = pgTable(
   {
     id: id(),
     email: text("email").notNull(),
-    role: text("role").notNull(), // staff | client (admin is promoted, never invited)
+    role: text("role").notNull(), // admin | staff | client (client = colleague of client_id)
     clientId: uuid("client_id"), // client colleague: joins this client company
     tokenHash: text("token_hash").notNull(),
     message: text("message"),

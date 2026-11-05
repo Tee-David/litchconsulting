@@ -3,7 +3,8 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { requestItem, serviceRequest, serviceRequestDocument, serviceRequestEvent } from "@/lib/db/schema";
 import { recordAudit } from "@/lib/audit";
-import { notifyClient, notifyFirm, simpleEmail } from "@/lib/requests/people";
+import { notifyClient, notifyFirm } from "@/lib/requests/people";
+import { templateEmail } from "@/lib/email-templates";
 
 /**
  * Asks (request_item): info or document, open → supplied → received.
@@ -41,12 +42,13 @@ export async function createItem(input: {
     body: `${req.number} · ${req.serviceName}`,
     link,
     dedupeKey: `item-open:${row.id}`,
-    email: await simpleEmail({
-      subject: `We need something from you — ${req.number}`,
-      heading: input.kind === "document" ? "We need a document" : "We have a question",
-      body: `${input.actor.name} asked: ${input.title.trim()}.${input.detail ? ` ${input.detail.trim()}` : ""}`,
-      href: link,
-      cta: input.kind === "document" ? "Upload it" : "Answer",
+    email: templateEmail("actionNeeded", {
+      senderName: input.actor.name,
+      requestNumber: req.number,
+      what: input.title.trim(),
+      why: input.detail?.trim() || null,
+      due: input.dueAt ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Lagos" }).format(input.dueAt) : null,
+      url: link,
     }),
   });
   return { ok: true as const, id: row.id };

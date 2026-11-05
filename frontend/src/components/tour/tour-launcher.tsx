@@ -16,7 +16,7 @@ const OPENED_KEY = "litch:tour:launcher-opened";
  * small popover with the available tours for the current page.
  */
 export function TourLauncher() {
-  const { startPageTour, startWalkthrough, startWelcome, hasPageTour, audience } = useTour();
+  const { startPageTour, startWalkthrough, startWelcome, hasPageTour, audience, hasWalkthrough } = useTour();
 
   const [open, setOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
@@ -120,15 +120,17 @@ export function TourLauncher() {
             Tour this page
           </button>
 
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => run(startWalkthrough)}
-            className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-surface"
-          >
-            <Compass className="size-4 text-muted" />
-            {walkthroughLabel}
-          </button>
+          {hasWalkthrough ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => run(startWalkthrough)}
+              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-surface"
+            >
+              <Compass className="size-4 text-muted" />
+              {walkthroughLabel}
+            </button>
+          ) : null}
 
           <button
             type="button"

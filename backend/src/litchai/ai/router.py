@@ -2,7 +2,8 @@
 
 Default chain (override with ``LITCHAI_PROVIDER_CHAIN=groq,cerebras,sambanova,local``):
 
-1. **Groq** ``openai/gpt-oss-120b`` (``reasoning_effort=low``) — ``GROQ_API_KEY``
+1. **Groq** ``openai/gpt-oss-120b`` (``reasoning_effort=medium``: on ``low`` gpt-oss
+   often writes its JSON into the reasoning channel and leaves ``content`` empty) — ``GROQ_API_KEY``
 2. **Cerebras** ``gpt-oss-120b`` — ``CEREBRAS_API_KEY``
 3. **SambaNova** ``Meta-Llama-3.3-70B-Instruct`` — ``SAMBANOVA_API_KEY``
 4. **Local** — llama-server when ``LITCHAI_LLAMA_SERVER_URL`` is set (OpenAI-compatible
@@ -115,7 +116,10 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
             name="groq", kind="cloud",
             model=e.get("LITCHAI_GROQ_MODEL") or groq_legacy_model or "openai/gpt-oss-120b",
             base_url="https://api.groq.com/openai/v1", api_key=groq_key,
-            params={"reasoning_effort": "low"},
+            # Groq's JSON mode rejects gpt-oss replies at random (json_validate_failed
+            # with an empty failed_generation); the prompt asks for JSON and the
+            # harness parses and checks it, so JSON mode is off here.
+            params={"reasoning_effort": "medium", "_prompt_json": True},
             daily_requests=_int_env("LITCHAI_GROQ_DAILY_REQUESTS") or 1000,
             daily_tokens=_int_env("LITCHAI_GROQ_DAILY_TOKENS") or 200_000,
             zero_retention=True,
@@ -124,7 +128,7 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
             name="cerebras", kind="cloud",
             model=e.get("LITCHAI_CEREBRAS_MODEL") or cer_legacy_model or "gpt-oss-120b",
             base_url="https://api.cerebras.ai/v1", api_key=cer_key,
-            params={"reasoning_effort": "low"},
+            params={"reasoning_effort": "medium"},
             daily_requests=_int_env("LITCHAI_CEREBRAS_DAILY_REQUESTS") or 14_400,
             daily_tokens=_int_env("LITCHAI_CEREBRAS_DAILY_TOKENS") or 1_000_000,
         ),
@@ -211,6 +215,34 @@ def classify_http_error(status: int, body: str) -> ProviderError:
 
 
 # --- transport ----------------------------------------------------------------
+def _json_tail(text: str) -> str | None:
+    """The last complete top-level JSON object in ``text`` (or None)."""
+    dec = json.JSONDecoder()
+    found: str | None = None
+    i = text.find("{")
+    while i != -1:
+        try:
+            obj, end = dec.raw_decode(text, i)
+        except ValueError:
+            i = text.find("{", i + 1)
+            continue
+        if isinstance(obj, dict):
+            found = text[i:end]
+        i = text.find("{", end)
+    return found
+
+
+def _failed_generation(resp: Any) -> str | None:
+    """The model output an OpenAI-compatible JSON-mode check rejected, if any."""
+    try:
+        err = (resp.json() or {}).get("error") or {}
+    except ValueError:
+        return None
+    text = err.get("failed_generation")
+    return text if isinstance(text, str) and text.strip() else None
+
+
+
 Transport = Callable[[ProviderSpec, list[Message], dict[str, Any] | None, dict[str, Any]],
                      ProviderResponse]
 
@@ -251,8 +283,9 @@ def http_transport(
         if params.get("max_tokens"):
             body["max_tokens"] = params["max_tokens"]
         for k, v in spec.params.items():
-            body.setdefault(k, v)
-        if schema is not None:
+            if not k.startswith("_"):  # "_"-prefixed keys are local switches, never sent
+                body.setdefault(k, v)
+        if schema is not None and not spec.params.get("_prompt_json"):
             body["response_format"] = (
                 {"type": "json_schema", "json_schema": {"name": "out", "schema": schema}}
                 if params.get("strict_schema") else {"type": "json_object"}
@@ -262,13 +295,29 @@ def http_transport(
             headers["Authorization"] = f"Bearer {spec.api_key}"
         resp = httpx.post(f"{spec.base_url}/chat/completions", json=body, headers=headers,
                           timeout=timeout)
+        if resp.status_code == 400 and schema is not None:
+            # Groq's JSON mode rejects a reply that isn't bare JSON (e.g. prose or a
+            # fence around it) and returns it as `failed_generation`. Hand that to
+            # our own validator instead of failing the provider: the harness
+            # extracts the JSON or retries once with the parse error.
+            failed = _failed_generation(resp)
+            if failed is not None:
+                return ProviderResponse(
+                    text=failed, finish_reason="json_validate_failed",
+                    latency_ms=int((time.monotonic() - started) * 1000),
+                )
         if resp.status_code >= 400:
             raise classify_http_error(resp.status_code, resp.text)
         data = resp.json()
         choice = (data.get("choices") or [{}])[0]
         usage = data.get("usage") or {}
+        msg = choice.get("message") or {}
+        text = msg.get("content") or ""
+        if not text.strip() and schema is not None:
+            # gpt-oss sometimes puts the whole answer in the reasoning channel.
+            text = _json_tail(msg.get("reasoning") or "") or ""
         return ProviderResponse(
-            text=((choice.get("message") or {}).get("content") or ""),
+            text=text,
             finish_reason=choice.get("finish_reason"),
             input_tokens=usage.get("prompt_tokens"),
             output_tokens=usage.get("completion_tokens"),

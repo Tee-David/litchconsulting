@@ -24,7 +24,7 @@ import type { TourIconName } from "./tour-icon";
  * Copy rule: say what is *actually* on the page and what the operator can do
  * with it. No filler, no "this is the dashboard".
  */
-export type TourAudience = "client" | "admin";
+export type TourAudience = "client" | "admin" | "staff";
 export type TourKind = "page" | "welcome" | "walkthrough";
 
 export type TourStep = Step & {
@@ -45,6 +45,12 @@ export type TourDef = {
   kind: TourKind;
   /** Home route for a page tour (informational; page tours are matched by route-match). */
   route?: string;
+  /**
+   * Bump when the copy or stops change enough to show again. Completion is
+   * stored per user and version on the server (user_onboarding.tours), so a
+   * finished tour stays finished on every device until its version moves.
+   */
+  version?: number;
   steps: TourStep[];
 };
 
@@ -87,73 +93,36 @@ function navStep(
 }
 
 export const TOURS: Record<string, TourDef> = {
-  // ─── Client · page tours ───────────────────────────────────────────────
+  // ─── Client · page tours (v2: the portal rebuilt around "what needs you") ───
   "client-dashboard": {
     id: "client-dashboard",
     audience: "client",
     kind: "page",
+    version: 2,
     route: "/dashboard",
     steps: [
       {
-        key: "request-service",
-        target: '[data-tour="request-service"]',
+        key: "attention",
+        target: '[data-tour="attention"]',
+        title: "What needs you",
+        content: "Anything waiting on you sits here first: a quote to accept, a payment, a document we asked for, a draft to review. Everything else is with us.",
+        icon: "flag",
+        optional: true,
+      },
+      {
+        key: "new-request",
+        target: '[data-tour="new-request"]',
         title: "Request a service",
-        content:
-          "Everything starts here — pick a service, tell us what you need, and pay securely. We guide you step by step.",
+        content: "Choose a service, tell us about the work and we send a quote. You are never charged before you accept it.",
         icon: "plus",
-      },
-      {
-        key: "services",
-        target: '[data-tour="services"]',
-        title: "What do you need done?",
-        content:
-          "Your three most-requested services, with upfront pricing. Anything priced “Get A Quote” means we'll size it and send you a figure first — you're never charged before you accept.",
-        icon: "briefcase",
         optional: true,
       },
       {
-        key: "active-requests",
-        target: '[data-tour="active-requests"]',
-        title: "Live progress",
-        content:
-          "Each active request shows its milestones — payment, documents, work in progress, delivery — so you always know what's next and who's waiting on whom.",
-        icon: "activity",
-        optional: true,
-      },
-      {
-        key: "client-kpis",
-        target: '[data-tour="client-kpis"]',
-        title: "Your numbers",
-        content:
-          "Active services, what you've paid, what's still outstanding, and open support tickets — the four figures worth knowing at a glance.",
-        icon: "gauge",
-        optional: true,
-      },
-      {
-        key: "billing",
-        target: '[data-tour="billing"]',
-        title: "Recent billing",
-        content:
-          "Your latest invoices, quotes and receipts. Each row shows the amount and status — open one to pay online and everything updates instantly.",
-        icon: "wallet",
-        optional: true,
-      },
-      {
-        key: "quick-actions",
-        target: '[data-tour="quick-actions"]',
-        title: "Quick actions",
-        content:
-          "The shortcuts you'll reach for most: start a request, book a free consultation, or open a support ticket.",
-        icon: "pointer",
-        optional: true,
-      },
-      {
-        key: "tools",
-        target: '[data-tour="tools"]',
-        title: "Free tools",
-        content:
-          "Run PAYE, VAT, CIT and loan calculations yourself — the same NTA-2025 rates we apply in your engagements. Open them from the calculator icon in the top bar.",
-        icon: "calculator",
+        key: "onboarding",
+        target: '[data-tour="onboarding"]',
+        title: "Finish setting up",
+        content: "Your company details go on every quote and invoice. Hide this list until tomorrow, or close it once you are done.",
+        icon: "check",
         optional: true,
       },
     ],
@@ -163,24 +132,21 @@ export const TOURS: Record<string, TourDef> = {
     id: "client-requests",
     audience: "client",
     kind: "page",
+    version: 2,
     route: "/dashboard/requests",
     steps: [
+      centerStep(
+        "intro",
+        "Your requests",
+        "Every piece of work with us, with whose move it is and the next step. Open one for its timeline, the files, our questions and the draft when it is ready.",
+        { icon: "inbox" },
+      ),
       {
-        key: "request-service",
-        target: '[data-tour="request-service"]',
-        title: "Start a new request",
-        content:
-          "Pick a service, tell us what you need and pay securely — most requests take under two minutes to submit.",
-        icon: "plus",
-        optional: true,
-      },
-      {
-        key: "requests-list",
-        target: '[data-tour="requests-list"]',
-        title: "Your services",
-        content:
-          "Live engagements sit up top with their progress; completed and cancelled ones drop into the history below. Open any card to see documents, messages and deliverables.",
-        icon: "briefcase",
+        key: "request-again",
+        target: '[data-tour="request-again"]',
+        title: "Same again next period",
+        content: "Start a follow-on request from finished work. Your files can come with it, so we do not ask twice.",
+        icon: "replay",
         optional: true,
       },
     ],
@@ -190,50 +156,49 @@ export const TOURS: Record<string, TourDef> = {
     id: "client-request-new",
     audience: "client",
     kind: "page",
+    version: 2,
     route: "/dashboard/requests/new",
     steps: [
-      centerStep(
-        "intro",
-        "Requesting a service",
-        "A short guided form: choose the service, tell us about the job, upload anything we'll need, then confirm. You can leave and come back — nothing is charged until you accept a price.",
-        { icon: "compass" },
-      ),
       {
         key: "service-picker",
         target: '[data-tour="service-picker"]',
-        title: "Pick your service",
-        content:
-          "Each option shows its price or “Get A Quote”, the turnaround time, and the documents we'll ask for — so there are no surprises later.",
-        icon: "briefcase",
+        title: "Pick a service",
+        content: "Fixed-price services can be paid straight away. Anything marked “Get a quote” gets a figure from us first.",
+        icon: "pointer",
         optional: true,
       },
     ],
   },
 
-  "client-invoices": {
-    id: "client-invoices",
+  "client-billing": {
+    id: "client-billing",
     audience: "client",
     kind: "page",
-    route: "/dashboard/invoices",
+    version: 1,
+    route: "/dashboard/billing",
     steps: [
-      {
-        key: "invoices-list",
-        target: '[data-tour="invoices-list"]',
-        title: "Billing & receipts",
-        content:
-          "Every invoice, quote and receipt is here. Open one to pay online — your dashboard and the request's progress update the moment payment clears.",
-        icon: "wallet",
-        optional: true,
-      },
-      {
-        key: "payment-history",
-        target: '[data-tour="payment-history"]',
-        title: "Payment history",
-        content:
-          "Every payment attempt with its reference and channel. If you ever need help with a payment, quote the reference here and we'll find it immediately.",
-        icon: "creditCard",
-        optional: true,
-      },
+      centerStep(
+        "intro",
+        "Billing",
+        "Quotes to accept, invoices to pay and receipts, in one list. Pay by card through Paystack, or by transfer: we confirm transfers and the receipt follows by email.",
+        { icon: "wallet" },
+      ),
+    ],
+  },
+
+  "client-files": {
+    id: "client-files",
+    audience: "client",
+    kind: "page",
+    version: 1,
+    route: "/dashboard/files",
+    steps: [
+      centerStep(
+        "intro",
+        "Files",
+        "Everything you sent us and everything we delivered, across all your requests. Downloads are private links that only work for your account.",
+        { icon: "fileStack" },
+      ),
     ],
   },
 
@@ -241,14 +206,14 @@ export const TOURS: Record<string, TourDef> = {
     id: "client-support",
     audience: "client",
     kind: "page",
+    version: 2,
     route: "/dashboard/support",
     steps: [
       {
         key: "support-kb",
         target: '[data-tour="support-kb"]',
         title: "Try a search first",
-        content:
-          "Search our help articles from here — most questions are already answered, and it's quicker than waiting on a reply.",
+        content: "Most questions about payments, documents and timelines have an answer here already.",
         icon: "search",
         optional: true,
       },
@@ -256,20 +221,34 @@ export const TOURS: Record<string, TourDef> = {
         key: "support-contact",
         target: '[data-tour="support-contact"]',
         title: "Or ask us directly",
-        content:
-          "Open a ticket and a real person replies — here and by email. You can link it to a specific request so we have the context straight away.",
-        icon: "plus",
+        content: "Open a ticket and the team replies here and by email, in the same thread.",
+        icon: "send",
         optional: true,
       },
       {
         key: "support-view",
         target: '[data-tour="support-view"]',
         title: "Your tickets",
-        content:
-          "Every conversation you've opened, with its status. Search them, and open one to read the full thread and reply.",
+        content: "Every conversation with its status. Reply in the thread any time.",
         icon: "lifeBuoy",
         optional: true,
       },
+    ],
+  },
+
+  "client-notifications": {
+    id: "client-notifications",
+    audience: "client",
+    kind: "page",
+    version: 1,
+    route: "/dashboard/notifications",
+    steps: [
+      centerStep(
+        "intro",
+        "Notifications",
+        "Everything we told you, newest first. Choose per kind of event whether it reaches you by email, push or only here.",
+        { icon: "bell" },
+      ),
     ],
   },
 
@@ -277,12 +256,13 @@ export const TOURS: Record<string, TourDef> = {
     id: "client-settings",
     audience: "client",
     kind: "page",
+    version: 2,
     route: "/dashboard/settings",
     steps: [
       centerStep(
-        "profile",
-        "Profile settings",
-        "Your name, company, contact details and tax/RC number live here. We pull these straight onto your invoices and receipts, so keeping them current means your paperwork is always right.",
+        "intro",
+        "Settings",
+        "Your company details for invoices, your colleagues and what they can do, and email preferences. Password, two-step and devices live in Profile and security.",
         { icon: "settings" },
       ),
     ],
@@ -293,55 +273,25 @@ export const TOURS: Record<string, TourDef> = {
     id: "client-welcome",
     audience: "client",
     kind: "welcome",
+    version: 2,
     steps: [
       centerStep(
         "welcome",
-        "Welcome to your portal",
-        "This is your home base with Litch — request services, track progress, and handle billing in one place. Here's a quick look around.",
+        "Welcome to Litch",
+        "Your requests, quotes, invoices and files in one place. Here is where things are.",
         { icon: "sparkles", showEstimate: true },
       ),
-      navStep(
-        "dashboard",
-        "Dashboard",
-        "Your at-a-glance home — active work, recent billing and quick actions.",
-        { icon: "layout" },
-      ),
-      navStep(
-        "my-services",
-        "My Services",
-        "Start a new request or follow every engagement from here.",
-        { icon: "briefcase" },
-      ),
-      navStep(
-        "billing",
-        "Billing",
-        "Invoices, quotes and receipts — pay online and it all updates instantly.",
-        { icon: "wallet" },
-      ),
-      navStep(
-        "support",
-        "Support Desk",
-        "Questions? Open a ticket and a real person gets back to you quickly.",
-        { icon: "lifeBuoy" },
-      ),
-      {
-        key: "sidebar-pin",
-        target: '[data-tour="sidebar-pin"]',
-        title: "Give yourself more room",
-        content:
-          "This collapses the sidebar to a slim icon rail — handy on a laptop. It stays collapsed until you bring it back, and hovering the rail peeks it open.",
-        placement: "right",
-        icon: "panelLeft",
-        desktopOnly: true,
-        optional: true,
-        interact: { hint: "Click the collapse button to try it" },
-      },
+      navStep("home", "Home", "What needs you right now. If it is empty, everything is with us.", { icon: "layout" }),
+      navStep("requests", "Requests", "Every piece of work, its timeline and its files.", { icon: "inbox" }),
+      navStep("billing", "Billing", "Quotes, invoices and receipts. Pay by card or transfer.", { icon: "wallet" }),
+      navStep("files", "Files", "Everything you sent and everything we delivered.", { icon: "fileStack" }),
+      navStep("support", "Support", "Ask us anything; replies come here and by email.", { icon: "lifeBuoy" }),
       {
         key: "mobile-menu",
-        target: '[data-tour="mobile-menu"]',
+        target: '[data-tour="tab-home"]',
         title: "Your menu",
-        content: "Tap here any time to jump between Dashboard, Services, Billing and Support.",
-        placement: "bottom",
+        content: "The bar at the bottom reaches every section on a phone.",
+        placement: "top",
         icon: "panelLeft",
         mobileOnly: true,
         optional: true,
@@ -350,10 +300,10 @@ export const TOURS: Record<string, TourDef> = {
         key: "launcher",
         target: '[data-tour="tour-launcher"]',
         title: "Replay any time",
-        content:
-          "Tap the help button whenever you want a tour of the page you're on, or the full walk-through again.",
+        content: "The help button gives you a tour of whatever page you are on.",
         placement: "bottom",
         icon: "replay",
+        optional: true,
       },
     ],
   },
@@ -362,103 +312,178 @@ export const TOURS: Record<string, TourDef> = {
     id: "client-walkthrough",
     audience: "client",
     kind: "walkthrough",
+    version: 2,
     steps: [
-      centerStep(
-        "intro",
-        "Let's take the full tour",
-        "We'll walk the whole portal together — a few seconds on each page. You can step out at any point.",
-        { route: "/dashboard", page: "Dashboard", icon: "compass", showEstimate: true },
-      ),
-      {
-        key: "dash-services",
+      centerStep("intro", "A walk around the portal", "We visit each part once. Step out whenever you like.", {
         route: "/dashboard",
-        page: "Dashboard",
-        target: '[data-tour="services"]',
-        title: "Start here",
-        content:
-          "Your most-requested services with upfront pricing. This is the fastest route from “I need this done” to a team working on it.",
-        icon: "briefcase",
+        page: "Home",
+        icon: "compass",
+        showEstimate: true,
+      }),
+      {
+        key: "dash-attention",
+        route: "/dashboard",
+        page: "Home",
+        target: '[data-tour="attention"]',
+        title: "What needs you",
+        content: "Quotes to accept, payments, documents we asked for and drafts to review land here first.",
+        icon: "flag",
         optional: true,
       },
-      {
-        key: "dash-active",
-        route: "/dashboard",
-        page: "Dashboard",
-        target: '[data-tour="active-requests"]',
-        title: "Live progress",
-        content:
-          "Anything in flight shows its milestones here — payment, documents, work, delivery — so you always know what's next.",
-        icon: "activity",
-        optional: true,
-      },
-      {
-        key: "go-services",
-        route: "/dashboard",
-        page: "Dashboard",
-        target: '[data-tour="nav-my-services"]',
-        title: "On to My Services",
-        content: "This is where every engagement you've ever requested lives.",
-        placement: "right",
-        icon: "pointer",
-        desktopOnly: true,
-        interact: { hint: "Click “My Services” in the sidebar" },
-      },
-      {
-        key: "services-list",
+      centerStep("requests", "Requests", "Each request shows its timeline, our questions, the files and the draft when it is ready.", {
         route: "/dashboard/requests",
-        page: "My Services",
-        target: '[data-tour="requests-list"]',
-        title: "My Services",
-        content:
-          "Live work up top, finished engagements in the history below. Open any one for its documents, messages and final deliverables.",
-        icon: "briefcase",
-        optional: true,
-      },
-      {
-        key: "services-new",
-        route: "/dashboard/requests",
-        page: "My Services",
-        target: '[data-tour="request-service"]',
-        title: "Starting a request",
-        content:
-          "Pick a service, describe the job, upload what we ask for, and pay. Under two minutes, and nothing is charged before you accept a price.",
-        icon: "plus",
-        optional: true,
-      },
-      {
-        key: "billing-list",
-        route: "/dashboard/invoices",
+        page: "Requests",
+        icon: "inbox",
+      }),
+      centerStep("billing", "Billing", "Accept a quote, pay in full or a 50% deposit, and download receipts.", {
+        route: "/dashboard/billing",
         page: "Billing",
-        target: '[data-tour="invoices-list"]',
-        title: "Billing",
-        content:
-          "Every invoice, quote and receipt. Pay securely online and it reconciles against your request automatically — no “did that go through?” emails.",
         icon: "wallet",
-        optional: true,
-      },
+      }),
+      centerStep("files", "Files", "Upload what we ask for; collect what we deliver. Links are private to your account.", {
+        route: "/dashboard/files",
+        page: "Files",
+        icon: "fileStack",
+      }),
       {
         key: "support",
         route: "/dashboard/support",
-        page: "Support Desk",
+        page: "Support",
         target: '[data-tour="support-view"]',
-        title: "Support Desk",
-        content:
-          "Open a ticket, link it to a request, and a real person replies. Every conversation stays here with its status.",
+        title: "Support",
+        content: "Your tickets and our replies, in one thread each.",
         icon: "lifeBuoy",
         optional: true,
       },
+      centerStep("outro", "That's the portal", "The help button in the top bar replays any of this whenever you want it.", {
+        route: "/dashboard",
+        page: "Home",
+        icon: "check",
+      }),
+    ],
+  },
+
+  // ─── Staff · /work ─────────────────────────────────────────────────────
+  "staff-home": {
+    id: "staff-home",
+    audience: "staff",
+    kind: "page",
+    version: 1,
+    route: "/work",
+    steps: [
+      {
+        key: "attention",
+        target: '[data-tour="attention"]',
+        title: "What needs you",
+        content: "Supplied documents to check, client replies and deadlines on the requests assigned to you, worst first.",
+        icon: "flag",
+        optional: true,
+      },
+      {
+        key: "onboarding",
+        target: '[data-tour="onboarding"]',
+        title: "Getting started",
+        content: "Profile, alerts and two-step. Hide the list until tomorrow or close it when you are done.",
+        icon: "check",
+        optional: true,
+      },
+    ],
+  },
+
+  "staff-requests": {
+    id: "staff-requests",
+    audience: "staff",
+    kind: "page",
+    version: 1,
+    route: "/work/requests",
+    steps: [
       centerStep(
-        "settings",
-        "Profile settings",
-        "Keep your name, company and tax/RC number current — we pull them straight onto your invoices and receipts.",
-        { route: "/dashboard/settings", page: "Profile", icon: "settings" },
+        "intro",
+        "My requests",
+        "Only the requests an Admin assigned to you. Open one to ask the client for documents, upload the draft for review and deliver the final. Amounts and billing stay with Admin.",
+        { icon: "inbox" },
       ),
+    ],
+  },
+
+  "staff-analyses": {
+    id: "staff-analyses",
+    audience: "staff",
+    kind: "page",
+    version: 1,
+    route: "/work/analyses",
+    steps: [
       centerStep(
-        "outro",
-        "That's the portal",
-        "You know your way around now. The help button in the top bar replays any of this whenever you want it — welcome aboard!",
-        { route: "/dashboard", page: "Dashboard", icon: "check" },
+        "intro",
+        "Files",
+        "Client documents and the workbooks compiled from them, for your requests only. Nothing unverified reaches a client.",
+        { icon: "fileStack" },
       ),
+    ],
+  },
+
+  "staff-conversations": {
+    id: "staff-conversations",
+    audience: "staff",
+    kind: "page",
+    version: 1,
+    route: "/work/conversations",
+    steps: [
+      centerStep(
+        "intro",
+        "Conversations",
+        "Client messages on your requests, one thread per request. Replies reach the client in their portal and by email.",
+        { icon: "send" },
+      ),
+    ],
+  },
+
+  "staff-notifications": {
+    id: "staff-notifications",
+    audience: "staff",
+    kind: "page",
+    version: 1,
+    route: "/work/notifications",
+    steps: [
+      centerStep(
+        "intro",
+        "Notifications",
+        "New assignments, supplied documents and client replies. Choose per kind of event how each one reaches you.",
+        { icon: "bell" },
+      ),
+    ],
+  },
+
+  "staff-welcome": {
+    id: "staff-welcome",
+    audience: "staff",
+    kind: "welcome",
+    version: 1,
+    steps: [
+      centerStep("welcome", "Your workspace", "Two minutes on where your work lives.", { icon: "sparkles", showEstimate: true }),
+      navStep("home", "My work", "What needs you on your assignments, worst first.", { icon: "layout" }),
+      navStep("requests", "My requests", "Only what an Admin assigned to you, with the client's files and asks.", { icon: "inbox" }),
+      navStep("analyses", "Files", "Documents and compiled workbooks for your requests.", { icon: "fileStack" }),
+      navStep("conversations", "Conversations", "Client messages, one thread per request.", { icon: "send" }),
+      {
+        key: "bell",
+        target: '[data-tour="bell"]',
+        title: "The bell",
+        content: "New assignments and client replies. Email and push follow your alert settings.",
+        placement: "bottom",
+        icon: "bell",
+        optional: true,
+      },
+      {
+        key: "mobile-menu",
+        target: '[data-tour="tab-home"]',
+        title: "Your menu",
+        content: "The bar at the bottom reaches every section on a phone.",
+        placement: "top",
+        icon: "panelLeft",
+        mobileOnly: true,
+        optional: true,
+      },
     ],
   },
 
@@ -658,18 +683,18 @@ export const TOURS: Record<string, TourDef> = {
     ],
   },
 
-  "admin-invoices": {
-    id: "admin-invoices",
+  "admin-billing": {
+    id: "admin-billing",
     audience: "admin",
     kind: "page",
-    route: "/admin/finance/invoices",
+    version: 2,
+    route: "/admin/billing",
     steps: [
       {
         key: "finance-tabs",
         target: '[data-tour="finance-tabs"]',
-        title: "The finance workspace",
-        content:
-          "Six tabs: Invoices, Quotes, Receipts, Accounting, Models and Calculators. Everything about money lives behind these.",
+        title: "Billing",
+        content: "Four sections: quotes and invoices in one list, payments to confirm, expenses, and the tools (models, calculators, templates).",
         placement: "bottom",
         icon: "wallet",
         optional: true,
@@ -677,91 +702,50 @@ export const TOURS: Record<string, TourDef> = {
       {
         key: "invoice-stats",
         target: '[data-tour="invoice-stats"]',
-        title: "Where you stand",
-        content: "Total invoiced, paid, outstanding and overdue — across every invoice, live.",
+        title: "Where the money is",
+        content: "Quotes waiting, unpaid, late and part paid. Each figure opens the list filtered to it.",
         icon: "gauge",
         optional: true,
       },
       {
         key: "invoices-table",
         target: '[data-tour="invoices-table"]',
-        title: "The invoice list",
-        content:
-          "Filter by status or date range, search, and export to CSV. Row actions let you preview, edit, duplicate, send or mark paid — and selecting rows unlocks bulk status changes.",
+        title: "One list",
+        content: "Quotes, invoices and receipts together. A quote becomes an invoice when the client accepts it; a receipt is made when it is paid. Totals are always recomputed on the server.",
         icon: "fileText",
-        optional: true,
-      },
-      {
-        key: "new-invoice",
-        target: '[data-tour="new-invoice"]',
-        title: "Building an invoice",
-        content:
-          "Add line items and watch the branded document build live beside you. Totals are always recomputed server-side, so the PDF and the pay page can never disagree with the preview.",
-        icon: "plus",
         optional: true,
       },
     ],
   },
 
-  "admin-quotes": {
-    id: "admin-quotes",
+  "admin-billing-payments": {
+    id: "admin-billing-payments",
     audience: "admin",
     kind: "page",
-    route: "/admin/finance/quotes",
-    steps: [
-      {
-        key: "quotes-table",
-        target: '[data-tour="quotes-table"]',
-        title: "Quotes",
-        content:
-          "Draft, send and track quotes. When a client accepts, convert the quote straight into an invoice — the line items and totals carry over untouched.",
-        icon: "fileText",
-        optional: true,
-      },
-      {
-        key: "new-quote",
-        target: '[data-tour="new-quote"]',
-        title: "New quote",
-        content:
-          "Same builder as invoices, same branded document — it just goes out as a quote until it's accepted.",
-        icon: "plus",
-        optional: true,
-      },
-    ],
-  },
-
-  "admin-receipts": {
-    id: "admin-receipts",
-    audience: "admin",
-    kind: "page",
-    route: "/admin/finance/receipts",
+    version: 1,
+    route: "/admin/billing/payments",
     steps: [
       centerStep(
         "intro",
-        "Receipts",
-        "Every invoice you mark paid generates a branded receipt automatically — no separate step. Download any of them here as a PDF.",
-        { icon: "receipt" },
+        "Payments",
+        "Card payments confirm themselves through Paystack. Transfers wait here until you match them to an invoice; confirming sends the client a receipt.",
+        { icon: "creditCard" },
       ),
     ],
   },
 
-  "admin-accounting": {
-    id: "admin-accounting",
+  "admin-billing-expenses": {
+    id: "admin-billing-expenses",
     audience: "admin",
     kind: "page",
-    route: "/admin/finance/accounting",
+    version: 1,
+    route: "/admin/billing/expenses",
     steps: [
       centerStep(
         "intro",
-        "Accounting",
-        "A lightweight profit & loss. Revenue is drawn automatically from collected invoices — you only log the expenses, and they net off against it.",
+        "Expenses",
+        "Log what the firm spends. Revenue comes from collected invoices on its own, so profit and margin net off without a second ledger.",
         { icon: "calculator" },
-      ),
-      centerStep(
-        "ledger",
-        "What's here",
-        "Revenue collected, expenses, net profit and margin up top; income vs expenses over six months and a category breakdown below; then the expense ledger itself, where you add and edit entries.",
-        { icon: "barChart" },
       ),
     ],
   },
@@ -770,7 +754,7 @@ export const TOURS: Record<string, TourDef> = {
     id: "admin-models",
     audience: "admin",
     kind: "page",
-    route: "/admin/finance/tools",
+    route: "/admin/billing/tools",
     steps: [
       centerStep(
         "intro",
@@ -785,7 +769,7 @@ export const TOURS: Record<string, TourDef> = {
     id: "admin-calculators",
     audience: "admin",
     kind: "page",
-    route: "/admin/finance/calculators",
+    route: "/admin/billing/calculators",
     steps: [
       centerStep(
         "intro",
@@ -827,7 +811,7 @@ export const TOURS: Record<string, TourDef> = {
     id: "admin-templates",
     audience: "admin",
     kind: "page",
-    route: "/admin/finance/templates",
+    route: "/admin/billing/templates",
     steps: [
       {
         key: "templates-view",
@@ -1056,11 +1040,12 @@ export const TOURS: Record<string, TourDef> = {
     id: "admin-welcome",
     audience: "admin",
     kind: "welcome",
+    version: 2,
     steps: [
       centerStep(
         "welcome",
         "Welcome to the Litch admin",
-        "This is where you run the firm — requests, clients, finance and LitchAI. Let's get you oriented on the navigation.",
+        "This is where you run the firm — requests, clients, billing and LitchAI. Let's get you oriented on the navigation.",
         { icon: "sparkles", showEstimate: true },
       ),
       navStep(
@@ -1081,7 +1066,7 @@ export const TOURS: Record<string, TourDef> = {
         "Your client directory — profiles, history and everything you bill them on.",
         { icon: "users" },
       ),
-      navStep("finance", "Finance", "Invoices, quotes, receipts, accounting and the calculators.", {
+      navStep("finance", "Billing", "Quotes, invoices and receipts in one list, payments to confirm, expenses and the tools.", {
         icon: "wallet",
       }),
       navStep(
@@ -1128,6 +1113,7 @@ export const TOURS: Record<string, TourDef> = {
     id: "admin-walkthrough",
     audience: "admin",
     kind: "walkthrough",
+    version: 2,
     steps: [
       centerStep(
         "intro",
@@ -1164,7 +1150,7 @@ export const TOURS: Record<string, TourDef> = {
         target: '[data-tour="kpi-stats"]',
         title: "The money, briefly",
         content:
-          "Invoiced, paid, outstanding, overdue. If overdue is climbing, your day starts in Finance instead.",
+          "Invoiced, paid, outstanding, overdue. If overdue is climbing, your day starts in Billing instead.",
         icon: "gauge",
         optional: true,
       },
@@ -1234,23 +1220,23 @@ export const TOURS: Record<string, TourDef> = {
       ),
       {
         key: "invoices-table",
-        route: "/admin/finance/invoices",
-        page: "Finance",
+        route: "/admin/billing",
+        page: "Billing",
         target: '[data-tour="invoices-table"]',
-        title: "Finance — invoices",
+        title: "Billing",
         content:
-          "Filter, search and export; row actions preview, edit, duplicate, send or mark paid. Select rows for bulk status changes.",
+          "Quotes, invoices and receipts in one list, with whose move it is. A quote becomes an invoice on acceptance; a receipt is made when it is paid.",
         icon: "wallet",
         optional: true,
       },
       {
         key: "finance-tabs",
-        route: "/admin/finance/invoices",
-        page: "Finance",
+        route: "/admin/billing",
+        page: "Billing",
         target: '[data-tour="finance-tabs"]',
-        title: "The rest of Finance",
+        title: "The rest of Billing",
         content:
-          "Quotes convert to invoices on acceptance. Receipts generate themselves when you mark one paid. Accounting nets logged expenses against collected revenue, and the Calculators run NTA-2025 Nigerian tax maths.",
+          "Payments holds transfers to confirm. Expenses nets what the firm spends against collected revenue. Tools has the models, the NTA-2025 calculators and workbook templates.",
         placement: "bottom",
         icon: "calculator",
         optional: true,
@@ -1265,7 +1251,7 @@ export const TOURS: Record<string, TourDef> = {
         "templates",
         "Templates",
         "Import a workbook once and reuse it forever — preview, download or share it by link. The starter library gives you branded models to build from.",
-        { route: "/admin/finance/templates", page: "Templates", icon: "fileStack" },
+        { route: "/admin/billing/templates", page: "Templates", icon: "fileStack" },
       ),
       {
         key: "litchai",
@@ -1287,8 +1273,14 @@ export const TOURS: Record<string, TourDef> = {
       centerStep(
         "settings",
         "Settings",
-        "Your organisation profile — company details, logo, bank account, invoice terms and default currency. All of it flows straight onto what clients receive. User access lives here too.",
+        "Your organisation profile — company details, logo, bank account, invoice terms and default currency. All of it flows straight onto what clients receive.",
         { route: "/admin/settings", page: "Settings", icon: "settings" },
+      ),
+      centerStep(
+        "access",
+        "Team and access",
+        "Invite staff and admins, change roles, see who has two-step on and who is working on what. Every change is in the audit log.",
+        { route: "/admin/settings/access", page: "Team and access", icon: "users" },
       ),
       centerStep(
         "integrations",

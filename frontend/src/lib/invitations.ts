@@ -25,7 +25,7 @@ import { siteOrigin } from "@/lib/site-url";
 
 export const INVITE_TTL_DAYS = 7;
 export const INVITE_PASSWORD_MIN = 10;
-export type InviteRole = "staff" | "client";
+export type InviteRole = "admin" | "staff" | "client";
 export type ColleagueAccess = "billing" | "reviewer" | "viewer";
 export const COLLEAGUE_ACCESS: Record<ColleagueAccess, { label: string; hint: string }> = {
   billing: { label: "Billing contact", hint: "Gets invoices and receipts, and can pay." },
@@ -239,7 +239,7 @@ export async function redeemInvitation(token: string, input: { name: string; pas
     const userId = randomUUID();
     const name = input.name.trim().slice(0, 120) || row.email.split("@")[0];
     const now = new Date();
-    const role: InviteRole = row.role === "staff" ? "staff" : "client";
+    const role: InviteRole = row.role === "admin" ? "admin" : row.role === "staff" ? "staff" : "client";
     await tx.insert(user).values({ id: userId, name, email: row.email, emailVerified: true, role, banned: false, createdAt: now, updatedAt: now });
     if (hashed) {
       await tx.execute(
@@ -269,7 +269,7 @@ export async function sendInvitationEmail(inv: InvitationRow, token: string, inv
     "invitation",
     {
       inviterName,
-      role: inv.role === "staff" ? "staff" : "client",
+      role: inv.role === "admin" ? "admin" : inv.role === "staff" ? "staff" : "client",
       email: inv.email,
       url: inviteUrl(token),
       expiresAt: inv.expiresAt,

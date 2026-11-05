@@ -5,6 +5,8 @@ import { invoice, invoiceItem, serviceRequest, serviceRequestEvent, type Invoice
 import { insertInvoiceWithItems } from "@/lib/invoice/persist";
 import { recordAudit } from "@/lib/audit";
 import { notifyClient, notifyFirm, simpleEmail } from "@/lib/requests/people";
+import { templateEmail } from "@/lib/email-templates";
+import { formatMoney } from "@/lib/invoice/money";
 
 /**
  * THE quote path (the two parallel paths are merged here).
@@ -60,15 +62,23 @@ export async function markQuoteSent(requestId: string, invoiceNumber: string): P
     body: isQuote ? `${invoiceNumber} · review and accept in one click` : `${invoiceNumber} · pay from your dashboard`,
     link,
     dedupeKey: `quote-sent:${requestId}:${invoiceNumber}`,
-    email: await simpleEmail({
-      subject: isQuote ? `Your quote ${invoiceNumber} from Litch Consulting` : `Invoice ${invoiceNumber} from Litch Consulting`,
-      heading: isQuote ? "Your quote is ready" : "Your invoice is ready",
-      body: isQuote
-        ? `We have priced ${req.serviceName} (${req.number}). Review the quote and accept it in one click; accepting creates your invoice and pay link.`
-        : `Your invoice for ${req.serviceName} (${req.number}) is ready to pay.`,
-      href: link,
-      cta: isQuote ? "Review quote" : "Pay invoice",
-    }),
+    email:
+      isQuote && doc
+        ? templateEmail("quoteReady", {
+            serviceName: req.serviceName,
+            quoteNumber: invoiceNumber,
+            total: formatMoney(Number(doc.total), doc.currency),
+            validTo: doc.dueDate ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Lagos" }).format(new Date(doc.dueDate)) : null,
+            requestDate: new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Lagos" }).format(req.createdAt),
+            url: link,
+          })
+        : await simpleEmail({
+            subject: `Invoice ${invoiceNumber} from Litch Consulting`,
+            heading: "Your invoice is ready",
+            body: `Your invoice for ${req.serviceName} (${req.number}) is ready to pay.`,
+            href: link,
+            cta: "Pay invoice",
+          }),
   });
 }
 

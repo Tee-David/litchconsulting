@@ -17,7 +17,8 @@ import { recordAudit } from "@/lib/audit";
 import { notifyUsers } from "@/lib/notifications";
 import { canTransition, STATUS_LABELS, type RequestStatus } from "@/lib/requests/status";
 import { actor, DENIED, failure } from "../_lib/guard";
-import { simpleEmail, escapeHtml } from "../_lib/mail";
+
+import { templateEmail } from "@/lib/email-templates";
 import { adminSetRequestStatusAction } from "./actions";
 import { createItem, markItemReceived, reopenItemSupplied } from "@/lib/requests/items";
 import { sendDraftForReview } from "@/lib/requests/review";
@@ -101,15 +102,16 @@ export async function assignRequestsAction(input: z.infer<typeof assignSchema>):
         body: theirs.map((t) => `${t.number} · ${t.serviceName}`).join("\n"),
         link: v.role === "staff" ? (theirs.length === 1 ? `/work/requests/${one.id}` : "/work") : theirs.length === 1 ? `/admin/requests/${one.id}` : "/admin/requests",
         dedupeKey: `assigned:${v.id}:${theirs.map((t) => t.id).sort().join(",")}:${Date.now()}`,
-        email: {
-          subject: theirs.length === 1 ? `You have been assigned ${one.number}: ${one.serviceName}` : `You have been assigned ${theirs.length} requests`,
-          html: simpleEmail({
-            heading: "New work assigned to you",
-            paragraphs: [`${escapeHtml(me.displayName)} assigned you:`, theirs.map((t) => `<strong>${escapeHtml(t.number)}</strong> · ${escapeHtml(t.serviceName)}`).join("<br>")],
-            cta: { href: v.role === "staff" ? "/work" : "/admin/requests", label: "Open your work" },
-            why: "You got this because you were assigned to a client request at Litch Consulting.",
-          }),
-        },
+        email: templateEmail(
+          "assigned",
+          {
+            name: v.name,
+            assignerName: me.displayName,
+            requests: theirs.map((t) => ({ number: t.number, service: t.serviceName })),
+            url: v.role === "staff" ? (theirs.length === 1 ? `/work/requests/${one.id}` : "/work") : "/admin/requests",
+          },
+          { recipientUserId: v.id, audience: v.role === "staff" ? "staff" : "admin" },
+        ),
       });
     }
     await recordAudit({ action: "request.assigned", entity: "request", meta: { requests: reqs.map((r) => r.number), to: valid.map((v) => v.name || v.email), mode } });
@@ -308,15 +310,17 @@ export async function remindAskAction(itemId: string): Promise<Res> {
     body: `Still needed for ${r.serviceName}${it.dueAt ? `, due ${it.dueAt.toISOString().slice(0, 10)}` : ""}.`,
     link: `/dashboard/requests/${r.id}`,
     dedupeKey: `ask-remind:${it.id}:${new Date().toISOString().slice(0, 10)}`,
-    email: {
-      subject: `Reminder: ${it.title}`,
-      html: simpleEmail({
-        heading: "A reminder about your request",
-        paragraphs: [`We are still waiting for <strong>${escapeHtml(it.title)}</strong> to carry on with ${escapeHtml(r.serviceName)}.`],
-        cta: { href: `/dashboard/requests/${r.id}`, label: it.kind === "document" ? "Upload it" : "Answer" },
-        why: "You got this because something on your request is still open.",
-      }),
-    },
+    email: templateEmail(
+      "actionNeeded",
+      {
+        requestNumber: r.number,
+        what: it.title,
+        why: `A reminder: we still need this to carry on with ${r.serviceName}.`,
+        due: it.dueAt ? new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Lagos" }).format(it.dueAt) : null,
+        url: `/dashboard/requests/${r.id}/asks`,
+      },
+      { recipientUserId: r.userId },
+    ),
   });
   return { ok: true, message: "Reminder sent." };
 }

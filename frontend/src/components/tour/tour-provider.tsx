@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { recordTourAction, tourStateAction } from "@/app/account/actions";
 import { Joyride, EVENTS, STATUS, type EventData, type Controls } from "react-joyride";
 import { TOURS, type TourAudience, type TourStep } from "./registry";
 import { pageTourIdFor } from "./route-match";
@@ -37,6 +38,8 @@ type TourContextValue = {
   hasPageTour: () => boolean;
   /** Whether a tour is currently running. */
   isRunning: boolean;
+  /** Whether this audience has a cross-page walkthrough. */
+  hasWalkthrough: boolean;
 };
 
 const TourContext = createContext<TourContextValue | null>(null);
@@ -57,6 +60,9 @@ const LEGACY_CLIENT_KEY = "litch:portal-tour-done";
  * arrives fails fast into the skip path instead of stalling the tour.
  */
 const TARGET_WAIT_MS = 5000;
+
+/** `?tour=1` in the address bar. */
+const wantsTour = () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tour") === "1";
 
 /** Is a step's target present, and does it apply to this viewport? */
 function isStepPresent(step: TourStep): boolean {
@@ -79,6 +85,9 @@ export function TourProvider({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const welcomeId = `${audience}-welcome`;
+  const walkthroughId = `${audience}-walkthrough`;
+  const welcomeVersion = TOURS[welcomeId]?.version ?? 1;
 
   // Live refs so before-hooks / callbacks always see the current values.
   const pathnameRef = useRef(pathname);
@@ -104,7 +113,8 @@ export function TourProvider({
   // carrying the terminal status before the teardown re-render lands.
   const terminalHandledRef = useRef(false);
 
-  const welcomeKey = useMemo(() => `litch:tour:${audience}:welcome`, [audience]);
+  // Local fast path; the server record (user_onboarding.tours) is the source of truth.
+  const welcomeKey = useMemo(() => `litch:tour:${audience}:welcome:v${welcomeVersion}`, [audience, welcomeVersion]);
 
   // Keep the scroll offset clear of the sticky 4rem topbar, and track the
   // reduced-motion preference live (users flip it mid-session).
@@ -189,12 +199,12 @@ export function TourProvider({
   );
 
   const startWelcome = useCallback(() => {
-    startTour(audience === "client" ? "client-welcome" : "admin-welcome");
-  }, [audience, startTour]);
+    startTour(welcomeId);
+  }, [welcomeId, startTour]);
 
   const startWalkthrough = useCallback(() => {
-    startTour(audience === "client" ? "client-walkthrough" : "admin-walkthrough");
-  }, [audience, startTour]);
+    startTour(walkthroughId);
+  }, [walkthroughId, startTour]);
 
   const startPageTour = useCallback(() => {
     const id = pageTourIdFor(pathnameRef.current);
@@ -236,6 +246,9 @@ export function TourProvider({
           localStorage.setItem(welcomeKey, "1");
         } catch {}
       }
+      // Per user + version, on the server: follows them to every device and
+      // ticks the onboarding "tour" step for welcome tours.
+      if (id && def) void recordTourAction(id, def.version ?? 1, finished ? "finished" : "skipped").catch(() => {});
       // Celebrate only when they made it to the end — never on a skip.
       if (finished) fireConfetti();
       stopTour();
@@ -282,8 +295,19 @@ export function TourProvider({
     };
   }, [run]);
 
-  // Auto-run the welcome tour once per audience.
+  // `?tour=1` (the welcome screens and the onboarding checklist link here)
+  // starts the welcome tour on arrival, whatever has been seen before.
+  // Read from the URL directly (no useSearchParams: this provider wraps whole
+  // shells, and a Suspense boundary around them is not worth it).
   useEffect(() => {
+    if (!wantsTour()) return;
+    const timer = setTimeout(() => startWelcome(), 700);
+    return () => clearTimeout(timer);
+  }, [pathname, startWelcome]);
+
+  // Auto-run the welcome tour once per audience and version.
+  useEffect(() => {
+    if (wantsTour()) return;
     let seen = false;
     try {
       if (localStorage.getItem(welcomeKey)) {
@@ -296,12 +320,26 @@ export function TourProvider({
     } catch {
       seen = true; // storage blocked — err on the side of not auto-running.
     }
-    if (seen) return;
+    if (seen || !TOURS[welcomeId]) return;
 
-    const timer = setTimeout(() => {
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      // Seen on another device? The server knows.
+      const state = await tourStateAction().catch(() => ({}) as Record<string, { version: number }>);
+      if (cancelled) return;
+      const rec = state[welcomeId];
+      if (rec && rec.version >= welcomeVersion) {
+        try {
+          localStorage.setItem(welcomeKey, "1");
+        } catch {}
+        return;
+      }
       startWelcome();
     }, 900);
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
     // Run once on mount for this audience.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -316,8 +354,9 @@ export function TourProvider({
       stopTour,
       hasPageTour,
       isRunning: run,
+      hasWalkthrough: Boolean(TOURS[walkthroughId]),
     }),
-    [audience, startTour, startPageTour, startWalkthrough, startWelcome, stopTour, hasPageTour, run],
+    [audience, startTour, startPageTour, startWalkthrough, startWelcome, stopTour, hasPageTour, run, walkthroughId],
   );
 
   return (
