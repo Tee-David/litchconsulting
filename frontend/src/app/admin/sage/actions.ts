@@ -1,9 +1,10 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, ilike, isNull, or } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db/client";
-import { sageConversation, sageMessage, type SageConversation, type SageMessage } from "@/lib/db/schema";
+import { client, sageConversation, sageMessage, type SageConversation, type SageMessage } from "@/lib/db/schema";
+import taxConfig from "@/lib/tax/nigeria-tax-config.json";
 import { getCurrentUserId, isAdmin } from "@/lib/server-user";
 import { recordAudit } from "@/lib/audit";
 import { listSageConversations, getSageConversation, getSageMessages } from "@/lib/db/queries/sage";
@@ -64,6 +65,10 @@ export async function applyAssistantProposalAction(
       return { ok: true, message: `Line ${lineId} reclassified to ${res.category_code}.` };
     }
 
+    if (proposal.action === "create_billing_draft") {
+      return await createBillingDraft(proposal.params);
+    }
+
     return { ok: false, message: `Don't know how to apply "${proposal.action}".` };
   } catch (err) {
     return {
@@ -71,6 +76,58 @@ export async function applyAssistantProposalAction(
       message: err instanceof Error ? err.message : "Failed to apply the proposal.",
     };
   }
+}
+
+/**
+ * Sage's "create a quote / an invoice for X" proposal, after the admin confirms:
+ * find the client by name, then save a DRAFT through the normal billing action
+ * (admin-guarded, totals recomputed on the server). Nothing is sent: the admin
+ * opens the draft in Billing, checks it and sends it.
+ */
+async function createBillingDraft(params: Record<string, unknown>): Promise<ProposalResult> {
+  const kind = params.kind === "quote" ? "quote" : "invoice";
+  const name = String(params.client_name ?? "").trim();
+  const amount = Number(params.amount);
+  if (!name || !Number.isFinite(amount) || amount <= 0 || amount > 1e12) {
+    return { ok: false, message: "That proposal needs a client name and an amount. Rephrase your request." };
+  }
+  const like = `%${name.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
+  const matches = await db
+    .select({ id: client.id, name: client.name, company: client.company, email: client.email, address: client.address, taxId: client.taxId })
+    .from(client)
+    .where(and(isNull(client.deletedAt), isNull(client.erasedAt), or(ilike(client.company, like), ilike(client.name, like))))
+    .limit(5);
+  if (matches.length === 0) {
+    return { ok: false, message: `No client matches "${name}". Add the client first, or use the exact name.` };
+  }
+  if (matches.length > 1) {
+    const list = matches.map((c) => c.company || c.name).join(", ");
+    return { ok: false, message: `More than one client matches "${name}" (${list}). Use the full name.` };
+  }
+  const c = matches[0];
+  const { nextInvoiceNumber } = await import("@/lib/db/queries/invoices");
+  const { saveInvoiceAction } = await import("@/app/admin/billing/invoices/actions");
+  const description = String(params.description ?? "").trim() || (kind === "quote" ? "Professional services (quote)" : "Professional services");
+  const res = await saveInvoiceAction({
+    kind,
+    number: await nextInvoiceNumber(kind),
+    status: "draft",
+    clientId: c.id,
+    billTo: { name: c.name || undefined, company: c.company || undefined, email: c.email || undefined, address: c.address || undefined, taxId: c.taxId || undefined },
+    projectTitle: description,
+    currency: "NGN",
+    issueDate: new Date().toISOString().slice(0, 10),
+    items: [{ description, quantity: 1, unitPrice: amount, taxRate: taxConfig.vat.standardRatePct }],
+  });
+  if (!res.ok || !res.id) return { ok: false, message: res.error || `The draft ${kind} was not saved.` };
+  await recordAudit({
+    action: `${kind}.drafted`,
+    entity: "invoice",
+    entityId: res.id,
+    meta: { via: "sage", client: c.company || c.name, amount },
+  });
+  revalidatePath("/admin/billing");
+  return { ok: true, message: `Draft ${kind} saved for ${c.company || c.name}. Open Billing to check it and send it.` };
 }
 
 /* -------------------------------------------------------------------------- *

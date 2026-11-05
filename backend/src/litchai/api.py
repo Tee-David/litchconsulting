@@ -115,6 +115,9 @@ class AssistantChatRequest(BaseModel):
     # sends {"tool", "data"} back for the routed tool (app_data).
     app_tools: bool = False
     app_data: dict[str, Any] | None = None
+    # The client's AI mode: True keeps every model call on the VM.
+    local_only: bool = False
+    conversation_id: str | None = None
 
 
 class CreateEngagementRequest(BaseModel):
@@ -713,22 +716,30 @@ def create_app(
         return app.state.chat_provider
 
     @app.post("/assistant/chat")
-    async def assistant_chat(
+    def assistant_chat(
         body: AssistantChatRequest, repo: Repository = Depends(get_repo)
     ) -> dict[str, Any]:
-        """Admin Copilot: semantic tool-routing → grounded RAG answer. READ tools
-        return data, WRITE tools return a proposal only (never executed here)."""
+        """Sage: semantic tool-routing → grounded RAG answer. READ tools return data,
+        WRITE tools return a proposal only (never executed here). Sync on purpose:
+        embedding and model calls block, so FastAPI runs this in its threadpool.
+        A model failure comes back as a plain-word answer with ``error`` set —
+        this endpoint does not answer 500 for a busy or unreachable model."""
         from dataclasses import asdict
 
-        from litchai.ai.assistant import answer_chat
+        from litchai.ai.assistant import answer_chat, busy_result
+        from litchai.ai.router import failure_reason
 
         if not body.message.strip():
             raise HTTPException(400, "message is required")
         if body.scope == "client" and not body.client_id:
             raise HTTPException(400, "client_id is required when scope='client'")
 
-        embedder = _get_embedder()
-        router = _get_router(embedder)
+        try:
+            embedder = _get_embedder()
+            router = _get_router(embedder)
+        except Exception as exc:  # noqa: BLE001 — embedder down: say so in words
+            return asdict(busy_result(failure_reason(exc)))
+        model_router = _sage_router(local_only=body.local_only)
         # Reuse the harness cache + ai_calls telemetry when we're on Postgres.
         conn = getattr(repo, "conn", None)
         cache = telemetry = None
@@ -752,8 +763,28 @@ def create_app(
             app_tools=body.app_tools,
             app_data=body.app_data,
             engine_status=_engine_status,
+            model_router=model_router,
+            local_only=body.local_only,
+            conversation_id=body.conversation_id,
+            # Cloud answers take seconds; the private model needs longer, but the
+            # web relay gives up at 120 s, so stop before that.
+            timeout=100.0 if body.local_only else 30.0,
         )
         return asdict(result)
+
+    def _sage_router(*, local_only: bool) -> Any:
+        """The provider chain for Sage, when it can serve this request: a cloud
+        provider for normal clients, a local one for local-only clients. Otherwise
+        None, and Sage keeps the configured local provider."""
+        try:
+            if app.state.ai_router is None:
+                app.state.ai_router = app.state.router_factory()
+            chain = app.state.ai_router.chain(local_only=local_only)
+        except Exception:  # noqa: BLE001
+            return None
+        if local_only:
+            return app.state.ai_router if chain else None
+        return app.state.ai_router if any(s.kind == "cloud" for s in chain) else None
 
     def _engine_status() -> list[dict[str, Any]]:
         if app.state.ai_router is None:

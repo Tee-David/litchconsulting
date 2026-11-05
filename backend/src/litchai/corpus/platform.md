@@ -16,6 +16,15 @@ reason: the client is told why and can upload proof again. Card and Paystack
 payments confirm themselves. You can also record a payment manually with "Record a
 payment", and export the payments list as CSV.
 
+## Asking Sage to draft a quote or an invoice
+
+Ask Sage, for example: "Create a quote for Acme Ltd for 500,000 naira for the audit".
+Sage does not create anything on its own. It shows a proposal with the client, the
+amount and what it is for. When you confirm, a DRAFT quote or invoice is saved for that
+client, with VAT at the standard rate from the tax configuration. Nothing is sent. Open
+Billing to check the draft, change it if necessary, and send it. If no client or more than
+one client matches the name, Sage says so and asks for the full name.
+
 ## Deposits and part payments
 
 A quote or invoice can ask for a deposit (a percentage of the total). The invoice

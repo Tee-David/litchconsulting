@@ -19,6 +19,7 @@ telemetry are reused via the harness.
 """
 from __future__ import annotations
 
+import logging
 import re
 from dataclasses import dataclass, field
 from typing import Any, Literal
@@ -32,6 +33,8 @@ from litchai.ai.tasks import PROMPTS_DIR, TaskPolicy, TaskSpec
 from litchai.categorize.retrieval import RetrievedChunk, hybrid_knowledge
 from litchai.db.repo import Repository
 from litchai.embeddings import Embedder, cosine
+
+log = logging.getLogger(__name__)
 
 ToolKind = Literal["read", "write"]
 
@@ -232,6 +235,34 @@ TOOLS: tuple[Tool, ...] = (
         ),
     ),
     Tool(
+        name="create_quote",
+        kind="write",
+        description="Propose a draft quote for a client (client name, amount, what it is for). "
+        "The admin reviews the draft in Billing before it is sent.",
+        examples=(
+            "create a quote for acme ltd for 500,000 naira",
+            "make a quote for okonkwo farms",
+            "draft a quote of 250000 for bookkeeping",
+            "quote acme 1.2m for the audit",
+            "prepare a quotation for this client",
+        ),
+        slots=("client_name", "amount", "description"),
+    ),
+    Tool(
+        name="create_invoice",
+        kind="write",
+        description="Propose a draft invoice for a client (client name, amount, what it is for). "
+        "The admin reviews the draft in Billing before it is sent.",
+        examples=(
+            "create an invoice for acme ltd for 500,000 naira",
+            "invoice okonkwo farms 250000 for the tax filing",
+            "raise an invoice for this client",
+            "bill acme ltd 300k for the payroll work",
+            "make an invoice for 1.5 million",
+        ),
+        slots=("client_name", "amount", "description"),
+    ),
+    Tool(
         name="recategorize_line",
         kind="write",
         description="Propose reclassifying a transaction line to a different category.",
@@ -329,6 +360,34 @@ def _first_int(patterns: list[str], message: str) -> int | None:
     return None
 
 
+_SCALE = {"k": 1e3, "thousand": 1e3, "m": 1e6, "mn": 1e6, "million": 1e6, "b": 1e9, "bn": 1e9,
+          "billion": 1e9}
+
+
+def _amount_in(message: str) -> float | None:
+    """The money amount in a request: '500,000 naira', '₦1.2m', '300k'."""
+    best: float | None = None
+    for m in re.finditer(r"(?:₦|NGN\s*|N(?=\d))?(\d{1,3}(?:,\d{3})+|\d+(?:\.\d+)?)\s*"
+                         r"(k|thousand|m|mn|million|b|bn|billion)?\b", message, re.IGNORECASE):
+        raw = m.group(1).replace(",", "")
+        if re.fullmatch(r"(19|20)\d\d", raw) and not m.group(2):
+            continue  # a year, not money
+        v = float(raw) * _SCALE.get((m.group(2) or "").lower(), 1.0)
+        if best is None or v > best:
+            best = v
+    return round(best, 2) if best else None
+
+
+def _client_in(message: str) -> str | None:
+    """'… for Acme Ltd for 500,000' → 'Acme Ltd'. Skips amounts and descriptions."""
+    for m in re.finditer(r"\b(?:for|to|bill|invoice|quote)\s+([A-Z][\w&.'-]*(?:\s+[A-Z&][\w&.'-]*){0,5})",
+                         message):
+        name = m.group(1).strip(" .,")
+        if not re.match(r"(?:₦|NGN|\d)", name) and name.lower() not in ("this client", "the client"):
+            return name
+    return None
+
+
 def extract_slots(message: str, tool: Tool) -> dict[str, Any]:
     slots: dict[str, Any] = {}
     if "document_id" in tool.slots:
@@ -343,6 +402,15 @@ def extract_slots(message: str, tool: Tool) -> dict[str, Any]:
     if "request_number" in tool.slots:
         m = re.search(r"\bREQ-\d{4}-\d+\b", message, re.IGNORECASE)
         slots["request_number"] = m.group(0).upper() if m else None
+    if "amount" in tool.slots:
+        slots["amount"] = _amount_in(message)
+    if "client_name" in tool.slots:
+        slots["client_name"] = _client_in(message)
+    if "description" in tool.slots:
+        m = re.search(r"\b(?:for|covering)\s+(?:the\s+|our\s+)?((?:[a-z][\w&'-]*\s?){1,6})\s*[.?!]?\s*$",
+                      message, re.IGNORECASE)
+        desc = m.group(1).strip() if m else None
+        slots["description"] = desc if desc and desc.lower() != (slots.get("client_name") or "").lower() else None
     if "engagement_action" in tool.slots:
         slots["engagement_action"] = next(
             (a for a in _ENGAGEMENT_ACTIONS if re.search(rf"\b{a}\b", message, re.IGNORECASE)), None
@@ -413,8 +481,11 @@ def llm_route(
             "engagement_action": out.engagement_action,
         }.items() if k in tool.slots
     }
-    if "request_number" in tool.slots:  # the route schema has no field for it
-        slots["request_number"] = extract_slots(message, tool).get("request_number")
+    # Slots the route schema has no field for come from the message itself.
+    extra = {"request_number", "client_name", "amount", "description"} & set(tool.slots)
+    if extra:
+        found = extract_slots(message, tool)
+        slots.update({k: found.get(k) for k in extra})
     return tool, slots
 
 
@@ -579,6 +650,28 @@ def workbench_status(repo: Repository, client_id: str | None) -> dict[str, Any]:
 
 
 def build_proposal(tool: Tool, slots: dict[str, Any]) -> Proposal:
+    if tool.name in ("create_quote", "create_invoice"):
+        kind = "quote" if tool.name == "create_quote" else "invoice"
+        params = {
+            "kind": kind,
+            "client_name": slots.get("client_name"),
+            "amount": slots.get("amount"),
+            "description": slots.get("description"),
+        }
+        missing = [k for k, label in (("client_name", "the client"), ("amount", "the amount"))
+                   if not params[k]]
+        ready = not missing
+        what = f" for {params['description']}" if params["description"] else ""
+        summary = (
+            f"Create a draft {kind} for {params['client_name']}: "
+            f"₦{float(params['amount']):,.2f}{what}. You review it in Billing before it is sent."
+            if ready else
+            f"Create a draft {kind}: tell me "
+            + " and ".join("the client" if k == "client_name" else "the amount" for k in missing)
+            + "."
+        )
+        return Proposal(tool.name, "create_billing_draft", params, summary, ready)
+
     if tool.name == "recategorize_line":
         params = {
             "document_id": slots.get("document_id"),
@@ -749,6 +842,43 @@ class ChatResult:
     # App-resolved read (billing, privacy, requests, backups): the relay runs the
     # read for {tool, slots} and calls again with app_data. Nothing to show yet.
     needs_app_data: dict[str, Any] | None = None
+    # Set when no model could answer: "quota" | "timeout" | "unavailable". The
+    # answer then holds a plain-word message with a next step (never an HTTP 500).
+    error: str | None = None
+    # Which engine wrote the words: {"provider", "model", "kind", "masked"} or None.
+    engine: dict[str, Any] | None = None
+
+
+# Plain words for a failed model call, each with a next step (U6).
+BUSY_MESSAGES = {
+    "quota": "The free AI allowance for today is used up, and the private model did not "
+             "answer in time. Try again in a few minutes, or ask a shorter question.",
+    "timeout": "Sage took too long to answer. The AI service is busy. Try again in a "
+               "minute, or ask a shorter question.",
+    "unavailable": "Sage cannot reach its AI service right now. Try again in a minute. "
+                   "Your question was not lost: send it again.",
+}
+
+
+def busy_result(reason: str, *, tool: str = "none", routed_by: str = "none") -> ChatResult:
+    return ChatResult(answer=BUSY_MESSAGES.get(reason, BUSY_MESSAGES["unavailable"]), citations=[],
+                      tool=tool, routed_by=routed_by, can_answer=False, error=reason)
+
+
+def _names_in(data: Any, out: set[str] | None = None) -> set[str]:
+    """Client / payer / person names inside app data, so they are masked for the cloud."""
+    out = out if out is not None else set()
+    if isinstance(data, dict):
+        for k, v in data.items():
+            if isinstance(v, str) and re.search(r"client|payer|name|customer|bill_to|company|by$",
+                                                k, re.IGNORECASE):
+                out.add(v)
+            else:
+                _names_in(v, out)
+    elif isinstance(data, list):
+        for v in data:
+            _names_in(v, out)
+    return out
 
 
 def _dedupe(items: list[str]) -> list[str]:
@@ -777,18 +907,83 @@ def answer_chat(
     app_tools: bool = False,
     app_data: dict[str, Any] | None = None,
     engine_status: Any = None,
+    model_router: Any = None,
+    local_only: bool = False,
+    conversation_id: str | None = None,
+    timeout: float | None = None,
 ) -> ChatResult:
     """``app_tools``: the caller can resolve app-side reads (two-pass contract).
-    ``app_data``: ``{"tool": name, "data": {...}}`` from that read (the second pass)."""
+    ``app_data``: ``{"tool": name, "data": {...}}`` from that read (the second pass).
+
+    ``model_router`` (a :class:`~litchai.ai.router.ProviderRouter`): when set, the
+    routing fallback, the answer and general chat all go through the provider chain
+    (cloud first, masked; ``local_only`` keeps it on the VM). Without it the local
+    ``provider`` is used as before. A model failure never raises: the result holds a
+    plain-word message and ``error``."""
+    try:
+        return _answer_chat(
+            message, repo=repo, embedder=embedder, provider=provider, router=router,
+            history=history, scope=scope, client_id=client_id, chat_provider=chat_provider,
+            cache=cache, telemetry=telemetry, app_tools=app_tools, app_data=app_data,
+            engine_status=engine_status, model_router=model_router, local_only=local_only,
+            conversation_id=conversation_id, timeout=timeout,
+        )
+    except Exception as exc:  # noqa: BLE001 — Sage answers in words, never with a 500
+        from litchai.ai.router import failure_reason
+
+        log.warning("sage turn failed: %s: %s", type(exc).__name__, str(exc)[:200])
+        return busy_result(failure_reason(exc))
+
+
+def _answer_chat(
+    message: str,
+    *,
+    repo: Repository,
+    embedder: Embedder,
+    provider: Provider,
+    router: SemanticRouter | None,
+    history: list[dict[str, str]] | None,
+    scope: str,
+    client_id: str | None,
+    chat_provider: Provider | None,
+    cache: AiCache | None,
+    telemetry: AiTelemetry | None,
+    app_tools: bool,
+    app_data: dict[str, Any] | None,
+    engine_status: Any,
+    model_router: Any,
+    local_only: bool,
+    conversation_id: str | None,
+    timeout: float | None,
+) -> ChatResult:
+    bound = None
+    if model_router is not None:
+        from litchai.ai.privacy import Masker
+        from litchai.ai.router import BoundRouter
+
+        masker = Masker()
+        masker.register_names(_names_in((app_data or {}).get("data")))
+        bound = BoundRouter(model_router, task="sage", conversation_id=conversation_id,
+                            local_only=local_only, masker=masker, timeout=timeout)
+        provider = bound
+        chat_provider = bound
+
+    def engine() -> dict[str, Any] | None:
+        last = getattr(bound, "last", None)
+        if last is None:
+            return None
+        return {"provider": last.provider, "model": last.model, "kind": last.kind,
+                "masked": last.masked}
+
     router = router or SemanticRouter(embedder)
     decision = route_message(
         message, router, provider=provider, history=history, cache=cache, telemetry=telemetry
     )
 
     # general_chat: off-corpus small talk / reasoning. Skip retrieval and the
-    # READ/proposal paths entirely and answer via the external chat provider. If
-    # none is configured, degrade to a friendly grounded refusal — no model call,
-    # no hallucination.
+    # READ/proposal paths entirely and answer via the chat provider. If none is
+    # configured, degrade to a friendly grounded refusal — no model call, no
+    # hallucination.
     if decision.tool.name == "general_chat":
         answer = (
             generate_general_chat(message, history, provider=chat_provider)
@@ -797,7 +992,7 @@ def answer_chat(
         )
         return ChatResult(
             answer=answer, citations=[], tool="general_chat", routed_by=decision.method,
-            can_answer=True,
+            can_answer=True, engine=engine(),
         )
 
     # scope='client' is the only mode that includes a client's operational context.
@@ -843,4 +1038,5 @@ def answer_chat(
     return ChatResult(
         answer=out.answer, citations=citations, tool=decision.tool.name, routed_by=decision.method,
         can_answer=out.can_answer, tool_result=tool_result.data if tool_result else None,
+        engine=engine(),
     )
