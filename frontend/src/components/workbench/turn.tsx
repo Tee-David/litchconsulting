@@ -224,6 +224,20 @@ export function TurnView({
               {(final.citations as string[]).slice(0, 12).map((c) => <CiteChip key={c} refText={c} onCite={onCite} />)}
             </div>
           ) : null}
+          {Array.isArray(final.unverified_figures) && final.unverified_figures.length > 0 ? (
+            <div className="rounded-ctl border border-warn/30 bg-warn-soft px-2.5 py-2 text-[12px] text-ink" role="note">
+              <p className="flex items-center gap-1.5 font-semibold">
+                <AlertTriangle className="size-3.5 text-warn" aria-hidden /> Check these figures
+              </p>
+              <p className="mt-0.5 text-body">
+                No tool result backs{" "}
+                {(final.unverified_figures as unknown[]).slice(0, 8).map((f, i) => (
+                  <span key={i}>{i ? ", " : ""}<b className="font-mono font-semibold text-ink">{s(f)}</b></span>
+                ))}
+                . Don&rsquo;t rely on {final.unverified_figures.length === 1 ? "it" : "them"} until a tool confirms: ask Sage to compute {final.unverified_figures.length === 1 ? "it" : "them"}.
+              </p>
+            </div>
+          ) : null}
           {final.truncated ? <p className="text-[12px] text-warn">Stopped at the step limit. Ask Sage to continue.</p> : null}
           <Attribution final={final} provider={provider} />
         </div>

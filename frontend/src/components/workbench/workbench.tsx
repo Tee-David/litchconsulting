@@ -492,7 +492,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
       );
     }
     const steps = (m.steps ?? []) as WbEvent[];
-    const final: WbEvent = { type: "final", answer: m.content, citations: m.citations ?? [], attribution: m.attribution ?? null };
+    const final: WbEvent = { type: "final", answer: m.content, citations: m.citations ?? [], attribution: m.attribution ?? null, unverified_figures: m.unverified_figures ?? [] };
     return (
       <div key={i} className="space-y-1.5">
         <p className="flex items-center gap-1.5 text-[12px] font-semibold text-ink"><SageIcon className="size-4" /> Sage</p>

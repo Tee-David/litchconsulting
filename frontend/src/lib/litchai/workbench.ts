@@ -64,6 +64,8 @@ export type WbMessage = {
   citations?: string[];
   proposals?: string[];
   attribution?: { pipeline: string[]; model: string | null; decision: string } | null;
+  /** Figures in the answer that no tool result backs (grounding rule). */
+  unverified_figures?: string[];
   steps?: WbEvent[];
 };
 
