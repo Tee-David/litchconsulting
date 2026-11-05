@@ -376,7 +376,7 @@ export function verifyUnsubscribe(userId: string, category: string, sig: string)
 
 export function unsubscribeUrl(userId: string, category: string): string {
   const q = new URLSearchParams({ u: userId, c: category, s: unsubscribeSignature(userId, category) });
-  return `${siteOrigin()}/account/unsubscribe?${q.toString()}`;
+  return `${siteOrigin()}/unsubscribe?${q.toString()}`;
 }
 
 /** Where each audience changes its notification settings. */

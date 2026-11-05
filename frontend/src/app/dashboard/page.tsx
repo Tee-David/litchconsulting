@@ -11,6 +11,7 @@ import { clientAttention } from "@/lib/attention/client";
 import { formatMoney } from "@/lib/invoice/money";
 import { balanceOf } from "@/lib/payments/amounts";
 import { formatDate } from "@/lib/format-date";
+import { Onboarding } from "@/components/access/onboarding";
 
 export const metadata: Metadata = { title: "Home" };
 export const dynamic = "force-dynamic";
@@ -60,6 +61,9 @@ export default async function ClientHome() {
           </Link>
         }
       />
+
+      {/* R1.5 first-run checklist: renders nothing once done or hidden. */}
+      <Onboarding />
 
       <div data-tour="attention">
         <AttentionList
