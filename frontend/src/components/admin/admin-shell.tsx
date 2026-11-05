@@ -41,6 +41,9 @@ export function AdminShell({
   const shellUser: ShellUser = { name: user.name, email: user.email, image: user.image, roleLabel: ROLE_LABEL[role] };
 
   const [mobileOpen, setMobileOpen] = useState(false);
+  /** lg–xl: the icon rail opened as an overlay (not persisted). */
+  const [railOpen, setRailOpen] = useState(false);
+  /** ≥ xl: the sidebar pinned to the icon rail (persisted). */
   const [pinnedCollapsed, setPinnedCollapsed] = useState(false);
 
   useEffect(() => {
@@ -50,14 +53,47 @@ export function AdminShell({
       /* private mode: default expanded */
     }
   }, []);
-  // Close the drawer on navigation.
-  useEffect(() => setMobileOpen(false), [pathname]);
+  // Close the drawer / overlay on navigation.
   useEffect(() => {
-    if (!mobileOpen) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMobileOpen(false);
+    setMobileOpen(false);
+    setRailOpen(false);
+  }, [pathname]);
+  useEffect(() => {
+    if (!mobileOpen && !railOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setMobileOpen(false);
+      setRailOpen(false);
+    };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [mobileOpen]);
+  }, [mobileOpen, railOpen]);
+  // The overlay only exists between lg and xl; drop it if the window leaves that range.
+  useEffect(() => {
+    if (!railOpen) return;
+    const mq = window.matchMedia("(min-width: 1024px) and (max-width: 1279.98px)");
+    const onChange = () => !mq.matches && setRailOpen(false);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, [railOpen]);
+  // Ctrl/⌘+B toggles the sidebar for the current width — never while typing
+  // (the blog editor uses Ctrl+B for bold).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== "b") return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (window.matchMedia("(min-width: 1280px)").matches) {
+        e.preventDefault();
+        togglePin();
+      } else if (window.matchMedia("(min-width: 1024px)").matches) {
+        e.preventDefault();
+        setRailOpen((o) => !o);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   function togglePin() {
     setPinnedCollapsed((c) => {
@@ -78,7 +114,7 @@ export function AdminShell({
     <TourProvider audience="admin">
       <div
         className={cn(
-          "min-h-dvh bg-cloud lg:grid lg:grid-cols-[68px_minmax(0,1fr)]",
+          "min-h-dvh bg-cloud lg:grid lg:grid-cols-[68px_minmax(0,1fr)] lg:transition-[grid-template-columns] lg:duration-200 motion-reduce:transition-none",
           !pinnedCollapsed && "xl:grid-cols-[236px_minmax(0,1fr)]",
         )}
       >
@@ -86,10 +122,19 @@ export function AdminShell({
           Skip to content
         </a>
 
-        {/* Rail / sidebar (≥ lg) */}
+        {/* Rail / sidebar (≥ lg). lg–xl: icon rail whose toggle opens the full
+            sidebar as an overlay; ≥ xl: full sidebar that can be pinned to the rail. */}
         <aside className="sticky top-0 z-40 hidden h-dvh border-r border-hairline bg-paper lg:block">
           <div className="h-full xl:hidden">
-            <SidebarNav items={items} counts={counts} user={shellUser} sageOnline={sageOnline} collapsed />
+            <SidebarNav
+              items={items}
+              counts={counts}
+              user={shellUser}
+              sageOnline={sageOnline}
+              collapsed
+              pinnedCollapsed
+              onTogglePin={() => setRailOpen(true)}
+            />
           </div>
           <div className="hidden h-full xl:block">
             <SidebarNav
@@ -101,18 +146,40 @@ export function AdminShell({
               pinnedCollapsed={pinnedCollapsed}
               onTogglePin={togglePin}
             />
-            {pinnedCollapsed && (
-              <button
-                type="button"
-                onClick={togglePin}
-                data-tour="sidebar-pin"
-                className="sr-only focus:not-sr-only focus:absolute focus:bottom-28 focus:left-2 focus:rounded-ctl focus:bg-paper focus:px-2 focus:py-1 focus:text-xs"
-              >
-                Expand sidebar
-              </button>
-            )}
           </div>
         </aside>
+
+        {/* Overlay sidebar (lg–xl) */}
+        <AnimatePresence>
+          {railOpen && (
+            <div className="fixed inset-0 z-50 hidden lg:block xl:hidden" role="dialog" aria-modal="true" aria-label="Menu">
+              <motion.div
+                className="absolute inset-0 bg-scrim"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setRailOpen(false)}
+              />
+              <motion.aside
+                className="absolute left-0 top-0 h-full w-[248px] border-r border-hairline bg-paper shadow-2xl"
+                initial={{ x: -180, opacity: 0 }}
+                animate={{ x: 0, opacity: 1 }}
+                exit={{ x: -180, opacity: 0 }}
+                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <SidebarNav
+                  items={items}
+                  counts={counts}
+                  user={shellUser}
+                  sageOnline={sageOnline}
+                  pinnedCollapsed
+                  onNavigate={() => setRailOpen(false)}
+                  onTogglePin={() => setRailOpen(false)}
+                />
+              </motion.aside>
+            </div>
+          )}
+        </AnimatePresence>
 
         {/* Drawer (< lg) */}
         <AnimatePresence>
