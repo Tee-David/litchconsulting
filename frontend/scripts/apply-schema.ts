@@ -386,6 +386,43 @@ export const STATEMENTS = [
     "created_at" timestamp with time zone DEFAULT now() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT now() NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS "request_draft_email_idx" ON "request_draft" ("email")`,
+  // R1.2 colleagues + invitation access level
+  `ALTER TABLE "invitation" ADD COLUMN IF NOT EXISTS "access" text`,
+  `CREATE TABLE IF NOT EXISTS "client_member" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "client_id" uuid NOT NULL,
+    "user_id" text NOT NULL,
+    "access" text DEFAULT 'viewer' NOT NULL,
+    "invited_by" text,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS "client_member_uidx" ON "client_member" ("client_id", "user_id")`,
+  `CREATE INDEX IF NOT EXISTS "client_member_user_idx" ON "client_member" ("user_id")`,
+  // R1.5 onboarding + tour progress
+  `CREATE TABLE IF NOT EXISTS "user_onboarding" (
+    "user_id" text PRIMARY KEY NOT NULL,
+    "steps" jsonb DEFAULT '{}'::jsonb NOT NULL,
+    "hidden_until" timestamp with time zone,
+    "completed_at" timestamp with time zone,
+    "tours" jsonb DEFAULT '{}'::jsonb NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL)`,
+  // R1.4 two-step sign-in: Better Auth twoFactor plugin columns (camelCase, like
+  // the rest of Better Auth's tables) + our per-session "second factor passed" mark.
+  `ALTER TABLE "user" ADD COLUMN IF NOT EXISTS "twoFactorEnabled" boolean DEFAULT false`,
+  `CREATE TABLE IF NOT EXISTS "twoFactor" (
+    "id" text PRIMARY KEY NOT NULL,
+    "secret" text NOT NULL,
+    "backupCodes" text NOT NULL,
+    "userId" text NOT NULL,
+    "verified" boolean DEFAULT true,
+    "failedVerificationCount" integer DEFAULT 0,
+    "lockedUntil" timestamp with time zone)`,
+  `CREATE INDEX IF NOT EXISTS "twoFactor_userId_idx" ON "twoFactor" ("userId")`,
+  `CREATE INDEX IF NOT EXISTS "twoFactor_secret_idx" ON "twoFactor" ("secret")`,
+  `CREATE TABLE IF NOT EXISTS "session_two_step" (
+    "session_id" text PRIMARY KEY NOT NULL,
+    "user_id" text NOT NULL,
+    "verified_at" timestamp with time zone DEFAULT now() NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS "session_two_step_user_idx" ON "session_two_step" ("user_id")`,
 ];
 
 /**
