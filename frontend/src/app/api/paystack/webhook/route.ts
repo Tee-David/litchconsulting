@@ -79,11 +79,10 @@ export async function POST(req: Request) {
       case "refund.processed": {
         await notifyAdmin({
           subject: "Paystack refund processed",
-          html: `<p>Paystack reports a processed refund. Review the transaction and set the linked request to <strong>refunded</strong> if you haven't already.</p><pre style="font-size:12px;color:#5b6474;">${JSON.stringify(
-            event.data ?? {},
-            null,
-            2
-          ).slice(0, 2000)}</pre>`,
+          lines: [
+            "Paystack reports a processed refund. Review the transaction and set the linked request to **refunded** if you haven't already.",
+            JSON.stringify(event.data ?? {}, null, 2).slice(0, 2000),
+          ],
         });
         break;
       }

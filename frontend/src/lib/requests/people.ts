@@ -55,21 +55,19 @@ export async function clientUserIds(clientId: string): Promise<string[]> {
   return [...ids];
 }
 
-const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-
-/** A short branded email: heading, one paragraph, one button. */
-export async function simpleEmail(opts: { subject: string; heading: string; body: string; href: string; cta: string }) {
-  const { emailLayout, emailButton } = await import("@/lib/email");
-  const href = opts.href.startsWith("http") ? opts.href : `${appBaseUrl()}${opts.href}`;
-  return {
+/**
+ * A short email (heading, one paragraph, one button) rendered by the `notice`
+ * template in lib/email-templates.ts. `body` is plain text, escaped on render.
+ */
+export async function simpleEmail(opts: { subject: string; heading: string; body: string; href: string; cta: string; why?: string }) {
+  const { templateEmail } = await import("@/lib/email-templates");
+  return templateEmail("notice", {
     subject: opts.subject,
-    html: emailLayout(
-      `<p style="margin:0 0 8px;font-size:20px;font-weight:700;">${escapeHtml(opts.heading)}</p>
-       <p style="margin:0 0 18px;color:#41485a;">${escapeHtml(opts.body)}</p>
-       <p style="margin:0 0 12px;">${emailButton(href, opts.cta)}</p>`,
-      { preheader: opts.body.slice(0, 120) },
-    ),
-  };
+    heading: opts.heading,
+    paragraphs: [opts.body],
+    cta: { label: opts.cta, href: opts.href },
+    why: opts.why ?? "You got this because of activity on your Litch Consulting account.",
+  });
 }
 
 type Note = {

@@ -5,7 +5,7 @@ import { UserPlus } from "lucide-react";
 import { signIn } from "@/lib/auth-client";
 import { continueUrl } from "@/lib/post-auth";
 import { useToast } from "@/components/admin/ui/toaster";
-import { acceptInvitationAction } from "@/app/invite/[token]/actions";
+import { acceptInvitationAction, prepareInviteGoogleAction } from "@/app/invite/[token]/actions";
 import { PasswordStrength, passwordIssue } from "./password-strength";
 import { AuthHeading, Callout, Field, GoogleButton, OrDivider, SubmitButton, authErrorText } from "./ui";
 
@@ -26,6 +26,7 @@ export function InviteAcceptForm({
   expiresAt,
   firm,
   googleEnabled,
+  initialError,
 }: {
   token: string;
   email: string;
@@ -37,13 +38,15 @@ export function InviteAcceptForm({
   expiresAt: string;
   firm: boolean;
   googleEnabled: boolean;
+  /** From the Google callback: wrong account, or Google did not finish. */
+  initialError?: string | null;
 }) {
   const toast = useToast();
   const [name, setName] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
-  const [errors, setErrors] = useState<{ name?: string; password?: string; form?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; password?: string; form?: string }>(initialError ? { form: initialError } : {});
   const next = continueUrl(null);
   const expires = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Lagos" }).format(new Date(expiresAt));
 
@@ -74,17 +77,19 @@ export function InviteAcceptForm({
   }
 
   async function google() {
-    if (name.trim().length < 2) return setErrors({ name: "Enter your full name first." });
+    setErrors({});
     setGoogleBusy(true);
-    const r = await acceptInvitationAction({ token, name: name.trim(), password: null });
+    // Nothing is created or spent yet: the invitation is accepted only when
+    // Google comes back with the invited email (app/invite/[token]/google).
+    const r = await prepareInviteGoogleAction(token);
     if (!r.ok) {
       setGoogleBusy(false);
       return setErrors({ form: r.error });
     }
-    // The account exists for this email; Google links to it on sign-in.
-    void signIn.social({ provider: "google", callbackURL: next, errorCallbackURL: "/login" }).catch(() => {
+    const here = `/invite/${encodeURIComponent(token)}`;
+    void signIn.social({ provider: "google", callbackURL: `${here}/google`, errorCallbackURL: `${here}?error=google` }).catch(() => {
       setGoogleBusy(false);
-      toast.error(authErrorText(null, "Google sign-in could not start. Your account is ready; sign in from the sign-in page."));
+      toast.error(authErrorText(null, "Google sign-in could not start. Try again, or choose a password."));
     });
   }
 
@@ -116,13 +121,13 @@ export function InviteAcceptForm({
       ) : null}
 
       <form onSubmit={accept} className="flex flex-col gap-4" noValidate>
-        <Field label="Your full name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} error={errors.name} />
         {googleEnabled ? (
           <>
             <GoogleButton onClick={google} label={`Continue with Google as ${email}`} busy={googleBusy} disabled={busy} />
             <OrDivider label="or choose a password" />
           </>
         ) : null}
+        <Field label="Your full name" autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} error={errors.name} />
         <div className="space-y-2">
           <Field label="Password" type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} error={errors.password} />
           <PasswordStrength password={password} forbidden={[name, email.split("@")[0]]} />

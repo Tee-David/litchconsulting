@@ -4,7 +4,7 @@ import { db } from "@/lib/db/client";
 import { invoice } from "@/lib/db/schema";
 import { auditForEntity } from "@/lib/db/queries/audit";
 import { recordAudit } from "@/lib/audit";
-import { sendEmail, emailLayout, emailButton, emailDetailRows, EMAIL_ICONS } from "@/lib/email";
+import { sendTemplate } from "@/lib/email-templates";
 import { formatMoney, num } from "@/lib/invoice/money";
 
 export const dynamic = "force-dynamic";
@@ -99,28 +99,25 @@ export async function GET(req: Request) {
     const late = past > 0;
 
     try {
-      await sendEmail({
-        to: inv.billToEmail,
-        subject: late
-          ? `Reminder: invoice ${inv.number} is ${stage.label}`
-          : `Invoice ${inv.number} is ${stage.label}`,
-        html: emailLayout(
-          `
-          <p style="margin:0 0 6px;font-size:20px;font-weight:700;">${late ? "A gentle reminder" : "Payment due soon"}</p>
-          <p class="body" style="margin:0 0 18px;color:#41485a;">Hi ${inv.billToName || "there"}, invoice <strong>${inv.number}</strong> is ${stage.label}. ${
-            late ? "If you've already sent it across, thank you — please ignore this note." : "Here are the details."
-          }</p>
-          ${emailDetailRows([
+      await sendTemplate(
+        "notice",
+        {
+          subject: late ? `Reminder: invoice ${inv.number} is ${stage.label}` : `Invoice ${inv.number} is ${stage.label}`,
+          preheader: `Invoice ${inv.number} is ${stage.label}: ${formatMoney(outstanding, inv.currency)} outstanding.`,
+          heading: late ? "A gentle reminder" : "Payment due soon",
+          name: inv.billToName,
+          paragraphs: [`Invoice **${inv.number}** is ${stage.label}. ${late ? "If you have already paid, thank you, and please ignore this note." : "Here are the details."}`],
+          rows: [
             { label: "Invoice", value: inv.number },
             ...(inv.projectTitle ? [{ label: "Project", value: inv.projectTitle }] : []),
-            { label: "Due", value: inv.dueDate },
+            { label: "Due", value: String(inv.dueDate) },
             { label: "Amount outstanding", value: formatMoney(outstanding, inv.currency), strong: true },
-          ])}
-          <p style="margin:18px 0 12px;">${emailButton(payUrl, "View & pay invoice", EMAIL_ICONS.arrow)}</p>
-        `,
-          { preheader: `Invoice ${inv.number} is ${stage.label} — ${formatMoney(outstanding, inv.currency)} outstanding.` },
-        ),
-      });
+          ],
+          cta: { label: "View and pay", href: payUrl },
+          why: "You got this because an invoice addressed to you is due or past due. Payment emails always send.",
+        },
+        { to: inv.billToEmail, audience: "client", dedupeKey: `invoice-stage:${inv.id}:${stage.key}` },
+      );
 
       await recordAudit({
         actorName: "System",

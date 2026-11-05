@@ -79,13 +79,20 @@ export async function replyTicketAction(id: string, body: string, notify = true)
   let note: string | undefined;
   if (notify && t.requesterEmail) {
     try {
-      const { sendEmail, emailLayout } = await import("@/lib/email");
-      const html = emailLayout(`
-        <p style="margin:0 0 14px;">Hi ${t.requesterName || "there"},</p>
-        <p style="margin:0 0 18px;white-space:pre-line;">${body.trim().replace(/</g, "&lt;")}</p>
-        <p style="margin:0;color:#5b6474;font-size:13px;">Re: ${t.subject} · ${t.number}</p>
-      `);
-      const { delivered } = await sendEmail({ to: t.requesterEmail, subject: `Re: ${t.subject} [${t.number}]`, html });
+      const { sendTemplate } = await import("@/lib/email-templates");
+      const { delivered } = await sendTemplate(
+        "notice",
+        {
+          subject: `Re: ${t.subject} [${t.number}]`,
+          heading: `Re: ${t.subject}`,
+          name: t.requesterName,
+          paragraphs: [body.trim()],
+          rows: [{ label: "Ticket", value: t.number }],
+          cta: { label: "Open the conversation", href: "/dashboard/support" },
+          why: `You got this because you asked Litch Consulting for help (${t.number}). Reply in your dashboard to keep the thread together.`,
+        },
+        { to: t.requesterEmail, audience: "client" },
+      );
       if (!delivered) note = "Reply saved (email not configured).";
     } catch {
       note = "Reply saved (email failed to send).";

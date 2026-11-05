@@ -6,6 +6,7 @@ import { AuthHeading } from "@/components/auth/ui";
 import { InviteAcceptForm } from "@/components/auth/invite-accept-form";
 import { invitationForToken, COLLEAGUE_ACCESS, type ColleagueAccess } from "@/lib/invitations";
 import { getAuthSession } from "@/lib/server-user";
+import { REASON } from "./accept-lib";
 
 export const metadata: Metadata = { title: "Your invitation", robots: { index: false, follow: false } };
 export const dynamic = "force-dynamic";
@@ -15,8 +16,11 @@ export const dynamic = "force-dynamic";
  * expired, already used, withdrawn, and a link we don't recognise. Nothing is
  * created until the form is submitted.
  */
-export default async function InvitePage({ params }: { params: Promise<{ token: string }> }) {
+export default async function InvitePage({ params, searchParams }: { params: Promise<{ token: string }>; searchParams: Promise<{ error?: string | string[] }> }) {
   const { token } = await params;
+  const raw = (await searchParams).error;
+  // Better Auth appends its own ?error= to the error callback, so it can repeat.
+  const error = Array.isArray(raw) ? raw[0] : raw;
   const inv = await invitationForToken(token).catch(() => null);
   const inviter = inv?.inviterName || inv?.inviterEmail || "Litch Consulting";
   const firm = inv && inv.role !== "client";
@@ -83,6 +87,13 @@ export default async function InvitePage({ params }: { params: Promise<{ token: 
         expiresAt={inv.expiresAt.toISOString()}
         firm={Boolean(firm)}
         googleEnabled={Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)}
+        initialError={
+          error === "mismatch" || error === "google"
+            ? `This invitation is for ${inv.email}. Sign in with that Google account, or use a password.`
+            : error && error in REASON
+              ? REASON[error as keyof typeof REASON]
+              : null
+        }
       />
     </AuthShell>
   );
