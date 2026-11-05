@@ -1,0 +1,83 @@
+name: CI
+
+# Checks for every push and pull request. Deployment stays in
+# vercel-deploy.yml; this workflow only says whether the code is sound.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (types, lint, tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      # Errors fail the job; warnings are reported but do not.
+      - name: Lint
+        run: npx eslint . --max-warnings=-1
+
+      - name: Unit tests
+        run: npx vitest run
+
+  backend:
+    name: Backend (LitchAI tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      # The golden-fixture suite recomputes workbooks with headless LibreOffice.
+      - name: LibreOffice (Calc, headless)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends libreoffice-calc-nogui
+
+      - name: Install
+        run: pip install -e "backend[dev]"
+
+      # Gate on real errors only (syntax, undefined names, invalid comparisons).
+      # The wider style backlog is reported in the log but does not fail CI.
+      - name: Ruff (errors)
+        working-directory: backend
+        run: ruff check --select E9,F63,F7,F82 src tests
+
+      - name: Ruff (full report, non-blocking)
+        working-directory: backend
+        continue-on-error: true
+        run: ruff check src tests --statistics
+
+      - name: Tests
+        working-directory: backend
+        run: pytest -q

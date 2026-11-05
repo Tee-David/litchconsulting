@@ -9,6 +9,8 @@ import { PageHero } from "@/components/ui/page-hero";
 import { Contact } from "@/components/sections/contact";
 import { insights } from "@/lib/content";
 import { getAllInsights } from "@/lib/insights";
+import { JsonLd } from "@/components/seo/json-ld";
+import { breadcrumbLd } from "@/lib/seo/jsonld";
 
 export const metadata: Metadata = {
   title: "Insights",
@@ -29,6 +31,7 @@ export default async function InsightsPage() {
     <>
       <Header overlay />
       <main className="flex-1">
+        <JsonLd data={breadcrumbLd([["Insights", "/insights"]])} />
         <PageHero
           eyebrow={insights.eyebrow}
           title="Finance, tax and advisory; clearly explained."

@@ -10,8 +10,8 @@
 ![Recharts](https://img.shields.io/badge/Recharts-charts-FF6384?style=flat-square)
 ![Vercel](https://img.shields.io/badge/Vercel-deploy-000000?logo=vercel&style=flat-square)
 
-The Litch Consulting web platform: a marketing site, a role-gated admin dashboard, and a client
-portal — one full-stack Next.js application. There is **no separate API server**; reads are React
+The Litch Consulting web platform: a marketing site, an admin dashboard (`/admin`), a staff
+workspace (`/work`) and a client portal (`/dashboard`) — one full-stack Next.js application. There is **no separate API server**; reads are React
 Server Components querying Drizzle directly, and writes are server actions.
 
 ---
@@ -33,14 +33,41 @@ A split-view builder (`components/admin/invoice/invoice-builder.tsx`) drives a l
 Money totals are **always recomputed server-side** in `lib/invoice/money.ts` — never trusted from
 the client.
 
+### Roles and access
+Three roles: `admin` (everything), `staff` (only requests assigned to them through
+`request_assignment`, never money amounts) and `client` (their own company). `lib/access.ts` is
+the single access map (`canAccess`, `accessMatrix`, `homeFor`); `lib/server-user.ts` enforces it
+(`requireArea`, `hasAccess`, `canWorkOnRequest`). Settings → Team and access renders the same map.
+
+### Sign-in, two-step and invitations
+- Self sign-up always makes a client. Staff, admins and client colleagues arrive by invitation
+  (`lib/invitations.ts`, `/invite/[token]`): a single-use 32-byte token stored only as a hash,
+  7 days, the email fixed by the invitation (Google sign-in must use that email).
+- Two-step sign-in (Better Auth `twoFactor`) is **required for admin and staff and enforced on the
+  server**: a firm session without an authenticator, or one that has not passed the code
+  (`session_two_step`), counts as signed out until it does (`/account/two-step`). Admins can reset
+  someone's two-step from Team and access. Optional for clients.
+- Every sign-in finishes at `/account/continue`, which picks the right door per role, claims a
+  service chosen before sign-up (`request_draft`), and shows the first-run welcome once.
+- `/account/security`: devices (sign one out or all others), password, two-step, sign-in history.
+
 ### Admin dashboard
-Requests pipeline, clients, finance (invoices, quotes, receipts, accounting, calculators, models
-at `finance/tools`), reports, blog, templates, Analyses (documents, editor, observability),
-integrations, notifications, help desk, audit log, trash, and settings.
+Home (what needs you), requests (views incl. Unassigned, bulk assign), clients (privacy tab with
+AI mode and NDPA erasure), billing (quotes, invoices, receipts, payments with transfer proofs,
+expenses, tools), the Analyses workbench, Sage, help desk, reports, website content, audit log,
+trash and settings (firm and users, team and access, notifications, backups with a restore test,
+privacy register, integrations).
+
+### Staff workspace (`/work`)
+My work, my requests, files (the workbench for assigned files), conversations and notifications.
+
+### Client portal (`/dashboard`)
+Home (what needs you), requests with asks and draft review, quotes (one-click accept), billing
+and pay (card or transfer proof, deposits), files, support, notifications and settings.
 
 ### Sage
 `/admin/sage` is a grounded admin assistant. The page calls the `/api/sage` relay, which
-is `isAdmin()`-guarded and forwards to the LitchAI backend's `POST /assistant/chat` over a
+is admin-guarded and forwards to the LitchAI backend's `POST /assistant/chat` over a
 Cloudflare Access service token. Answers carry citations; **write actions arrive as proposals**
 that a human confirms before `app/admin/sage/actions.ts` executes them (audit-logged). All LitchAI
 features are gated on `LITCHAI_API_URL` being set — without it, the rest of the app is unaffected.
@@ -68,7 +95,8 @@ clients, requests and invoices (`app/admin/command-actions.ts`, admin-guarded).
 the trail.
 
 ### Backups
-`/api/cron/backup` dumps CockroachDB to the **private** R2 bucket with rotation. The Settings page
+`/api/cron/backup` writes a JSON snapshot of the business tables to the **private** R2 bucket
+(the Better Auth tables are not included). Old copies are not rotated automatically yet. The Settings page
 carries a Backups card (`app/admin/settings/backups-card.tsx`) for on-demand runs and downloads,
 which reuses `CRON_SECRET`.
 
@@ -76,10 +104,29 @@ which reuses `CRON_SECRET`.
 `/api/cron/digest` emails clients a weekly summary each Monday. Clients opt out from
 `/dashboard/settings` (`client.digest_opt_out`).
 
-### Guided tours
+### Guided tours and onboarding
 A tour engine in `components/tour/*` — registry, route matching, target waiting, an animated
 launcher, a cross-page walkthrough controller, and confetti on completion, reduced-motion aware
-throughout. Anchors are `data-tour` attributes; providers mount in both the admin and client shells.
+throughout. Anchors are `data-tour` attributes; providers mount in the admin, staff and client
+shells, and completion is stored per user and tour version (`user_onboarding.tours`). A per-role
+getting-started checklist (`components/access/onboarding.tsx`) sits on each home until done.
+
+### Emails
+Every email is a template in `lib/email-templates.ts`: audience, merge tags, a "why you got
+this" footer, a link to the matching notification setting and a signed one-click unsubscribe
+(`/unsubscribe`) where the category allows it. Everything is escaped; builders take plain text.
+All sends go through the outbox in `lib/email.ts` (`email_outbox`, retried by the outbox cron).
+
+### Privacy (NDPA)
+A cookie notice (`components/consent/*`, choice in the `litch_consent` cookie, re-opened from the
+footer): only strictly necessary cookies; the Cal.com calendar loads only after consent. The
+privacy policy lives in `lib/content.ts`; the record of processing is `lib/privacy/register.ts`,
+shown at `/admin/settings/privacy`.
+
+### SEO
+JSON-LD (`lib/seo/jsonld.ts`): ProfessionalService on the home page, Service and FAQPage on
+service pages, Article on insights and case studies, BreadcrumbList throughout. `app/sitemap.ts`
+lists every service, request page, insight, case study and legal page with real lastModified dates.
 
 ### Help desk
 A three-pane admin help desk at `/admin/help-desk` (list / thread / details, with progress
@@ -92,14 +139,17 @@ timeline, tags, team and type), paired with a client Help & Support hub at `/das
 ```
 frontend/
 ├── src/app/
-│   ├── (auth)/                Login, signup, verification
-│   ├── admin/                 Admin dashboard (isAdmin()-gated in layout.tsx)
+│   ├── (auth)/                Sign in, sign up, verify, reset, unsubscribe
+│   ├── account/               continue (post sign-in router), security, two-step, welcome
+│   ├── invite/[token]/        Accept an invitation (password or Google)
+│   ├── work/                  Staff workspace
+│   ├── admin/                 Admin dashboard (requireArea-gated in layout.tsx)
 │   │   ├── sage/              Sage chat UI + history + confirm-gated actions
 │   │   ├── audit/             Audit log viewer
-│   │   ├── clients/ requests/ finance/ reports/ blog/ templates/
-│   │   ├── help-desk/ integrations/ litchai/ notifications/ settings/ trash/
+│   │   ├── clients/ requests/ billing/ analyses/ reports/ blog/ services/
+│   │   ├── help-desk/ notifications/ settings/ (access, backups, privacy, integrations) trash/
 │   │   └── command-actions.ts ⌘K cross-entity search (server action)
-│   ├── dashboard/             Client portal (invoices, requests, support, settings)
+│   ├── dashboard/             Client portal (requests, quotes, billing, files, support, settings)
 │   ├── api/                   sage, cron/*, paystack, calcom, push, upload, contact …
 │   ├── i/[token]/             Public pay page
 │   ├── calculators/           Public Nigerian tax calculators
@@ -112,13 +162,16 @@ frontend/
 │   ├── calculators/           Public calculator UIs
 │   └── layout/ sections/      Marketing chrome and page sections
 ├── src/lib/
-│   ├── auth.ts server-user.ts Better Auth + getSessionUser/isAdmin
+│   ├── access.ts              Roles and the access map
+│   ├── auth.ts server-user.ts Better Auth (+ twoFactor) and the server guards
+│   ├── two-step.ts invitations.ts onboarding.ts email-templates.ts
 │   ├── db/                    schema.ts, client.ts, queries/*
 │   ├── invoice/               money.ts, pdf/ (InvoiceDocument, render, Noto Sans fonts)
 │   ├── litchai/               client.ts (Access service token), blind-relay.ts
 │   ├── tax/                   nigeria-tax-config.json — the single source of rates
 │   ├── audit.ts email.ts r2.ts
-│   └── emails/                digest.ts, requests.ts
+│   ├── privacy/ seo/          Processing register, erasure; JSON-LD builders
+│   └── emails/                requests.ts (request lifecycle, via email-templates)
 ├── scripts/                   apply-schema, seed-users, vercel-sync-env, inspect-db
 └── certs/cockroach-ca.crt     CockroachDB cluster CA
 ```
@@ -129,11 +182,13 @@ frontend/
 
 **Reads** — admin pages are RSCs querying Drizzle directly (`lib/db/queries/*`).
 
-**Writes** — server actions (`app/admin/**/actions.ts`), each guarded by `isAdmin()`.
+**Writes** — server actions, each re-checking access on the server (`requireArea`/`hasAccess`, or
+the admin `actor(area)` guard).
 
-**Auth** — Better Auth (`lib/auth.ts`), roles `admin | client` on the session user.
-`lib/server-user.ts` exposes `getSessionUser`/`isAdmin`. The admin gate lives in
-`app/admin/layout.tsx`; `/dashboard` redirects admins to `/admin`.
+**Auth** — Better Auth (`lib/auth.ts`), roles `admin | staff | client` on the session user
+(server-only field). `lib/server-user.ts` exposes `getSessionUser`, `requireArea`, `hasAccess`,
+`canWorkOnRequest` and the two-step hold. Each shell's layout guards its role and sends anyone
+else to their own home (`homeFor`).
 
 > Better Auth **owns and creates** the `user` table. `schema.ts` carries a read/admin **mapping**
 > of it for settings user management — never create or migrate `user` via `apply-schema.ts`, and
@@ -142,7 +197,11 @@ frontend/
 **Schema** (`lib/db/schema.ts`) — `lead`, `client`, `invoice`, `invoice_item`, `expense`,
 `payment`, `post`, `template`, `ticket`, `ticket_message`, `service_offering`, `service_request`,
 `service_request_event`, `service_request_document`, `consultation`, `client_note`, `audit_log`,
-`push_subscription`, `org_settings`, plus the Better Auth `user` mapping.
+`push_subscription`, `org_settings`, `invitation`, `client_member`, `request_assignment`,
+`request_item`, `review_round`, `notification`, `notification_pref`, `request_draft`,
+`user_onboarding`, `session_two_step`, `email_outbox`, `rate_limit`, plus the Better Auth `user`
+mapping. Better Auth's `twoFactor` table and `user.twoFactorEnabled` column are created by
+`apply-schema.ts` (additive).
 
 **Storage** — Cloudflare R2. The public bucket serves assets; `R2_PRIVATE_BUCKET` holds client
 financial documents and deliverables, reachable only via ownership-checked presigned URLs. Backups
@@ -160,7 +219,7 @@ compilers both read it. **Never hardcode a rate.**
 ## Getting started
 
 ### Prerequisites
-- Node.js 20+
+- Node.js 24 (CI uses 24)
 - Access to the CockroachDB cluster (or a Postgres-compatible equivalent)
 
 ### Installation
@@ -188,14 +247,17 @@ Next reads `frontend/.env*`, so **local dev uses `frontend/.env.local`**. Secret
 | `R2_ACCOUNT_ID` / `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY` | Cloudflare R2 credentials |
 | `R2_BUCKET_NAME` / `R2_PUBLIC_DOMAIN` | Public bucket for assets |
 | `R2_PRIVATE_BUCKET` | Private bucket — client documents, deliverables, backups |
-| `PAYSTACK_SECRET_KEY` / `PAYSTACK_PUBLIC_KEY` | Payments (redirect flow) |
+| `PAYSTACK_MODE` (`test` \| `live`) | Picks the key pair below |
+| `PAYSTACK_TEST_SECRET_KEY` / `PAYSTACK_TEST_PUBLIC_KEY` / `PAYSTACK_LIVE_SECRET_KEY` / `PAYSTACK_LIVE_PUBLIC_KEY` | Payments (legacy `PAYSTACK_SECRET_KEY` / `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` still read) |
+| `NEXT_PUBLIC_TURNSTILE_SITE_KEY` / `TURNSTILE_SECRET_KEY` | Cloudflare Turnstile on public forms (skipped when unset) |
 | `NEXT_PUBLIC_SITE_URL` | Canonical origin for pay links, emails, OG tags |
 | `INVOICE_FROM_EMAIL` / `INVOICE_BANK_NAME` / `INVOICE_ACCOUNT_NAME` / `INVOICE_ACCOUNT_NUMBER` | Issuer details on invoices/receipts (optional overrides) |
 | `NEXT_PUBLIC_CALCOM_LINK` / `CALCOM_WEBHOOK_SECRET` | Cal.com booking |
 | `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` | Admin web push (`npx web-push generate-vapid-keys`) |
 | `CRON_SECRET` | Guards `/api/cron/*` and manual "Back up now" |
 | `LITCHAI_API_URL` | LitchAI base URL — LitchAI features are gated on this |
-| `LITCHAI_PUBLIC_KEY` | Blind-relay envelope encryption key |
+| `LITCHAI_PUBLIC_KEY` | Blind-relay envelope encryption key (PEM; 
+ escapes allowed) |
 | `LITCHAI_ACCESS_CLIENT_ID` / `LITCHAI_ACCESS_CLIENT_SECRET` | Cloudflare Access service token |
 
 ### Seeded accounts
@@ -204,7 +266,8 @@ Next reads `frontend/.env*`, so **local dev uses `frontend/.env.local`**. Secret
 node --env-file=.env.local --import tsx scripts/seed-users.ts
 ```
 
-Admins land on `/admin`, clients on `/dashboard`.
+Admins land on `/admin`, staff on `/work`, clients on `/dashboard` (after two-step setup for admin
+and staff).
 
 ---
 
@@ -215,6 +278,7 @@ Admins land on `/admin`, clients on `/dashboard`.
 | `npm run dev` | Next dev server on port 3000 |
 | `npm run build` / `npm start` | Production build / serve |
 | `npm run lint` | ESLint |
+| `npm test` | Vitest unit tests (`src/**/*.test.ts`) |
 | `npm run db:generate` | Generate Drizzle migration SQL |
 | `npm run auth:migrate` | Migrate Better Auth tables (its own CLI) |
 | `node --env-file=.env.local --import tsx scripts/apply-schema.ts` | **Apply schema** — see below |

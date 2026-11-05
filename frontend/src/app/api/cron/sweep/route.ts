@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { and, eq, isNotNull, isNull, lt } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lt } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import {
   payment,
   serviceRequest,
   client,
   serviceRequestEvent,
+  serviceRequestDocument,
   invoice,
   ticket,
 } from "@/lib/db/schema";
@@ -27,6 +28,7 @@ export const dynamic = "force-dynamic";
  * 4. Trash purge — rows soft-deleted more than 30 days ago are hard-deleted
  *    (except erased clients: their anonymous row anchors the kept finance records).
  * 5. NDPA erasures whose 30-day hold has passed are carried out.
+ * 6. Uploads not yet virus-scanned are scanned (lib/uploads/scan.ts).
  */
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
@@ -39,7 +41,7 @@ export async function GET(req: Request) {
   const dayAgo = new Date(now - 24 * 60 * 60 * 1000);
   const twoDaysAgo = new Date(now - 48 * 60 * 60 * 1000);
   const thirtyDaysAgo = new Date(now - 30 * 24 * 60 * 60 * 1000);
-  const summary = { abandoned: 0, nudged: 0, quoteReminders: 0, purged: 0, erased: 0, erasureFailures: 0, rateLimitRows: 0 };
+  const summary = { abandoned: 0, nudged: 0, quoteReminders: 0, purged: 0, erased: 0, erasureFailures: 0, scanned: { done: 0, infected: 0 }, rateLimitRows: 0 };
 
   // 1. Stale checkout attempts.
   const stale = await db
@@ -166,7 +168,28 @@ export async function GET(req: Request) {
     }).catch(() => {});
   }
 
-  // 6. Expired rate-limit windows.
+  // 6. Virus-scan uploads nobody has opened yet (they are scanned on first open
+  //    too). Bounded so the cron stays inside its time budget.
+  const { scannerConfigured, ensureDocumentScanned, ensureProofScanned } = await import("@/lib/uploads/scan");
+  if (scannerConfigured()) {
+    const docs = await db
+      .select({ id: serviceRequestDocument.id, requestId: serviceRequestDocument.requestId, r2Key: serviceRequestDocument.r2Key, fileName: serviceRequestDocument.fileName, scanStatus: serviceRequestDocument.scanStatus })
+      .from(serviceRequestDocument)
+      .where(inArray(serviceRequestDocument.scanStatus, ["unscanned", "error"]))
+      .limit(25);
+    for (const d of docs) summary.scanned[(await ensureDocumentScanned(d)) === "infected" ? "infected" : "done"]++;
+    const proofs = await db
+      .select({ id: payment.id, proofKey: payment.proofKey, proofFileName: payment.proofFileName, proofScanStatus: payment.proofScanStatus })
+      .from(payment)
+      .where(and(isNotNull(payment.proofKey), inArray(payment.proofScanStatus, ["unscanned", "error"])))
+      .limit(10);
+    for (const p of proofs) {
+      if (!p.proofKey) continue;
+      summary.scanned[(await ensureProofScanned({ ...p, proofKey: p.proofKey })) === "infected" ? "infected" : "done"]++;
+    }
+  }
+
+  // 7. Expired rate-limit windows.
   summary.rateLimitRows = await sweepRateLimits().catch(() => 0);
 
   return NextResponse.json({ ok: true, ...summary });

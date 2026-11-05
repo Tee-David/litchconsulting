@@ -16,12 +16,16 @@ import { CaseStudies } from "@/components/sections/case-studies";
 import { Insights } from "@/components/sections/insights";
 import { Faq } from "@/components/sections/faq";
 import { Contact } from "@/components/sections/contact";
+import { JsonLd } from "@/components/seo/json-ld";
+import { faqs } from "@/lib/content";
+import { faqLd, organizationLd, websiteLd } from "@/lib/seo/jsonld";
 
 export default function Home() {
   return (
     <>
       <Header overlay />
       <main className="flex-1">
+        <JsonLd data={[organizationLd(), websiteLd(), faqLd(faqs)]} />
         <Hero />
         <ValueCards />
         <BuiltFor />

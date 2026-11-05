@@ -67,7 +67,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
         kind: d.kind,
         sizeBytes: d.sizeBytes,
         uploadedAt: d.createdAt,
-        downloadUrl: await presignPrivateGet(d.r2Key, { downloadName: d.fileName, expiresIn: 24 * 3600 }).catch(() => null),
+        // Never hand out a link to a file the virus scan blocked.
+        downloadUrl: d.scanStatus === "infected" ? null : await presignPrivateGet(d.r2Key, { downloadName: d.fileName, expiresIn: 24 * 3600 }).catch(() => null),
       })),
     );
   } catch {

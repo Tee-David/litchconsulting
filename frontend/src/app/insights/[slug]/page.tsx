@@ -9,6 +9,8 @@ import { PageHero } from "@/components/ui/page-hero";
 import { Contact } from "@/components/sections/contact";
 import { InsightBody } from "@/components/insights/insight-body";
 import { getAllInsights, getInsight } from "@/lib/insights";
+import { JsonLd } from "@/components/seo/json-ld";
+import { articleLd, breadcrumbLd } from "@/lib/seo/jsonld";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +57,7 @@ export default async function InsightPage({
     <>
       <Header overlay />
       <main className="flex-1">
+        <JsonLd data={[articleLd({ ...post, section: post.tag }), breadcrumbLd([["Insights", "/insights"], [post.title, `/insights/${post.slug}`]])]} />
         <PageHero
           eyebrow={post.tag}
           title={post.title}

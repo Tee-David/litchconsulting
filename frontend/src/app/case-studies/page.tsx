@@ -8,6 +8,8 @@ import { Section, SectionHeading } from "@/components/ui/primitives";
 import { PageHero } from "@/components/ui/page-hero";
 import { Contact } from "@/components/sections/contact";
 import { caseStudies, caseStudyDetails } from "@/lib/content";
+import { JsonLd } from "@/components/seo/json-ld";
+import { breadcrumbLd } from "@/lib/seo/jsonld";
 
 export const metadata: Metadata = {
   title: "Case Studies",
@@ -19,6 +21,7 @@ export default function CaseStudiesPage() {
     <>
       <Header overlay />
       <main className="flex-1">
+        <JsonLd data={breadcrumbLd([["Case studies", "/case-studies"]])} />
         <PageHero
           eyebrow="Case studies"
           title="Real engagements, measurable outcomes."
