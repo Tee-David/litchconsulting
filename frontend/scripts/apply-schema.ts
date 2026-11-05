@@ -427,6 +427,17 @@ export const STATEMENTS = [
   `ALTER TABLE "client" ADD COLUMN IF NOT EXISTS "erasure_requested_at" timestamp with time zone`,
   `ALTER TABLE "client" ADD COLUMN IF NOT EXISTS "erasure_requested_by" text`,
   `ALTER TABLE "client" ADD COLUMN IF NOT EXISTS "erased_at" timestamp with time zone`,
+  // R5 workbench: our link from a LitchAI workbench conversation to its request
+  // (access checks for staff) and who started it.
+  `CREATE TABLE IF NOT EXISTS "workbench_conversation" (
+    "id" text PRIMARY KEY NOT NULL,
+    "request_id" uuid,
+    "client_id" uuid,
+    "title" text NOT NULL,
+    "created_by" text NOT NULL,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT now() NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS "workbench_conversation_request_idx" ON "workbench_conversation" ("request_id")`,
 ];
 
 /**

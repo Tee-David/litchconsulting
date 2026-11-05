@@ -19,6 +19,19 @@ function requireEnv(name: string): string {
   return value;
 }
 
+/** Raw authenticated call (streams, binary downloads, status-aware callers). */
+export function litchaiRaw(path: string, init?: RequestInit): Promise<Response> {
+  return fetch(new URL(path, requireEnv("LITCHAI_API_URL")), {
+    ...init,
+    headers: {
+      ...(init?.headers ?? {}),
+      "CF-Access-Client-Id": requireEnv("LITCHAI_ACCESS_CLIENT_ID"),
+      "CF-Access-Client-Secret": requireEnv("LITCHAI_ACCESS_CLIENT_SECRET"),
+    },
+    cache: "no-store",
+  });
+}
+
 async function litchai<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(new URL(path, requireEnv("LITCHAI_API_URL")), {
     ...init,

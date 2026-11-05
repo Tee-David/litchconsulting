@@ -840,6 +840,25 @@ export const sessionTwoStep = pgTable(
   (t) => [index("session_two_step_user_idx").on(t.userId)]
 );
 
+/**
+ * R5 workbench: one row per LitchAI workbench conversation, linking it to the
+ * request it works on (staff access = canWorkOnRequest on request_id). The
+ * thread, workbooks and proposals themselves live on the analysis server.
+ */
+export const workbenchConversation = pgTable(
+  "workbench_conversation",
+  {
+    id: text("id").primaryKey(), // the LitchAI conversation id (wb-…)
+    requestId: uuid("request_id"),
+    clientId: uuid("client_id"),
+    title: text("title").notNull(),
+    createdBy: text("created_by").notNull(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("workbench_conversation_request_idx").on(t.requestId)]
+);
+
 export type Client = typeof client.$inferSelect;
 export type Invoice = typeof invoice.$inferSelect;
 export type InvoiceItem = typeof invoiceItem.$inferSelect;
@@ -870,3 +889,4 @@ export type NotificationPref = typeof notificationPref.$inferSelect;
 export type RequestDraft = typeof requestDraft.$inferSelect;
 export type ClientMember = typeof clientMember.$inferSelect;
 export type UserOnboarding = typeof userOnboarding.$inferSelect;
+export type WorkbenchConversation = typeof workbenchConversation.$inferSelect;

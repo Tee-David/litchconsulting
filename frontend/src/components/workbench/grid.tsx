@@ -1,0 +1,311 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AlertCircle, Loader2 } from "lucide-react";
+import type { WbCell, WbSheetWindow } from "@/lib/litchai/workbench";
+import { colLetter, type Range, inRange } from "./refs";
+import { cn } from "@/lib/utils";
+
+const ROW_H = 28;
+const HEAD_H = 28;
+const ROWNUM_W = 52;
+const BLOCK = 100;
+const MAX_COLS = 60;
+
+type Block = { cells: Map<string, WbCell> };
+export type GridMeta = { maxRow: number; maxCol: number; sheets: string[] };
+
+/**
+ * A virtualised read view of one sheet, fed in 100-row blocks by the
+ * analysis server. Only the visible rows are in the DOM, so a 40,000-row
+ * ledger scrolls like a 40-row one. Pending proposals are coloured (green new,
+ * amber changed); AI-chosen ranges and citations get an outline.
+ */
+export function Grid({
+  conversationId,
+  workbookId,
+  sheet,
+  version,
+  highlights,
+  focus,
+  selection,
+  onSelect,
+  onCell,
+  onMeta,
+}: {
+  conversationId: string;
+  workbookId: string;
+  sheet: string;
+  /** Bump to refetch (after accept / undo / a new proposal). */
+  version: number;
+  highlights: Range[];
+  focus: { r: number; c: number; nonce: number } | null;
+  selection: Range | null;
+  onSelect: (r: Range | null) => void;
+  onCell: (cell: WbCell | null, at: { r: number; c: number }, rect: DOMRect | null) => void;
+  onMeta?: (m: GridMeta) => void;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  const [blocks, setBlocks] = useState<Map<number, Block>>(new Map());
+  const [meta, setMeta] = useState<GridMeta | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState({ top: 0, height: 600 });
+  const loading = useRef(new Set<number>());
+  const drag = useRef<{ r: number; c: number } | null>(null);
+  const [active, setActive] = useState<{ r: number; c: number } | null>(null);
+  const key = `${conversationId}|${workbookId}|${sheet}|${version}`;
+  const keyRef = useRef(key);
+
+  const load = useCallback(
+    async (b: number) => {
+      if (loading.current.has(b)) return;
+      loading.current.add(b);
+      const want = keyRef.current;
+      const r0 = b * BLOCK + 1;
+      try {
+        const qs = new URLSearchParams({ wb: workbookId, sheet, r0: String(r0), r1: String(r0 + BLOCK - 1), c0: "1", c1: String(MAX_COLS) });
+        const res = await fetch(`/api/workbench/${conversationId}/cells?${qs}`, { cache: "no-store" });
+        const body = (await res.json()) as WbSheetWindow & { error?: string };
+        if (want !== keyRef.current) return;
+        if (!res.ok) throw new Error(body.error || "This sheet could not be read.");
+        const cells = new Map<string, WbCell>();
+        for (const c of body.cells) cells.set(`${c.r}:${c.c}`, c);
+        setBlocks((prev) => new Map(prev).set(b, { cells }));
+        const m = { maxRow: Math.max(1, body.max_row), maxCol: Math.max(1, Math.min(MAX_COLS, body.max_col)), sheets: body.sheets };
+        setMeta(m);
+        onMeta?.(m);
+        setError(null);
+      } catch (e) {
+        if (want === keyRef.current) setError(e instanceof Error ? e.message : "This sheet could not be read.");
+      } finally {
+        loading.current.delete(b);
+      }
+    },
+    [conversationId, workbookId, sheet, onMeta],
+  );
+
+  // New sheet / version → drop the cache and read from the top.
+  useEffect(() => {
+    keyRef.current = key;
+    loading.current.clear();
+    setBlocks(new Map());
+    setError(null);
+    setMeta(null);
+    void load(0);
+  }, [key, load]);
+
+  const maxRow = meta?.maxRow ?? 0;
+  const maxCol = Math.max(meta?.maxCol ?? 0, 6);
+  const first = Math.max(1, Math.floor((view.top - HEAD_H) / ROW_H) - 10);
+  const last = Math.min(maxRow, Math.ceil((view.top + view.height) / ROW_H) + 10);
+
+  useEffect(() => {
+    if (!meta) return;
+    for (let b = Math.floor((first - 1) / BLOCK); b <= Math.floor((last - 1) / BLOCK); b++) {
+      if (!blocks.has(b)) void load(b);
+    }
+  }, [first, last, meta, blocks, load]);
+
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const sync = () => setView({ top: el.scrollTop, height: el.clientHeight });
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const cellAt = useCallback(
+    (r: number, c: number) => blocks.get(Math.floor((r - 1) / BLOCK))?.cells.get(`${r}:${c}`) ?? null,
+    [blocks],
+  );
+
+  // Column widths from what is loaded (headers and the first rows).
+  const widths = useMemo(() => {
+    const w: number[] = [];
+    const b0 = blocks.get(0);
+    for (let c = 1; c <= maxCol; c++) {
+      let n = 4;
+      for (let r = 1; r <= Math.min(40, maxRow); r++) {
+        const v = b0?.cells.get(`${r}:${c}`)?.v;
+        if (v !== null && v !== undefined) n = Math.max(n, String(typeof v === "number" ? v.toLocaleString("en-NG", { maximumFractionDigits: 2 }) : v).length);
+      }
+      w.push(Math.max(72, Math.min(300, n * 7.4 + 22)));
+    }
+    return w;
+  }, [blocks, maxCol, maxRow]);
+  const left = useMemo(() => {
+    const out = [ROWNUM_W];
+    widths.forEach((w) => out.push(out[out.length - 1] + w));
+    return out;
+  }, [widths]);
+
+  // Jump to a cited cell.
+  useEffect(() => {
+    const el = box.current;
+    if (!focus || !el) return;
+    const y = HEAD_H + (focus.r - 1) * ROW_H;
+    const x = left[focus.c - 1] ?? 0;
+    el.scrollTo({ top: Math.max(0, y - el.clientHeight / 3), left: Math.max(0, x - ROWNUM_W - 40), behavior: "smooth" });
+    setActive({ r: focus.r, c: focus.c });
+  }, [focus, left]);
+
+  const rangeFrom = (a: { r: number; c: number }, b: { r: number; c: number }): Range => ({
+    sheet,
+    r0: Math.min(a.r, b.r),
+    r1: Math.max(a.r, b.r),
+    c0: Math.min(a.c, b.c),
+    c1: Math.max(a.c, b.c),
+  });
+
+  const pick = (r: number, c: number, e: React.MouseEvent) => {
+    const anchor = e.shiftKey && active ? active : { r, c };
+    if (!e.shiftKey) setActive({ r, c });
+    drag.current = anchor;
+    onSelect(rangeFrom(anchor, { r, c }));
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    onCell(cellAt(r, c), { r, c }, rect);
+  };
+
+  const onKey = (e: React.KeyboardEvent) => {
+    if (!active) return;
+    const d: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+    const step = d[e.key];
+    if (!step) return;
+    e.preventDefault();
+    const next = { r: Math.min(Math.max(1, active.r + step[0]), Math.max(1, maxRow)), c: Math.min(Math.max(1, active.c + step[1]), maxCol) };
+    const anchor = e.shiftKey && selection ? { r: selection.r0 === active.r ? selection.r1 : selection.r0, c: selection.c0 === active.c ? selection.c1 : selection.c0 } : next;
+    setActive(next);
+    onSelect(rangeFrom(e.shiftKey ? anchor : next, next));
+    onCell(cellAt(next.r, next.c), next, null);
+    const el = box.current;
+    if (el) {
+      const y = HEAD_H + (next.r - 1) * ROW_H;
+      if (y < el.scrollTop + HEAD_H) el.scrollTop = y - HEAD_H;
+      else if (y + ROW_H > el.scrollTop + el.clientHeight) el.scrollTop = y + ROW_H - el.clientHeight;
+    }
+  };
+
+  if (error && !meta) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+        <AlertCircle className="size-6 text-bad" aria-hidden />
+        <p className="max-w-sm text-sm text-body">{error}</p>
+        <button type="button" onClick={() => void load(0)} className="rounded-ctl border border-hairline px-3 py-1.5 text-sm font-medium text-ink hover:bg-cloud">
+          Try again
+        </button>
+      </div>
+    );
+  }
+  if (!meta) {
+    return (
+      <div className="flex h-full items-center justify-center gap-2 text-sm text-muted" role="status">
+        <Loader2 className="size-4 animate-spin" aria-hidden /> Reading {sheet}…
+      </div>
+    );
+  }
+
+  const totalW = left[left.length - 1];
+  const rows: number[] = [];
+  for (let r = first; r <= last; r++) rows.push(r);
+
+  return (
+    <div
+      ref={box}
+      tabIndex={0}
+      role="grid"
+      aria-label={`Sheet ${sheet}`}
+      aria-rowcount={maxRow}
+      aria-colcount={maxCol}
+      onKeyDown={onKey}
+      onScroll={(e) => setView({ top: e.currentTarget.scrollTop, height: e.currentTarget.clientHeight })}
+      onMouseUp={() => (drag.current = null)}
+      onMouseLeave={() => (drag.current = null)}
+      className="relative h-full overflow-auto overscroll-contain bg-paper font-sans text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
+    >
+      <div style={{ height: HEAD_H + maxRow * ROW_H, width: totalW }} className="relative">
+        {/* Column letters */}
+        <div role="row" className="sticky top-0 z-20 flex" style={{ height: HEAD_H, width: totalW }}>
+          <div className="sticky left-0 z-30 border-b border-r border-hairline bg-cloud" style={{ width: ROWNUM_W }} />
+          {widths.map((w, i) => (
+            <div
+              key={i}
+              role="columnheader"
+              className="flex items-center justify-center border-b border-r border-hairline bg-cloud text-[11px] font-semibold text-muted"
+              style={{ width: w }}
+            >
+              {colLetter(i + 1)}
+            </div>
+          ))}
+        </div>
+        {rows.map((r) => {
+          const loaded = blocks.has(Math.floor((r - 1) / BLOCK));
+          const page = cellAt(r, 1)?.page ?? null;
+          return (
+            <div key={r} role="row" aria-rowindex={r} className="absolute flex" style={{ top: HEAD_H + (r - 1) * ROW_H, height: ROW_H, width: totalW }}>
+              <div
+                role="rowheader"
+                className="sticky left-0 z-10 flex items-center justify-end gap-1 border-b border-r border-hairline bg-cloud pr-2 text-[11px] tabular-nums text-muted"
+                style={{ width: ROWNUM_W }}
+                title={page ? `From page ${page} of the PDF` : undefined}
+              >
+                {page ? <span className="text-[9.5px] text-faint">p{page}</span> : null}
+                {r}
+              </div>
+              {widths.map((w, i) => {
+                const c = i + 1;
+                const cell = loaded ? cellAt(r, c) : null;
+                const sel = selection && selection.sheet === sheet && inRange(selection, r, c);
+                const hi = highlights.some((h) => h.sheet === sheet && inRange(h, r, c));
+                const isActive = active?.r === r && active?.c === c;
+                const pend = cell?.pending?.kind;
+                const num = typeof cell?.v === "number";
+                return (
+                  <div
+                    key={c}
+                    role="gridcell"
+                    aria-selected={Boolean(sel)}
+                    aria-colindex={c}
+                    onMouseDown={(e) => pick(r, c, e)}
+                    onMouseEnter={() => drag.current && onSelect(rangeFrom(drag.current, { r, c }))}
+                    onDoubleClick={(e) => onCell(cell, { r, c }, (e.currentTarget as HTMLElement).getBoundingClientRect())}
+                    className={cn(
+                      "relative cursor-cell truncate border-b border-r border-hairline px-2 leading-[27px] text-ink",
+                      num && "text-right tabular-nums",
+                      r === 1 && !num && "font-semibold",
+                      pend === "new" && "bg-diff-new shadow-[inset_3px_0_0_var(--color-diff-new-line)]",
+                      pend === "changed" && "bg-diff-chg shadow-[inset_3px_0_0_var(--color-diff-chg-line)]",
+                      sel && "bg-diff-sel",
+                      hi && "outline outline-1 -outline-offset-1 outline-diff-sel-line",
+                      isActive && "outline outline-2 -outline-offset-2 outline-diff-sel-line",
+                      cell?.f && !pend && "text-ink",
+                    )}
+                    style={{ width: w }}
+                    title={cell?.f ?? undefined}
+                  >
+                    {loaded ? display(cell) : <span className="inline-block h-2.5 w-2/3 animate-pulse rounded bg-cloud align-middle" />}
+                  </div>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export function display(cell: WbCell | null): string {
+  if (!cell || cell.v === null || cell.v === undefined) return cell?.f ? "" : "";
+  const v = cell.v;
+  if (typeof v === "number") {
+    const pct = cell.nf?.includes("%");
+    if (pct) return `${(v * 100).toLocaleString("en-NG", { maximumFractionDigits: 1 })}%`;
+    const dp = cell.nf && /0\.0+/.test(cell.nf) ? 2 : Number.isInteger(v) ? 0 : 2;
+    return v.toLocaleString("en-NG", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+  }
+  if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
+  const s = String(v);
+  return /^\d{4}-\d{2}-\d{2}T00:00:00$/.test(s) ? s.slice(0, 10) : s;
+}
