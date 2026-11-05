@@ -53,6 +53,9 @@ class Tool:
     description: str
     examples: tuple[str, ...]
     slots: tuple[str, ...] = ()
+    # "litchai": data read here (the VM's Postgres). "app": data lives in the web
+    # app's database; the admin-guarded relay resolves it (see answer_chat).
+    source: Literal["litchai", "app"] = "litchai"
 
 
 # The tool registry. Example utterances are embedded once (see SemanticRouter);
@@ -76,6 +79,15 @@ TOOLS: tuple[Tool, ...] = (
             "why is a document showing extraction failed",
             "how do i message a client on their request",
             "why did the client's analysis fail",
+            "how do i confirm a bank transfer payment",
+            "how does erasing a client work",
+            "how do i export a client's data",
+            "how do i send a draft to the client for review",
+            "how do i ask a client for a document",
+            "how do i assign a request to a staff member",
+            "how do i run the backup restore test",
+            "how do i accept a proposal in the workbench",
+            "how does the workbench keep client data private",
         ),
     ),
     Tool(
@@ -139,6 +151,84 @@ TOOLS: tuple[Tool, ...] = (
             "how many documents need review",
             "show me observability metrics",
             "what is the review queue like",
+        ),
+    ),
+    Tool(
+        name="workbench_status",
+        kind="read",
+        description="Workbench conversations: which files are open, pending proposals waiting "
+        "to be accepted, last activity.",
+        examples=(
+            "what is pending in the workbench",
+            "list the workbench conversations",
+            "how many workbench proposals are waiting",
+            "which workbench changes have not been accepted",
+        ),
+    ),
+    Tool(
+        name="ai_engine_status",
+        kind="read",
+        description="The AI model chain behind Sage and the workbench: which providers are "
+        "healthy, which one answers, and how much daily free quota is used.",
+        examples=(
+            "which ai model is sage using",
+            "are the ai providers healthy",
+            "is the groq quota used up",
+            "show the ai engine status",
+        ),
+    ),
+    Tool(
+        name="billing_status",
+        kind="read",
+        source="app",
+        description="Billing now: bank transfer proofs waiting for confirmation, overdue and "
+        "part-paid invoices, money received recently.",
+        examples=(
+            "which bank transfers are waiting for confirmation",
+            "how many payment proofs need confirming",
+            "which invoices are overdue",
+            "how much have we been paid this month",
+            "who still owes us money",
+        ),
+    ),
+    Tool(
+        name="client_privacy",
+        kind="read",
+        source="app",
+        description="Client privacy: AI mode (cloud masked or local only) with who set it and "
+        "why, and scheduled erasures with their dates.",
+        examples=(
+            "what is this client's ai mode",
+            "which clients have erasure pending",
+            "is this client local only",
+            "when will the client's data be erased",
+        ),
+    ),
+    Tool(
+        name="request_work",
+        kind="read",
+        source="app",
+        description="Where a service request stands: status, open asks, the current draft "
+        "review round and decision, and who is assigned.",
+        examples=(
+            "what asks are open on REQ-2026-014",
+            "which review round is REQ-2026-003 on",
+            "who is assigned to REQ-2026-010",
+            "which requests have no one assigned",
+            "which requests are waiting on the client",
+        ),
+        slots=("request_number",),
+    ),
+    Tool(
+        name="backup_status",
+        kind="read",
+        source="app",
+        description="Database backups: when the last backup ran and the result of the last "
+        "restore test.",
+        examples=(
+            "when was the last backup",
+            "did the last restore test pass",
+            "are the backups working",
         ),
     ),
     Tool(
@@ -250,6 +340,9 @@ def extract_slots(message: str, tool: Tool) -> dict[str, Any]:
     if "category_code" in tool.slots:
         m = re.search(r"\b([a-z][a-z_]*\.[a-z_.]+)\b", message)
         slots["category_code"] = m.group(1) if m else None
+    if "request_number" in tool.slots:
+        m = re.search(r"\bREQ-\d{4}-\d+\b", message, re.IGNORECASE)
+        slots["request_number"] = m.group(0).upper() if m else None
     if "engagement_action" in tool.slots:
         slots["engagement_action"] = next(
             (a for a in _ENGAGEMENT_ACTIONS if re.search(rf"\b{a}\b", message, re.IGNORECASE)), None
@@ -320,6 +413,8 @@ def llm_route(
             "engagement_action": out.engagement_action,
         }.items() if k in tool.slots
     }
+    if "request_number" in tool.slots:  # the route schema has no field for it
+        slots["request_number"] = extract_slots(message, tool).get("request_number")
     return tool, slots
 
 
@@ -397,7 +492,20 @@ def execute_read(
     embedder: Embedder | None,
     context: list[RetrievedChunk],
     client_id: str | None,
+    engine_status: Any = None,
 ) -> ToolResult:
+    if tool.name == "workbench_status":
+        return ToolResult(tool.name, "read", workbench_status(repo, client_id))
+
+    if tool.name == "ai_engine_status":
+        if engine_status is None:
+            return ToolResult(tool.name, "read",
+                              {"error": "The AI engine status isn't available here."})
+        keep = ("name", "kind", "model", "configured", "ok", "detail", "used_requests",
+                "used_tokens", "daily_requests", "daily_tokens", "exhausted_until")
+        return ToolResult(tool.name, "read", {
+            "providers": [{k: p.get(k) for k in keep} for p in engine_status()]})
+
     if tool.name == "list_analyses":
         docs = repo.list_documents(client_id, limit=20)
         return ToolResult(tool.name, "read", {
@@ -448,6 +556,26 @@ def execute_read(
             for c in context
         ],
     })
+
+
+def workbench_status(repo: Repository, client_id: str | None) -> dict[str, Any]:
+    """Recent workbench conversations with their pending proposals (VM Postgres)."""
+    conn = getattr(repo, "conn", None)
+    if conn is None:
+        return {"error": "Workbench history is only kept on the analysis server."}
+    from litchai.workbench.session import PgConversationStore
+
+    rows = []
+    for c in PgConversationStore(conn).list(client_id, 20):
+        pending = [b for b in c.batches if b.status == "pending"]
+        rows.append({
+            "conversation_id": c.id, "title": c.title, "client_id": c.client_id,
+            "ai_mode": c.ai_mode, "files": [w.name for w in c.workbooks],
+            "pending_proposals": [{"title": b.title, "summary": b.summary} for b in pending][:10],
+            "pending_count": len(pending), "updated_at": c.updated_at,
+        })
+    return {"conversations": rows, "count": len(rows),
+            "pending_total": sum(r["pending_count"] for r in rows)}
 
 
 def build_proposal(tool: Tool, slots: dict[str, Any]) -> Proposal:
@@ -618,6 +746,9 @@ class ChatResult:
     can_answer: bool
     tool_result: dict[str, Any] | None = None
     proposal: dict[str, Any] | None = None
+    # App-resolved read (billing, privacy, requests, backups): the relay runs the
+    # read for {tool, slots} and calls again with app_data. Nothing to show yet.
+    needs_app_data: dict[str, Any] | None = None
 
 
 def _dedupe(items: list[str]) -> list[str]:
@@ -643,7 +774,12 @@ def answer_chat(
     chat_provider: Provider | None = None,
     cache: AiCache | None = None,
     telemetry: AiTelemetry | None = None,
+    app_tools: bool = False,
+    app_data: dict[str, Any] | None = None,
+    engine_status: Any = None,
 ) -> ChatResult:
+    """``app_tools``: the caller can resolve app-side reads (two-pass contract).
+    ``app_data``: ``{"tool": name, "data": {...}}`` from that read (the second pass)."""
     router = router or SemanticRouter(embedder)
     decision = route_message(
         message, router, provider=provider, history=history, cache=cache, telemetry=telemetry
@@ -680,10 +816,25 @@ def answer_chat(
             can_answer=True, proposal=proposal.__dict__,
         )
 
-    tool_result = execute_read(
-        decision.tool, decision.slots, message,
-        repo=repo, embedder=embedder, context=context, client_id=read_client,
-    )
+    tool_result: ToolResult | None
+    if decision.tool.source == "app":
+        supplied = app_data if app_data and app_data.get("tool") == decision.tool.name else None
+        if supplied is None and app_tools:
+            return ChatResult(
+                answer="", citations=[], tool=decision.tool.name, routed_by=decision.method,
+                can_answer=True,
+                needs_app_data={"tool": decision.tool.name, "slots": decision.slots,
+                                "client_id": read_client},
+            )
+        # Second pass grounds on the app's data; an older relay gets the how-to answer.
+        tool_result = (ToolResult(decision.tool.name, "read", dict(supplied.get("data") or {}))
+                       if supplied is not None else None)
+    else:
+        tool_result = execute_read(
+            decision.tool, decision.slots, message,
+            repo=repo, embedder=embedder, context=context, client_id=read_client,
+            engine_status=engine_status,
+        )
     out = generate_answer(
         message, context, tool_result, history, provider=provider,
         tool_name=decision.tool.name, cache=cache, telemetry=telemetry,
@@ -691,5 +842,5 @@ def answer_chat(
     citations = _dedupe([c.citation for c in context]) if out.can_answer and context else []
     return ChatResult(
         answer=out.answer, citations=citations, tool=decision.tool.name, routed_by=decision.method,
-        can_answer=out.can_answer, tool_result=tool_result.data,
+        can_answer=out.can_answer, tool_result=tool_result.data if tool_result else None,
     )

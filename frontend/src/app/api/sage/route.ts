@@ -13,7 +13,20 @@ export async function POST(req: Request) {
   
   try {
     const { message, history, scope, clientId } = await req.json();
-    const result = await assistantChat(message, history, scope, clientId);
+    let result = await assistantChat(message, history, scope, clientId, { tools: true });
+    // Two-pass app read: the engine asks for live app data (billing, privacy,
+    // requests, backups); read it here, behind isAdmin(), and ask again.
+    if (result.needs_app_data) {
+      const { resolveSageAppRead } = await import("@/lib/sage/app-reads");
+      const data = await resolveSageAppRead(result.needs_app_data).catch((e: unknown) => {
+        console.error("[sage] app read failed:", e instanceof Error ? e.message : e);
+        return { error: "That data couldn't be read right now." };
+      });
+      result = await assistantChat(message, history, scope, clientId, {
+        tools: true,
+        data: { tool: result.needs_app_data.tool, data },
+      });
+    }
     return NextResponse.json(result);
   } catch (err) {
     const raw = err instanceof Error ? err.message : "Sage relay failed";

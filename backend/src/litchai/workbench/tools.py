@@ -260,8 +260,20 @@ TOOLS: tuple[WorkbenchTool, ...] = (
                   lambda c, a: analysis.flag_anomalies(c, **_kw(a)),
                   ("anything unusual", "find duplicates", "check for anomalies")),
     WorkbenchTool("tax_compute", "read",
-                  "Compute CIT, VAT, WHT or PAYE from the shared tax config; write=true lays "
-                  "the computation out as a new sheet (that becomes a proposal).", TaxArgs,
+                  "Compute CIT, VAT, WHT or PAYE from the shared tax config (always use this; "
+                  "never compute tax yourself). write=true lays it out as a new sheet "
+                  "(a proposal). inputs by kind — "
+                  "cit: net_profit_per_accounts, turnover, total_fixed_assets, "
+                  "professional_services (bool), addbacks, deductions, capital_allowances; "
+                  "vat: standard_rated_sales, standard_rated_purchases, "
+                  "vat_credit_brought_forward, amounts_include_vat (bool); "
+                  "wht: gross_amount, category (dividend|interest|rent|royalty|commission|"
+                  "consultancy|construction|supply|technical), payee_type "
+                  "(individual|corporate), or deductions=[{vendor, category, payee_type, "
+                  "gross_amount}] for several lines; "
+                  "paye: gross_annual, pension (bool, default true), nhf (bool), rent_paid, "
+                  "or employees=[{name, gross_annual, pension, nhf, rent_paid}]. "
+                  "Amounts are annual naira.", TaxArgs,
                   lambda c, a: analysis.tax_compute(c, **_kw(a)),
                   ("what is the cit", "compute vat payable", "paye for this salary",
                    "withholding tax on this invoice")),

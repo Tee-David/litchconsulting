@@ -139,6 +139,9 @@ export type AssistantResponse = {
   can_answer: boolean;
   tool_result: Record<string, unknown> | null;
   proposal: AssistantProposal | null;
+  /** Set when the answer needs a web-app read (billing, privacy, requests,
+   *  backups): the relay resolves it and asks again with that data. */
+  needs_app_data?: { tool: string; slots: Record<string, unknown>; client_id: string | null } | null;
 };
 
 /** Per-engagement `/engagements/{id}/ask` response (AI Studio review panel). */
@@ -312,12 +315,20 @@ export function assistantChat(
   message: string,
   history?: { role: string; content: string }[],
   scope: "firm" | "client" = "firm",
-  clientId?: string
+  clientId?: string,
+  app?: { tools: boolean; data?: { tool: string; data: Record<string, unknown> } }
 ): Promise<AssistantResponse> {
   return litchai("/assistant/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ message, history, scope, client_id: clientId }),
+    body: JSON.stringify({
+      message,
+      history,
+      scope,
+      client_id: clientId,
+      app_tools: app?.tools ?? false,
+      app_data: app?.data ?? null,
+    }),
   });
 }
 
