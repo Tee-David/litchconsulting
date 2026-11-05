@@ -218,7 +218,6 @@ export async function applyInvoicePaid(
       if (data) {
         const { renderInvoicePdf } = await import("@/lib/invoice/pdf/render");
         const { getIssuer } = await import("@/lib/invoice/get-issuer");
-        const { sendEmail, emailLayout, emailButton, emailDetailRows, EMAIL_ICONS } = await import("@/lib/email");
         const { formatMoney } = await import("@/lib/invoice/money");
         const pdf = await renderInvoicePdf(
           {
@@ -248,35 +247,27 @@ export async function applyInvoicePaid(
           "receipt",
           await getIssuer()
         );
-        const nextStep = req
-          ? `<p style="margin:18px 0 12px;">${emailButton(
-              `${baseUrl()}/dashboard/requests/${req.id}`,
-              ((req.requiredDocuments as RequiredDocument[]) ?? []).some((d) => d.required)
-                ? "Upload your documents"
-                : "Track your request",
-              EMAIL_ICONS.arrow,
-            )}</p>`
-          : "";
-        await sendEmail({
-          to: inv.billToEmail,
-          subject: `Payment received — receipt for ${inv.number}`,
-          html: emailLayout(
-            `
-            <p style="margin:0 0 6px;font-size:20px;font-weight:700;">Payment received</p>
-            <p class="body" style="margin:0 0 18px;color:#41485a;">Thank you, ${inv.billToName || "there"} — we've received your payment for <strong>${inv.number}</strong>. Your receipt is attached as a PDF.</p>
-            ${emailDetailRows([
+        const { sendTemplate } = await import("@/lib/email-templates");
+        await sendTemplate(
+          "receipt",
+          {
+            name: inv.billToName,
+            receiptNumber: inv.number,
+            forWhat: req ? `${req.serviceName} (${req.number})` : inv.projectTitle || `invoice ${inv.number}`,
+            rows: [
               { label: "Invoice", value: inv.number },
               ...(inv.projectTitle ? [{ label: "Project", value: inv.projectTitle }] : []),
-              { label: "Amount paid", value: formatMoney(Number(inv.total), inv.currency), strong: true },
-            ])}
-            ${nextStep}
-          `,
-            { preheader: `Your payment for ${inv.number} was received — receipt attached.` },
-          ),
-          attachments: [
-            { filename: `${inv.number}-receipt.pdf`, content: pdf, contentType: "application/pdf" },
-          ],
-        });
+              { label: "Paid by", value: opts.via === "manual" ? "Bank transfer" : "Card (Paystack)" },
+            ],
+            total: formatMoney(Number(inv.total), inv.currency),
+            url: req ? `${baseUrl()}/dashboard/requests/${req.id}` : `${baseUrl()}/dashboard/billing`,
+          },
+          {
+            to: inv.billToEmail,
+            dedupeKey: `receipt:${inv.id}`,
+            attachments: [{ filename: `${inv.number}-receipt.pdf`, content: pdf, contentType: "application/pdf" }],
+          },
+        );
       }
     }
   } catch (err) {

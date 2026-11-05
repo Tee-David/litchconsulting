@@ -3,7 +3,8 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { reviewRound, serviceRequest, serviceRequestDocument, serviceRequestEvent } from "@/lib/db/schema";
 import { recordAudit } from "@/lib/audit";
-import { notifyClient, notifyFirm, simpleEmail } from "@/lib/requests/people";
+import { notifyClient, notifyFirm } from "@/lib/requests/people";
+import { templateEmail } from "@/lib/email-templates";
 
 /**
  * Draft review rounds.
@@ -68,12 +69,15 @@ export async function sendDraftForReview(input: {
     body: round <= INCLUDED_ROUNDS ? `Round ${round} of ${INCLUDED_ROUNDS} included. Approve it or tell us what to change.` : "Approve it or tell us what to change.",
     link,
     dedupeKey: `draft-sent:${req.id}:${round}`,
-    email: await simpleEmail({
-      subject: `Your draft is ready to review — ${req.number}`,
-      heading: "Your draft is ready",
-      body: `${input.actor.name} sent draft ${round} of ${req.serviceName}. Have a look, then approve it or tell us what to change.`,
-      href: link,
-      cta: "Review draft",
+    email: templateEmail("draftForReview", {
+      senderName: input.actor.name,
+      requestNumber: req.number,
+      serviceName: req.serviceName,
+      version: round,
+      round,
+      rounds: Math.max(INCLUDED_ROUNDS, round),
+      changes: input.note?.trim() || null,
+      url: link,
     }),
   });
   return { ok: true, round };

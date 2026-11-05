@@ -1,13 +1,14 @@
 import "server-only";
 import type { ServiceRequest } from "@/lib/db/schema";
-import { sendEmail, emailLayout } from "@/lib/email";
+import { sendTemplate } from "@/lib/email-templates";
 import { notifyAdmin } from "@/lib/notify";
 import { STATUS_LABELS, type RequestStatus } from "@/lib/requests/status";
 
 /**
- * Service-request lifecycle emails. All best-effort (never block the action)
- * and all through the branded SMTP layout. Client-facing copy stays warm,
- * short, and always says what happens next.
+ * Service-request lifecycle emails (R6.1): every client-facing one renders
+ * through lib/email-templates.ts (one layout, escaped merge fields, a "why
+ * you got this" line). All best-effort: they never block the action. Admin
+ * alerts go through notifyAdmin.
  */
 
 function baseUrl() {
@@ -18,17 +19,16 @@ function baseUrl() {
   ).replace(/\/$/, "");
 }
 
-function button(href: string, label: string) {
-  return `<p style="margin:0 0 20px;"><a href="${href}" style="display:inline-block;background:#0a196d;color:#fff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:9999px;">${label}</a></p>`;
-}
+/** Client-typed text goes into admin alert HTML: escape it. */
+const esc = (v: string | null | undefined) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 function requestLink(req: ServiceRequest) {
   return `${baseUrl()}/dashboard/requests/${req.id}`;
 }
 
-async function safeSend(opts: Parameters<typeof sendEmail>[0]) {
+async function safeSend(fn: () => Promise<unknown>) {
   try {
-    await sendEmail(opts);
+    await fn();
   } catch (err) {
     console.error("[emails/requests] send failed:", err);
   }
@@ -36,30 +36,20 @@ async function safeSend(opts: Parameters<typeof sendEmail>[0]) {
 
 /** Client ack on submit — copy differs for quote vs fixed-price paths. */
 export async function emailRequestSubmitted(req: ServiceRequest, to: string, name?: string | null) {
-  const isQuote = req.pricingMode === "quote";
-  await safeSend({
-    to,
-    subject: isQuote
-      ? `We received your request — ${req.number}`
-      : `Complete your payment — ${req.number}`,
-    html: emailLayout(`
-      <p style="margin:0 0 14px;">Hi ${name || "there"},</p>
-      <p style="margin:0 0 18px;">Thanks for requesting <strong>${req.serviceName}</strong>. Your reference is <strong>${req.number}</strong>.</p>
-      ${
-        isQuote
-          ? `<p style="margin:0 0 18px;">We'll review the details you shared and send you a tailored quote within <strong>2 business days</strong>. You'll get an email the moment it's ready, and you can track everything from your dashboard.</p>`
-          : `<p style="margin:0 0 18px;">One step left: complete your payment to get things moving. Your request stays reserved in your dashboard if you need to come back to it.</p>`
-      }
-      ${button(requestLink(req), isQuote ? "Track your request" : "Complete payment")}
-    `),
-  });
+  await safeSend(() =>
+    sendTemplate(
+      "requestReceived",
+      { name, serviceName: req.serviceName, requestNumber: req.number, mode: req.pricingMode === "quote" ? "quote" : "pay", url: requestLink(req) },
+      { to, dedupeKey: `request-received:${req.id}` },
+    ),
+  );
 }
 
 /** Admin alert on any new request. */
 export async function alertAdminNewRequest(req: ServiceRequest, clientName?: string | null) {
   await notifyAdmin({
     subject: `New service request ${req.number} — ${req.serviceName}`,
-    html: `<p><strong>${clientName || "A client"}</strong> requested <strong>${req.serviceName}</strong> (${req.pricingMode === "quote" ? "quote-based" : `fixed — ₦${req.priceSnapshot ?? "?"}`}).</p><p style="color:#5b6474;">${(req.details || "No brief provided.").slice(0, 600)}</p>`,
+    html: `<p><strong>${esc(clientName || "A client")}</strong> requested <strong>${req.serviceName}</strong> (${req.pricingMode === "quote" ? "quote-based" : `fixed — ₦${req.priceSnapshot ?? "?"}`}).</p><p style="color:#5b6474;">${esc((req.details || "No brief provided.").slice(0, 600))}</p>`,
     href: `${baseUrl()}/admin/requests/${req.id}`,
   });
 }
@@ -71,31 +61,17 @@ export async function emailStatusChanged(
   toStatus: RequestStatus,
   note?: string | null
 ) {
-  const label = STATUS_LABELS[toStatus] ?? toStatus;
-  await safeSend({
-    to,
-    subject: `${req.number} update — ${label}`,
-    html: emailLayout(`
-      <p style="margin:0 0 14px;">Hi there,</p>
-      <p style="margin:0 0 18px;">Your <strong>${req.serviceName}</strong> request (${req.number}) is now <strong>${label}</strong>.</p>
-      ${note ? `<p style="margin:0 0 18px;padding:12px 16px;background:#f3f5fb;border-radius:12px;color:#3c4657;">${note}</p>` : ""}
-      ${button(requestLink(req), "View progress")}
-    `),
-  });
+  const statusLabel = STATUS_LABELS[toStatus] ?? toStatus;
+  await safeSend(() =>
+    sendTemplate("requestUpdate", { serviceName: req.serviceName, requestNumber: req.number, statusLabel, note: note || null, url: requestLink(req) }, { to }),
+  );
 }
 
 /** Client notice when a deliverable is ready to download. */
 export async function emailDeliverableReady(req: ServiceRequest, to: string, fileName: string) {
-  await safeSend({
-    to,
-    subject: `Your ${req.serviceName} deliverable is ready — ${req.number}`,
-    html: emailLayout(`
-      <p style="margin:0 0 14px;">Hi there,</p>
-      <p style="margin:0 0 18px;">Good news — <strong>${fileName}</strong> is ready for you. Sign in to review and download it from your request workspace.</p>
-      ${button(requestLink(req), "Download your deliverable")}
-      <p style="margin:0;color:#5b6474;font-size:13px;">If anything looks off, reply in the workspace or open a support ticket — we're on it.</p>
-    `),
-  });
+  await safeSend(() =>
+    sendTemplate("deliverableReady", { serviceName: req.serviceName, requestNumber: req.number, fileName, url: requestLink(req) }, { to, dedupeKey: `deliverable:${req.id}:${fileName}` }),
+  );
 }
 
 /** Terminal outcomes: cancelled / declined / refunded. */
@@ -105,22 +81,13 @@ export async function emailRequestTerminal(
   status: "cancelled" | "declined" | "refunded",
   reason?: string | null
 ) {
-  const titles = {
-    cancelled: `Request ${req.number} cancelled`,
-    declined: `Update on your request ${req.number}`,
-    refunded: `Refund confirmed for ${req.number}`,
-  } as const;
-  await safeSend({
-    to,
-    subject: titles[status],
-    html: emailLayout(`
-      <p style="margin:0 0 14px;">Hi there,</p>
-      <p style="margin:0 0 18px;">Your <strong>${req.serviceName}</strong> request (${req.number}) has been <strong>${STATUS_LABELS[status].toLowerCase()}</strong>.</p>
-      ${reason ? `<p style="margin:0 0 18px;padding:12px 16px;background:#f3f5fb;border-radius:12px;color:#3c4657;">${reason}</p>` : ""}
-      <p style="margin:0 0 18px;">If you'd like to talk it through or start again, we're one message away.</p>
-      ${button(`${baseUrl()}/dashboard/support?new=true`, "Contact support")}
-    `),
-  });
+  await safeSend(() =>
+    sendTemplate(
+      "requestClosed",
+      { serviceName: req.serviceName, requestNumber: req.number, outcome: status, reason: reason || null, url: `${baseUrl()}/dashboard/support?new=true` },
+      { to, dedupeKey: `request-closed:${req.id}:${status}` },
+    ),
+  );
 }
 
 /** Admin alert when every required document slot is filled. */
@@ -136,7 +103,7 @@ export async function alertAdminDocumentsComplete(req: ServiceRequest) {
 export async function alertAdminDocumentUploaded(req: ServiceRequest, fileName: string) {
   await notifyAdmin({
     subject: `Document uploaded on ${req.number}`,
-    html: `<p><strong>${fileName}</strong> was uploaded on request <strong>${req.number}</strong> (${req.serviceName}).</p>`,
+    html: `<p><strong>${esc(fileName)}</strong> was uploaded on request <strong>${req.number}</strong> (${req.serviceName}).</p>`,
     href: `${baseUrl()}/admin/requests/${req.id}`,
   });
 }
@@ -148,25 +115,26 @@ export async function emailCorrectionRequested(
   fileName: string,
   reason: string
 ) {
-  await safeSend({
-    to,
-    subject: `Action needed on ${req.number} — please re-upload a document`,
-    html: emailLayout(`
-      <p style="margin:0 0 14px;">Hi there,</p>
-      <p style="margin:0 0 18px;">We had a look at <strong>${fileName}</strong> on your <strong>${req.serviceName}</strong> request (${req.number}), and we need a corrected version before we can continue.</p>
-      <p style="margin:0 0 8px;color:#3c4657;font-weight:600;">What we need:</p>
-      <p style="margin:0 0 18px;padding:12px 16px;background:#f3f5fb;border-radius:12px;color:#3c4657;">${reason}</p>
-      <p style="margin:0 0 18px;">Open your request workspace to upload the corrected file — it takes a minute.</p>
-      ${button(requestLink(req), "Upload corrected document")}
-    `),
-  });
+  await safeSend(() =>
+    sendTemplate(
+      "actionNeeded",
+      {
+        requestNumber: req.number,
+        what: `a corrected copy of ${fileName}`,
+        why: reason,
+        hint: "Open your request to upload the corrected file. It takes a minute.",
+        url: requestLink(req),
+      },
+      { to },
+    ),
+  );
 }
 
 /** Admin alert when a client replies on the request thread. */
 export async function alertAdminClientMessage(req: ServiceRequest, body: string, clientName?: string | null) {
   await notifyAdmin({
     subject: `New message on ${req.number} from ${clientName || "client"}`,
-    html: `<p><strong>${clientName || "The client"}</strong> replied on request <strong>${req.number}</strong> (${req.serviceName}):</p><p style="color:#3c4657;padding:12px 16px;background:#f3f5fb;border-radius:12px;">${body}</p>`,
+    html: `<p><strong>${esc(clientName || "The client")}</strong> replied on request <strong>${req.number}</strong> (${req.serviceName}):</p><p style="color:#3c4657;padding:12px 16px;background:#f3f5fb;border-radius:12px;">${esc(body)}</p>`,
     href: `${baseUrl()}/admin/requests/${req.id}`,
   });
 }

@@ -305,36 +305,26 @@ export async function sendInvoiceAction(id: string): Promise<ActionResult> {
   };
 
   const { renderInvoicePdf } = await import("@/lib/invoice/pdf/render");
-  const { sendEmail, emailLayout, emailButton, emailDetailRows, EMAIL_ICONS } = await import("@/lib/email");
   const { getIssuer } = await import("@/lib/invoice/get-issuer");
   const { formatMoney } = await import("@/lib/invoice/money");
   const pdf = await renderInvoicePdf(invoiceData, "invoice", await getIssuer());
 
-  const payHref = publicLink;
-  const html = emailLayout(
-    `
-    <p style="margin:0 0 6px;font-size:20px;font-weight:700;">Invoice ${inv.number}</p>
-    <p class="body" style="margin:0 0 18px;color:#41485a;">Hi ${inv.billToName || "there"}, your invoice is attached${
-      inv.projectTitle ? ` for <strong>${inv.projectTitle}</strong>` : ""
-    }. View it online or pay with the button below.</p>
-    ${emailDetailRows([
-      { label: "Invoice", value: inv.number },
-      ...(inv.projectTitle ? [{ label: "Project", value: inv.projectTitle }] : []),
-      ...(inv.dueDate ? [{ label: "Due", value: String(inv.dueDate) }] : []),
-      { label: "Amount due", value: formatMoney(Number(inv.total), inv.currency), strong: true },
-    ])}
-    <p style="margin:18px 0 12px;">${emailButton(payHref, "View & pay invoice", EMAIL_ICONS.arrow)}</p>
-    <p class="muted" style="margin:0;color:#8a92a6;font-size:13px;">Or open it here: <a href="${publicLink}" style="color:#2540c4;">${publicLink}</a></p>
-  `,
-    { preheader: `Invoice ${inv.number} from Litch Consulting — ${formatMoney(Number(inv.total), inv.currency)} due` },
+  const { sendTemplate } = await import("@/lib/email-templates");
+  const { delivered } = await sendTemplate(
+    "invoiceSent",
+    {
+      name: inv.billToName,
+      invoiceNumber: inv.number,
+      projectTitle: inv.projectTitle,
+      total: formatMoney(Number(inv.total), inv.currency),
+      due: inv.dueDate ? String(inv.dueDate) : null,
+      url: publicLink,
+    },
+    {
+      to: inv.billToEmail,
+      attachments: [{ filename: `${inv.number}.pdf`, content: pdf, contentType: "application/pdf" }],
+    },
   );
-
-  const { delivered } = await sendEmail({
-    to: inv.billToEmail,
-    subject: `Invoice ${inv.number} from Litch Consulting`,
-    html,
-    attachments: [{ filename: `${inv.number}.pdf`, content: pdf, contentType: "application/pdf" }],
-  });
 
   await db.update(invoice).set({ status: "sent", sentAt: new Date(), updatedAt: new Date() }).where(eq(invoice.id, id));
 

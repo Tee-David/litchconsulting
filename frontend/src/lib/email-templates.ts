@@ -84,7 +84,7 @@ const fmtDate = (d: Date | string) =>
 
 export type InvitationData = {
   inviterName: string;
-  role: "staff" | "client";
+  role: "admin" | "staff" | "client";
   email: string;
   url: string;
   expiresAt: Date | string;
@@ -96,12 +96,17 @@ export type VerifyData = { name?: string | null; url: string; serviceName?: stri
 export type ResetData = { name?: string | null; url: string };
 export type WelcomeData = { name?: string | null; role: "admin" | "staff" | "client"; homeUrl: string };
 export type SecurityNoticeData = { name?: string | null; what: string; when: Date | string; device?: string | null };
-export type InviteAcceptedData = { adminName?: string | null; personName: string; personEmail: string; role: "staff" | "client"; company?: string | null };
+export type InviteAcceptedData = { adminName?: string | null; personName: string; personEmail: string; role: "admin" | "staff" | "client"; company?: string | null };
 export type QuoteReadyData = { name?: string | null; senderName?: string | null; serviceName: string; quoteNumber: string; total: string; deposit?: string | null; validTo?: string | null; summary?: string | null; requestDate?: string | null; url: string };
 export type ActionNeededData = { name?: string | null; senderName?: string | null; requestNumber: string; what: string; why?: string | null; hint?: string | null; due?: string | null; url: string };
 export type DraftData = { name?: string | null; senderName?: string | null; requestNumber: string; serviceName: string; version: number; round: number; rounds: number; changes?: string | null; answerBy?: string | null; figure?: { label: string; value: string } | null; url: string };
 export type ReceiptData = { name?: string | null; receiptNumber: string; forWhat: string; rows: Array<{ label: string; value: string; strong?: boolean }>; total: string; url: string };
 export type DigestData = { name?: string | null; dateLabel: string; needsYou: string[]; updates: string[]; url: string; categoryLabel: string };
+export type RequestReceivedData = { name?: string | null; serviceName: string; requestNumber: string; mode: "quote" | "pay"; url: string };
+export type RequestUpdateData = { name?: string | null; serviceName: string; requestNumber: string; statusLabel: string; note?: string | null; url: string };
+export type DeliverableData = { name?: string | null; serviceName: string; requestNumber: string; fileName: string; url: string };
+export type RequestClosedData = { name?: string | null; serviceName: string; requestNumber: string; outcome: "cancelled" | "declined" | "refunded"; reason?: string | null; url: string };
+export type InvoiceSentData = { name?: string | null; invoiceNumber: string; projectTitle?: string | null; total: string; due?: string | null; url: string };
 export type AssignedData = { name?: string | null; assignerName: string; requests: Array<{ number: string; service: string; client?: string | null }>; url: string };
 
 const ACCESS_TEXT: Record<string, string> = {
@@ -117,17 +122,19 @@ export const EMAIL_TEMPLATES = {
     always: true,
     mergeTags: ["inviterName", "role", "email", "url", "expiresAt", "company", "access", "message"],
     build: (d: InvitationData): EmailBody => ({
-      subject: d.role === "staff" ? `${first(d.inviterName)} invited you to Litch Consulting` : `${first(d.inviterName)} invited you to ${d.company || "your company"} on Litch`,
+      subject: d.role !== "client" ? `${first(d.inviterName)} invited you to Litch Consulting` : `${first(d.inviterName)} invited you to ${d.company || "your company"} on Litch`,
       preheader: "Set up your account. The link works once, for 7 days.",
-      heading: d.role === "staff" ? "You are invited to join Litch as Staff" : `You are invited to ${d.company || "your company"} on Litch`,
+      heading: d.role !== "client" ? `You are invited to join Litch as ${d.role === "admin" ? "an Admin" : "Staff"}` : `You are invited to ${d.company || "your company"} on Litch`,
       paragraphs: [
-        d.role === "staff"
+        d.role === "admin"
+          ? `${d.inviterName} added you to the Litch Consulting team as an Admin. You will run billing, settings, the team and every request.`
+          : d.role === "staff"
           ? `${d.inviterName} added you to the Litch Consulting team. You will work on the requests assigned to you, with the client's files and Sage beside you.`
           : `${d.inviterName} added you to **${d.company || "their company"}** on Litch Consulting as ${ACCESS_TEXT[d.access || "viewer"] || "a colleague"}.`,
         ...(d.message ? [`“${d.message}”`] : []),
       ],
       rows: [
-        { label: "Your role", value: d.role === "staff" ? "Staff" : d.access ? d.access[0].toUpperCase() + d.access.slice(1) : "Client contact" },
+        { label: "Your role", value: d.role === "admin" ? "Admin" : d.role === "staff" ? "Staff" : d.access ? d.access[0].toUpperCase() + d.access.slice(1) : "Client contact" },
         { label: "Sign in with", value: d.email },
         { label: "Link expires", value: fmtDate(d.expiresAt) },
       ],
@@ -336,6 +343,110 @@ export const EMAIL_TEMPLATES = {
       why: `You got this because you chose a digest for ${d.categoryLabel}.`,
     }),
   } satisfies Def<DigestData>,
+
+  requestReceived: {
+    audience: "client",
+    category: "progress",
+    always: false,
+    mergeTags: ["name", "serviceName", "requestNumber", "mode", "url"],
+    build: (d: RequestReceivedData): EmailBody => ({
+      subject: d.mode === "quote" ? `We received your request ${d.requestNumber}` : `Complete your payment for ${d.requestNumber}`,
+      preheader: d.mode === "quote" ? "Your quote follows within 2 business days." : "One step left: payment.",
+      heading: d.mode === "quote" ? "We received your request" : "One step left",
+      greeting: first(d.name),
+      paragraphs: [
+        `Thanks for requesting **${d.serviceName}**. Your reference is **${d.requestNumber}**.`,
+        d.mode === "quote"
+          ? "We review what you shared and send a quote within 2 business days. You are never charged before you accept it."
+          : "Complete your payment to start the work. The request stays in your dashboard if you need to come back to it.",
+      ],
+      rows: [
+        { label: "Service", value: d.serviceName },
+        { label: "Reference", value: d.requestNumber },
+      ],
+      cta: { label: d.mode === "quote" ? "Track your request" : "Complete payment", href: d.url },
+      why: `You got this because you requested ${d.serviceName} on Litch.`,
+    }),
+  } satisfies Def<RequestReceivedData>,
+
+  requestUpdate: {
+    audience: "client",
+    category: "progress",
+    always: false,
+    mergeTags: ["name", "serviceName", "requestNumber", "statusLabel", "note", "url"],
+    build: (d: RequestUpdateData): EmailBody => ({
+      subject: `${d.requestNumber}: ${d.statusLabel}`,
+      preheader: d.note || `Your ${d.serviceName} request is now ${d.statusLabel.toLowerCase()}.`,
+      heading: "An update on your request",
+      greeting: first(d.name),
+      paragraphs: [`Your **${d.serviceName}** request (${d.requestNumber}) is now **${d.statusLabel}**.`, ...(d.note ? [d.note] : [])],
+      cta: { label: "View progress", href: d.url },
+      why: `You got this because the status of your request ${d.requestNumber} changed.`,
+    }),
+  } satisfies Def<RequestUpdateData>,
+
+  deliverableReady: {
+    audience: "client",
+    category: "progress",
+    always: false,
+    mergeTags: ["name", "serviceName", "requestNumber", "fileName", "url"],
+    build: (d: DeliverableData): EmailBody => ({
+      subject: `Your ${d.serviceName} is ready: ${d.requestNumber}`,
+      preheader: `${d.fileName} is ready to download.`,
+      heading: "Your work is ready",
+      greeting: first(d.name),
+      paragraphs: [`**${d.fileName}** is ready. Sign in to download it from your request.`, "If anything looks off, reply on the request and we pick it up."],
+      rows: [
+        { label: "Request", value: d.requestNumber },
+        { label: "File", value: d.fileName },
+      ],
+      cta: { label: "Download", href: d.url },
+      why: `You got this because we delivered work on your request ${d.requestNumber}.`,
+    }),
+  } satisfies Def<DeliverableData>,
+
+  requestClosed: {
+    audience: "client",
+    category: "progress",
+    always: true,
+    mergeTags: ["name", "serviceName", "requestNumber", "outcome", "reason", "url"],
+    build: (d: RequestClosedData): EmailBody => ({
+      subject: d.outcome === "refunded" ? `Refund confirmed for ${d.requestNumber}` : d.outcome === "cancelled" ? `Request ${d.requestNumber} cancelled` : `An update on your request ${d.requestNumber}`,
+      preheader: d.reason || `Your ${d.serviceName} request was ${d.outcome}.`,
+      heading: d.outcome === "refunded" ? "Your refund is confirmed" : d.outcome === "cancelled" ? "Your request was cancelled" : "We cannot take this request on",
+      greeting: first(d.name),
+      paragraphs: [
+        `Your **${d.serviceName}** request (${d.requestNumber}) was ${d.outcome}.`,
+        ...(d.reason ? [d.reason] : []),
+        "If you want to talk it through or start again, we are one message away.",
+      ],
+      cta: { label: "Contact support", href: d.url },
+      why: `You got this because your request ${d.requestNumber} was closed. Closing notices always send.`,
+    }),
+  } satisfies Def<RequestClosedData>,
+
+  invoiceSent: {
+    audience: "client",
+    category: "billing",
+    always: true,
+    mergeTags: ["name", "invoiceNumber", "projectTitle", "total", "due", "url"],
+    build: (d: InvoiceSentData): EmailBody => ({
+      subject: `Invoice ${d.invoiceNumber} from Litch Consulting`,
+      preheader: `${d.total}${d.due ? ` due ${d.due}` : ""}. The PDF is attached.`,
+      heading: `Invoice ${d.invoiceNumber}`,
+      greeting: first(d.name),
+      paragraphs: [`Your invoice${d.projectTitle ? ` for **${d.projectTitle}**` : ""} is attached. View it online or pay with the button below.`],
+      rows: [
+        { label: "Invoice", value: d.invoiceNumber },
+        ...(d.projectTitle ? [{ label: "Project", value: d.projectTitle }] : []),
+        ...(d.due ? [{ label: "Due", value: d.due }] : []),
+        { label: "Amount due", value: d.total, strong: true },
+      ],
+      cta: { label: "View and pay", href: d.url },
+      note: `Or open it here: ${d.url}`,
+      why: "You got this because Litch Consulting issued you an invoice. Invoices always send, for your records.",
+    }),
+  } satisfies Def<InvoiceSentData>,
 
   assigned: {
     audience: "staff",
