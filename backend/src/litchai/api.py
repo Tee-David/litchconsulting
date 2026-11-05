@@ -111,6 +111,10 @@ class AssistantChatRequest(BaseModel):
     history: list[dict[str, str]] | None = None
     scope: str = "firm"           # 'firm' | 'client'
     client_id: str | None = None
+    # Two-pass app reads: the relay says it can resolve them (app_tools), then
+    # sends {"tool", "data"} back for the routed tool (app_data).
+    app_tools: bool = False
+    app_data: dict[str, Any] | None = None
 
 
 class CreateEngagementRequest(BaseModel):
@@ -735,8 +739,16 @@ def create_app(
             chat_provider=_get_chat_provider(),
             cache=cache,
             telemetry=telemetry,
+            app_tools=body.app_tools,
+            app_data=body.app_data,
+            engine_status=_engine_status,
         )
         return asdict(result)
+
+    def _engine_status() -> list[dict[str, Any]]:
+        if app.state.ai_router is None:
+            app.state.ai_router = app.state.router_factory()
+        return app.state.ai_router.status()
 
     @app.post("/assistant/selection")
     async def assistant_selection(
