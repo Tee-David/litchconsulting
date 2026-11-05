@@ -620,6 +620,65 @@ def add_formula_column(ctx: ToolContext, *, kind: str, header: str, sheet: str |
     )
 
 
+# --- clean_values ------------------------------------------------------------------------------
+def clean_values(ctx: ToolContext, *, sheet: str | None = None, workbook_id: str | None = None,
+                 kinds: list[str] | None = None) -> ToolOutput:
+    """Convert dates typed as text and numbers stored as text into real values
+    (same date / same number — only the type changes), so SUMIFS and date
+    filters stop skipping them. Every sheet when none is named."""
+    from litchai.workbench.model import _coerce, is_date, looks_like_text_date
+    from litchai.workbench.tables import detect_table
+
+    want = set(kinds or ["text_date", "text_number"])
+    books = [ctx.workbook(workbook_id)] if workbook_id else list(ctx.workbooks.values())
+    batches_ops: list[Any] = []
+    fixed = {"text_date": 0, "text_number": 0}
+    target_wb = None
+    for wb in books:
+        b = OpBuilder(wb, "clean_values")
+        for name, sh in wb.sheets.items():
+            if sheet and name.lower() != sheet.lower():
+                continue
+            t = detect_table(sh)
+            if t is None:
+                continue
+            for col in t.columns:
+                for r in range(t.first_row, t.last_row + 1):
+                    v = sh.value(r, col.index)
+                    if not isinstance(v, str) or sh.get(r, col.index).formula:
+                        continue
+                    if "text_date" in want and col.role == "date" and looks_like_text_date(v):
+                        new = _coerce(v)
+                        if is_date(new):
+                            b.set(name, a1(r, col.index), value=new, number_format="yyyy-mm-dd",
+                                  reason=f"text date {v!r} → real date",
+                                  source_rows=[qualify(name, a1(r, col.index))])
+                            fixed["text_date"] += 1
+                    elif ("text_number" in want and col.role in ("amount", "debit", "credit",
+                                                                  "balance")
+                          and to_number(v) is not None):
+                        b.set(name, a1(r, col.index), value=to_number(v),
+                              number_format=NAIRA_FMT, reason=f"number stored as text {v!r}",
+                              source_rows=[qualify(name, a1(r, col.index))])
+                        fixed["text_number"] += 1
+        if b.ops:
+            if target_wb is not None:
+                raise ToolError("name a workbook_id: text values were found in several files")
+            target_wb = (wb, b)
+            batches_ops = b.ops
+    if not batches_ops or target_wb is None:
+        raise ToolError("no text dates or text numbers to fix")
+    wb, b = target_wb
+    batch = finish_batch(ctx, b, f"Convert {sum(fixed.values())} text values",
+                         ", ".join(f"{v} {k.replace('_', ' ')}s" for k, v in fixed.items() if v)
+                         + " · values stay the same")
+    return ToolOutput(data={"fixed": fixed, "workbook_id": wb.id,
+                            "cells": [o.cell for o in batch.ops][:50]},
+                      batch=batch, citations=[qualify(o.sheet or "", o.cell or "")
+                                              for o in batch.ops][:20],
+                      summary=f"Proposed converting {sum(fixed.values())} text values.")
+
+
 # --- create_sheet / create_workbook --------------------------------------------------------
 def create_sheet(ctx: ToolContext, *, name: str, workbook_id: str | None = None,
                  headers: list[str] | None = None, rows: list[list[Any]] | None = None,

@@ -137,6 +137,12 @@ class NewSheetSpec(_Args):
     rows: list[list[Any]] | None = None
 
 
+class CleanArgs(_Args):
+    sheet: str | None = None
+    workbook_id: str | None = None
+    kinds: list[Literal["text_date", "text_number"]] | None = None
+
+
 class WorkbookArgs(_Args):
     name: str
     sheets: list[NewSheetSpec] | None = None
@@ -267,6 +273,12 @@ TOOLS: tuple[WorkbenchTool, ...] = (
                   lambda c, a: builders.create_workbook(
                       c, name=a.name, sheets=[s.model_dump() for s in (a.sheets or [])]),
                   ("new blank workbook", "build a template from scratch")),
+    WorkbenchTool("clean_values", "write",
+                  "Convert dates typed as text and numbers stored as text into real values "
+                  "(same value, correct type) so totals and date filters include them.",
+                  CleanArgs, lambda c, a: builders.clean_values(c, **_kw(a)),
+                  ("fix the text dates", "convert text numbers", "clean the dates"),
+                  risky=True),
 )
 
 TOOLS_BY_NAME = {t.name: t for t in TOOLS}
