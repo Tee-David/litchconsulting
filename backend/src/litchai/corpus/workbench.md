@@ -12,7 +12,8 @@ saves the file to the request as a draft, sends it for client review (the next r
 round), or publishes it as the final deliverable. Every one of them recomputes the
 workbook first; if a formula errors, nothing is released and the cells are listed.
 Voice: hold the microphone button in the composer to talk; the words appear in the
-text box to edit before sending.
+text box to edit before sending. Voice is off for clients set to local only, because
+the browser's speech recognition sends audio to an outside service.
 
 ## What the workbench reads
 
