@@ -78,6 +78,43 @@ _DOC_TYPES = {
 }
 
 
+_PROFIT_WORDS = ("profit", "p&l", "pnl", "income statement", "loss for", "net income",
+                 "made money", "how much did we make", "earnings")
+_TAX_ON_PROFIT = ("cit", "company income tax", "companies income tax", "development levy",
+                  "tax on profit", "tax on the profit", "corporate tax")
+
+
+def _profit_question(message: str) -> bool:
+    m = message.lower()
+    return any(w in m for w in _PROFIT_WORDS) or _tax_question(message)
+
+
+def _tax_question(message: str) -> bool:
+    m = message.lower()
+    return any(re.search(rf"\b{re.escape(w)}\b", m) for w in _TAX_ON_PROFIT)
+
+
+def routing_hints(message: str) -> list[str]:
+    """Typed routing notes the decision layer adds to the model's turn. They
+    steer accounting concepts the model tends to confuse (report 5.1)."""
+    hints: list[str] = []
+    if _profit_question(message):
+        hints.append("Profit is a P&L figure: get it from build_statement kind=pnl "
+                     "(categorise_rows first if there is no Category column). Never use "
+                     "credits minus debits, and never count own-account transfers.")
+    if _tax_question(message):
+        hints.append("CIT and development levy are on the P&L profit: call tax_compute kind=cit "
+                     "after build_statement and leave net_profit_per_accounts out, so the tool "
+                     "takes it from the P&L.")
+    m = message.lower()
+    if any(w in m for w in ("reconcil", "bank to ledger", "ledger to the bank", "bank vs")):
+        hints.append("Use reconcile. Report its balance_per_bank and balance_per_books (closing "
+                     "balances = opening + movement), the reconciling items and the difference.")
+    if any(w in m for w in ("balance", "closing", "cash at bank")) and "balance sheet" not in m:
+        hints.append("A balance = opening balance + net movement, not the movement alone.")
+    return hints
+
+
 def _score(text: str, words: tuple[str, ...]) -> float:
     t = text.lower()
     return float(sum(1 for w in words if w in t))
@@ -94,6 +131,12 @@ class HeuristicDecisionLayer:
             scored.append((t.name, s))
         scored.sort(key=lambda x: x[1], reverse=True)
         chosen = [n for n in ALWAYS_OFFER if n in names]
+        # Profit is a P&L figure: always offer the tools that produce it (report 5.1).
+        if _profit_question(message):
+            for n in ("categorise_rows", "build_statement",
+                      *(("tax_compute",) if _tax_question(message) else ())):
+                if n in names and n not in chosen:
+                    chosen.append(n)
         for name, s in scored:
             if len(chosen) >= k:
                 break
@@ -211,12 +254,14 @@ def fallback_plan(message: str) -> list[tuple[str, dict[str, Any]]]:
     plan: list[tuple[str, dict[str, Any]]] = []
     if any(w in m for w in ("reconcil", "bank to ledger", "bank vs")):
         plan.append(("reconcile", {}))
-    if any(w in m for w in ("categor", "classif")):
+    if any(w in m for w in ("categor", "classif")) or _profit_question(message):
         plan.append(("categorise_rows", {}))
-    for words, kind in ((("p&l", "pnl", "profit", "income statement"), "pnl"),
+    for words, kind in ((_PROFIT_WORDS, "pnl"),
                         (("balance sheet",), "bs"), (("cash flow", "cashflow"), "cashflow")):
-        if any(w in m for w in words):
+        if any(w in m for w in words) or (kind == "pnl" and _tax_question(message)):
             plan.append(("build_statement", {"kind": kind}))
+    if _tax_question(message):
+        plan.append(("tax_compute", {"kind": "cit"}))  # takes the profit from the P&L
     if any(w in m for w in ("text date", "fix the date", "stored as text")):
         plan.append(("clean_values", {}))
     if any(w in m for w in ("anomal", "unusual", "duplicate", "outlier", "check")):

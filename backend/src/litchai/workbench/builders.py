@@ -324,6 +324,9 @@ def build_statement(ctx: ToolContext, *, kind: str, sheet: str | None = None,
     key = {k: qualify(target, v) for k, v in compiled.key_cells.items()}
     previews = {op.cell: op.preview_value for op in batch.ops if op.op == "set_cell"}
     figures = {k: previews.get(v) for k, v in compiled.key_cells.items()}
+    if kind == "pnl":
+        # Later steps (tax_compute cit) take the profit from here, not from the model.
+        ctx.memory["pnl"] = {"figures": figures, "key_cells": key}
     return ToolOutput(
         data={"sheet": target, "kind": kind, "key_cells": key, "figures": figures,
               "excluded": excluded, "unmapped_categories": unknown,

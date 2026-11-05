@@ -24,7 +24,7 @@ TASKS = load_tasks()["tasks"]
 
 
 def test_task_set_shape():
-    assert 30 <= len(TASKS) <= 50
+    assert 30 <= len(TASKS) <= 60
     ids = [t["id"] for t in TASKS]
     assert len(ids) == len(set(ids))
     cats = {t["category"] for t in TASKS}

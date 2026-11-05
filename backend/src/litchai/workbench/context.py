@@ -30,6 +30,9 @@ class ToolContext:
     # (workbook_id, sheet) created by proposals — skipped when a tool picks its
     # own source sheet, so "reconcile" never treats the proposed P&L as a ledger.
     generated: set[tuple[str, str]] = field(default_factory=set)
+    # Results earlier steps left for later ones in the same turn (e.g. the P&L
+    # figures that tax_compute uses), so the model never retypes a figure.
+    memory: dict[str, Any] = field(default_factory=dict)
 
     def workbook(self, workbook_id: str | None = None) -> Workbook:
         if not self.workbooks:

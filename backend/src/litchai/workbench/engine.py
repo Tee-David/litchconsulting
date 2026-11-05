@@ -20,6 +20,7 @@ from litchai.ai.decision import (
     HeuristicDecisionLayer,
     fallback_plan,
     gate_batch,
+    routing_hints,
 )
 from litchai.ai.harness import AgentTool, Observation, run_agent_loop
 from litchai.ai.privacy import Masker
@@ -89,6 +90,34 @@ def _observation(out: Any, batch_info: dict[str, Any] | None) -> Observation:
                        proposal=batch_info, data=_trim(data))
 
 
+_REF = re.compile(r"^\$([a-z_]+)\.([A-Za-z0-9_.]+)$")
+
+
+def resolve_refs(value: Any, results: dict[str, Any]) -> Any:
+    """Replace "$tool.path" strings with the value from that tool's latest result,
+    so a chained step uses the computed figure, never one the model retyped."""
+    if isinstance(value, dict):
+        return {k: resolve_refs(v, results) for k, v in value.items()}
+    if isinstance(value, list):
+        return [resolve_refs(v, results) for v in value]
+    if isinstance(value, str):
+        m = _REF.match(value.strip())
+        if m:
+            tool, path = m.group(1), m.group(2)
+            if tool not in results:
+                raise ToolError(f"{value}: {tool} has not run yet in this answer")
+            cur: Any = results[tool]
+            for part in path.split("."):
+                if isinstance(cur, list) and part.isdigit() and int(part) < len(cur):
+                    cur = cur[int(part)]
+                elif isinstance(cur, dict) and part in cur:
+                    cur = cur[part]
+                else:
+                    raise ToolError(f"{value}: no '{part}' in the {tool} result")
+            return cur
+    return value
+
+
 def _trim(data: dict[str, Any], limit: int = 12000) -> dict[str, Any]:
     raw = json.dumps(data, default=str)
     if len(raw) <= limit:
@@ -108,9 +137,13 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
     conv.messages.append({"role": "user", "content": message, "at": _now(),
                           "selection": selection})
 
+    results: dict[str, Any] = {}  # tool name → its latest data, for "$tool.path" references
+
     def execute(name: str, args: dict[str, Any], step: int) -> Observation:
         try:
+            args = resolve_refs(args, results)
             out = run_tool(ctx, name, args)
+            results[name] = out.data
         except ToolError as exc:
             return Observation(ok=False, text=json.dumps({"error": str(exc)}), error=str(exc),
                                summary=f"{name} failed")
@@ -132,7 +165,7 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
 
     def check_args(name: str, args: dict[str, Any]) -> str | None:
         try:
-            validate_call(name, args)
+            validate_call(name, resolve_refs(args, results))
         except ToolError as exc:
             return str(exc)
         return None
@@ -146,6 +179,9 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
                              pending="\n".join(pending) or "(none)", max_steps=max_steps,
                              tool_menu="{tool_menu}")
     user = message if not selection else f"{message}\n(Selection hint: {selection})"
+    hints = routing_hints(message)
+    if hints:
+        user += "\n(Routing notes from the decision layer: " + " ".join(hints) + ")"
     history = [{"role": m["role"], "content": m["content"]} for m in conv.messages[:-1]
                if m.get("role") in ("user", "assistant")]
     final: dict[str, Any] | None = None
