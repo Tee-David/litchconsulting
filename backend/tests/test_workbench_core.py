@@ -331,3 +331,16 @@ def test_accept_with_reviewer_edit_and_new_workbook():
     assert wb.sheetnames == ["Sheet1"] and wb["Sheet1"]["B3"].value == "=B2*0.3"
     with pytest.raises(WorkbenchError):
         wbench.accept(conv, b.id)
+
+
+def test_tax_compute_refuses_unknown_inputs_and_applies_single_rent_relief():
+    import pytest
+
+    from litchai.workbench.analysis import tax_compute
+    from litchai.workbench.tools import ToolError
+
+    with pytest.raises(ToolError, match="valid inputs"):
+        tax_compute(None, kind="wht", inputs={"amount": 1_000_000})
+    with_rent = tax_compute(None, kind="paye", inputs={"gross_annual": 4_800_000, "rent_paid": 1_000_000})
+    without = tax_compute(None, kind="paye", inputs={"gross_annual": 4_800_000})
+    assert with_rent.data["total_annual_paye"] < without.data["total_annual_paye"]
