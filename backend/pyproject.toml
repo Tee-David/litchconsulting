@@ -40,6 +40,7 @@ where = ["src"]
 "litchai.taxonomy" = ["*.json"]
 "litchai.categorize" = ["seeds/*.json"]
 "litchai.ai" = ["prompts/*.md"]
+"litchai.evals" = ["*.json"]
 "litchai" = ["corpus/*.md"]
 
 [tool.pytest.ini_options]
