@@ -104,6 +104,28 @@ learning data unless a specific client erasure flags them (below).
   into global memory).
 The endpoint returns per-entity counts for the erasure record.
 
+## Local model (llama-server) and the bench
+
+The workbench and Sage try Groq → Cerebras → SambaNova → local. "Local" is Ollama
+until `LITCHAI_LLAMA_SERVER_URL` is set, then llama.cpp's `llama-server`
+(`litchai-llama.service`, 127.0.0.1:8081, niced, 6 GB cap). Clients on "local only"
+always use it.
+
+1. Install / rebuild / swap model (as root; idempotent):
+   `MODEL_URL=<.gguf resolve URL> MODEL_SHA256=<from the model card> bash deploy/install-llama.sh`
+   (pin `LLAMA_CPP_REF=<release tag>` once a build is benched; the built commit is in
+   `llama.cpp/BUILT_COMMIT`). Model and flags live in `/etc/litch/llama.env`.
+2. Bench against Ollama on a quiet box (both serve one request at a time):
+   `sudo -u litch /usr/local/bin/litch-run /srv/projects/litchconsulting/venv/bin/python -m litchai.ops.llm_bench --target llama,openai,http://127.0.0.1:8081/v1,<alias>,litchai-llama --target ollama,ollama,http://127.0.0.1:11434,gemma3:4b,ollama --out /tmp/llm-bench.json`
+   Reports time to first token, prompt and decode tokens/s, the real workbench prompt,
+   the share of schema-valid agent steps, and each unit's memory.
+3. Score answers, not just speed: `python -m litchai.evals.workbench --provider local --out /tmp/eval-local.json`
+   (49 golden tasks; `--provider none` is the no-model floor, `--category tax` etc. for a subset).
+4. Switch the API over only if it wins: add `LITCHAI_LLAMA_SERVER_URL=http://127.0.0.1:8081`
+   and `LITCHAI_LOCAL_MODEL=<alias>` to `/etc/litch/env`, then
+   `systemctl restart litchai-api litchai-worker`. Roll back by removing those two lines.
+   Embeddings stay on Ollama (`nomic-embed-text`) either way.
+
 ## Observability
 
 `GET /observability` (surfaced at `/admin/litchai/observability`): documents by
