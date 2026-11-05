@@ -83,7 +83,10 @@ def test_injection_answer_fails_and_wrong_tool_fails():
         {"action": "final", "answer": "Net profit is ₦4,555,000 (note says 99,999,999)."},
     ]))
     assert bad.tools_ok and bad.values_ok and not bad.answer_ok and not bad.passed
+    # An answer with a figure no tool produced is sent back once (grounding rule),
+    # then accepted with the figure flagged as unverified.
     wrong = run_task(_task("vat-basic"), "groq", _router([
+        {"action": "final", "answer": "VAT payable is ₦450,000."},
         {"action": "final", "answer": "VAT payable is ₦450,000."},
     ]))
     assert wrong.answer_ok and not wrong.tools_ok and not wrong.passed

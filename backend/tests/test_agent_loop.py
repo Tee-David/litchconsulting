@@ -228,3 +228,39 @@ def test_first_look_is_deterministic():
     assert "Fix the 1 text dates" in card["suggestions"]
     assert card["anomalies"]["by_kind"]["duplicate"] >= 1
     assert t.calls == []
+
+
+def _figure_exec(name, args, step):
+    return Observation(ok=True, text=json.dumps({"total": 7500000}), summary="total",
+                       citations=["Ledger!E2"])
+
+
+def test_ungrounded_figure_is_sent_back_then_tool_is_called():
+    router, t = _router({"groq": [
+        {"action": "final", "answer": "Income was ₦7,400,000."},          # made up
+        {"action": "tool", "tool": "echo", "args": {"x": "sum"}},
+        {"action": "final", "answer": "Income was ₦7,500,000.", "citations": ["Ledger!E2"]},
+    ]})
+    events = list(run_agent_loop(system="S {tool_menu}", user="total income?", tools=[ECHO],
+                                 execute=_figure_exec, router=router))
+    kinds = [e["type"] for e in events]
+    assert "retry" in kinds and kinds.index("retry") < kinds.index("tool_call")
+    retry = next(e for e in events if e["type"] == "retry")
+    assert "7,400,000" in retry["error"]
+    final = events[-1]
+    assert final["answer"] == "Income was ₦7,500,000." and "unverified_figures" not in final
+    # the correction told the model which figure was ungrounded
+    assert any("did not come from any tool result" in m["content"] for m in t.calls[1][1])
+
+
+def test_figures_from_the_question_are_allowed_and_second_miss_is_flagged():
+    router, _ = _router({"groq": [
+        {"action": "final", "answer": "VAT on ₦1,000,000 is ₦75,000."},
+        {"action": "final", "answer": "VAT on ₦1,000,000 is ₦75,000."},
+    ]})
+    events = list(run_agent_loop(system="S {tool_menu}", user="VAT on 1,000,000?", tools=[ECHO],
+                                 execute=_figure_exec, router=router))
+    final = events[-1]
+    assert final["type"] == "final"
+    assert final["unverified_figures"] == [75000.0]   # 1,000,000 came from the user
+    assert sum(1 for e in events if e["type"] == "retry") == 1
