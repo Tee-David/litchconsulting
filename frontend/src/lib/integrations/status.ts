@@ -398,7 +398,7 @@ export async function getIntegrationStatuses(): Promise<IntegrationStatus[]> {
         envGroup(`PAYSTACK_${paystackMode().toUpperCase()}_PUBLIC_KEY`, "NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY"),
       ],
       docsUrl: "https://paystack.com/docs/api/",
-      configHref: "/admin/finance/invoices",
+      configHref: "/admin/billing",
       ...pay,
     },
     {

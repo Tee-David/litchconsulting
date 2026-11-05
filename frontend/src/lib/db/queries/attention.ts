@@ -120,7 +120,7 @@ export async function needsAttention(): Promise<AttentionItem[]> {
           ? "Refund needed — double payment"
           : "Payment amount mismatch",
       detail: `Reference ${p.reference}`,
-      href: `/admin/finance/invoices/${p.invoiceId}`,
+      href: `/admin/billing/invoices/${p.invoiceId}`,
       at: (p.updatedAt as Date).toISOString(),
       tone: "danger",
     });

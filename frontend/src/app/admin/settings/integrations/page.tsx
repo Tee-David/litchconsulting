@@ -16,7 +16,6 @@ import {
   ArrowRight,
   type LucideIcon,
 } from "lucide-react";
-import { PageHeader } from "@/components/admin/ui/page-header";
 import { getIntegrationStatuses, type IntegrationState, type IntegrationStatus } from "@/lib/integrations/status";
 import { cn } from "@/lib/utils";
 
@@ -164,10 +163,7 @@ export default async function IntegrationsPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Integrations"
-        description="Live status for every service the platform depends on. Checked on each page load — nothing here is cached."
-      />
+      <p className="text-sm text-body">Live status for every service the platform depends on, checked on each page load.</p>
 
       {/* Roll-up. Anything amber is actionable; grey is simply switched off. */}
       <div className="flex flex-wrap items-center gap-2 rounded-card border border-hairline bg-paper px-4 py-3 text-sm">

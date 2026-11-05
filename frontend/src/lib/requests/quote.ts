@@ -216,7 +216,7 @@ export async function acceptQuote(input: {
     title: `${q.billToCompany || q.billToName || "A client"} accepted ${q.number}`,
     body: `Invoice ${created.number} created${input.plan === "deposit" ? ` with a ${q.depositPercent}% deposit` : ""}.`,
     dedupeKey: `quote-accepted:${q.id}`,
-    adminLink: `/admin/finance/invoices/${created.id}`,
+    adminLink: `/admin/billing/invoices/${created.id}`,
   });
   return { ok: true, invoiceId: created.id, invoiceNumber: created.number, requestId: req?.id ?? null };
 }
@@ -268,7 +268,7 @@ export async function declineQuote(input: {
     title: `${q.billToCompany || q.billToName || "A client"} declined ${q.number}`,
     body: reason,
     dedupeKey: `quote-declined:${q.id}`,
-    adminLink: `/admin/finance/quotes/${q.id}`,
+    adminLink: `/admin/billing/quotes/${q.id}`,
   });
   return { ok: true };
 }

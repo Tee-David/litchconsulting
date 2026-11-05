@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { emailOutbox, invoice, requestAssignment, requestItem, serviceRequest, serviceRequestEvent } from "@/lib/db/schema";
 import { recordAudit } from "@/lib/audit";
+import { markItemReceived, reopenItemSupplied } from "@/lib/requests/items";
 import { sendEmail } from "@/lib/email";
 import { notifyUsers } from "@/lib/notifications";
 import { formatMoney, num } from "@/lib/invoice/money";
@@ -188,16 +189,8 @@ export async function markReceived(id: string): Promise<Res> {
   try {
     const [it] = await db.select().from(requestItem).where(eq(requestItem.id, iId)).limit(1);
     if (!it) return { ok: false, error: "This ask no longer exists." };
-    if (it.status !== "supplied") return { ok: false, error: `This ask is ${it.status} now.` };
-    await db.update(requestItem).set({ status: "received", receivedAt: new Date(), updatedAt: new Date() }).where(eq(requestItem.id, it.id));
-    await db.insert(serviceRequestEvent).values({
-      requestId: it.requestId,
-      type: "note",
-      message: `Received: ${it.title}`,
-      visibility: "client",
-      actorRole: "admin",
-      actorName: me.displayName,
-    });
+    const r = await markItemReceived(it.id, { userId: me.id, name: me.displayName });
+    if (!r.ok) return { ok: false, error: r.error };
     done([`/admin/requests/${it.requestId}`, `/dashboard/requests/${it.requestId}`]);
     return { ok: true, message: `Marked received. The client sees “${it.title}” ticked.`, undoId: `unreceive:${it.id}` };
   } catch (e) {
@@ -266,10 +259,7 @@ export async function undoAttention(undoId: string): Promise<Res> {
     } else if (kind === "unreceive") {
       const me = await actor("requests");
       if (!me) return DENIED;
-      await db
-        .update(requestItem)
-        .set({ status: "supplied", receivedAt: null, updatedAt: new Date() })
-        .where(and(eq(requestItem.id, rowId), eq(requestItem.status, "received")));
+      await reopenItemSupplied(rowId);
     } else if (kind === "undismiss") {
       const me = await actor("settings");
       if (!me) return DENIED;

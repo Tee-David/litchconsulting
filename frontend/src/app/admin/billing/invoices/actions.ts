@@ -11,7 +11,7 @@ import { recordAudit } from "@/lib/audit";
 import { computeTotals, num } from "@/lib/invoice/money";
 import { nextInvoiceNumber, getInvoice } from "@/lib/db/queries/invoices";
 import { successfulPaymentsForInvoice } from "@/lib/db/queries/payments";
-import { recomputeInvoicePaid } from "../../_lib/recompute";
+import { applyManualPayment, rederivePaid } from "../../_lib/recompute";
 import type { InvoiceInput, BillTo } from "@/lib/invoice/types";
 
 type ActionResult = { ok: boolean; id?: string; error?: string };
@@ -150,7 +150,7 @@ export async function setInvoiceStatusAction(id: string, status: string): Promis
   if (status === "paid") {
     // Mark-as-paid == "the full amount landed". Record a manual payment for the
     // OUTSTANDING balance so the ledger sums to the total and amount_paid stays
-    // consistent with recomputeInvoicePaid — otherwise a later payment edit
+    // consistent with rederivePaid — otherwise a later payment edit
     // would recompute against a phantom total and reopen the invoice. recompute
     // then clears it and runs the paid side-effects (receipt, request advance).
     const [inv] = await db.select().from(invoice).where(eq(invoice.id, id));
@@ -177,7 +177,8 @@ export async function setInvoiceStatusAction(id: string, status: string): Promis
           rawEvent: { note: "Marked as paid" },
         });
       }
-      await recomputeInvoicePaid(id);
+      const { applyInvoicePaid } = await import("@/lib/payments/apply");
+      await applyInvoicePaid(inv, { via: "manual" });
     }
   } else {
     const patch: Record<string, unknown> = { status, updatedAt: new Date() };
@@ -387,6 +388,8 @@ export async function convertQuoteToInvoiceAction(id: string): Promise<ActionRes
         subtotal: q.subtotal,
         taxTotal: q.taxTotal,
         total: q.total,
+        // Deposit terms on the quote carry over to its invoice.
+        depositPercent: q.depositPercent,
         publicToken: randomUUID(),
         createdByUserId: uid,
       })
@@ -545,7 +548,7 @@ export async function recordManualPaymentAction(input: {
       meta: { number: inv.number, amount, currency: inv.currency, channel: input.channel || "bank_transfer", reference },
     });
 
-    await recomputeInvoicePaid(inv.id);
+    await applyManualPayment(inv.id, amount);
     paymentsRevalidate(inv.id);
     return { ok: true, id: inv.id };
   } catch (err) {
@@ -572,7 +575,7 @@ export async function deleteManualPaymentAction(paymentId: string): Promise<Acti
       meta: { amount: num(pay.amountSettled ?? pay.amount), reference: pay.reference },
     });
 
-    await recomputeInvoicePaid(pay.invoiceId);
+    await rederivePaid(pay.invoiceId);
     paymentsRevalidate(pay.invoiceId);
     return { ok: true, id: pay.invoiceId };
   } catch (err) {

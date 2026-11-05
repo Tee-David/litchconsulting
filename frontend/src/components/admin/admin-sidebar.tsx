@@ -112,8 +112,8 @@ export function SidebarNav({
             onClick={onTogglePin}
             data-tour="sidebar-pin"
             aria-label={pinnedCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            title={pinnedCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className="grid size-8 place-items-center rounded-ctl text-muted transition-colors hover:bg-surface hover:text-ink"
+            title={pinnedCollapsed ? "Expand sidebar (Ctrl+B)" : "Collapse sidebar (Ctrl+B)"}
+            className="grid size-8 place-items-center rounded-ctl text-muted outline-none transition-colors hover:bg-surface hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40"
           >
             {pinnedCollapsed ? <PanelLeftOpen className="size-4" /> : <PanelLeftClose className="size-4" />}
           </button>
@@ -132,6 +132,18 @@ export function SidebarNav({
       </nav>
 
       <div className={cn("flex flex-col gap-2 border-t border-hairline", collapsed ? "p-2.5" : "p-3")}>
+        {collapsed && onTogglePin ? (
+          <button
+            type="button"
+            onClick={onTogglePin}
+            data-tour="sidebar-pin"
+            aria-label="Expand sidebar"
+            title="Expand sidebar"
+            className="grid h-9 w-full place-items-center rounded-ctl text-muted outline-none transition-colors hover:bg-surface hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40"
+          >
+            <PanelLeftOpen className="size-[18px]" />
+          </button>
+        ) : null}
         <div
           className={cn("flex items-center gap-2 rounded-ctl bg-surface text-xs text-body", collapsed ? "justify-center p-2" : "px-2.5 py-2")}
           title={sageOnline ? "Sage is connected" : "Sage is not connected on this deployment"}

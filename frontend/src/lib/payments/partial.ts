@@ -96,7 +96,7 @@ export async function applyInvoicePartPaid(
     title: `${label} received on ${inv.number}`,
     body: `${inv.billToCompany || inv.billToName || "Client"} paid part of the invoice. Work can start.`,
     dedupeKey: `part-paid-firm:${inv.id}:${paid.toFixed(2)}`,
-    adminLink: `/admin/finance/invoices/${inv.id}`,
+    adminLink: `/admin/billing/invoices/${inv.id}`,
   });
   await notifyAdmin({
     subject: `₦ ${label} received — ${inv.number}`,
@@ -106,7 +106,7 @@ export async function applyInvoicePartPaid(
   try {
     const { revalidatePath } = await import("next/cache");
     revalidatePath("/dashboard", "layout");
-    revalidatePath("/admin/finance/invoices");
+    revalidatePath("/admin/billing");
     revalidatePath("/work", "layout");
   } catch {
     /* outside a request scope (webhook) */

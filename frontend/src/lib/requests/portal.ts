@@ -1,4 +1,5 @@
 import "server-only";
+import { ERASURE_HOLD_DAYS } from "@/lib/privacy/erase";
 import { cache } from "react";
 import { and, asc, desc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { db } from "@/lib/db/client";
@@ -24,12 +25,30 @@ import { assigneesOf } from "@/lib/requests/people";
  */
 
 /** Session user + their client row, deduped per request. Null when not a client. */
-export const getPortal = cache(async () => {
+const loadPortal = cache(async () => {
   const user = await getSessionUser();
   if (!user || user.banned || roleOf(user) !== "client") return null;
   const clientRow = await getClientForUser(user.id, user.email || "", user.name || undefined);
   return { user, client: clientRow };
 });
+
+/**
+ * The signed-in client and their client row, or null. Also null while the
+ * client's erasure is scheduled (NDPA hold): the portal is closed, so every
+ * page, action and API that starts here refuses.
+ */
+export const getPortal = cache(async () => {
+  const p = await loadPortal();
+  if (!p || p.client.erasureRequestedAt) return null;
+  return p;
+});
+
+/** When the signed-in client's erasure is scheduled: the date it runs; else null. */
+export async function portalErasureDue(): Promise<Date | null> {
+  const p = await loadPortal();
+  const at = p?.client.erasureRequestedAt;
+  return at ? new Date(at.getTime() + ERASURE_HOLD_DAYS * 86_400_000) : null;
+}
 
 export async function clientRequestRows(clientId: string) {
   const rows = await db

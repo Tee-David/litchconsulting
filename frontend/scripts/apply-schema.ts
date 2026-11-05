@@ -385,7 +385,10 @@ export const STATEMENTS = [
     "claimed_at" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT now() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT now() NOT NULL)`,
-  `CREATE INDEX IF NOT EXISTS "request_draft_email_idx" ON "request_draft" ("email")`,
+  `CREATE INDEX IF NOT EXISTS "request_draft_email_idx" ON "request_draft" ("email")`,  // NDPA erasure with a 30-day hold (scheduled -> cancel or erased by the sweep).
+  `ALTER TABLE "client" ADD COLUMN IF NOT EXISTS "erasure_requested_at" timestamp with time zone`,
+  `ALTER TABLE "client" ADD COLUMN IF NOT EXISTS "erasure_requested_by" text`,
+  `ALTER TABLE "client" ADD COLUMN IF NOT EXISTS "erased_at" timestamp with time zone`,
 ];
 
 /**
