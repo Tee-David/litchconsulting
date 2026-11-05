@@ -125,6 +125,8 @@ export function RequestList({ rows, team }: { rows: RequestRow[]; team: TeamMemb
     { id: "action", label: "Needs action", predicate: needsAction },
     { id: "us", label: "With us", predicate: (r) => r.move === "us" && !CLOSED.includes(r.status) },
     { id: "client", label: "Waiting on client", predicate: (r) => r.move === "wait" },
+    // Open work nobody is on (Settings → Team and access links here).
+    { id: "unassigned", label: "Unassigned", predicate: (r) => !CLOSED.includes(r.status) && r.assignees.length === 0 && !r.legacyAssignee },
     { id: "open", label: "All open", predicate: (r) => !CLOSED.includes(r.status) },
     { id: "done", label: "Done", predicate: (r) => CLOSED.includes(r.status) },
   ];

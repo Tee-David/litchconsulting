@@ -107,6 +107,7 @@ export default async function TeamAccessPage({ searchParams }: { searchParams: P
       and(
         isNull(serviceRequest.deletedAt),
         notInArray(serviceRequest.status, TERMINAL),
+        isNull(serviceRequest.assignee),
         sql`NOT EXISTS (SELECT 1 FROM ${requestAssignment} WHERE ${requestAssignment.requestId} = ${serviceRequest.id})`,
       ),
     )

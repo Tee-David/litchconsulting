@@ -3,7 +3,7 @@ import { contactSchema } from "@/lib/schemas";
 import { site } from "@/lib/content";
 import { db } from "@/lib/db/client";
 import { lead } from "@/lib/db/schema";
-import { sendEmail, emailLayout } from "@/lib/email";
+import { sendTemplate } from "@/lib/email-templates";
 import { rateLimit, RATE_LIMITS, callerKey, callerIp, tooManyRequests } from "@/lib/rate-limit";
 import { verifyTurnstile, turnstileTokenFrom } from "@/lib/turnstile";
 
@@ -46,19 +46,21 @@ export async function POST(req: Request) {
   }
 
   const to = process.env.CONTACT_TO_EMAIL || site.email;
-  const result = await sendEmail({
-    to,
-    replyTo: data.email,
-    subject: `New consultation request — ${data.service}`,
-    html: emailLayout(`
-      <p style="margin:0 0 14px;"><strong>${data.name}</strong> (${data.email}) requested a consultation.</p>
-      <table style="border-collapse:collapse;font-size:14px;color:#3c4657;">
-        <tr><td style="padding:4px 12px 4px 0;color:#5b6474;">Service</td><td style="padding:4px 0;"><strong>${data.service}</strong></td></tr>
-        <tr><td style="padding:4px 12px 4px 0;color:#5b6474;">Company</td><td style="padding:4px 0;">${data.company || "—"}</td></tr>
-      </table>
-      <p style="margin:16px 0 0;padding:12px 16px;background:#f3f5fb;border-radius:12px;">${data.message}</p>
-    `),
-  }).catch((err) => {
+  const result = await sendTemplate(
+    "notice",
+    {
+      subject: `New consultation request: ${data.service}`,
+      heading: "New consultation request",
+      paragraphs: [`**${data.name}** (${data.email}) asked for a consultation.`, data.message],
+      rows: [
+        { label: "Service", value: data.service, strong: true },
+        { label: "Company", value: data.company || "Not given" },
+      ],
+      note: "Reply to this email to answer them directly.",
+      why: "You got this because someone sent the contact form on litchconsulting.com.",
+    },
+    { to, replyTo: data.email, audience: "admin" },
+  ).catch((err) => {
     console.error("[contact] email send failed:", err);
     return { delivered: false as const };
   });

@@ -1,10 +1,11 @@
 import "server-only";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { hashPassword } from "better-auth/crypto";
 import { db } from "@/lib/db/client";
 import { client, clientMember, invitation, user } from "@/lib/db/schema";
 import { siteOrigin } from "@/lib/site-url";
+import { FIRM_PENDING_ERROR, supersedePlan } from "@/lib/invitation-rules";
 
 /**
  * Invitations (R1.2) — the only way a staff account or a client colleague is
@@ -56,8 +57,10 @@ async function accountExists(email: string): Promise<boolean> {
 
 /**
  * Make an invitation and return the raw token (put it in the email, then let
- * it go). An outstanding invitation for the same address is withdrawn in the
- * same transaction, so there are never two live links for one person.
+ * it go). Earlier pending invitations for the address are withdrawn in the
+ * same transaction by the rules in lib/invitation-rules.ts: a firm (staff or
+ * admin) invitation replaces anything; a client colleague invitation is
+ * refused while a firm one is pending and only replaces its own company's.
  */
 export async function createInvitation(input: {
   email: string;
@@ -80,10 +83,14 @@ export async function createInvitation(input: {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + INVITE_TTL_DAYS * 24 * 60 * 60 * 1000);
   const row = await db.transaction(async (tx) => {
-    await tx
-      .update(invitation)
-      .set({ revokedAt: new Date() })
-      .where(and(sql`lower(${invitation.email}) = ${email}`, isNull(invitation.redeemedAt), isNull(invitation.revokedAt)));
+    const pending = await tx
+      .select({ id: invitation.id, role: invitation.role, clientId: invitation.clientId })
+      .from(invitation)
+      .where(and(sql`lower(${invitation.email}) = ${email}`, isNull(invitation.redeemedAt), isNull(invitation.revokedAt), gt(invitation.expiresAt, new Date())))
+      .for("update");
+    const plan = supersedePlan({ role: input.role, clientId: input.clientId ?? null }, pending);
+    if (!plan.ok) throw new InvitationError(plan.error);
+    if (plan.revokeIds.length) await tx.update(invitation).set({ revokedAt: new Date() }).where(inArray(invitation.id, plan.revokeIds));
     const [created] = await tx
       .insert(invitation)
       .values({
@@ -113,6 +120,22 @@ export async function reissueInvitation(id: string): Promise<{ invitation: Invit
   if (!row) throw new InvitationError("That invitation no longer exists.");
   if (row.redeemedAt) throw new InvitationError("That invitation was already accepted.");
   if (await accountExists(row.email)) throw new InvitationError("This person already has an account.");
+  if (row.role === "client") {
+    const [firm] = await db
+      .select({ id: invitation.id })
+      .from(invitation)
+      .where(
+        and(
+          sql`lower(${invitation.email}) = ${row.email}`,
+          inArray(invitation.role, ["staff", "admin"]),
+          isNull(invitation.redeemedAt),
+          isNull(invitation.revokedAt),
+          gt(invitation.expiresAt, new Date()),
+        ),
+      )
+      .limit(1);
+    if (firm) throw new InvitationError(FIRM_PENDING_ERROR);
+  }
   const token = randomBytes(32).toString("base64url");
   const [updated] = await db
     .update(invitation)
@@ -255,6 +278,40 @@ export async function redeemInvitation(token: string, input: { name: string; pas
     await tx.update(invitation).set({ redeemedAt: now, redeemedBy: userId }).where(eq(invitation.id, row.id));
     return { ok: true, userId, email: row.email, name, role, clientId: row.clientId, invitedBy: row.invitedBy, invitationId: row.id } as const;
   });
+}
+
+/**
+ * Spend an invitation for an account that "Continue with Google" just made
+ * (app/invite/[token]/google). The account must carry the invited email and
+ * must have been created after the invitation was sent, so an older account
+ * is never silently given a new role. Same lock and all-or-nothing rules as
+ * redeemInvitation.
+ */
+export async function redeemInvitationForUser(token: string, userId: string): Promise<Redeemed> {
+  if (!TOKEN_RE.test(token)) return { ok: false, reason: "invalid" };
+  return db.transaction(async (tx) => {
+    const [row] = await tx.select().from(invitation).where(eq(invitation.tokenHash, hashToken(token))).for("update").limit(1);
+    if (!row) return { ok: false, reason: "invalid" } as const;
+    const state = inviteState(row);
+    if (state !== "pending") return { ok: false, reason: state } as const;
+    const [u] = await tx.select({ id: user.id, email: user.email, name: user.name, createdAt: user.createdAt }).from(user).where(eq(user.id, userId)).limit(1);
+    if (!u || normaliseEmail(u.email) !== row.email) return { ok: false, reason: "invalid" } as const;
+    if (!u.createdAt || u.createdAt.getTime() < row.createdAt.getTime()) return { ok: false, reason: "exists" } as const;
+    const role: InviteRole = row.role === "admin" ? "admin" : row.role === "staff" ? "staff" : "client";
+    await tx.update(user).set({ role, emailVerified: true, updatedAt: new Date() }).where(eq(user.id, u.id));
+    if (role === "client" && row.clientId) {
+      await tx.insert(clientMember).values({ clientId: row.clientId, userId: u.id, access: row.access || "viewer", invitedBy: row.invitedBy }).onConflictDoNothing();
+    }
+    await tx.update(invitation).set({ redeemedAt: new Date(), redeemedBy: u.id }).where(eq(invitation.id, row.id));
+    return { ok: true, userId: u.id, email: row.email, name: u.name || row.email.split("@")[0], role, clientId: row.clientId, invitedBy: row.invitedBy, invitationId: row.id } as const;
+  });
+}
+
+/** The invited address for a token while it is still pending (the Google sign-up guard in lib/auth.ts). */
+export async function pendingInviteEmail(token: string): Promise<string | null> {
+  if (!TOKEN_RE.test(token)) return null;
+  const [row] = await db.select().from(invitation).where(eq(invitation.tokenHash, hashToken(token))).limit(1);
+  return row && inviteState(row) === "pending" ? row.email : null;
 }
 
 /** Send the invitation email for a freshly made (or re-issued) token. */

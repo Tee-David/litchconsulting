@@ -106,7 +106,7 @@ export async function applySuccessfulPayment(
         .where(eq(payment.id, pay.id));
       await notifyAdmin({
         subject: `⚠️ Payment amount mismatch on ${inv.number}`,
-        html: `<p>Paystack reported <strong>${(data.amount ?? 0) / 100} ${data.currency ?? "?"}</strong> for invoice <strong>${inv.number}</strong> (expected ${inv.total} ${inv.currency}). Reference <code>${reference}</code> via ${via}. The invoice was NOT marked paid.</p>`,
+        lines: [`Paystack reported **${(data.amount ?? 0) / 100} ${data.currency ?? "?"}** for invoice **${inv.number}** (expected ${inv.total} ${inv.currency}). Reference ${reference} via ${via}. The invoice was NOT marked paid.`],
         href: `${baseUrl()}/admin/billing/invoices/${inv.id}`,
       });
       return { outcome: "flagged_amount_mismatch" as const, invoiceId: inv.id };
@@ -120,7 +120,7 @@ export async function applySuccessfulPayment(
         .where(eq(payment.id, pay.id));
       await notifyAdmin({
         subject: `⚠️ Double payment on ${inv.number} — refund needed`,
-        html: `<p>Invoice <strong>${inv.number}</strong> was already paid, but Paystack charge <code>${reference}</code> also succeeded. Refund it from the Paystack dashboard.</p>`,
+        lines: [`Invoice **${inv.number}** was already paid, but Paystack charge ${reference} also succeeded. Refund it from the Paystack dashboard.`],
         href: `${baseUrl()}/admin/billing/invoices/${inv.id}`,
       });
       return { outcome: "duplicate_success" as const, invoiceId: inv.id };
@@ -286,9 +286,7 @@ export async function applyInvoicePaid(
 
   await notifyAdmin({
     subject: `₦ Payment received — ${inv.number}${req ? ` (${req.number})` : ""}`,
-    html: `<p><strong>${inv.currency} ${inv.total}</strong> received on invoice <strong>${inv.number}</strong>${
-      req ? ` for request <strong>${req.number}</strong> (${req.serviceName})` : ""
-    } via ${opts.via}.</p>`,
+    lines: [`**${inv.currency} ${inv.total}** received on invoice **${inv.number}**${req ? ` for request **${req.number}** (${req.serviceName})` : ""} via ${opts.via}.`],
     href: `${baseUrl()}/admin/billing/invoices/${inv.id}`,
   });
 

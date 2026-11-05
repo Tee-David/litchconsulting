@@ -107,6 +107,24 @@ export type RequestUpdateData = { name?: string | null; serviceName: string; req
 export type DeliverableData = { name?: string | null; serviceName: string; requestNumber: string; fileName: string; url: string };
 export type RequestClosedData = { name?: string | null; serviceName: string; requestNumber: string; outcome: "cancelled" | "declined" | "refunded"; reason?: string | null; url: string };
 export type InvoiceSentData = { name?: string | null; invoiceNumber: string; projectTitle?: string | null; total: string; due?: string | null; url: string };
+/**
+ * General-purpose notice for one-off sends (reminders, follow-ups, support
+ * replies, admin alerts). Every string is escaped by the renderer; use **bold**
+ * for emphasis and 
+ for line breaks. Never pass HTML.
+ */
+export type NoticeData = {
+  subject: string;
+  preheader?: string | null;
+  heading: string;
+  name?: string | null;
+  paragraphs: string[];
+  rows?: Array<{ label: string; value: string; strong?: boolean }>;
+  cta?: { label: string; href: string } | null;
+  note?: string | null;
+  why: string;
+  fromName?: string | null;
+};
 export type AssignedData = { name?: string | null; assignerName: string; requests: Array<{ number: string; service: string; client?: string | null }>; url: string };
 
 const ACCESS_TEXT: Record<string, string> = {
@@ -447,6 +465,25 @@ export const EMAIL_TEMPLATES = {
       why: "You got this because Litch Consulting issued you an invoice. Invoices always send, for your records.",
     }),
   } satisfies Def<InvoiceSentData>,
+
+  notice: {
+    audience: "anyone",
+    category: null,
+    always: true,
+    mergeTags: ["subject", "preheader", "heading", "name", "paragraphs", "rows", "cta", "note", "why", "fromName"],
+    build: (d: NoticeData): EmailBody => ({
+      subject: d.subject,
+      preheader: d.preheader || d.paragraphs[0]?.split("**").join("").slice(0, 120) || d.heading,
+      heading: d.heading,
+      greeting: first(d.name),
+      paragraphs: d.paragraphs,
+      rows: d.rows,
+      cta: d.cta ?? undefined,
+      note: d.note ?? undefined,
+      why: d.why,
+      fromName: d.fromName ?? undefined,
+    }),
+  } satisfies Def<NoticeData>,
 
   assigned: {
     audience: "staff",

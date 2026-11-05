@@ -11,7 +11,7 @@ import { sendEmail } from "@/lib/email";
 import { notifyUsers } from "@/lib/notifications";
 import { formatMoney, num } from "@/lib/invoice/money";
 import { actor, DENIED, failure } from "./_lib/guard";
-import { simpleEmail, escapeHtml } from "./_lib/mail";
+import { simpleEmail } from "./_lib/mail";
 
 type Res = { ok: true; undoId?: string; message?: string } | { ok: false; error: string };
 
@@ -48,7 +48,7 @@ export async function remindInvoice(id: string): Promise<Res> {
         heading: `Invoice ${inv.number} is past its due date`,
         greeting: inv.billToName,
         paragraphs: [
-          `This is a reminder that <strong>${escapeHtml(formatMoney(bal, inv.currency))}</strong> on invoice ${escapeHtml(inv.number)} was due on ${escapeHtml(String(inv.dueDate))}.`,
+          `This is a reminder that **${formatMoney(bal, inv.currency)}** on invoice ${inv.number} was due on ${String(inv.dueDate)}.`,
           "If you have already paid, thank you, and please reply with the transfer reference so we can match it. If you deducted WHT, send us the credit note.",
         ],
         rows: [
@@ -92,7 +92,7 @@ export async function followUpQuote(id: string): Promise<Res> {
         heading: `Following up on quote ${q.number}`,
         greeting: q.billToName,
         paragraphs: [
-          `We sent you a quote${q.projectTitle ? ` for <strong>${escapeHtml(q.projectTitle)}</strong>` : ""}. If it looks right, you can accept it online in one click; your invoice and pay link follow straight away.`,
+          `We sent you a quote${q.projectTitle ? ` for **${q.projectTitle}**` : ""}. If it looks right, you can accept it online in one click; your invoice and pay link follow straight away.`,
           "If something needs changing, reply to this email and we will update it.",
         ],
         rows: [
@@ -135,7 +135,7 @@ export async function remindReview(id: string): Promise<Res> {
         subject: `Reminder: your draft is ready to review (${r.number})`,
         html: simpleEmail({
           heading: "Your draft is waiting for you",
-          paragraphs: [`The draft for <strong>${escapeHtml(r.serviceName)}</strong> is ready. Approve it, or tell us what to change, and we will carry on.`],
+          paragraphs: [`The draft for **${r.serviceName}** is ready. Approve it, or tell us what to change, and we will carry on.`],
           rows: [{ label: "Request", value: r.number }, { label: "Round", value: String(Math.max(1, r.reviewRound)) }],
           cta: { href: link, label: "Review the draft" },
           why: "You got this because a draft on your request is waiting for your approval.",

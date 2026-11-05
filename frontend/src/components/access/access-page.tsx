@@ -284,7 +284,7 @@ export function AccessPage({ team, invites, work, unassigned, openInvite, tab: i
           {unassigned ? (
             <p className="rounded-card border border-warn/30 bg-warn-soft px-4 py-3 text-sm text-ink">
               {unassigned} open {unassigned === 1 ? "request has" : "requests have"} nobody on {unassigned === 1 ? "it" : "them"}.{" "}
-              <Link href="/admin/requests" className="font-medium text-accent hover:underline">
+              <Link href="/admin/requests?view=unassigned" className="font-medium text-accent hover:underline">
                 Assign them
               </Link>
             </p>

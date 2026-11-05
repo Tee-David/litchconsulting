@@ -1,25 +1,25 @@
 import "server-only";
 
 /**
- * Single seam for "tell the admin something happened": email now, and web
- * push once a subscription exists (added with the admin alerts milestone —
- * this function is the only place that needs to grow).
+ * Single seam for "tell the admin something happened": email (rendered by the
+ * `notice` template in lib/email-templates.ts, so every line is escaped) and
+ * web push to admins. `lines` are plain text; use **bold** for emphasis.
  */
-export async function notifyAdmin(opts: { subject: string; html: string; href?: string }) {
-  const { sendEmail, emailLayout } = await import("@/lib/email");
-  const to =
-    process.env.CONTACT_TO_EMAIL || process.env.SMTP_FROM || process.env.SMTP_USER || "";
+export async function notifyAdmin(opts: { subject: string; lines: string[]; href?: string }) {
+  const to = process.env.CONTACT_TO_EMAIL || process.env.SMTP_FROM || process.env.SMTP_USER || "";
   if (to) {
-    await sendEmail({
-      to,
-      subject: opts.subject,
-      html: emailLayout(
-        opts.html +
-          (opts.href
-            ? `<p style="margin:18px 0 0;"><a href="${opts.href}" style="color:#2540c4;">Open in dashboard →</a></p>`
-            : "")
-      ),
-    }).catch(() => {});
+    const { sendTemplate } = await import("@/lib/email-templates");
+    await sendTemplate(
+      "notice",
+      {
+        subject: opts.subject,
+        heading: opts.subject,
+        paragraphs: opts.lines,
+        cta: opts.href ? { label: "Open in dashboard", href: opts.href } : null,
+        why: "You got this because you are an Admin at Litch Consulting.",
+      },
+      { to, audience: "admin" },
+    ).catch(() => {});
   }
   try {
     const { pushAdmins } = await import("@/lib/push");

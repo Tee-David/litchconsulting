@@ -61,3 +61,6 @@ Thumbs.db
 
 # Local secret scratch — never commit
 info.txt
+
+# Local VM access notes (secrets) — never commit
+wdc-projects-vm-access.txt

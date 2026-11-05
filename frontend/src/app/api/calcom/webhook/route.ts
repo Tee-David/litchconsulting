@@ -109,9 +109,7 @@ export async function POST(req: Request) {
           subject: rescheduled
             ? `Consultation rescheduled — ${attendee.name ?? attendee.email}`
             : `New consultation booked — ${attendee.name ?? attendee.email}`,
-          html: `<p><strong>${attendee.name ?? attendee.email}</strong> ${
-            rescheduled ? "moved their consultation to" : "booked a consultation for"
-          } <strong>${p.startTime ? formatDateTime(p.startTime) : "a time TBC"}</strong>.</p>`,
+          lines: [`**${attendee.name ?? attendee.email}** ${rescheduled ? "moved their consultation to" : "booked a consultation for"} **${p.startTime ? formatDateTime(p.startTime) : "a time TBC"}**.`],
           href: `${(process.env.BETTER_AUTH_URL || "https://litchconsulting.com").replace(/\/$/, "")}/admin/requests?tab=consultations`,
         });
         break;
@@ -123,9 +121,7 @@ export async function POST(req: Request) {
           .where(eq(consultation.calBookingUid, uid));
         await notifyAdmin({
           subject: `Consultation cancelled — ${attendee.name ?? attendee.email}`,
-          html: `<p><strong>${attendee.name ?? attendee.email}</strong> cancelled their consultation${
-            p.startTime ? ` (${formatDateTime(p.startTime)})` : ""
-          }.</p>`,
+          lines: [`**${attendee.name ?? attendee.email}** cancelled their consultation${p.startTime ? ` (${formatDateTime(p.startTime)})` : ""}.`],
         });
         break;
       }

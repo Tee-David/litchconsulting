@@ -19,9 +19,6 @@ function baseUrl() {
   ).replace(/\/$/, "");
 }
 
-/** Client-typed text goes into admin alert HTML: escape it. */
-const esc = (v: string | null | undefined) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-
 function requestLink(req: ServiceRequest) {
   return `${baseUrl()}/dashboard/requests/${req.id}`;
 }
@@ -49,7 +46,10 @@ export async function emailRequestSubmitted(req: ServiceRequest, to: string, nam
 export async function alertAdminNewRequest(req: ServiceRequest, clientName?: string | null) {
   await notifyAdmin({
     subject: `New service request ${req.number} — ${req.serviceName}`,
-    html: `<p><strong>${esc(clientName || "A client")}</strong> requested <strong>${req.serviceName}</strong> (${req.pricingMode === "quote" ? "quote-based" : `fixed — ₦${req.priceSnapshot ?? "?"}`}).</p><p style="color:#5b6474;">${esc((req.details || "No brief provided.").slice(0, 600))}</p>`,
+    lines: [
+      `**${clientName || "A client"}** requested **${req.serviceName}** (${req.pricingMode === "quote" ? "quote-based" : `fixed, ₦${req.priceSnapshot ?? "?"}`}).`,
+      (req.details || "No brief provided.").slice(0, 600),
+    ],
     href: `${baseUrl()}/admin/requests/${req.id}`,
   });
 }
@@ -94,7 +94,7 @@ export async function emailRequestTerminal(
 export async function alertAdminDocumentsComplete(req: ServiceRequest) {
   await notifyAdmin({
     subject: `All documents in for ${req.number} — ${req.serviceName}`,
-    html: `<p>Every required document for <strong>${req.number}</strong> has been uploaded. The request has moved to <strong>In progress</strong>.</p>`,
+    lines: [`Every required document for **${req.number}** has been uploaded. The request has moved to **In progress**.`],
     href: `${baseUrl()}/admin/requests/${req.id}`,
   });
 }
@@ -103,7 +103,7 @@ export async function alertAdminDocumentsComplete(req: ServiceRequest) {
 export async function alertAdminDocumentUploaded(req: ServiceRequest, fileName: string) {
   await notifyAdmin({
     subject: `Document uploaded on ${req.number}`,
-    html: `<p><strong>${esc(fileName)}</strong> was uploaded on request <strong>${req.number}</strong> (${req.serviceName}).</p>`,
+    lines: [`**${fileName}** was uploaded on request **${req.number}** (${req.serviceName}).`],
     href: `${baseUrl()}/admin/requests/${req.id}`,
   });
 }
@@ -134,7 +134,7 @@ export async function emailCorrectionRequested(
 export async function alertAdminClientMessage(req: ServiceRequest, body: string, clientName?: string | null) {
   await notifyAdmin({
     subject: `New message on ${req.number} from ${clientName || "client"}`,
-    html: `<p><strong>${esc(clientName || "The client")}</strong> replied on request <strong>${req.number}</strong> (${req.serviceName}):</p><p style="color:#3c4657;padding:12px 16px;background:#f3f5fb;border-radius:12px;">${esc(body)}</p>`,
+    lines: [`**${clientName || "The client"}** replied on request **${req.number}** (${req.serviceName}):`, body],
     href: `${baseUrl()}/admin/requests/${req.id}`,
   });
 }
