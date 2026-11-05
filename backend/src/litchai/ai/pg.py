@@ -132,3 +132,58 @@ class PgQuota:
                 "SET exhausted_until = EXCLUDED.exhausted_until",
                 (provider, until),
             )
+
+
+class ConnectingCallLog:
+    """Long-lived router call log: one short connection per record, never raises."""
+
+    def record(self, rec: Any) -> None:
+        from litchai.db.pg import connect
+
+        try:
+            conn = connect()
+        except Exception:  # noqa: BLE001 — a log write must never break a model call
+            return
+        try:
+            PgCallLog(conn).record(rec)
+        except Exception:  # noqa: BLE001, S110
+            pass
+        finally:
+            conn.close()
+
+
+class ConnectingQuota:
+    """Postgres-backed daily quota with an in-memory fallback when the DB is down."""
+
+    def __init__(self) -> None:
+        from litchai.ai.router import InMemoryQuota
+
+        self._mem = InMemoryQuota()
+
+    def _run(self, fn_name: str, *args: Any) -> Any:
+        from litchai.db.pg import connect
+
+        try:
+            conn = connect()
+        except Exception:  # noqa: BLE001
+            return getattr(self._mem, fn_name)(*args)
+        try:
+            return getattr(PgQuota(conn), fn_name)(*args)
+        except Exception:  # noqa: BLE001
+            return getattr(self._mem, fn_name)(*args)
+        finally:
+            conn.close()
+
+    def usage(self, provider: str) -> tuple[int, int]:
+        return self._run("usage", provider)
+
+    def record(self, provider: str, tokens: int) -> None:
+        self._mem.record(provider, tokens)
+        self._run("record", provider, tokens)
+
+    def exhausted_until(self, provider: str) -> float | None:
+        return self._run("exhausted_until", provider)
+
+    def mark_exhausted(self, provider: str, until: float) -> None:
+        self._mem.mark_exhausted(provider, until)
+        self._run("mark_exhausted", provider, until)
