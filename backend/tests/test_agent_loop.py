@@ -264,3 +264,11 @@ def test_figures_from_the_question_are_allowed_and_second_miss_is_flagged():
     assert final["type"] == "final"
     assert final["unverified_figures"] == [75000.0]   # 1,000,000 came from the user
     assert sum(1 for e in events if e["type"] == "retry") == 1
+
+
+def test_parse_turn_tolerates_prose_extra_objects_and_raw_newlines():
+    turn, err = parse_turn('Sure. {"action":"final","answer":"a"} {"note":1}', set())
+    assert err is None and turn.answer == "a"
+    turn, err = parse_turn('{"action":"final","answer":"line1\nline2"}', set())
+    assert err is None and "line2" in turn.answer
+    assert parse_turn("no json at all", set())[0] is None

@@ -206,14 +206,35 @@ def _strip_fence(text: str) -> str:
     return t[start:end + 1] if start != -1 and end > start else t
 
 
+def _turn_object(text: str) -> dict[str, Any] | None:
+    """The last JSON object in ``text`` that carries an ``action`` (prose or a
+    second object around it is ignored)."""
+    dec = json.JSONDecoder(strict=False)
+    found: dict[str, Any] | None = None
+    i = text.find("{")
+    while i != -1:
+        try:
+            obj, end = dec.raw_decode(text, i)
+        except ValueError:
+            i = text.find("{", i + 1)
+            continue
+        if isinstance(obj, dict) and "action" in obj:
+            found = obj
+        i = text.find("{", end)
+    return found
+
+
 def parse_turn(text: str, offered: set[str],
                check_args: Callable[[str, dict[str, Any]], str | None] | None = None
                ) -> tuple[AgentTurn | None, str | None]:
     """Parse + validate one model turn. Returns (turn, None) or (None, error)."""
     try:
-        payload = json.loads(_strip_fence(text))
+        # strict=False: raw newlines/tabs inside strings are common model slips.
+        payload = json.loads(_strip_fence(text), strict=False)
     except (json.JSONDecodeError, TypeError) as exc:
-        return None, f"reply was not valid JSON ({exc.msg if hasattr(exc, 'msg') else exc})"
+        payload = _turn_object(text or "")
+        if payload is None:
+            return None, f"reply was not valid JSON ({exc.msg if hasattr(exc, 'msg') else exc})"
     try:
         turn = AgentTurn.model_validate(payload)
     except ValidationError as exc:
