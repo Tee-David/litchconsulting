@@ -6,6 +6,7 @@ import { ArrowRight, ArrowUpRight, Check } from "lucide-react";
 import { Logo } from "@/components/ui/logo";
 import { site, legal } from "@/lib/content";
 import { newsletterSchema } from "@/lib/schemas";
+import { CookieSettingsLink } from "@/components/consent/consent-banner";
 import { Turnstile, type TurnstileHandle } from "@/components/ui/turnstile";
 
 /* Inline brand glyphs (lucide in this project doesn't export these). */
@@ -207,7 +208,8 @@ export function Footer() {
         {/* Copyright */}
         <div className="relative z-10 mt-32 flex flex-col items-center justify-between gap-3 py-6 text-sm text-body dark:text-white/60 md:mt-44 md:flex-row">
           <p>
-            © {new Date().getFullYear()} {site.legalName}. All rights reserved.
+            © {new Date().getFullYear()} {site.legalName}. All rights reserved.{" "}
+            <CookieSettingsLink className="ml-2 underline-offset-4 hover:text-ink hover:underline dark:hover:text-white" />
           </p>
           <p>Clarity · Compliance · Confidence</p>
         </div>

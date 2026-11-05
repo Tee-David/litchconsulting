@@ -8,6 +8,8 @@ import { Section, SectionHeading, Eyebrow } from "@/components/ui/primitives";
 import { PageHero } from "@/components/ui/page-hero";
 import { Contact } from "@/components/sections/contact";
 import { caseStudies, caseStudyDetails } from "@/lib/content";
+import { JsonLd } from "@/components/seo/json-ld";
+import { breadcrumbLd, caseStudyLd } from "@/lib/seo/jsonld";
 
 export function generateStaticParams() {
   return caseStudyDetails.map((d) => ({ slug: d.slug }));
@@ -44,6 +46,7 @@ export default async function CaseStudyPage({
     <>
       <Header overlay />
       <main className="flex-1">
+        <JsonLd data={[caseStudyLd({ ...study, slug: detail.slug }), breadcrumbLd([["Case studies", "/case-studies"], [study.title, `/case-studies/${detail.slug}`]])]} />
         <PageHero
           eyebrow={study.tag}
           title={study.title}

@@ -8,6 +8,7 @@ const TABS = [
   { id: "/admin/settings/access", label: "Team and access", href: "/admin/settings/access" },
   { id: "/admin/notifications", label: "Notifications", href: "/admin/notifications#prefs" },
   { id: "/admin/settings/backups", label: "Backups", href: "/admin/settings/backups" },
+  { id: "/admin/settings/privacy", label: "Privacy", href: "/admin/settings/privacy" },
   { id: "/admin/settings/integrations", label: "Integrations", href: "/admin/settings/integrations" },
 ];
 

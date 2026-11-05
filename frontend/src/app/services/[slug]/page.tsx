@@ -8,6 +8,8 @@ import { Section, SectionHeading, Button } from "@/components/ui/primitives";
 import { PageHero } from "@/components/ui/page-hero";
 import { Contact } from "@/components/sections/contact";
 import { services } from "@/lib/content";
+import { JsonLd } from "@/components/seo/json-ld";
+import { breadcrumbLd, faqLd, serviceLd } from "@/lib/seo/jsonld";
 
 export function generateStaticParams() {
   return services.map((s) => ({ slug: s.slug }));
@@ -41,6 +43,7 @@ export default async function ServiceDetailPage({
     <>
       <Header overlay />
       <main className="flex-1">
+        <JsonLd data={[serviceLd(service), faqLd(service.faqs), breadcrumbLd([["Services", "/services"], [service.name, `/services/${service.slug}`]])]} />
         <PageHero
           eyebrow={service.kind}
           title={service.name}
