@@ -26,9 +26,11 @@ Restart=on-failure
 RestartSec=5
 # A cold load of a 4B Q4 model from disk takes a while on this box.
 TimeoutStartSec=300
+# Low priority instead of a hard quota: a CPUQuota cap throttled the OpenMP
+# workers ~3x (bench 2026-11-05). The API and Postgres still win under load.
 Nice=10
 CPUWeight=20
-CPUQuota=190%
+Environment=OMP_WAIT_POLICY=PASSIVE
 MemoryHigh=5G
 MemoryMax=6G
 LimitMEMLOCK=infinity

@@ -159,7 +159,7 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
     if llama_url:
         specs["local"] = ProviderSpec(
             name="local", kind="local", api="openai",
-            model=e.get("LITCHAI_LOCAL_MODEL") or "qwen3.5-4b-q4_k_m",
+            model=e.get("LITCHAI_LOCAL_MODEL") or "qwen3.5-4b-q4_0",
             base_url=llama_url if llama_url.endswith("/v1") else f"{llama_url}/v1",
             timeout=float(e.get("LITCHAI_LOCAL_TIMEOUT") or 180),
         )
