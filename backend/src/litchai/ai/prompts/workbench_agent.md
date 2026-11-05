@@ -20,6 +20,22 @@ Rules:
 - Cite cells as Sheet!A1 (quote sheet names with spaces: 'Bank Recon'!C8). Cite the
   cells a figure came from or the key cells of a proposal.
 - Nigerian tax rates come only from tax_compute (it reads the firm's config).
+- To use a figure from an earlier tool result, do not retype it. Pass a reference:
+  "$<tool>.<path>", for example {{"net_profit_per_accounts": "$build_statement.figures.net_profit"}}.
+
+Accounting glossary (use these meanings exactly):
+- Net profit (profit, the P&L result) comes ONLY from build_statement {{"kind": "pnl"}}.
+  It is revenue minus cost of sales minus expenses. It is NOT credits minus debits.
+  If the ledger has no Category column, call categorise_rows first, then build_statement.
+- Transfers between the client's own accounts (for example "transfer to savings") are
+  NOT income and NOT expenses. They never change profit.
+- A balance (closing balance, cash at bank, balance per books) = opening balance + net
+  movement. Never report a net movement as a balance.
+- Bank reconciliation: use the reconcile tool. Quote its balance_per_bank,
+  balance_per_books and difference, then name the reconciling items.
+- Tax on profit (CIT, development levy): first build the P&L, then call tax_compute
+  {{"kind": "cit"}}. If you leave out net_profit_per_accounts, tax_compute takes the net
+  profit from the P&L in this workbook.
 - Final answers: short, plain English, figures with ₦ and thousands separators,
   then what the user should review or accept next.
 

@@ -153,10 +153,16 @@ def reconcile(ctx: ToolContext, *, bank_sheet: str | None = None,
         "deposits_in_transit": round(sum(lsign(e) for e in dit), 2),
         "outstanding_cheques": round(-sum(lsign(e) for e in oc), 2),
     }
+    items = "; ".join(f"{x['description']} {abs(x['amount']):,.2f} ({x['side']} only)"
+                      for x in [*data["bank_only"], *data["ledger_only"]][:6])
+    # Balances, not movements: closing = opening + net movement (report 5.1).
+    rec_summary = (
+        f"Closing balance per bank {bank_close:,.2f}; closing balance per books "
+        f"{books_close:,.2f} (opening {books_opening:,.2f} + net movement "
+        f"{books_close - books_opening:,.2f}). {len(pairs)} lines matched. Reconciling items: "
+        f"{items or 'none'}. Difference after these adjustments: {difference:,.2f}.")
     if not write:
-        return ToolOutput(data=data, summary=(
-            f"{len(pairs)} matched; {len(bank_only)} bank-only and {len(ledger_only)} "
-            f"ledger-only lines; difference {difference:,.2f}."))
+        return ToolOutput(data=data, summary=rec_summary)
 
     from litchai.compilers.bank_rec import compile_bank_rec
     from litchai.contracts.bank_rec import BankRecContract, RecItem
@@ -205,8 +211,7 @@ def reconcile(ctx: ToolContext, *, bank_sheet: str | None = None,
                          " reconciling items")
     key = {k: qualify(target, v) for k, v in compiled.key_cells.items()}
     data["key_cells"] = key
-    return ToolOutput(data=data, batch=batch, citations=list(key.values()), summary=(
-        f"{len(pairs)} matched; difference after adjustments {difference:,.2f}."))
+    return ToolOutput(data=data, batch=batch, citations=list(key.values()), summary=rec_summary)
 
 
 # --- flag_anomalies ----------------------------------------------------------------------
@@ -338,6 +343,50 @@ TAX_INPUT_KEYS: dict[str, set[str]] = {
 }
 
 
+def pnl_figures(ctx: ToolContext) -> dict[str, Any] | None:
+    """Net profit and revenue from the P&L: the one built this turn, else a P&L
+    sheet already in the workbook (accepted or pending). Formulas are evaluated
+    by the pipeline, so the figure is the statement's own, not a model's."""
+    mem = ctx.memory.get("pnl")
+    if mem and mem["figures"].get("net_profit") is not None:
+        f = mem["figures"]
+        return {"net_profit": f["net_profit"], "total_revenue": f.get("total_revenue"),
+                "cell": mem["key_cells"].get("net_profit"), "from": "P&L built in this answer"}
+    from litchai.workbench.formula import safe_preview
+
+    def value_right_of(sheet: Sheet, r: int, c: int) -> tuple[float | None, str | None]:
+        for cc in range(c + 1, min(c + 6, sheet.max_col + 1)):
+            cell = sheet.get(r, cc)
+            if cell is None:
+                continue
+            v = cell.value
+            if v is None and cell.formula:
+                v = cell.preview if cell.preview is not None else safe_preview(model, sheet.name,
+                                                                                cell.formula)
+            n = to_number(v)
+            if n is not None:
+                return n, a1(r, cc)
+        return None, None
+
+    for model in ctx.workbooks.values():
+        for sheet in model.sheets.values():
+            found: dict[str, Any] = {}
+            for (r, c), cell in list(sheet.cells.items()):
+                label = str(cell.value or "").strip().lower()
+                if label in ("net profit", "net profit for the year", "profit for the period"):
+                    v, ref = value_right_of(sheet, r, c)
+                    if v is not None:
+                        found["net_profit"], found["cell"] = round(v, 2), qualify(sheet.name, ref)
+                elif label == "total revenue":
+                    v, _ = value_right_of(sheet, r, c)
+                    if v is not None:
+                        found["total_revenue"] = round(v, 2)
+            if "net_profit" in found:
+                return {"net_profit": found["net_profit"], "total_revenue": found.get("total_revenue"),
+                        "cell": found["cell"], "from": f"P&L sheet {sheet.name}"}
+    return None
+
+
 def tax_compute(ctx: ToolContext, *, kind: str, inputs: dict[str, Any] | None = None,
                 write: bool = False, new_sheet_name: str | None = None) -> ToolOutput:
     """CIT / VAT / WHT / PAYE from the shared config. ``write`` lays the
@@ -363,6 +412,16 @@ def tax_compute(ctx: ToolContext, *, kind: str, inputs: dict[str, Any] | None = 
     compiled = None
     if kind == "cit":
         c = cfg["cit"]
+        if "net_profit_per_accounts" not in p and "profit_before_tax" not in p:
+            # Chained input: the profit comes from the P&L, never retyped by the model.
+            found = pnl_figures(ctx)
+            if found is None:
+                raise ToolError("no profit given and no P&L found. Build the P&L first "
+                                "(build_statement kind=pnl), or pass net_profit_per_accounts.")
+            p = {**p, "net_profit_per_accounts": found["net_profit"]}
+            if "turnover" not in p and found.get("total_revenue") is not None:
+                p["turnover"] = found["total_revenue"]
+            data["profit_source"] = found
         npa = num("net_profit_per_accounts", num("profit_before_tax"))
         add = sum(to_number(x.get("amount")) or 0 for x in p.get("disallowable_addbacks", []))
         add += num("addbacks")
@@ -490,7 +549,8 @@ def tax_compute(ctx: ToolContext, *, kind: str, inputs: dict[str, Any] | None = 
         raise ToolError("kind must be cit, vat, wht or paye")
 
     if compiled is None:
-        return ToolOutput(data=data, summary=_tax_summary(data))
+        src = (data.get("profit_source") or {}).get("cell")
+        return ToolOutput(data=data, summary=_tax_summary(data), citations=[src] if src else [])
     from litchai.workbench.builders import _copy_compiled
 
     b = OpBuilder(ctx.workbook(), "tax_compute")
@@ -508,8 +568,12 @@ def tax_compute(ctx: ToolContext, *, kind: str, inputs: dict[str, Any] | None = 
 def _tax_summary(d: dict[str, Any]) -> str:
     k = d["kind"]
     if k == "cit":
-        return (f"CIT {d['cit']:,.2f} at {d['rate_pct']}% plus development levy "
-                f"{d['development_levy']:,.2f} ({'small' if d['small_company'] else 'not small'})")
+        src = d.get("profit_source")
+        base = (f" on net profit {src['net_profit']:,.2f} from {src['cell'] or src['from']}"
+                if src else "")
+        return (f"CIT {d['cit']:,.2f} at {d['rate_pct']}%{base} plus development levy "
+                f"{d['development_levy']:,.2f} ({'small' if d['small_company'] else 'not small'}); "
+                f"total tax {d['total_tax']:,.2f}")
     if k == "vat":
         return f"Net VAT payable {d['net_payable']:,.2f}"
     if k == "wht":
