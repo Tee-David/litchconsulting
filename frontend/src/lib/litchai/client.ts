@@ -155,6 +155,10 @@ export type AssistantResponse = {
   /** Set when the answer needs a web-app read (billing, privacy, requests,
    *  backups): the relay resolves it and asks again with that data. */
   needs_app_data?: { tool: string; slots: Record<string, unknown>; client_id: string | null } | null;
+  /** Set when no model could answer: the answer then holds plain words and a next step. */
+  error?: "quota" | "timeout" | "unavailable" | null;
+  /** Which engine wrote the words (null when no model was needed). */
+  engine?: { provider: string; model: string; kind: "cloud" | "local"; masked: boolean } | null;
 };
 
 /** Per-engagement `/engagements/{id}/ask` response (AI Studio review panel). */
@@ -329,7 +333,8 @@ export function assistantChat(
   history?: { role: string; content: string }[],
   scope: "firm" | "client" = "firm",
   clientId?: string,
-  app?: { tools: boolean; data?: { tool: string; data: Record<string, unknown> } }
+  app?: { tools: boolean; data?: { tool: string; data: Record<string, unknown> } },
+  opts?: { localOnly?: boolean; conversationId?: string },
 ): Promise<AssistantResponse> {
   return litchai("/assistant/chat", {
     method: "POST",
@@ -341,6 +346,8 @@ export function assistantChat(
       client_id: clientId,
       app_tools: app?.tools ?? false,
       app_data: app?.data ?? null,
+      local_only: opts?.localOnly ?? false,
+      conversation_id: opts?.conversationId ?? null,
     }),
   });
 }

@@ -42,7 +42,7 @@ import re
 import threading
 import time
 from collections.abc import Callable
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
@@ -499,7 +499,8 @@ class ProviderRouter:
     ) -> ProviderResponse:
         routed = self.complete([{"role": "user", "content": prompt}], schema=schema,
                                params=params, task="generate")
-        return routed.response
+        # routed.text is unmasked; routed.response.text still holds the tokens.
+        return replace(routed.response, text=routed.text)
 
     # -- chain / pin ----------------------------------------------------------
     def chain(self, *, local_only: bool = False) -> list[ProviderSpec]:
@@ -709,3 +710,60 @@ class ProviderRouter:
 
 def build_router(**kw: Any) -> ProviderRouter:
     return ProviderRouter(default_specs(), **kw)
+
+
+@dataclass
+class BoundRouter:
+    """The chain as a plain :class:`~litchai.ai.provider.Provider` for one caller.
+
+    Existing ``run_task`` call sites (Sage's routing and answer steps) use it
+    unchanged, while every call still goes through the chain with masking,
+    ``local_only``, a per-call time limit and a task name in the call log.
+    ``last`` keeps the last routed response, so the caller can attribute it.
+    """
+
+    router: ProviderRouter
+    task: str = "sage"
+    conversation_id: str | None = None
+    local_only: bool = False
+    masker: Masker | None = None
+    timeout: float | None = None
+    name: str = "router"
+    model_digest: str | None = None
+    last: RoutedResponse | None = None
+
+    @property
+    def request_model(self) -> str:
+        chain = self.router.chain(local_only=self.local_only)
+        return chain[0].model if chain else "none"
+
+    def generate(
+        self, prompt: str, *, schema: dict[str, Any] | None = None,
+        params: dict[str, Any] | None = None,
+    ) -> ProviderResponse:
+        p = dict(params or {})
+        if self.timeout is not None:
+            p["timeout"] = self.timeout
+        routed = self.router.complete(
+            [{"role": "user", "content": prompt}], schema=schema, params=p,
+            conversation_id=self.conversation_id, local_only=self.local_only,
+            masker=self.masker, task=self.task,
+        )
+        self.last = routed
+        return replace(routed.response, text=routed.text)
+
+
+def failure_reason(exc: BaseException) -> str:
+    """One plain reason for a failed model call: quota | timeout | unavailable."""
+    if isinstance(exc, AllProvidersFailed):
+        reasons = {a.reason for a in exc.attempts}
+        if reasons and reasons <= {"quota", "rate_limit", "skipped"}:
+            return "quota"
+        if "timeout" in reasons:
+            return "timeout"
+        return "unavailable"
+    if isinstance(exc, ProviderError):
+        return "quota" if exc.reason in ("quota", "rate_limit") else (
+            "timeout" if exc.reason == "timeout" else "unavailable")
+    name = type(exc).__name__.lower()
+    return "timeout" if "timeout" in name else "unavailable"

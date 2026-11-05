@@ -549,6 +549,7 @@ export function ChatThread({ clients }: { clients: Client[] }) {
           history,
           scope,
           clientId: scope === "client" ? clientId : undefined,
+          conversationId: activeId ?? undefined,
         }),
       });
 
