@@ -296,7 +296,7 @@ export async function redeemInvitationForUser(token: string, userId: string): Pr
     if (state !== "pending") return { ok: false, reason: state } as const;
     const [u] = await tx.select({ id: user.id, email: user.email, name: user.name, createdAt: user.createdAt }).from(user).where(eq(user.id, userId)).limit(1);
     if (!u || normaliseEmail(u.email) !== row.email) return { ok: false, reason: "invalid" } as const;
-    if (u.createdAt.getTime() < row.createdAt.getTime()) return { ok: false, reason: "exists" } as const;
+    if (!u.createdAt || u.createdAt.getTime() < row.createdAt.getTime()) return { ok: false, reason: "exists" } as const;
     const role: InviteRole = row.role === "admin" ? "admin" : row.role === "staff" ? "staff" : "client";
     await tx.update(user).set({ role, emailVerified: true, updatedAt: new Date() }).where(eq(user.id, u.id));
     if (role === "client" && row.clientId) {

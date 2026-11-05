@@ -193,7 +193,8 @@ export const auth = betterAuth({
           if (!path.startsWith("/callback")) return;
           const cookie = ctx?.request?.headers.get("cookie") ?? "";
           const token = cookie
-            .split(/;s*/)
+            .split(";")
+            .map((c) => c.trim())
             .find((c) => c.startsWith(`${INVITE_COOKIE}=`))
             ?.slice(INVITE_COOKIE.length + 1);
           if (!token) return;

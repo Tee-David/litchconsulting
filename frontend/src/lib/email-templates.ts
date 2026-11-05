@@ -473,7 +473,7 @@ export const EMAIL_TEMPLATES = {
     mergeTags: ["subject", "preheader", "heading", "name", "paragraphs", "rows", "cta", "note", "why", "fromName"],
     build: (d: NoticeData): EmailBody => ({
       subject: d.subject,
-      preheader: d.preheader || d.paragraphs[0]?.replace(/**/g, "").slice(0, 120) || d.heading,
+      preheader: d.preheader || d.paragraphs[0]?.split("**").join("").slice(0, 120) || d.heading,
       heading: d.heading,
       greeting: first(d.name),
       paragraphs: d.paragraphs,
