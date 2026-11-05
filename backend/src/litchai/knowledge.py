@@ -32,7 +32,8 @@ from litchai.embeddings import Embedder
 CORPUS_DIR = Path(__file__).parent / "corpus"
 
 # Filename stem → source_type for the seed markdown corpus.
-_SOURCE_TYPES = {"services": "services", "faqs": "faq", "sops": "sop"}
+_SOURCE_TYPES = {"services": "services", "faqs": "faq", "sops": "sop", "workbench": "sop",
+                 "platform": "sop"}
 
 TARGET_TOKENS = 450
 MIN_TOKENS = 40

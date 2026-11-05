@@ -104,6 +104,12 @@ then constrained slot extraction — and returns a grounded answer with citation
 return data; write tools return a proposal only and are never executed here** — the frontend
 confirms them with a human first.
 
+Some read tools need data that lives in the web app's database (billing and transfer proofs,
+client privacy, request asks / review rounds / assignment, backups). For those the engine returns
+`needs_app_data: {tool, slots, client_id}` when the caller sent `app_tools: true`; the
+admin-guarded `/api/sage` relay runs the read and calls again with `app_data: {tool, data}`, and
+the answer is grounded on it. A caller without `app_tools` gets the knowledge-base answer instead.
+
 Ingestion is a CLI (the same work `POST /knowledge/reindex` does):
 
 ```bash
