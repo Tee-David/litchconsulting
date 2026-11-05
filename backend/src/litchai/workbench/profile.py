@@ -192,8 +192,8 @@ def profile_range(wb: Workbook, sheet_name: str, ref: str, level: int = 3) -> di
 
 def profile_text(profile: dict[str, Any], max_cols: int = 14) -> str:
     """Compact text rendering of a workbook profile for a prompt."""
-    lines = [f"Workbook {profile['name']} (id {profile['workbook_id']}): "
-             f"sheets {', '.join(profile['sheet_names'])}"]
+    lines = [(f"Workbook {profile['name']} (id {profile['workbook_id']}): "
+             f"sheets {', '.join(profile['sheet_names'])}")]
     for s in profile["sheets"]:
         t = s.get("table")
         if not t:

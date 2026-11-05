@@ -115,7 +115,8 @@ def categorise_rows(ctx: ToolContext, *, sheet: str | None = None, workbook_id: 
                          f"{qualify(sh.name, a1(table.first_row, target))} down · "
                          f"{len(review)} need review")
     return ToolOutput(
-        data={"sheet": sh.name, "column": a1(table.header_row, target)[:-len(str(table.header_row))],
+        data={"sheet": sh.name,
+              "column": a1(table.header_row, target).rstrip("0123456789"),
               "rows": n, "by_category": counts, "by_source": by_source,
               "needs_review": review[:50], "needs_review_count": len(review)},
         batch=batch, summary=f"Proposed categories for {n} rows; {len(review)} need review.",
@@ -170,7 +171,8 @@ class _Source:
                     terms.append(s if inflow_positive else f"-{s}")
         return "=" + "+".join(f"({t})" for t in terms)
 
-    def python_sum(self, raw_labels: set[str], *, inflow_positive: bool, part: str = "net") -> float:
+    def python_sum(self, raw_labels: set[str], *, inflow_positive: bool,
+                   part: str = "net") -> float:
         total = 0.0
         for r in range(self.table.first_row, self.table.last_row + 1):
             if str(self.sh.value(r, self.cat.index) or "").strip() not in raw_labels:
@@ -557,7 +559,7 @@ def add_formula_column(ctx: ToolContext, *, kind: str, header: str, sheet: str |
         raise ToolError(f"{kind} needs {need} column(s)")
     cfg = load_tax_config()
     target = _target_column(sh, table, header)
-    L = [c.letter for c in cols]  # noqa: N806
+    L = [c.letter for c in cols]
     first, last = table.first_row, table.last_row
     tl = a1(table.header_row, target).rstrip("0123456789")
 
@@ -569,7 +571,8 @@ def add_formula_column(ctx: ToolContext, *, kind: str, header: str, sheet: str |
         if kind == "ratio":
             return f"=IF({L[1]}{r}=0,0,{L[0]}{r}/{L[1]}{r})"
         if kind == "percent_of_total":
-            return f"=IF(SUM(${L[0]}${first}:${L[0]}${last})=0,0,{L[0]}{r}/SUM(${L[0]}${first}:${L[0]}${last}))"
+            total = f"SUM(${L[0]}${first}:${L[0]}${last})"
+            return f"=IF({total}=0,0,{L[0]}{r}/{total})"
         if kind == "running_total":
             return f"={L[0]}{r}" if r == first else f"={tl}{r - 1}+{L[0]}{r}"
         if kind == "vat_from_gross":

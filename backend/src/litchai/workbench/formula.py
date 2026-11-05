@@ -41,7 +41,7 @@ class FormulaError(ValueError):
 
 
 def tokens(formula: str) -> list[tuple[str, str]]:
-    src = formula[1:] if formula.startswith("=") else formula
+    src = formula.removeprefix("=")
     out: list[tuple[str, str]] = []
     pos = 0
     while pos < len(src):
@@ -270,7 +270,7 @@ def _num(v: Any) -> float:
     return 0.0 if n is None else n
 
 
-def _walk(node: ast.AST, env: dict[str, Any]) -> Any:  # noqa: PLR0911, PLR0912
+def _walk(node: ast.AST, env: dict[str, Any]) -> Any:
     if isinstance(node, ast.Constant):
         return node.value
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):

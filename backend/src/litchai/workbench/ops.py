@@ -248,7 +248,7 @@ def apply_ops(xlsx: bytes, ops: list[Operation], *, check_conflicts: bool = True
             if op.sheet in wb.sheetnames:
                 ws = wb[op.sheet]
                 title = (op.chart or {}).get("title")
-                ws._charts = [ch for ch in ws._charts if _chart_title(ch) != title]  # noqa: SLF001
+                ws._charts = [ch for ch in ws._charts if _chart_title(ch) != title]
     if conflicts:
         raise ApplyConflict(conflicts)
     buf = io.BytesIO()

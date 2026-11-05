@@ -228,6 +228,8 @@ def flag_anomalies(ctx: ToolContext, *, sheet: str | None = None,
             t = detect_table(sh)
             if t is None or not t.columns or t.n_rows == 0:
                 continue
+            if not sheet and sh.formula_count() * 2 > len(sh.cells):
+                continue  # a computed schedule (often a pending proposal), not source data
             findings.extend(_sheet_findings(sh, t, round_threshold, z))
     by_kind: dict[str, int] = {}
     for f in findings:
@@ -254,6 +256,13 @@ def _sheet_findings(sh: Sheet, t: Table, round_threshold: float, z: float) -> li
     amounts = [(r, a) for r, a in amounts if a is not None and a != 0]
     vals = [abs(a) for _, a in amounts]
     amt_col = (t.col("amount") or t.col("debit") or t.col("credit") or desc).index
+    cr_col = t.col("credit")
+
+    def col_of(r: int, a: float) -> int:
+        """The column that actually holds this row's amount (credit for inflows)."""
+        if cr_col is not None and a > 0 and sh.value(r, cr_col.index) is not None:
+            return cr_col.index
+        return amt_col
     if len(vals) >= 8:
         med = statistics.median(vals)
         mad = statistics.median(abs(v - med) for v in vals) or 0.0
@@ -261,11 +270,11 @@ def _sheet_findings(sh: Sheet, t: Table, round_threshold: float, z: float) -> li
             for r, a in amounts:
                 score = 0.6745 * (abs(a) - med) / mad
                 if score > z:
-                    add("outlier", r, amt_col, f"{abs(a):,.2f} is far above the typical "
+                    add("outlier", r, col_of(r, a), f"{abs(a):,.2f} is far above the typical "
                         f"{med:,.2f} (robust z {score:.1f})")
     for r, a in amounts:
         if abs(a) >= round_threshold and abs(a) % 100_000 == 0:
-            add("round_amount", r, amt_col, f"Large round amount {abs(a):,.0f}", "info")
+            add("round_amount", r, col_of(r, a), f"Large round amount {abs(a):,.0f}", "info")
     dcol = t.col("date")
     if dcol:
         for r in range(t.first_row, t.last_row + 1):

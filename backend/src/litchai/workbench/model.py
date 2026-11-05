@@ -208,7 +208,7 @@ def from_line_items(items: list[Any], *, wb_id: str, name: str,
 
 
 def new_workbook(wb_id: str, name: str, sheet_names: list[str] | None = None) -> Workbook:
-    names = sheet_names or ["Sheet1"]
+    names = ["Sheet1"] if sheet_names is None else sheet_names
     return Workbook(id=wb_id, name=name, sheets={n: Sheet(n) for n in names}, origin="new")
 
 
