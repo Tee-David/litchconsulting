@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { isAdmin } from "@/lib/server-user";
 import { presignPrivateGet } from "@/lib/r2";
 import { recordAudit } from "@/lib/audit";
-import { runDatabaseBackup } from "@/app/api/cron/backup/route";
+import { runDatabaseBackup } from "@/lib/backup/db-backup";
 
 type ActionResult = { ok: boolean; error?: string };
 
