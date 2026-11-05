@@ -139,7 +139,7 @@ def test_default_specs_from_env_and_legacy_chat():
     })
     by = {s.name: s for s in specs}
     assert [s.name for s in specs] == ["groq", "cerebras", "sambanova", "local"]
-    assert by["groq"].params["reasoning_effort"] == "low"
+    assert by["groq"].params["reasoning_effort"] == "medium"
     assert by["cerebras"].api_key == "c"
     assert by["sambanova"].configured is False
     assert by["local"].api == "ollama" and by["local"].model == "gemma3:4b"
@@ -177,3 +177,11 @@ def test_masker_columns_and_state_roundtrip():
     assert header_kind("Account Name") == "NAME"
     assert header_kind("Customer TIN") == "TIN"
     assert header_kind("Amount") is None
+
+
+def test_json_tail_picks_outermost_last_object():
+    from litchai.ai.router import _json_tail
+
+    text = 'Need total. Use query_sql.{"thought":"x","action":"tool","args":{"sql":"SELECT 1"}}'
+    assert _json_tail(text) == '{"thought":"x","action":"tool","args":{"sql":"SELECT 1"}}'
+    assert _json_tail("no json here") is None
