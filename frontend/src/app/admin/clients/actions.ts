@@ -244,17 +244,20 @@ export async function inviteClientToPortalAction(clientId: string): Promise<Resu
 
   const base = (process.env.BETTER_AUTH_URL || "https://litchconsulting.com").replace(/\/$/, "");
   const signupUrl = `${base}/signup?email=${encodeURIComponent(row.email)}`;
-  const { sendEmail, emailLayout } = await import("@/lib/email");
-  const { delivered } = await sendEmail({
-    to: row.email,
-    subject: "Your Litch Consulting client portal invitation",
-    html: emailLayout(`
-      <p style="margin:0 0 14px;">Hi ${row.name || "there"},</p>
-      <p style="margin:0 0 18px;">We've set up a secure client portal for you — track your engagements, download deliverables, pay invoices, and reach us any time, all in one place.</p>
-      <p style="margin:0 0 20px;"><a href="${signupUrl}" style="display:inline-block;background:#0a196d;color:#fff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:9999px;">Create your account</a></p>
-      <p style="margin:0;color:#5b6474;font-size:13px;">Use this email address (${row.email}) when signing up so your records link automatically.</p>
-    `),
-  }).catch(() => ({ delivered: false as const }));
+  const { sendTemplate } = await import("@/lib/email-templates");
+  const { delivered } = await sendTemplate(
+    "notice",
+    {
+      subject: "Your Litch Consulting client portal invitation",
+      heading: "Your client portal is ready",
+      name: row.name,
+      paragraphs: ["We set up a secure portal for you: track your work, download what we deliver, pay invoices and reach us, in one place."],
+      cta: { label: "Create your account", href: signupUrl },
+      note: `Sign up with this address (${row.email}) so your records link automatically.`,
+      why: "You got this because Litch Consulting added you as a client.",
+    },
+    { to: row.email, audience: "client" },
+  ).catch(() => ({ delivered: false as const }));
 
   if (delivered) {
     await recordAudit({

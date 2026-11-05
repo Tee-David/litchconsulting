@@ -79,6 +79,9 @@ const deviceOf = (ua?: string | null) => {
 const PASSWORD_PATHS = new Set(["/sign-up/email", "/reset-password", "/change-password"]);
 const SECOND_FACTOR_PATHS = new Set(["/two-factor/verify-totp", "/two-factor/verify-backup-code"]);
 
+/** httpOnly cookie naming the invitation a Google sign-in is accepting (15 min). */
+export const INVITE_COOKIE = "litch_invite";
+
 export const auth = betterAuth({
   appName: "Litch Consulting",
   database: pool,
@@ -178,6 +181,30 @@ export const auth = betterAuth({
     }),
   ],
   databaseHooks: {
+    user: {
+      create: {
+        // Accepting an invitation with Google (app/invite/[token]): the
+        // invitation is named by the INVITE_COOKIE set just before the
+        // redirect. A Google account with any other email must not become a
+        // new (client) account from that flow, so creation is refused here and
+        // Better Auth returns to the invite page with ?error=.
+        before: async (user, ctx) => {
+          const path = ctx?.path ?? "";
+          if (!path.startsWith("/callback")) return;
+          const cookie = ctx?.request?.headers.get("cookie") ?? "";
+          const token = cookie
+            .split(/;s*/)
+            .find((c) => c.startsWith(`${INVITE_COOKIE}=`))
+            ?.slice(INVITE_COOKIE.length + 1);
+          if (!token) return;
+          const { pendingInviteEmail } = await import("./invitations");
+          const invited = await pendingInviteEmail(decodeURIComponent(token));
+          if (!invited || invited !== user.email.trim().toLowerCase()) {
+            throw new APIError("FORBIDDEN", { message: "This Google account does not match the invitation.", code: "INVITE_EMAIL_MISMATCH" });
+          }
+        },
+      },
+    },
     session: {
       create: {
         before: async (session) => {

@@ -3,7 +3,7 @@ import { newsletterSchema } from "@/lib/schemas";
 import { site } from "@/lib/content";
 import { db } from "@/lib/db/client";
 import { lead } from "@/lib/db/schema";
-import { sendEmail } from "@/lib/email";
+import { sendTemplate } from "@/lib/email-templates";
 import { rateLimit, RATE_LIMITS, callerKey, callerIp, tooManyRequests } from "@/lib/rate-limit";
 import { verifyTurnstile, turnstileTokenFrom } from "@/lib/turnstile";
 
@@ -34,12 +34,16 @@ export async function POST(req: Request) {
   }
 
   after(() =>
-    sendEmail({
-      to: process.env.CONTACT_TO_EMAIL || site.email,
-      subject: "New newsletter subscriber",
-      html: `<p>New subscriber: <strong>${email}</strong></p>`,
-      dedupeKey: `newsletter:${email.toLowerCase()}`,
-    }).catch((err) => console.error("[newsletter] email send failed:", err)),
+    sendTemplate(
+      "notice",
+      {
+        subject: "New newsletter subscriber",
+        heading: "New newsletter subscriber",
+        paragraphs: [`**${email}** subscribed to the newsletter.`],
+        why: "You got this because someone subscribed on litchconsulting.com.",
+      },
+      { to: process.env.CONTACT_TO_EMAIL || site.email, audience: "admin", dedupeKey: `newsletter:${email.toLowerCase()}` },
+    ).catch((err) => console.error("[newsletter] email send failed:", err)),
   );
 
   return NextResponse.json({ ok: true, delivered: true });

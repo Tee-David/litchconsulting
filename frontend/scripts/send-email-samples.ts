@@ -1,6 +1,7 @@
 /**
- * Send one of each transactional template to a test inbox — both a preview of
- * the designs and a live check that SMTP delivery works.
+ * Send a sample of the main email templates (lib/email-templates.ts) to a
+ * test inbox — both a preview of the designs and a live check that SMTP
+ * delivery works.
  *
  *   node --conditions=react-server --env-file=.env.local \
  *     --import tsx scripts/send-email-samples.ts [to]
@@ -9,15 +10,8 @@
  * whose default entry throws outside a server bundle. That flag selects the
  * package's no-op export, exactly as Next's bundler does.
  */
-import {
-  emailConfigured,
-  emailButton,
-  emailDetailRows,
-  emailLayout,
-  sendEmail,
-  sendPasswordResetEmail,
-  sendVerificationEmail,
-} from "@/lib/email";
+import { emailConfigured } from "@/lib/email";
+import { sendTemplate } from "@/lib/email-templates";
 
 const to = process.argv[2] || "wedigcreativity@gmail.com";
 const base = "https://www.litchconsulting.com";
@@ -27,53 +21,27 @@ async function main() {
     console.error("SMTP not configured — set SMTP_* in .env.local");
     process.exit(1);
   }
-
   const results: Record<string, boolean> = {};
-
-  results.verification = (
-    await sendVerificationEmail(to, `${base}/api/auth/verify-email?token=SAMPLE_TOKEN&callbackURL=/dashboard`)
-  ).delivered;
-
-  results.passwordReset = (
-    await sendPasswordResetEmail(to, `${base}/reset-password?token=SAMPLE_TOKEN`)
-  ).delivered;
-
-  results.welcome = (
-    await sendEmail({
-      to,
-      subject: "Welcome to Litch Consulting",
-      html: emailLayout(
-        `
-        <p style="margin:0 0 6px;font-size:20px;font-weight:700;">You're all set 🎉</p>
-        <p class="body" style="margin:0 0 22px;color:#41485a;">Your account is verified — welcome aboard. From your dashboard you can request a service, track progress, pay invoices, download deliverables and reach us any time.</p>
-        <p style="margin:0 0 8px;">${emailButton(`${base}/dashboard`, "Open your dashboard")}</p>
-      `,
-        { preheader: "Your Litch Consulting account is ready." },
-      ),
-    })
-  ).delivered;
-
+  results.verifyEmail = (await sendTemplate("verifyEmail", { name: "Ada Obi", url: `${base}/api/auth/verify-email?token=SAMPLE_TOKEN` }, { to })).delivered;
+  results.passwordReset = (await sendTemplate("passwordReset", { name: "Ada Obi", url: `${base}/reset-password?token=SAMPLE_TOKEN` }, { to })).delivered;
+  results.welcome = (await sendTemplate("welcome", { name: "Ada Obi", role: "client", homeUrl: `${base}/dashboard` }, { to })).delivered;
   results.receipt = (
-    await sendEmail({
-      to,
-      subject: "Payment received — receipt for LC-INV-0042",
-      html: emailLayout(
-        `
-        <p style="margin:0 0 6px;font-size:20px;font-weight:700;">Payment received ✓</p>
-        <p class="body" style="margin:0 0 18px;color:#41485a;">Thank you — we've received your payment for <strong>LC-INV-0042</strong>. Your receipt is below and attached as a PDF.</p>
-        ${emailDetailRows([
+    await sendTemplate(
+      "receipt",
+      {
+        name: "Ada Obi",
+        receiptNumber: "LC-INV-0042",
+        forWhat: "FY2025 Annual Report",
+        rows: [
           { label: "Invoice", value: "LC-INV-0042" },
-          { label: "Project", value: "FY2025 Annual Report" },
           { label: "Paid on", value: "17 Jul 2026" },
-          { label: "Amount", value: "₦2,074,750.00", strong: true },
-        ])}
-        <p style="margin:18px 0 8px;">${emailButton(`${base}/dashboard/invoices`, "View in your portal")}</p>
-      `,
-        { preheader: "Your payment for LC-INV-0042 was received." },
-      ),
-    })
+        ],
+        total: "₦2,074,750.00",
+        url: `${base}/dashboard/billing`,
+      },
+      { to },
+    )
   ).delivered;
-
   console.log("delivered:", JSON.stringify(results, null, 2), "→", to);
 }
 

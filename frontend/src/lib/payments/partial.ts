@@ -100,7 +100,7 @@ export async function applyInvoicePartPaid(
   });
   await notifyAdmin({
     subject: `₦ ${label} received — ${inv.number}`,
-    html: `<p><strong>${formatMoney(amount, inv.currency)}</strong> received on <strong>${inv.number}</strong> via ${opts.via}. Balance ${formatMoney(balance, inv.currency)}.</p>`,
+    lines: [`**${formatMoney(amount, inv.currency)}** received on **${inv.number}** via ${opts.via}. Balance ${formatMoney(balance, inv.currency)}.`],
   });
 
   try {

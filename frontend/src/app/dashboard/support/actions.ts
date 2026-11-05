@@ -7,11 +7,8 @@ import { ticket, ticketMessage } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/server-user";
 import { getClientForUser } from "@/lib/db/queries/clients";
 import { nextTicketNumber } from "@/lib/db/queries/tickets";
-import { sendEmail, emailLayout } from "@/lib/email";
+import { sendTemplate } from "@/lib/email-templates";
 import { notifyFirm } from "@/lib/requests/people";
-
-const esc = (v: string) =>
-  v.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 
 type ActionResult = { ok: boolean; id?: string; error?: string };
 
@@ -79,34 +76,22 @@ export async function createClientTicketAction(input: {
   });
 
   // Send email to firm alerting them about the new ticket
-  const html = emailLayout(`
-    <p style="margin:0 0 14px;"><strong>New Support Ticket Created</strong></p>
-    <p style="margin:0 0 14px;">A new support ticket has been opened by <strong>${esc(clientRow.name)}</strong> (${esc(clientRow.company || "No Company")}).</p>
-    <table style="width:100%;border-collapse:collapse;margin:0 0 20px;">
-      <tr>
-        <td style="padding:6px 0;font-weight:600;width:100px;">Ticket No:</td>
-        <td style="padding:6px 0;">${number}</td>
-      </tr>
-      <tr>
-        <td style="padding:6px 0;font-weight:600;">Subject:</td>
-        <td style="padding:6px 0;">${esc(input.subject.trim())}</td>
-      </tr>
-      <tr>
-        <td style="padding:6px 0;font-weight:600;">Category:</td>
-        <td style="padding:6px 0;text-transform:capitalize;">${input.category}</td>
-      </tr>
-    </table>
-    <div style="background:#f5f6fa;padding:14px;border-radius:8px;border:1px solid #e6e8f0;font-style:italic;">
-      "${esc(input.message.trim())}"
-    </div>
-    <p style="margin:20px 0 0;"><a href="${process.env.BETTER_AUTH_URL || "https://litchconsulting.com"}/admin/help-desk" style="display:inline-block;background:#0a196d;color:#fff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:9999px;">View in Help Desk</a></p>
-  `);
-
-  await sendEmail({
-    to: adminEmail,
-    subject: `[${number}] New Support Ticket: ${input.subject.trim()}`,
-    html,
-  });
+  await sendTemplate(
+    "notice",
+    {
+      subject: `[${number}] New support ticket: ${input.subject.trim()}`,
+      heading: "New support ticket",
+      paragraphs: [`**${clientRow.name}** (${clientRow.company || "no company"}) opened a ticket.`, input.message.trim()],
+      rows: [
+        { label: "Ticket", value: number },
+        { label: "Subject", value: input.subject.trim() },
+        { label: "Category", value: input.category || "general" },
+      ],
+      cta: { label: "View in Help Desk", href: "/admin/help-desk" },
+      why: "You got this because a client opened a support ticket.",
+    },
+    { to: adminEmail, audience: "admin" },
+  );
 
   await notifyFirm(input.requestId ?? null, {
     category: "support",
@@ -160,20 +145,17 @@ export async function replyClientTicketAction(ticketId: string, body: string): P
   });
 
   // Send email notify to firm
-  const html = emailLayout(`
-    <p style="margin:0 0 14px;"><strong>New Reply on Ticket ${t.number}</strong></p>
-    <p style="margin:0 0 14px;"><strong>${esc(clientRow.name)}</strong> has replied to the support thread:</p>
-    <div style="background:#f5f6fa;padding:14px;border-radius:8px;border:1px solid #e6e8f0;font-style:italic;margin-bottom:20px;">
-      "${esc(body.trim())}"
-    </div>
-    <p style="margin:0;"><a href="${process.env.BETTER_AUTH_URL || "https://litchconsulting.com"}/admin/help-desk" style="display:inline-block;background:#0a196d;color:#fff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:9999px;">Reply in Help Desk</a></p>
-  `);
-
-  await sendEmail({
-    to: adminEmail,
-    subject: `Re: [${t.number}] ${t.subject}`,
-    html,
-  });
+  await sendTemplate(
+    "notice",
+    {
+      subject: `Re: [${t.number}] ${t.subject}`,
+      heading: `New reply on ${t.number}`,
+      paragraphs: [`**${clientRow.name}** replied on the support thread:`, body.trim()],
+      cta: { label: "Reply in Help Desk", href: "/admin/help-desk" },
+      why: "You got this because a client replied on a support ticket.",
+    },
+    { to: adminEmail, audience: "admin" },
+  );
 
   await notifyFirm(t.requestId ?? null, {
     category: "support",

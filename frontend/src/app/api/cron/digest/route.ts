@@ -2,10 +2,10 @@ import { NextResponse } from "next/server";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { client, invoice, serviceRequest } from "@/lib/db/schema";
-import { sendEmail } from "@/lib/email";
-import { buildClientDigestEmail, type DigestRequest } from "@/lib/emails/digest";
-import { ACTIVE_STATUSES } from "@/lib/requests/status";
-import { num } from "@/lib/invoice/money";
+import { sendTemplate } from "@/lib/email-templates";
+import type { DigestRequest } from "@/lib/emails/digest";
+import { ACTIVE_STATUSES, STATUS_LABELS, type RequestStatus } from "@/lib/requests/status";
+import { formatMoney, num } from "@/lib/invoice/money";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -79,17 +79,24 @@ export async function GET(req: Request) {
       continue;
     }
 
-    const { subject, html } = buildClientDigestEmail({
-      clientName: c.name,
-      activeRequests,
-      amountDue,
-      currency,
-      deliverablesReady,
-      baseUrl: base,
-    });
-
+    const needsYou = [
+      ...(amountDue > 0 ? [`**${formatMoney(amountDue, currency)}** to pay on open invoices`] : []),
+      ...(deliverablesReady > 0 ? [`${deliverablesReady} ${deliverablesReady === 1 ? "piece of work is" : "pieces of work are"} ready to download`] : []),
+    ];
+    const updates = activeRequests.map((r) => `**${r.number}** · ${r.serviceName} · ${STATUS_LABELS[r.status as RequestStatus] ?? r.status}`);
     try {
-      await sendEmail({ to: c.email, subject, html });
+      await sendTemplate(
+        "digest",
+        {
+          name: c.name,
+          dateLabel: new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", timeZone: "Africa/Lagos" }).format(new Date()),
+          needsYou,
+          updates,
+          url: `${base}/dashboard`,
+          categoryLabel: "your weekly summary",
+        },
+        { to: c.email, audience: "client" },
+      );
       summary.sent++;
     } catch (err) {
       console.error("[digest] send failed for", c.id, err);

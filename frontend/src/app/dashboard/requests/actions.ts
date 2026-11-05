@@ -262,7 +262,7 @@ export async function cancelRequestAction(requestId: string, reason?: string): P
   after(() =>
     notifyAdmin({
       subject: `Request ${req.number} cancelled by client`,
-      html: `<p><strong>${clientRow.name}</strong> cancelled <strong>${req.number}</strong> (${req.serviceName}).${reason ? ` Reason: ${reason}` : ""}</p>`,
+      lines: [`**${clientRow.name}** cancelled **${req.number}** (${req.serviceName}).`, ...(reason ? [`Reason: ${reason}`] : [])],
     }),
   );
   revalidateRequest(requestId);
@@ -307,7 +307,7 @@ export async function declineQuoteRequestAction(requestId: string, reason: strin
   after(() =>
     notifyAdmin({
       subject: `Quote declined on ${req.number}`,
-      html: `<p><strong>${clientRow.name}</strong> declined the quote for <strong>${req.serviceName}</strong>. Reason: ${reason.trim()}</p>`,
+      lines: [`**${clientRow.name}** declined the quote for **${req.serviceName}**.`, `Reason: ${reason.trim()}`],
     }),
   );
   revalidateRequest(requestId);
@@ -465,7 +465,7 @@ export async function approveCloseRequestAction(requestId: string): Promise<Acti
   after(() =>
     notifyAdmin({
       subject: `✅ ${req.number} approved & closed by client`,
-      html: `<p><strong>${clientRow.name}</strong> approved and closed <strong>${req.number}</strong> (${req.serviceName}).</p>`,
+      lines: [`**${clientRow.name}** approved and closed **${req.number}** (${req.serviceName}).`],
     }),
   );
   revalidateRequest(requestId);

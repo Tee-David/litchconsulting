@@ -9,7 +9,7 @@ import {
   invoice,
   ticket,
 } from "@/lib/db/schema";
-import { sendEmail, emailLayout } from "@/lib/email";
+import { sendTemplate } from "@/lib/email-templates";
 import { notifyAdmin } from "@/lib/notify";
 import { sweepRateLimits } from "@/lib/rate-limit";
 import { recordAudit } from "@/lib/audit";
@@ -73,15 +73,19 @@ export async function GET(req: Request) {
     const [c] = await db.select().from(client).where(eq(client.id, r.clientId));
     if (!c?.email) continue;
     const base = (process.env.BETTER_AUTH_URL || "https://litchconsulting.com").replace(/\/$/, "");
-    await sendEmail({
-      to: c.email,
-      subject: `Still interested? Your ${r.serviceName} request is waiting — ${r.number}`,
-      html: emailLayout(`
-        <p style="margin:0 0 14px;">Hi ${c.name || "there"},</p>
-        <p style="margin:0 0 18px;">Your <strong>${r.serviceName}</strong> request is saved and one payment away from kicking off. Pick up where you left off any time — or reply if something's holding you back.</p>
-        <p style="margin:0 0 20px;"><a href="${base}/dashboard/requests/${r.id}" style="display:inline-block;background:#0a196d;color:#fff;text-decoration:none;font-weight:600;padding:12px 22px;border-radius:9999px;">Complete your request</a></p>
-      `),
-    }).catch(() => {});
+    await sendTemplate(
+      "notice",
+      {
+        subject: `Your ${r.serviceName} request is waiting: ${r.number}`,
+        heading: "Your request is one step away",
+        name: c.name,
+        paragraphs: [`Your **${r.serviceName}** request is saved and one payment away from starting. Pick up where you left off, or reply if something is holding you back.`],
+        rows: [{ label: "Request", value: r.number }],
+        cta: { label: "Complete your request", href: `${base}/dashboard/requests/${r.id}` },
+        why: `You got this because your request ${r.number} is waiting for payment. We send this reminder once.`,
+      },
+      { to: c.email, audience: "client", dedupeKey: `payment-nudge:${r.id}` },
+    ).catch(() => {});
     await db.insert(serviceRequestEvent).values({
       requestId: r.id,
       type: "note",
@@ -107,9 +111,7 @@ export async function GET(req: Request) {
     const base = (process.env.BETTER_AUTH_URL || "https://litchconsulting.com").replace(/\/$/, "");
     await notifyAdmin({
       subject: `${owedQuotes.length} quote${owedQuotes.length > 1 ? "s" : ""} overdue (>48h)`,
-      html: `<p>These requests are past the 2-business-day quote promise:</p><ul>${owedQuotes
-        .map((q) => `<li><strong>${q.number}</strong> — ${q.serviceName}</li>`)
-        .join("")}</ul>`,
+      lines: ["These requests are past the 2-business-day quote promise:", owedQuotes.map((q) => `**${q.number}** · ${q.serviceName}`).join("\n")],
       href: `${base}/admin/requests?filter=action`,
     });
     summary.quoteReminders = owedQuotes.length;
@@ -160,7 +162,7 @@ export async function GET(req: Request) {
   if (summary.erasureFailures) {
     await notifyAdmin({
       subject: `${summary.erasureFailures} scheduled erasure${summary.erasureFailures > 1 ? "s" : ""} failed`,
-      html: "<p>The nightly sweep could not finish a scheduled client erasure. It retries tomorrow; check the client's Privacy tab and the audit log.</p>",
+      lines: ["The nightly sweep could not finish a scheduled client erasure. It retries tomorrow; check the client's Privacy tab and the audit log."],
     }).catch(() => {});
   }
 
