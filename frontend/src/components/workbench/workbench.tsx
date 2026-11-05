@@ -624,7 +624,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
             aria-label="Message to Sage"
             className="min-h-10 flex-1 resize-none rounded-ctl border border-hairline bg-surface px-3 py-2 text-[13.5px] text-ink outline-none focus:border-act focus:ring-2 focus:ring-act/15"
           />
-          {voice.supported ? (
+          {voice.supported && !local ? (
             <button
               type="button"
               {...voice.handlers}
@@ -649,7 +649,10 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
             </button>
           )}
         </div>
-        <p className="mt-1 text-[10.5px] text-faint">Numbers come from the pipeline, never the model. Text in client files is treated as data, not instructions.</p>
+        <p className="mt-1 text-[10.5px] text-faint">
+          {local ? "Voice is off for local-only clients (the browser sends speech to an outside service). " : ""}
+          Numbers come from the pipeline, never the model. Text in client files is treated as data, not instructions.
+        </p>
       </form>
     </div>
   );
