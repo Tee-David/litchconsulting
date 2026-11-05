@@ -438,6 +438,8 @@ export const STATEMENTS = [
     "created_at" timestamp with time zone DEFAULT now() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT now() NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS "workbench_conversation_request_idx" ON "workbench_conversation" ("request_id")`,
+  // Virus scan of bank-transfer proofs (documents already carry scan_status).
+  `ALTER TABLE "payment" ADD COLUMN IF NOT EXISTS "proof_scan_status" text DEFAULT 'unscanned' NOT NULL`,
 ];
 
 /**

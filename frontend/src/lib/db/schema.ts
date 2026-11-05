@@ -492,6 +492,8 @@ export const payment = pgTable(
     // Bank transfer: proof uploaded by the client, confirmed by an admin.
     proofKey: text("proof_key"),
     proofFileName: text("proof_file_name"),
+    // Virus scan of the proof (lib/uploads/scan.ts): unscanned | clean | infected | too_large | error
+    proofScanStatus: text("proof_scan_status").notNull().default("unscanned"),
     confirmedBy: text("confirmed_by"),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
     createdAt: createdAt(),

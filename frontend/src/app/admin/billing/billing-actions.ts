@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { invoice, payment } from "@/lib/db/schema";
@@ -34,6 +34,9 @@ export async function proofUrlAction(paymentId: string): Promise<{ ok: true; url
   if (!uuid.safeParse(paymentId).success) return { ok: false, error: "Unknown payment." };
   const [p] = await db.select().from(payment).where(eq(payment.id, paymentId)).limit(1);
   if (!p?.proofKey) return { ok: false, error: "This payment has no proof attached." };
+  const { downloadBlock, ensureProofScanned } = await import("@/lib/uploads/scan");
+  const blocked = downloadBlock(await ensureProofScanned({ id: p.id, proofKey: p.proofKey, proofFileName: p.proofFileName, proofScanStatus: p.proofScanStatus }), "firm");
+  if (blocked) return { ok: false, error: blocked };
   try {
     const { presignPrivateGet } = await import("@/lib/r2");
     const url = await presignPrivateGet(p.proofKey, { downloadName: p.proofFileName || "transfer-proof", expiresIn: 300 });

@@ -5,6 +5,7 @@ import { serviceRequest, serviceRequestDocument } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/server-user";
 import { getClientForUser } from "@/lib/db/queries/clients";
 import { presignPrivatePut, presignPrivateGet, r2PrivateConfigured } from "@/lib/r2";
+import { downloadBlock, ensureDocumentScanned } from "@/lib/uploads/scan";
 
 export const dynamic = "force-dynamic";
 
@@ -28,12 +29,13 @@ const ALLOWED: Record<string, string[]> = {
 
 async function authorize(requestId: string) {
   const user = await getSessionUser();
-  if (!user) return null;
+  if (!user || user.banned) return null;
   const [req] = await db.select().from(serviceRequest).where(eq(serviceRequest.id, requestId));
   if (!req) return null;
   if (user.role === "admin") return { user, req, role: "admin" as const };
   const clientRow = await getClientForUser(user.id, user.email, user.name);
-  if (req.clientId !== clientRow.id) return null;
+  // A client whose erasure is scheduled has a closed portal (lib/requests/portal.ts).
+  if (req.clientId !== clientRow.id || clientRow.erasureRequestedAt) return null;
   return { user, req, role: "client" as const };
 }
 
@@ -100,6 +102,8 @@ export async function GET(req: Request, ctx: { params: Promise<{ id: string }> }
       and(eq(serviceRequestDocument.id, documentId), eq(serviceRequestDocument.requestId, id))
     );
   if (!doc) return NextResponse.json({ ok: false, error: "Not found" }, { status: 404 });
+  const blocked = downloadBlock(await ensureDocumentScanned(doc), auth.role === "admin" ? "firm" : "client");
+  if (blocked) return NextResponse.json({ ok: false, error: blocked }, { status: 403 });
 
   const url = await presignPrivateGet(doc.r2Key, { downloadName: doc.fileName, expiresIn: 60 });
   return NextResponse.json({ ok: true, url });

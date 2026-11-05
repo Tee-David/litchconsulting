@@ -247,6 +247,16 @@ def create_app(
         with app.state.store_provider() as store:
             yield store
 
+    @app.post("/scan")
+    async def scan_file(body: dict[str, Any]) -> dict[str, Any]:
+        """Virus-scan a client upload by its presigned R2 link (web app → VM).
+        The web app blocks downloads until this says ``clean``."""
+        from starlette.concurrency import run_in_threadpool
+
+        from litchai.scanning import scan_url
+
+        return await run_in_threadpool(scan_url, str(body.get("url") or ""))
+
     @app.get("/health")
     async def health() -> dict:
         return {"status": "ok", "service": "litchai", "version": API_VERSION}

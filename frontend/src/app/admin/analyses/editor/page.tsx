@@ -6,6 +6,7 @@ import { db } from "@/lib/db/client";
 import { serviceRequest, serviceRequestDocument } from "@/lib/db/schema";
 import { isAdmin } from "@/lib/server-user";
 import { presignPrivateGet, r2PrivateConfigured } from "@/lib/r2";
+import { downloadBlock, ensureDocumentScanned } from "@/lib/uploads/scan";
 import { PageHeader } from "@/components/admin/ui/page-header";
 import { EmptyState } from "@/components/admin/ui/empty-state";
 import { WorkbookEditor } from "@/components/admin/analyses/workbook-editor";
@@ -52,6 +53,16 @@ export default async function WorkbookEditorPage({
           title="Private storage not configured"
           description="Set R2_PRIVATE_BUCKET to open request documents in the editor."
         />
+      </div>
+    );
+  }
+
+  const blocked = downloadBlock(await ensureDocumentScanned(doc), "firm");
+  if (blocked) {
+    return (
+      <div className="space-y-6">
+        <PageHeader title="Spreadsheet workspace" />
+        <EmptyState icon={ShieldAlert} title="This file can't be opened" description={blocked} />
       </div>
     );
   }
