@@ -194,6 +194,9 @@ export function authErrorText(err: { code?: string; message?: string; status?: n
       return "Use at least 8 characters.";
     case "PASSWORD_BREACHED":
       return "That password has appeared in a known data breach. Choose a different one.";
+    case "SECURITY_CHECK_FAILED":
+    case "SECURITY_CHECK_UNAVAILABLE":
+      return err.message || "The security check did not pass. Refresh the page and try again.";
     case "ACCOUNT_SUSPENDED":
       return "This account is suspended. Contact Litch Consulting if you think this is a mistake.";
     case "INVALID_CODE":

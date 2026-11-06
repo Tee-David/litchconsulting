@@ -27,6 +27,7 @@ import { useToast } from "@/components/admin/ui/toaster";
 import { Button, Segmented } from "@/components/kit";
 import { SageIcon } from "@/components/admin/sage-icon";
 import { cn } from "@/lib/utils";
+import { FAILURE, engineLabel } from "@/lib/ai-words";
 import { Grid, display, type GridMeta } from "./grid";
 import { FirstLookCard } from "./first-look";
 import { Proposals } from "./proposals";
@@ -242,8 +243,8 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           }
         }
       } catch (e) {
-        if ((e as Error).name === "AbortError") onEvent({ type: "error", message: "Stopped." });
-        else onEvent({ type: "error", message: "The connection dropped." });
+        if ((e as Error).name === "AbortError") onEvent({ type: "error", reason: "stopped", message: FAILURE.stopped.title });
+        else onEvent({ type: "error", reason: "dropped", message: FAILURE.dropped.title });
       } finally {
         abort.current = null;
         setRunning(false);
@@ -351,7 +352,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           title="What powers Sage, and where the data goes"
         >
           {local ? <Lock className="size-3" aria-hidden /> : <Cloud className="size-3" aria-hidden />}
-          {local ? "Local only" : "Cloud, masked"}
+          {engineLabel(local ? "local" : "cloud")}
         </button>
         {hasPdf ? (
           <Button size="sm" onClick={() => setPdfOpen((o) => !o)} aria-pressed={pdfOpen}>

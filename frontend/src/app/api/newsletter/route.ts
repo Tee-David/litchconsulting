@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const human = await verifyTurnstile(turnstileTokenFrom(body), callerIp(req.headers));
+  const human = await verifyTurnstile(turnstileTokenFrom(body), callerIp(req.headers), "open"); // fail open: honeypot + rate limit stay
   if (!human.ok) return NextResponse.json({ error: human.error }, { status: 403 });
 
   const parsed = newsletterSchema.safeParse(body);

@@ -22,6 +22,7 @@ import {
   type WbProvider,
 } from "@/lib/litchai/workbench";
 import { ensureRelayed, requestContext, workbenchAccess } from "./server";
+import { unreadableFile } from "@/lib/ai-words";
 
 type Res<T = object> = ({ ok: true; message?: string } & T) | { ok: false; error: string };
 
@@ -30,7 +31,7 @@ const id = z.string().regex(/^wb-[0-9a-f]{6,32}$/);
 const uuid = z.string().uuid();
 
 function fail(e: unknown, fallback = "That did not work. Try again."): { ok: false; error: string } {
-  if (e instanceof WorkbenchError) return { ok: false, error: e.message };
+  if (e instanceof WorkbenchError) return { ok: false, error: unreadableFile(e.message) ?? e.message };
   if (e instanceof Error && /is not set — cannot reach LitchAI/.test(e.message)) {
     return { ok: false, error: "The analysis server is not connected yet." };
   }

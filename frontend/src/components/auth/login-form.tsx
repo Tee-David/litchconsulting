@@ -7,6 +7,7 @@ import { KeyRound, Mail } from "lucide-react";
 import { authClient, signIn } from "@/lib/auth-client";
 import { continueUrl } from "@/lib/post-auth";
 import { useToast } from "@/components/admin/ui/toaster";
+import { Turnstile, turnstileHeaders, type TurnstileHandle } from "@/components/ui/turnstile";
 import { AuthHeading, Callout, Check, Field, GoogleButton, OrDivider, SubmitButton, authErrorText, maskEmail } from "./ui";
 
 type Stage = "form" | "code";
@@ -44,15 +45,24 @@ export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
   const [useBackup, setUseBackup] = useState(false);
   const [trust, setTrust] = useState(true);
   const codeRef = useRef<HTMLInputElement>(null);
+  const ts = useRef<TurnstileHandle>(null);
+  const [token, setToken] = useState<string | null>(null);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setUnverified(false);
     setBusy(true);
-    const { data, error: err } = await signIn.email({ email: email.trim(), password, rememberMe: remember, callbackURL: next });
+    const { data, error: err } = await signIn.email({
+      email: email.trim(),
+      password,
+      rememberMe: remember,
+      callbackURL: next,
+      fetchOptions: { headers: turnstileHeaders(token) },
+    });
     setBusy(false);
     if (err) {
+      ts.current?.reset();
       if (err.status === 403 && (err.code === "EMAIL_NOT_VERIFIED" || /verif/i.test(err.message ?? ""))) {
         setUnverified(true);
         return;
@@ -205,6 +215,7 @@ export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
         <Check checked={remember} onChange={setRemember}>
           Keep me signed in on this device
         </Check>
+        <Turnstile ref={ts} onToken={setToken} action="signin" />
         <SubmitButton busy={busy} busyLabel="Signing in…" disabled={!email || !password}>
           Sign in
         </SubmitButton>

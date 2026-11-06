@@ -50,6 +50,11 @@ function loadScript(): Promise<void> {
 
 export const turnstileConfigured = Boolean(SITE_KEY);
 
+/** Headers that carry the widget token to the auth route (sign-in, sign-up). */
+export function turnstileHeaders(token: string | null): Record<string, string> {
+  return token ? { "x-turnstile-token": token } : {};
+}
+
 export type TurnstileHandle = { reset: () => void };
 
 export const Turnstile = forwardRef<

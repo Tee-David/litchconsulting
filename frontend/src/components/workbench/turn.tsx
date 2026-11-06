@@ -5,11 +5,14 @@ import { AlertTriangle, ArrowRight, Check, Cpu, Loader2, RefreshCw, Sparkles, X,
 import type { WbEvent } from "@/lib/litchai/workbench";
 import { REF_IN_TEXT } from "./refs";
 import { cn } from "@/lib/utils";
+import { FAILURE, engineLabel, failureKind } from "@/lib/ai-words";
 
 export const PROVIDER_LABEL: Record<string, string> = {
   groq: "Groq",
   cerebras: "Cerebras",
   sambanova: "SambaNova",
+  cloudflare: "Cloudflare",
+  openrouter: "OpenRouter",
   local: "Local model",
   chat: "Chat provider",
 };
@@ -245,8 +248,10 @@ export function TurnView({
 
       {error ? (
         <div className="rounded-card border border-bad/30 bg-bad-soft px-3 py-2 text-[12.5px]" role="alert">
-          <p className="font-semibold text-ink">That turn did not finish.</p>
-          <p className="mt-0.5 text-body">{s(error.message)} Proposals made before it stopped are kept below.</p>
+          <p className="font-semibold text-ink">{failureKind(error.reason) ? FAILURE[failureKind(error.reason)!].title : "That turn did not finish."}</p>
+          <p className="mt-0.5 text-body">
+            {failureKind(error.reason) ? FAILURE[failureKind(error.reason)!].next : s(error.message)} Proposals made before it stopped are kept below.
+          </p>
           {onRetry ? (
             <button type="button" onClick={onRetry} className="mt-2 rounded-ctl border border-hairline bg-paper px-2.5 py-1 text-[12px] font-medium text-ink hover:bg-cloud">
               Try again
@@ -280,8 +285,9 @@ export function Attribution({ final, provider }: { final: WbEvent; provider?: Wb
       </span>
       <span className="inline-flex items-center gap-1 rounded-full bg-good-soft px-2 py-0.5 text-[11px] text-good">
         <Sparkles className="size-3" aria-hidden />
-        {model ? `Wording: model · ${model}${provider?.model ? ` · ${s(provider.model)}` : ""}` : "Wording: none (no model)"}
-        {provider?.masked ? " · masked" : ""}
+        <span title={model ? `${model}${provider?.model ? ` · ${s(provider.model)}` : ""}` : undefined}>
+          {model ? `Wording: ${engineLabel(provider?.kind ? s(provider.kind) : att.model === "local" ? "local" : "cloud")}` : "Wording: none (no model)"}
+        </span>
       </span>
     </div>
   );

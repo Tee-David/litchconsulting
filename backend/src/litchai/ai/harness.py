@@ -297,6 +297,26 @@ def _tool_menu(tools: list[AgentTool]) -> str:
     return "\n".join(lines)
 
 
+# Plain words for a turn the model chain could not finish (report U6).
+FAILURE_WORDS = {
+    "quota": "Today's free AI allowance is used up on every cloud model.",
+    "timeout": "The AI model is busy and did not answer in time.",
+    "unavailable": "Sage cannot reach an AI model right now.",
+}
+
+
+def failure_kind(exc: Any) -> str:
+    """quota | timeout | unavailable, from the chain's recorded attempts."""
+    attempts = list(getattr(exc, "attempts", []))
+    tried = [a for a in attempts if getattr(a, "detail", "") != "skipped"] or attempts
+    reasons = {getattr(a, "reason", "") for a in tried}
+    if reasons and reasons <= {"quota", "rate_limit"}:
+        return "quota"
+    if "timeout" in reasons:
+        return "timeout"
+    return "unavailable"
+
+
 def compact_history(history: list[dict[str, str]] | None
                     ) -> tuple[list[dict[str, str]], str]:
     """The last 2 turns in full (each capped), and a short summary of older turns."""
@@ -389,8 +409,9 @@ def run_agent_loop(
                     yield from _degraded(user, execute, fallback_plan, proposals, citations,
                                          check_citation)
                 else:
-                    yield {"type": "error", "message": "No language model is available right "
-                           "now; the proposals so far are kept.", "proposals": proposals}
+                    reason = failure_kind(exc)
+                    yield {"type": "error", "reason": reason, "message": FAILURE_WORDS[reason],
+                           "proposals": proposals}
                 return
             for fb in routed.fallbacks:
                 yield {"type": "fallback", "from": fb.provider, "reason": fb.reason,
@@ -410,8 +431,9 @@ def run_agent_loop(
             if attempt == 1:  # second failure on this provider → next provider
                 start_after = routed.provider
         if turn is None:
-            yield {"type": "error", "message": f"The model kept returning invalid steps "
-                   f"({last_err}).", "proposals": proposals}
+            yield {"type": "error", "reason": "invalid", "message": "The AI model kept "
+                   "returning steps Sage could not use. Try again, or ask in shorter steps.",
+                   "detail": (last_err or "")[:200], "proposals": proposals}
             return
 
         if turn.plan and step == 0:

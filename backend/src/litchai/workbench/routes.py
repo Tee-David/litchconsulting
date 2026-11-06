@@ -137,10 +137,16 @@ def register_workbench_routes(app: FastAPI) -> None:
                 plain = state.decryptor(state.storage.read(doc.client_id, doc.source_hash))
             except FileNotFoundError as exc:
                 raise HTTPException(410, f"document {document_id} file is gone") from exc
-            data = plain if is_sheet else to_xlsx_bytes(
-                load_csv(plain, wb_id=f"doc-{doc.id}", name=name))
-            wb.attach_bytes(conv, data, name=name, origin="xlsx" if is_sheet else "csv",
-                            document_id=doc.id)
+            try:
+                data = plain if is_sheet else to_xlsx_bytes(
+                    load_csv(plain, wb_id=f"doc-{doc.id}", name=name))
+                wb.attach_bytes(conv, data, name=name, origin="xlsx" if is_sheet else "csv",
+                                document_id=doc.id)
+            except HTTPException:
+                raise
+            except Exception as exc:  # a damaged file: tell the user, not a 500
+                raise HTTPException(422, f"unreadable file: {name} could not be opened "
+                                    f"({type(exc).__name__})") from exc
         else:
             items = repo.get_line_items(doc.id)
             if not items:
@@ -235,7 +241,7 @@ def register_workbench_routes(app: FastAPI) -> None:
                 data = base64.b64decode(body.xlsx_base64, validate=True)
                 ref = wb.attach_bytes(conv, data, name=body.name)
             except (ValueError, OSError) as exc:
-                raise HTTPException(422, f"not a usable xlsx: {exc}") from exc
+                raise HTTPException(422, f"unreadable file: not a usable xlsx ({exc})") from exc
             wb.store.save(conv)
             return {"workbook": ref.__dict__}
 

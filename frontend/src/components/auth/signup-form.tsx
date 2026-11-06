@@ -8,7 +8,7 @@ import { authClient, signIn, signUp } from "@/lib/auth-client";
 import { isDisposableEmail } from "@/lib/block-disposable-email";
 import { continueUrl } from "@/lib/post-auth";
 import { useToast } from "@/components/admin/ui/toaster";
-import { Turnstile, type TurnstileHandle } from "@/components/ui/turnstile";
+import { Turnstile, turnstileHeaders, type TurnstileHandle } from "@/components/ui/turnstile";
 import { prepareSignupAction } from "@/app/get-started/actions";
 import { PasswordStrength, passwordIssue } from "./password-strength";
 import { AuthHeading, Callout, Check, Field, GoogleButton, OrDivider, SubmitButton, authErrorText } from "./ui";
@@ -62,9 +62,16 @@ export function SignupForm({ draftId: initialDraft, serviceName, googleEnabled }
     }
     setDraftId(prep.draftId);
     // role is never sent: the server always makes a client.
-    const { error } = await signUp.email({ name: name.trim(), email: email.trim(), password, callbackURL: callbackFor(prep.draftId) });
+    const { error } = await signUp.email({
+      name: name.trim(),
+      email: email.trim(),
+      password,
+      callbackURL: callbackFor(prep.draftId),
+      fetchOptions: { headers: turnstileHeaders(token) },
+    });
     setBusy(false);
     if (error) {
+      ts.current?.reset();
       const msg = authErrorText(error, "We could not create your account. Try again.");
       if (error.code === "PASSWORD_BREACHED" || error.code === "PASSWORD_TOO_SHORT") setErrors({ password: msg });
       else if (/exist/i.test(error.code ?? "")) setErrors({ email: msg });
