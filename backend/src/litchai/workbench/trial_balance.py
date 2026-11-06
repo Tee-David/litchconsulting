@@ -130,6 +130,14 @@ def _tb_of(wb: Workbook, sheet: Sheet) -> TrialBalance | None:
                  exclude=("code", "no"))
     if name is None or not ((debit and credit) or (balance and code)):
         return None
+    # A TB lists accounts, not transactions: no date column, and an account code or
+    # an "account" header (a ledger or bank statement has dates and narrations).
+    if t.col("date") is not None:
+        return None
+    name_head = next(c.name.lower() for c in t.columns if c.index == name)
+    if code is None and "account" not in name_head and "ledger" not in sheet.name.lower() \
+            and "trial" not in sheet.name.lower():
+        return None
     tb = TrialBalance(wb, sheet, t, code, name, debit if credit else None,
                       credit if debit else None, balance)
     for r in range(t.first_row, t.last_row + 1):

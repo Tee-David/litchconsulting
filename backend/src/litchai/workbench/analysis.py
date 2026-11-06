@@ -457,6 +457,20 @@ def tax_compute(ctx: ToolContext, *, kind: str, inputs: dict[str, Any] | None = 
             # Chained input: the profit comes from the P&L, never retyped by the model.
             found = pnl_figures(ctx)
             if found is None:
+                # A trial balance in the workbook: its PBT, read by the TB tool.
+                from litchai.workbench.trial_balance import (
+                    detect_trial_balance,
+                    trial_balance_statements,
+                )
+
+                if detect_trial_balance(ctx) is not None:
+                    tb = trial_balance_statements(ctx, write=False)
+                    if tb.data["balanced"]:
+                        found = pnl_figures(ctx)
+                        if found is not None:
+                            found["from"] = f"trial balance {tb.data['sheet']}"
+                            found["cell"] = tb.citations[-1] if tb.citations else None
+            if found is None:
                 raise ToolError("no profit given and no P&L found. Build the P&L first "
                                 "(build_statement kind=pnl), or pass net_profit_per_accounts.")
             p = {**p, "net_profit_per_accounts": found["net_profit"]}

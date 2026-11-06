@@ -8,7 +8,7 @@ import pytest
 
 from litchai.ai.provider import ProviderResponse
 from litchai.ai.router import ProviderError, ProviderRouter, ProviderSpec
-from litchai.evals.fixtures import FIXTURES
+from litchai.evals.fixtures import FIXTURES, QA_FIXTURES
 from litchai.evals.workbench import (
     figures_in,
     load_tasks,
@@ -24,13 +24,13 @@ TASKS = load_tasks()["tasks"]
 
 
 def test_task_set_shape():
-    assert 30 <= len(TASKS) <= 60
+    assert 30 <= len(TASKS) <= 90
     ids = [t["id"] for t in TASKS]
     assert len(ids) == len(set(ids))
     cats = {t["category"] for t in TASKS}
     assert {"read", "anomaly", "statement", "reconcile", "tax", "write", "safety"} <= cats
     for t in TASKS:
-        assert t["fixture"] in FIXTURES
+        assert t["fixture"] in FIXTURES or t["fixture"] in QA_FIXTURES
         assert t["oracle"]["tool"] in TOOLS_BY_NAME
         assert set(t["expect_tools"]) <= set(TOOLS_BY_NAME), t["id"]
         assert t["checks"], t["id"]

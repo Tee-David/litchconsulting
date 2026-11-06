@@ -159,6 +159,12 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
     confident = route.confidence >= CONFIDENT_ROUTE
     offered = decision.select_tools(message, list(TOOLS),
                                     k=CONFIDENT_TOOLS if confident else MAX_OFFERED_TOOLS)
+    from litchai.workbench.trial_balance import looks_like_tb
+
+    has_tb = looks_like_tb(ctx.workbooks)
+    if has_tb and "trial_balance_statements" not in offered:
+        # A TB is open: its statements tool goes first, replacing the last pick.
+        offered = ["trial_balance_statements", *offered][:max(len(offered), 1)]
     tools = [AgentTool(t.name, t.description, t.schema(), t.kind)
              for t in (TOOLS_BY_NAME[n] for n in offered)]
     conv.messages.append({"role": "user", "content": message, "at": _now(),
@@ -198,6 +204,8 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
         return None
 
     fast = _fast_path(message, route, ctx, execute) if not selection else None
+    if fast is None and has_tb and not selection:
+        fast = _tb_fast_path(message, ctx, execute)
     if fast is not None:
         for ev in fast:
             yield ev
@@ -214,6 +222,10 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
                              tool_menu="{tool_menu}")
     user = message if not selection else f"{message}\n(Selection hint: {selection})"
     hints = routing_hints(message)
+    if has_tb:
+        hints = [("This workbook has a trial balance: use trial_balance_statements for "
+                 "profit, P&L, balance sheet and balancing questions, then tax_compute "
+                 "kind=cit (it takes the PBT from the TB).")]
     if hints:
         user += "\n(Routing notes from the decision layer: " + " ".join(hints) + ")"
     history = [{"role": m["role"], "content": m["content"]} for m in conv.messages[:-1]
@@ -250,6 +262,105 @@ def _finish(wbench: Workbench, conv: Conversation, masker: Masker,
 
 
 CONFIDENT_ROUTE = 0.8   # tool_route confidence that offers 5 tools instead of 8
+
+# Questions a trial balance answers with no model step (QA S5–S7).
+_TB_INTENT = re.compile(
+    r"\b(profit|loss|p\s*&\s*l|pnl|income statement|statement of (profit|comprehensive)|"
+    r"gross profit|pbt|balance sheet|financial position|balances?\b|balanc(e|ing)|"
+    r"revenue|turnover|cost of sales|admin\w* expenses?|cit|company income tax|"
+    r"development levy|small company)", re.IGNORECASE)
+_TB_OTHER_JOB = re.compile(
+    r"\b(reconcil|bank statement|cash book|vat return|wht|withholding|payroll|paye|aging|"
+    r"ageing|chart|plot|pivot|categori[sz]e|anomal|duplicate)", re.IGNORECASE)
+_TB_TAX = re.compile(r"\b(cit|company income tax|development levy|small company|tax on)",
+                     re.IGNORECASE)
+
+
+def _tb_fast_path(message: str, ctx: ToolContext, execute: Any
+                  ) -> list[dict[str, Any]] | None:
+    """A trial balance is open and the question is about its profit, statements,
+    balance or CIT: the pipeline answers with no model step (fast and sure)."""
+    if not _TB_INTENT.search(message) or _TB_OTHER_JOB.search(message):
+        return None
+    m = message.lower()
+    only_check = bool(re.search(r"\bbalanc", m)) and not re.search(
+        r"profit|income statement|p&l|balance sheet|financial position|cit|tax|revenue", m)
+    steps: list[tuple[str, dict[str, Any]]] = [
+        ("trial_balance_statements", {"write": not only_check})]
+    if _TB_TAX.search(message):
+        steps.append(("tax_compute", {"kind": "cit"}))
+    events: list[dict[str, Any]] = [
+        {"type": "start", "tools": [t for t, _ in steps], "max_steps": len(steps),
+         "fast_path": True},
+        {"type": "plan", "steps": [t for t, _ in steps], "layer": "decision"}]
+    outs, cites, proposals = [], [], []
+    for i, (name, args) in enumerate(steps, start=1):
+        events.append({"type": "tool_call", "step": i, "tool": name, "args": args,
+                       "layer": "pipeline"})
+        obs = execute(name, args, i)
+        events.append({"type": "tool_result", "step": i, "tool": name, "ok": obs.ok,
+                       "summary": obs.summary, "error": obs.error, "proposal": obs.proposal,
+                       "citations": (obs.citations or [])[:20], "data": obs.data})
+        if not obs.ok:
+            return None  # let the model handle what the pipeline could not
+        outs.append((name, obs))
+        cites += obs.citations or []
+        if obs.proposal:
+            proposals.append(obs.proposal)
+    answer = _tb_answer(outs, only_check, bool(proposals))
+    events.append({"type": "final", "answer": answer, "citations": list(dict.fromkeys(cites))[:40],
+                   "dropped_citations": [], "proposals": proposals, "steps": len(steps),
+                   "fast_path": True,
+                   "attribution": {"pipeline": [t for t, _ in steps], "model": None,
+                                   "decision": "heuristic"}})
+    return events
+
+
+def _tb_answer(outs: list[tuple[str, Any]], only_check: bool, proposed: bool) -> str:
+    from litchai.taxconfig import load_tax_config
+
+    tb = next(o for n, o in outs if n == "trial_balance_statements").data
+    lines = []
+    bal = (f"The trial balance balances: debits and credits are both ₦{tb['total_debits']:,.2f}."
+           if tb["balanced"] else
+           f"The trial balance does NOT balance: debits ₦{tb['total_debits']:,.2f}, credits "
+           f"₦{tb['total_credits']:,.2f}, difference ₦{tb['difference']:,.2f}.")
+    lines.append(bal)
+    if not only_check:
+        p = tb["income_statement"]
+        lines.append(
+            f"Revenue ₦{p['revenue']:,.2f} less cost of sales ₦{p['cost_of_sales']:,.2f} gives "
+            f"gross profit ₦{p['gross_profit']:,.2f}. Administrative expenses are "
+            f"₦{p['administrative_expenses']:,.2f} and finance costs ₦{p['finance_costs']:,.2f}"
+            f". Profit before tax is ₦{p['profit_before_tax']:,.2f}.")
+        b = tb["balance_sheet"]
+        lines.append(f"Balance sheet: total assets ₦{b['total_assets']:,.2f}; equity and "
+                     f"liabilities ₦{b['total_equity_and_liabilities']:,.2f}.")
+    if tb["unmapped"]:
+        lines.append("Not mapped (check them): " + ", ".join(u["name"] for u in tb["unmapped"][:6])
+                     + ".")
+    tax = next((o for n, o in outs if n == "tax_compute"), None)
+    if tax is not None:
+        d = tax.data
+        cfg = load_tax_config()
+        sc = cfg["cit"]["smallCompany"]
+        turnover = (d.get("profit_source") or {}).get("total_revenue")
+        lines.append(f"CIT at {d['rate_pct']}% is ₦{d['cit']:,.2f} and the development levy at "
+                     f"{cfg['cit']['developmentLevy']['ratePct']}% is "
+                     f"₦{d['development_levy']:,.2f}: total ₦{d['total_tax']:,.2f}.")
+        if d["small_company"]:
+            lines.append("The company is a small company (0% CIT, no levy).")
+        elif turnover is not None and turnover > sc["maxTurnover"]:
+            lines.append(f"It is not a small company: turnover ₦{turnover:,.2f} is above the "
+                         f"₦{sc['maxTurnover']:,.0f} limit.")
+        else:
+            lines.append("It is not a small company under the config limits.")
+        lines.append(f"Rates come from the firm's tax config {cfg['version']} (NTA 2025). No "
+                     "tax adjustments were applied.")
+    if proposed:
+        lines.append("The income statement and balance sheet are a proposal: review and accept "
+                     "them to add the sheets.")
+    return " ".join(lines)
 _OVERVIEW = re.compile(
     r"^\s*(?:what(?:'s| is| are)? (?:in|on)|what sheets|which sheets|list the sheets|"
     r"describe|give me an overview of|overview of|summari[sz]e)\b.{0,40}"
