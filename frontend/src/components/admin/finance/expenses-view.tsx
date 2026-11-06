@@ -243,7 +243,7 @@ export function ExpensesView({ items, remit, tabs }: { items: ExpenseItem[]; rem
         id: "wht",
         accessorKey: "whtDeducted",
         header: "WHT deducted",
-        meta: { label: "WHT deducted", align: "right", mobile: "hidden" },
+        meta: { label: "WHT deducted", align: "right", mobile: "meta" },
         cell: ({ row }) => <span className="tabular-nums text-body">{row.original.whtDeducted ? money(row.original.whtDeducted, row.original.currency) : "—"}</span>,
       },
       {

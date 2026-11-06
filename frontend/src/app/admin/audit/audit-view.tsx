@@ -57,6 +57,10 @@ const PHRASE: Record<string, string> = {
   "user.deleted": "Deleted a user",
   "auth.signed_in": "Signed in",
   "auth.sign_in_failed": "Failed to sign in",
+  "auth.two_step_enabled": "Turned on two-step sign-in",
+  "auth.two_step_disabled": "Turned off two-step sign-in",
+  "auth.two_step_reset": "Reset someone's two-step sign-in",
+  "expense.deleted": "Deleted expenses",
 };
 export const phrase = (a: string) => PHRASE[a] ?? a.replace(/[._]/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 
