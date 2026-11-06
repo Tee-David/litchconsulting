@@ -242,12 +242,15 @@ export const auth = betterAuth({
           if (path && !path.startsWith("/two-factor/enable")) {
             background(async () => {
               const recordAudit = await lib.audit();
+              // The audit log's "Who" column shows the person, not the event.
+              const who = await pool.query<{ name: string | null; email: string }>(`SELECT "name", "email" FROM "user" WHERE "id" = $1`, [session.userId]).catch(() => null);
+              const person = who?.rows[0];
               await recordAudit({
                 action: "auth.signed_in",
                 entity: "user",
                 entityId: session.userId,
                 actorId: session.userId,
-                actorName: "sign-in",
+                actorName: person?.name || person?.email || "Unknown user",
                 meta: {
                   method: path.startsWith("/callback") ? "google" : path.startsWith("/two-factor") ? "password + code" : path === "/verify-email" ? "email link" : "password",
                   ip: session.ipAddress || null,
@@ -316,7 +319,7 @@ export const auth = betterAuth({
             entity: "user",
             entityId: id,
             actorId: null,
-            actorName: "sign-in",
+            actorName: `Unknown device (${email})`,
             meta: {
               reason: (returned as { body?: { code?: string } }).body?.code ?? "failed",
               ip: headers?.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
