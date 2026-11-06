@@ -81,12 +81,21 @@ def build_llm_classifier(
             "shortlist": _format_shortlist(shortlist, taxonomy),
             "examples": _format_examples(examples),
         }
-        result = run_task(
-            spec, inputs, provider=provider, cache=cache, telemetry=telemetry,
-            taxonomy_version=taxonomy.version,
-        )
+        if state["down"]:
+            return None  # the model already timed out on this run: send the row to review
+        try:
+            result = run_task(
+                spec, inputs, provider=provider, cache=cache, telemetry=telemetry,
+                taxonomy_version=taxonomy.version,
+            )
+        except Exception:  # noqa: BLE001 - a slow or absent model must not fail the document
+            # One timeout (the local CPU model can take minutes) used to fail the whole
+            # file. Now the row goes to human review and the rest skip the model.
+            state["down"] = True
+            return None
         if result.ok and isinstance(result.model, CategoryChoice):
             return result.model.category
         return None
 
+    state = {"down": False}
     return classify
