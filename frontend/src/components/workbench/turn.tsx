@@ -5,7 +5,7 @@ import { AlertTriangle, ArrowRight, Check, Cpu, Loader2, RefreshCw, Sparkles, X,
 import type { WbEvent } from "@/lib/litchai/workbench";
 import { REF_IN_TEXT } from "./refs";
 import { cn } from "@/lib/utils";
-import { FAILURE, engineLabel, failureKind } from "@/lib/ai-words";
+import { FAILURE, answeredBy, engineLabel, failureKind, slotLabel } from "@/lib/ai-words";
 
 export const PROVIDER_LABEL: Record<string, string> = {
   groq: "Groq",
@@ -207,9 +207,9 @@ export function TurnView({
           <p className="mt-0.5 text-body">
             {f.from === "all"
               ? "No language model could be reached."
-              : `${PROVIDER_LABEL[s(f.from)] ?? s(f.from)} ${REASON[s(f.reason)] ?? "failed"}.`}{" "}
+              : `${slotLabel(s(f.from))} ${REASON[s(f.reason)] ?? "failed"}.`}{" "}
             {f.to ? (
-              <>Moved this conversation to <b>{PROVIDER_LABEL[s(f.to)] ?? s(f.to)}</b><ArrowRight className="mx-1 inline size-3" aria-hidden />steps already done were kept, nothing was redone.</>
+              <>Moved this conversation to <b>{slotLabel(s(f.to))}</b><ArrowRight className="mx-1 inline size-3" aria-hidden />steps already done were kept, nothing was redone.</>
             ) : f.from === "all" ? "The pipeline ran the steps it could without one." : null}
           </p>
         </div>
@@ -286,7 +286,10 @@ export function Attribution({ final, provider }: { final: WbEvent; provider?: Wb
       <span className="inline-flex items-center gap-1 rounded-full bg-good-soft px-2 py-0.5 text-[11px] text-good">
         <Sparkles className="size-3" aria-hidden />
         <span title={model ? `${model}${provider?.model ? ` · ${s(provider.model)}` : ""}` : undefined}>
-          {model ? `Wording: ${engineLabel(provider?.kind ? s(provider.kind) : att.model === "local" ? "local" : "cloud")}` : "Wording: none (no model)"}
+          {model
+            ? answeredBy(att.model, provider?.model ? s(provider.model) : null, provider?.kind ? s(provider.kind) : null) ||
+              `Wording: ${engineLabel(att.model === "local" ? "local" : "cloud")}`
+            : "Wording: none (no model)"}
         </span>
       </span>
     </div>

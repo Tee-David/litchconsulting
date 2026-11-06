@@ -130,6 +130,10 @@ def test_classify_http_error():
     assert classify_http_error(401, "").reason == "auth"
 
 
+GROQ = ["groq", "groq:gpt-oss-20b", "groq:qwen3.8-27b", "groq:llama-3.3-70b-versatile",
+        "groq:llama-3.1-8b-instant"]
+
+
 def test_default_specs_from_env_and_legacy_chat():
     specs = default_specs({
         "GROQ_API_KEY": "g",
@@ -138,7 +142,7 @@ def test_default_specs_from_env_and_legacy_chat():
         "LITCHAI_CHAT_MODEL": "gpt-oss-120b",
     })
     by = {s.name: s for s in specs}
-    assert [s.name for s in specs] == ["groq", "cloudflare", "sambanova", "local"]
+    assert [s.name for s in specs] == [*GROQ, "cloudflare", "sambanova", "local"]
     assert not by["cloudflare"].configured  # no CLOUDFLARE_ACCOUNT_ID in this env
     assert by["groq"].params["reasoning_effort"] == "medium"
     assert "cerebras" not in by and "openrouter" not in by
@@ -146,7 +150,7 @@ def test_default_specs_from_env_and_legacy_chat():
                          "LITCHAI_CHAT_API_KEY": "c", "LITCHAI_PROVIDER_CHAIN": "cerebras"})
     assert [s.name for s in cer] == ["cerebras"] and cer[0].api_key == "c"
     orr = default_specs({"OPENROUTER_API_KEY": "o"})
-    assert [s.name for s in orr] == ["groq", "cloudflare", "sambanova", "openrouter", "local"]
+    assert [s.name for s in orr] == [*GROQ, "cloudflare", "sambanova", "openrouter", "local"]
     assert next(s for s in orr if s.name == "openrouter").base_url == \
         "https://openrouter.ai/api/v1"
     assert by["sambanova"].configured is False
@@ -154,7 +158,59 @@ def test_default_specs_from_env_and_legacy_chat():
     llama = default_specs({"LITCHAI_LLAMA_SERVER_URL": "http://127.0.0.1:8080"})
     assert next(s for s in llama if s.name == "local").base_url == "http://127.0.0.1:8080/v1"
     custom = default_specs({"LITCHAI_PROVIDER_CHAIN": "local,groq", "GROQ_API_KEY": "g"})
-    assert [s.name for s in custom] == ["local", "groq"]
+    assert [s.name for s in custom] == ["local", *GROQ]
+    one = default_specs({"LITCHAI_PROVIDER_CHAIN": "groq,groq:gpt-oss-20b", "GROQ_API_KEY": "g"})
+    assert [s.name for s in one] == ["groq", "groq:gpt-oss-20b"]
+
+
+def test_groq_models_each_have_their_own_settings():
+    by = {s.name: s for s in default_specs({"GROQ_API_KEY": "g"})}
+    assert by["groq"].model == "openai/gpt-oss-120b"
+    assert by["groq"].params["_strict_schema"] and by["groq:qwen3.8-27b"].params["_strict_schema"]
+    llama = by["groq:llama-3.3-70b-versatile"]
+    assert not llama.params["_strict_schema"] and "reasoning_effort" not in llama.params
+    assert all(by[n].api_key == "g" and by[n].zero_retention for n in GROQ)
+    picked = default_specs({"GROQ_API_KEY": "g", "LITCHAI_GROQ_MODELS": "a/m1,m2"})
+    assert [s.name for s in picked][:2] == ["groq", "groq:m2"]
+
+
+def test_429_headers_set_the_wait_and_only_that_model_rests():
+    from litchai.ai.router import parse_duration
+
+    assert parse_duration("2m59.56s") == pytest.approx(179.56)
+    assert parse_duration("7.66s") == pytest.approx(7.66)
+    assert parse_duration("450ms") == pytest.approx(0.45)
+    assert parse_duration("30") == 30
+    daily = classify_http_error(
+        429, "Rate limit reached for model on tokens per day (TPD): Limit 200000",
+        {"retry-after": "3600", "x-ratelimit-reset-requests": "1h0m0s"})
+    assert daily.reason == "quota" and daily.retry_after == 3600
+    minute = classify_http_error(
+        429, "Rate limit reached on tokens per minute (TPM)",
+        {"x-ratelimit-reset-tokens": "7.66s"})
+    assert minute.reason == "rate_limit" and minute.retry_after == pytest.approx(7.66)
+
+    calls = []
+
+    def t(spec, messages, schema, params):
+        calls.append(spec.name)
+        if spec.name == "groq":
+            raise daily
+        if spec.name == "groq:gpt-oss-20b" and calls.count(spec.name) == 1:
+            raise minute
+        return ProviderResponse(text="ok", input_tokens=1, output_tokens=1)
+
+    specs = [s for s in default_specs({"GROQ_API_KEY": "g"}) if s.name in GROQ[:3]]
+    from litchai.ai.router import InMemoryQuota
+
+    q = InMemoryQuota()
+    r = ProviderRouter(specs, transport=t, quota=q)
+    assert r.complete([{"role": "user", "content": "x"}]).provider == "groq:qwen3.8-27b"
+    assert q.exhausted_until("groq") is not None          # the 120b model rests for today
+    assert q.exhausted_until("groq:gpt-oss-20b") is None  # a per-minute limit is not daily
+    calls.clear()
+    assert r.complete([{"role": "user", "content": "x"}]).provider == "groq:qwen3.8-27b"
+    assert calls == ["groq:qwen3.8-27b"]  # both rested models were skipped
 
 
 # --- masking ------------------------------------------------------------------

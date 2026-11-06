@@ -252,12 +252,19 @@ def router_for(provider: str, router: Any = None) -> Any:
         return router
     if provider == "none":
         return ProviderRouter([])
-    specs = [s for s in default_specs() if s.name == provider]
+    # "groq" means the Groq model family (each model has its own daily quota);
+    # "groq:gpt-oss-20b" picks one model.
+    specs = [s for s in default_specs()
+             if s.name == provider or (":" not in provider and s.name.startswith(provider + ":"))]
     if not specs:
         raise SystemExit(f"unknown provider {provider!r}")
     if not specs[0].configured:
         raise SystemExit(f"provider {provider!r} has no key configured")
-    return ProviderRouter(specs)
+    # The same persisted quota as the app (ai_provider_quota), so an eval run knows
+    # which models are already out for today; in-memory when there is no database.
+    from litchai.ai.pg import ConnectingQuota
+
+    return ProviderRouter(specs, quota=ConnectingQuota())
 
 
 def run_task(task: dict[str, Any], provider: str, router: Any = None) -> TaskScore:

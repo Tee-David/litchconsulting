@@ -35,7 +35,7 @@ import { Select } from "@/components/ui/select";
 import { SageIcon } from "@/components/admin/sage-icon";
 import { useToast } from "@/components/admin/ui/toaster";
 import { formatDateTime } from "@/lib/format-date";
-import { FAILURE, engineLabel, failureKind, type FailureKind } from "@/lib/ai-words";
+import { FAILURE, answeredBy, failureKind, type FailureKind } from "@/lib/ai-words";
 import type { AssistantProposal, AssistantResponse } from "@/lib/litchai/client";
 import type { SageConversation } from "@/lib/db/schema";
 import {
@@ -207,7 +207,7 @@ function EngineChip({ engine }: { engine: NonNullable<AssistantResponse["engine"
       title={`${engine.provider} · ${engine.model}`}
     >
       {local ? <Lock className="size-3" /> : <Cloud className="size-3" />}
-      {engineLabel(engine.kind)}
+      {answeredBy(engine.provider, engine.model, engine.kind)}
     </span>
   );
 }

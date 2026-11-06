@@ -189,7 +189,7 @@ backend/
 
 | Order | Provider | Model | Env |
 | --- | --- | --- | --- |
-| 1 | Groq | `openai/gpt-oss-120b` | `GROQ_API_KEY` |
+| 1 | Groq, model by model (each model has its own free daily quota) | `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `qwen/qwen3.8-27b`, `llama-3.3-70b-versatile`, `llama-3.1-8b-instant` (`LITCHAI_GROQ_MODELS` overrides) | `GROQ_API_KEY` |
 | 2 | Cloudflare Workers AI | `@cf/openai/gpt-oss-120b` | `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` (or `LITCHAI_CF_AI_TOKEN`) |
 | 3 | SambaNova | `Meta-Llama-3.3-70B-Instruct` | `SAMBANOVA_API_KEY` |
 | 4 | OpenRouter (only when the key is set) | `openai/gpt-oss-120b:free` (`LITCHAI_OPENROUTER_MODEL`) | `OPENROUTER_API_KEY` |

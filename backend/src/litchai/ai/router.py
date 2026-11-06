@@ -95,6 +95,51 @@ def _int_env(name: str) -> int | None:
 
 _KNOWN_HOSTS = {"groq": "groq.com", "cerebras": "cerebras.ai", "sambanova": "sambanova.ai"}
 
+# Groq's free quota is per model per day (console.groq.com/docs/rate-limits and
+# /docs/models, checked 2026-11-06), so the chain rotates through Groq models before
+# it leaves Groq. LITCHAI_GROQ_MODELS (comma-separated) replaces this list.
+GROQ_MODELS = ("openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b",
+               "llama-3.3-70b-versatile", "llama-3.1-8b-instant")
+# Models with strict json_schema on Groq (docs/structured-outputs); the others get
+# the prompt's JSON and the tolerant parser with its repair retry.
+GROQ_STRICT_MODELS = frozenset({"openai/gpt-oss-120b", "openai/gpt-oss-20b",
+                                "qwen/qwen3.8-27b"})
+# Free-plan daily limits per model where the docs list them (others: Groq's 429).
+GROQ_DAILY = {"openai/gpt-oss-120b": (1000, 200_000), "openai/gpt-oss-20b": (1000, 200_000),
+              "qwen/qwen3.8-27b": (1000, 200_000)}
+
+
+def groq_spec_name(index: int, model: str) -> str:
+    """'groq' for the first model (pins and old logs keep working), then
+    'groq:<model>' (for example 'groq:gpt-oss-20b')."""
+    return "groq" if index == 0 else f"groq:{model.rsplit('/', 1)[-1]}"
+
+
+def groq_specs(e: dict[str, str], key: str | None, legacy_model: str | None
+               ) -> list[ProviderSpec]:
+    listed = [m.strip() for m in (e.get("LITCHAI_GROQ_MODELS") or "").split(",") if m.strip()]
+    first = e.get("LITCHAI_GROQ_MODEL") or legacy_model
+    models = listed or [m for m in dict.fromkeys([first, *GROQ_MODELS]) if m]
+    strict_on = e.get("LITCHAI_GROQ_STRICT", "1") != "0"
+    out = []
+    for i, model in enumerate(models):
+        # Groq's JSON mode rejects gpt-oss replies at random (json_validate_failed),
+        # so JSON mode stays off: the prompt asks for JSON and the harness checks it.
+        # The strict agent-turn schema is used only where Groq supports it.
+        params: dict[str, Any] = {"_prompt_json": True,
+                                  "_strict_schema": strict_on and model in GROQ_STRICT_MODELS}
+        if "gpt-oss" in model:
+            params["reasoning_effort"] = "medium"
+        req, tok = GROQ_DAILY.get(model, (None, None))
+        if i == 0:
+            req = _int_env("LITCHAI_GROQ_DAILY_REQUESTS") or req
+            tok = _int_env("LITCHAI_GROQ_DAILY_TOKENS") or tok
+        out.append(ProviderSpec(
+            name=groq_spec_name(i, model), kind="cloud", model=model,
+            base_url="https://api.groq.com/openai/v1", api_key=key, params=params,
+            daily_requests=req, daily_tokens=tok, zero_retention=True))
+    return out
+
 
 def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
     """Build the chain from env. Unconfigured cloud slots are kept (so status can
@@ -116,23 +161,9 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
     cer_key, cer_legacy_model = key_for("cerebras", "CEREBRAS_API_KEY")
     sn_key, sn_legacy_model = key_for("sambanova", "SAMBANOVA_API_KEY")
 
+    groq_family = groq_specs(e, groq_key, groq_legacy_model)
     specs: dict[str, ProviderSpec] = {
-        "groq": ProviderSpec(
-            name="groq", kind="cloud",
-            model=e.get("LITCHAI_GROQ_MODEL") or groq_legacy_model or "openai/gpt-oss-120b",
-            base_url="https://api.groq.com/openai/v1", api_key=groq_key,
-            # Groq's JSON mode rejects gpt-oss replies at random (json_validate_failed
-            # with an empty failed_generation); the prompt asks for JSON and the
-            # harness parses and checks it, so JSON mode is off here.
-            # The agent loop's strict json_schema (all fields required, args as a JSON
-            # string) is checked by Groq server-side; tested with gpt-oss-120b.
-            # LITCHAI_GROQ_STRICT=0 turns it off.
-            params={"reasoning_effort": "medium", "_prompt_json": True,
-                    "_strict_schema": e.get("LITCHAI_GROQ_STRICT", "1") != "0"},
-            daily_requests=_int_env("LITCHAI_GROQ_DAILY_REQUESTS") or 1000,
-            daily_tokens=_int_env("LITCHAI_GROQ_DAILY_TOKENS") or 200_000,
-            zero_retention=True,
-        ),
+        **{g.name: g for g in groq_family},
         "cerebras": ProviderSpec(
             name="cerebras", kind="cloud",
             model=e.get("LITCHAI_CEREBRAS_MODEL") or cer_legacy_model or "gpt-oss-120b",
@@ -203,6 +234,10 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
         # stays available through LITCHAI_PROVIDER_CHAIN, e.g. "groq,cerebras,local".
         order = ["groq", "cloudflare", "sambanova", *(["openrouter"] if or_key else []),
                  *(["chat"] if "chat" in specs else []), "local"]
+    # "groq" in a chain means every Groq model in turn, unless models are named.
+    if "groq" in order and not any(n.startswith("groq:") for n in order):
+        i = order.index("groq")
+        order[i:i + 1] = [g.name for g in groq_family]
     return [specs[n] for n in order if n in specs]
 
 
@@ -229,7 +264,27 @@ _DAILY_MARKERS = (
 _RETRY_HINT = re.compile(r"try again in\s+(?:(\d+)h)?(?:(\d+)m)?([\d.]+)s", re.IGNORECASE)
 
 
-def classify_http_error(status: int, body: str) -> ProviderError:
+_DURATION = re.compile(r"(?:(\d+)h)?(?:(\d+)m(?!s))?(?:([\d.]+)s)?(?:([\d.]+)ms)?$")
+
+
+def parse_duration(raw: str | None) -> float | None:
+    """'2m59.56s' / '7.66s' / '1h2m3s' / '450ms' / '30' (seconds) → seconds."""
+    if not raw:
+        return None
+    raw = raw.strip()
+    try:
+        return float(raw)
+    except ValueError:
+        pass
+    m = _DURATION.match(raw)
+    if not m or not any(m.groups()):
+        return None
+    h, mi, sec, ms = m.groups()
+    return int(h or 0) * 3600 + int(mi or 0) * 60 + float(sec or 0) + float(ms or 0) / 1000
+
+
+def classify_http_error(status: int, body: str,
+                        headers: dict[str, str] | None = None) -> ProviderError:
     low = body.lower()
     hint = _RETRY_HINT.search(body)
     retry_after = None
@@ -237,6 +292,15 @@ def classify_http_error(status: int, body: str) -> ProviderError:
         retry_after = (
             int(hint.group(1) or 0) * 3600 + int(hint.group(2) or 0) * 60 + float(hint.group(3))
         )
+    h = {k.lower(): v for k, v in (headers or {}).items()}
+    if status == 429:
+        # retry-after is set on a 429; x-ratelimit-reset-requests is the daily (RPD)
+        # window and x-ratelimit-reset-tokens the per-minute (TPM) one.
+        daily = any(m in low for m in _DAILY_MARKERS)
+        header_wait = parse_duration(h.get("retry-after"))
+        reset = parse_duration(h.get("x-ratelimit-reset-requests" if daily
+                                     else "x-ratelimit-reset-tokens"))
+        retry_after = header_wait or reset or retry_after
     if status in (401, 403):
         return ProviderError("auth", f"HTTP {status}")
     if status == 402 or any(m in low for m in _DAILY_MARKERS):
@@ -356,7 +420,7 @@ def http_transport(
                 return http_transport(spec, messages, schema,
                                       {**params, "strict_schema": None, "timeout": timeout})
         if resp.status_code >= 400:
-            raise classify_http_error(resp.status_code, resp.text)
+            raise classify_http_error(resp.status_code, resp.text, dict(resp.headers))
         data = resp.json()
         choice = (data.get("choices") or [{}])[0]
         usage = data.get("usage") or {}
@@ -519,6 +583,8 @@ class ProviderRouter:
         self.health_ttl = health_ttl
         self._pins: dict[str, str] = {}
         self._health: dict[str, tuple[float, bool, str]] = {}
+        # Per-minute 429s: that model rests until Groq's reset; the next model is used.
+        self._cooldown: dict[str, float] = {}
         self._lock = threading.Lock()
 
     # -- Provider protocol shim -------------------------------------------------
@@ -555,6 +621,9 @@ class ProviderRouter:
         cached = self._health.get(spec.name)
         if cached and time.monotonic() - cached[0] < self.health_ttl and not cached[1]:
             return False, "unhealthy"
+        cool = self._cooldown.get(spec.name)
+        if cool and time.monotonic() < cool:
+            return False, "rate_limit"
         return True, ""
 
     def pick(self, conversation_id: str | None, *, local_only: bool = False) -> ProviderSpec | None:
@@ -684,8 +753,12 @@ class ProviderRouter:
 
     def _on_failure(self, spec: ProviderSpec, exc: ProviderError) -> None:
         if exc.reason == "quota":
+            # Daily: only this model is out, until the provider's reset (persisted in
+            # ai_provider_quota, so a restart does not forget it).
             until = (time.time() + exc.retry_after) if exc.retry_after else _next_utc_midnight()
             self.quota.mark_exhausted(spec.name, until)
+        elif exc.reason == "rate_limit":
+            self._cooldown[spec.name] = time.monotonic() + min(exc.retry_after or 20.0, 120.0)
         elif exc.reason in ("auth", "http_5xx", "timeout"):
             self._health[spec.name] = (time.monotonic(), False, exc.reason)
 
@@ -802,14 +875,14 @@ class BoundRouter:
 def failure_reason(exc: BaseException) -> str:
     """One plain reason for a failed model call: quota | timeout | unavailable."""
     if isinstance(exc, AllProvidersFailed):
-        reasons = {a.reason for a in exc.attempts}
-        if reasons and reasons <= {"quota", "rate_limit", "skipped"}:
+        reasons = {a.reason for a in exc.attempts} - {"skipped"}
+        if reasons and reasons <= {"quota"}:
             return "quota"
-        if "timeout" in reasons:
+        if "timeout" in reasons or (reasons and reasons <= {"quota", "rate_limit"}):
             return "timeout"
         return "unavailable"
     if isinstance(exc, ProviderError):
-        return "quota" if exc.reason in ("quota", "rate_limit") else (
-            "timeout" if exc.reason == "timeout" else "unavailable")
+        return "quota" if exc.reason == "quota" else (
+            "timeout" if exc.reason in ("timeout", "rate_limit") else "unavailable")
     name = type(exc).__name__.lower()
     return "timeout" if "timeout" in name else "unavailable"

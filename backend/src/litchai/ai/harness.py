@@ -335,8 +335,10 @@ def failure_kind(exc: Any) -> str:
     attempts = list(getattr(exc, "attempts", []))
     tried = [a for a in attempts if getattr(a, "detail", "") != "skipped"] or attempts
     reasons = {getattr(a, "reason", "") for a in tried}
-    if reasons and reasons <= {"quota", "rate_limit"}:
+    if reasons and reasons <= {"quota"}:
         return "quota"
+    if reasons and reasons <= {"quota", "rate_limit"}:
+        return "timeout"  # per-minute limits: busy, not "used up for today"
     if "timeout" in reasons:
         return "timeout"
     return "unavailable"

@@ -7,7 +7,7 @@ import { providersAction } from "@/lib/workbench/actions";
 import { Button, Sheet } from "@/components/kit";
 import { PROVIDER_LABEL } from "./turn";
 import { cn } from "@/lib/utils";
-import { engineLabel } from "@/lib/ai-words";
+import { engineLabel, slotLabel } from "@/lib/ai-words";
 
 /**
  * What powers Sage, in order: the pipeline computes every number, the
@@ -86,7 +86,7 @@ export function EngineSheet({
                 return (
                   <li key={p.name} className="flex items-center gap-1">
                     <div className={cn("min-w-[118px] rounded-ctl border px-2 py-1.5 text-[12px]", on ? "border-good bg-good-soft" : down ? "border-hairline bg-cloud opacity-70" : "border-hairline bg-surface")}>
-                      <p className="font-semibold text-ink">{PROVIDER_LABEL[p.name] ?? p.name}{on ? " · in use" : ""}</p>
+                      <p className="font-semibold text-ink">{PROVIDER_LABEL[p.name] ?? slotLabel(p.name)}{on ? " · in use" : ""}</p>
                       <p className="truncate text-[11px] text-muted" title={p.model}>{p.model}</p>
                       <p className={cn("text-[11px]", down ? "text-warn" : "text-good")}>
                         {!p.configured ? "No key" : p.exhausted_until ? "Daily limit reached" : p.ok === false ? `Down (${p.detail})` : p.ok ? "Healthy" : "Not checked"}
