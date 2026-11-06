@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, type ComponentPropsWithoutRef } from "react";
+import { useState, useRef, useEffect, useMemo, type ComponentPropsWithoutRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -24,6 +24,10 @@ import {
   Plus,
   Pencil,
   Trash2,
+  Square,
+  Cloud,
+  Lock,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/shadcn/button";
@@ -31,6 +35,7 @@ import { Select } from "@/components/ui/select";
 import { SageIcon } from "@/components/admin/sage-icon";
 import { useToast } from "@/components/admin/ui/toaster";
 import { formatDateTime } from "@/lib/format-date";
+import { FAILURE, engineLabel, failureKind, type FailureKind } from "@/lib/ai-words";
 import type { AssistantProposal, AssistantResponse } from "@/lib/litchai/client";
 import type { SageConversation } from "@/lib/db/schema";
 import {
@@ -53,6 +58,13 @@ type Message = {
   tool?: string;
   toolResult?: Record<string, unknown> | null;
   proposal?: AssistantProposal | null;
+  engine?: AssistantResponse["engine"];
+  /** Set when Sage could not answer: plain words and a next step are shown. */
+  failure?: FailureKind | null;
+  /** The question to send again from the failure card. */
+  retryText?: string;
+  /** A reply that arrived in this session: its text is revealed progressively. */
+  fresh?: boolean;
 };
 
 type Client = { id: string; name: string | null; company: string | null };
@@ -142,6 +154,64 @@ function AssistantMarkdown({ content }: { content: string }) {
   );
 }
 
+/**
+ * Reveals a fresh answer word by word (about a second for any length), so the
+ * reply reads as it lands instead of appearing as one block. Reduced motion
+ * shows it at once.
+ */
+function RevealMarkdown({ content }: { content: string }) {
+  const parts = useMemo(() => content.split(/(\s+)/), [content]);
+  const [shown, setShown] = useState(0);
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      setShown(parts.length);
+      return;
+    }
+    const step = Math.max(1, Math.ceil(parts.length / 50));
+    const t = setInterval(() => {
+      setShown((n) => {
+        const next = Math.min(parts.length, n + step);
+        if (next >= parts.length) clearInterval(t);
+        return next;
+      });
+    }, 20);
+    return () => clearInterval(t);
+  }, [parts]);
+  return <AssistantMarkdown content={shown >= parts.length ? content : parts.slice(0, shown).join("")} />;
+}
+
+/** Plain words for a reply Sage could not give, with the next step. */
+function FailureCard({ kind, onRetry }: { kind: FailureKind; onRetry?: () => void }) {
+  const f = FAILURE[kind];
+  return (
+    <div className="rounded-xl border border-amber-400/40 bg-amber-50/60 px-3 py-2.5 text-sm dark:bg-amber-950/20" role="alert">
+      <p className="flex items-center gap-1.5 font-semibold text-amber-700 dark:text-amber-400">
+        <AlertTriangle className="size-3.5 shrink-0" /> {f.title}
+      </p>
+      <p className="mt-0.5 text-body">{f.next}</p>
+      {onRetry && (
+        <Button size="xs" variant="outline" className="mt-2" onClick={onRetry}>
+          <RefreshCw className="size-3.5" /> Try again
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/** Which kind of model wrote the words, in plain words (the brand is in the tooltip). */
+function EngineChip({ engine }: { engine: NonNullable<AssistantResponse["engine"]> }) {
+  const local = engine.kind === "local";
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full bg-surface px-2 py-0.5 text-[11px] text-muted"
+      title={`${engine.provider} · ${engine.model}`}
+    >
+      {local ? <Lock className="size-3" /> : <Cloud className="size-3" />}
+      {engineLabel(engine.kind)}
+    </span>
+  );
+}
+
 /** Pulsating streaming indicator — three dots that breathe while awaiting a reply. */
 function TypingDots() {
   return (
@@ -158,17 +228,16 @@ function TypingDots() {
 }
 
 /**
- * Sage runs a local model on our own VM. A warm reply lands in a few seconds,
- * but the first request after an idle spell loads the model and has been
- * measured at ~77s. Silence that long reads as "broken", so escalate an
- * explanation the longer it takes rather than leaving the user guessing.
+ * A cloud answer lands in a few seconds; the private local model (local-only
+ * clients) can take up to a minute. Explain a long wait instead of leaving the
+ * user staring at dots, and point at Stop.
  */
 function WaitingNote({ seconds }: { seconds: number }) {
   const note =
     seconds >= 40
-      ? "Still warming up — almost there. The model loads once, then replies are quick."
+      ? "This is slow. The private local model can take up to a minute. Press Stop to cancel."
       : seconds >= 12
-        ? "Sage is starting up. The first question after a quiet spell loads the model, which can take up to a minute."
+        ? "Still working. The AI model may be busy. Press Stop to cancel and try again."
         : null;
   if (!note) return null;
   return (
@@ -391,6 +460,7 @@ export function ChatThread({ clients }: { clients: Client[] }) {
   const [renameDraft, setRenameDraft] = useState("");
 
   const bottomRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const toast = useToast();
 
@@ -509,8 +579,8 @@ export function ChatThread({ clients }: { clients: Client[] }) {
     setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title } : c)));
   }
 
-  async function send() {
-    const text = input.trim();
+  async function send(again?: string) {
+    const text = (again ?? input).trim();
     if (!text || loading) return;
     if (scope === "client" && !clientId) {
       toast.error("Pick a client first, or switch the scope to the firm knowledge base.");
@@ -520,7 +590,7 @@ export function ChatThread({ clients }: { clients: Client[] }) {
     const history = messages.map((m) => ({ role: m.role, content: m.content }));
     const userMsg: Message = { id: crypto.randomUUID(), role: "user", content: text };
     setMessages((prev) => [...prev, userMsg]);
-    setInput("");
+    if (!again) setInput("");
     setShowPrompts(false);
     setOffline(null);
     setLoading(true);
@@ -540,9 +610,12 @@ export function ChatThread({ clients }: { clients: Client[] }) {
       void refreshHistory(historyQuery);
     }
 
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
     try {
       const res = await fetch("/api/sage", {
         method: "POST",
+        signal: ctrl.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           message: text,
@@ -562,16 +635,21 @@ export function ChatThread({ clients }: { clients: Client[] }) {
 
       const payload = data as AssistantResponse;
       const answer = payload.answer || "I'm not sure how to respond to that.";
+      const failure = failureKind(payload.error);
       setMessages((prev) => [
         ...prev,
         {
           id: crypto.randomUUID(),
           role: "assistant",
-          content: answer,
+          content: failure ? "" : answer,
           citations: payload.citations,
           tool: payload.tool,
           toolResult: payload.tool_result,
           proposal: payload.proposal,
+          engine: payload.engine,
+          failure,
+          retryText: failure ? text : undefined,
+          fresh: true,
         },
       ]);
 
@@ -583,10 +661,29 @@ export function ChatThread({ clients }: { clients: Client[] }) {
         }).then(() => void refreshHistory(historyQuery));
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to get a response");
+      const stopped = err instanceof Error && err.name === "AbortError";
+      if (stopped || err instanceof TypeError) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            content: "",
+            failure: stopped ? "stopped" : "dropped",
+            retryText: text,
+          },
+        ]);
+      } else {
+        toast.error(err instanceof Error ? err.message : "Failed to get a response");
+      }
     } finally {
+      abortRef.current = null;
       setLoading(false);
     }
+  }
+
+  function stop() {
+    abortRef.current?.abort();
   }
 
   async function confirmProposal(msgId: string, proposal: AssistantProposal) {
@@ -754,7 +851,16 @@ export function ChatThread({ clients }: { clients: Client[] }) {
                 </div>
               ) : (
                 <div key={m.id} className="space-y-2">
-                  <AssistantMarkdown content={m.content} />
+                  {m.failure ? (
+                    <FailureCard
+                      kind={m.failure}
+                      onRetry={m.retryText && !loading ? () => void send(m.retryText) : undefined}
+                    />
+                  ) : m.fresh ? (
+                    <RevealMarkdown content={m.content} />
+                  ) : (
+                    <AssistantMarkdown content={m.content} />
+                  )}
 
                   {m.toolResult && <ToolCard tool={m.tool} data={m.toolResult} />}
 
@@ -808,7 +914,9 @@ export function ChatThread({ clients }: { clients: Client[] }) {
                     </div>
                   )}
 
+                  {!m.failure && (
                   <div className="flex items-center gap-1">
+                    {m.engine && <EngineChip engine={m.engine} />}
                     <Button
                       size="icon-xs"
                       variant="ghost"
@@ -821,6 +929,7 @@ export function ChatThread({ clients }: { clients: Client[] }) {
                       <Copy className="size-3.5" />
                     </Button>
                   </div>
+                  )}
                 </div>
               ),
             )}
@@ -885,14 +994,20 @@ export function ChatThread({ clients }: { clients: Client[] }) {
                 className="max-h-40 min-h-10 w-full resize-none bg-transparent px-2 py-2 text-sm text-ink outline-none placeholder:text-muted"
                 rows={1}
               />
-              <Button
-                size="icon"
-                aria-label="Send message"
-                disabled={!input.trim() || loading}
-                onClick={() => void send()}
-              >
-                <ArrowUp className="size-4" />
-              </Button>
+              {loading ? (
+                <Button size="icon" variant="outline" aria-label="Stop the answer" title="Stop" onClick={stop}>
+                  <Square className="size-3.5 fill-current" />
+                </Button>
+              ) : (
+                <Button
+                  size="icon"
+                  aria-label="Send message"
+                  disabled={!input.trim()}
+                  onClick={() => void send()}
+                >
+                  <ArrowUp className="size-4" />
+                </Button>
+              )}
             </div>
 
             <div className="flex items-center gap-1 border-t border-hairline px-2 py-1.5">

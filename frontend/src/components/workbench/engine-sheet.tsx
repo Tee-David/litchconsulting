@@ -7,6 +7,7 @@ import { providersAction } from "@/lib/workbench/actions";
 import { Button, Sheet } from "@/components/kit";
 import { PROVIDER_LABEL } from "./turn";
 import { cn } from "@/lib/utils";
+import { engineLabel } from "@/lib/ai-words";
 
 /**
  * What powers Sage, in order: the pipeline computes every number, the
@@ -103,7 +104,7 @@ export function EngineSheet({
         <div className={cn("rounded-card border px-3 py-2.5 text-[12.5px]", local ? "border-violet/30 bg-violet-soft" : "border-hairline bg-surface")}>
           <p className="flex items-center gap-1.5 font-semibold text-ink">
             {local ? <Lock className="size-3.5" aria-hidden /> : <Cloud className="size-3.5" aria-hidden />}
-            {local ? "Local only" : "Cloud, masked"}
+            {engineLabel(local ? "local" : "cloud")}
           </p>
           <p className="mt-0.5 text-body">
             {local
