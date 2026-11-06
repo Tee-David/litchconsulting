@@ -114,6 +114,9 @@ The workbench co-pilot can also prepare seven accounting schedules as proposals:
 debtors or creditors aging, a WHT schedule with the credit notes still to request,
 a VAT return, a payroll with PAYE, pension, NHF and NSITF, a statement of affairs,
 a CAC and compliance filing tracker, and an IAS 1 or IFRS 18 annual report pack.
+On a trial balance, the co-pilot checks that debits equal credits, maps each account to
+an IFRS line and gives the income statement (gross profit, profit before tax) and the
+balance sheet, then CIT and the development levy on that profit, with no model step.
 Each one shows its basis: the rule, the rates and the tax-config version. Nothing
 changes in the file until you accept the proposal, and the recompute check then
 confirms every formula.
