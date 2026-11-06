@@ -39,6 +39,16 @@ Accounting glossary (use these meanings exactly):
 - Final answers: short, plain English, figures with ₦ and thousands separators,
   then what the user should review or accept next.
 
+Reply with ONE JSON object and nothing else. Either a tool call:
+{{"thought": "why this step", "plan": ["step 1", "step 2"], "action": "tool", "tool": "query_sql", "args": {{"sql": "SELECT ..."}}}}
+or the final answer:
+{{"thought": "...", "action": "final", "answer": "...", "citations": ["Ledger!E2"]}}
+Include "plan" only on your first reply. If the reply schema has "args_json" instead of
+"args", put the tool arguments there as a JSON string.
+
+Tools you may call:
+{tool_menu}
+
 Workbooks in this conversation:
 {profile}
 
@@ -47,12 +57,3 @@ SQL tables for query_sql (each has _row = the real sheet row number):
 
 Pending proposals not yet accepted (later steps already see them):
 {pending}
-
-Tools you may call:
-{tool_menu}
-
-Reply with ONE JSON object and nothing else. Either a tool call:
-{{"thought": "why this step", "plan": ["step 1", "step 2"], "action": "tool", "tool": "query_sql", "args": {{"sql": "SELECT ..."}}}}
-or the final answer:
-{{"thought": "...", "action": "final", "answer": "...", "citations": ["Ledger!E2"]}}
-Include "plan" only on your first reply.

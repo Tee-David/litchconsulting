@@ -121,7 +121,11 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
             # Groq's JSON mode rejects gpt-oss replies at random (json_validate_failed
             # with an empty failed_generation); the prompt asks for JSON and the
             # harness parses and checks it, so JSON mode is off here.
-            params={"reasoning_effort": "medium", "_prompt_json": True},
+            # The agent loop's strict json_schema (all fields required, args as a JSON
+            # string) is checked by Groq server-side; tested with gpt-oss-120b.
+            # LITCHAI_GROQ_STRICT=0 turns it off.
+            params={"reasoning_effort": "medium", "_prompt_json": True,
+                    "_strict_schema": e.get("LITCHAI_GROQ_STRICT", "1") != "0"},
             daily_requests=_int_env("LITCHAI_GROQ_DAILY_REQUESTS") or 1000,
             daily_tokens=_int_env("LITCHAI_GROQ_DAILY_TOKENS") or 200_000,
             zero_retention=True,
@@ -258,6 +262,11 @@ def _failed_generation(resp: Any) -> str | None:
 
 
 
+# Providers whose strict json_schema request was refused once in this process:
+# later calls use the prompt + tolerant parser instead.
+_STRICT_OFF: set[str] = set()
+
+
 Transport = Callable[[ProviderSpec, list[Message], dict[str, Any] | None, dict[str, Any]],
                      ProviderResponse]
 
@@ -300,11 +309,15 @@ def http_transport(
         for k, v in spec.params.items():
             if not k.startswith("_"):  # "_"-prefixed keys are local switches, never sent
                 body.setdefault(k, v)
-        if schema is not None and not spec.params.get("_prompt_json"):
-            body["response_format"] = (
-                {"type": "json_schema", "json_schema": {"name": "out", "schema": schema}}
-                if params.get("strict_schema") else {"type": "json_object"}
-            )
+        strict = params.get("strict_schema")
+        use_strict = (schema is not None and isinstance(strict, dict)
+                      and bool(spec.params.get("_strict_schema"))
+                      and spec.name not in _STRICT_OFF)
+        if use_strict:
+            body["response_format"] = {"type": "json_schema", "json_schema": {
+                "name": "turn", "schema": strict, "strict": True}}
+        elif schema is not None and not spec.params.get("_prompt_json"):
+            body["response_format"] = {"type": "json_object"}
         headers = {"Content-Type": "application/json"}
         if spec.api_key:
             headers["Authorization"] = f"Bearer {spec.api_key}"
@@ -321,6 +334,12 @@ def http_transport(
                     text=failed, finish_reason="json_validate_failed",
                     latency_ms=int((time.monotonic() - started) * 1000),
                 )
+            if use_strict:
+                # The provider refused the strict schema itself: turn strict off for
+                # this process and send the same request once without it.
+                _STRICT_OFF.add(spec.name)
+                return http_transport(spec, messages, schema,
+                                      {**params, "strict_schema": None, "timeout": timeout})
         if resp.status_code >= 400:
             raise classify_http_error(resp.status_code, resp.text)
         data = resp.json()
