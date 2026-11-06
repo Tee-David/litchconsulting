@@ -68,7 +68,45 @@ _TOOL_KEYWORDS: dict[str, tuple[str, ...]] = {
     "create_sheet": ("new sheet", "add a sheet", "tab", "schedule"),
     "create_workbook": ("new workbook", "blank workbook", "from scratch", "template"),
     "clean_values": ("text date", "fix the date", "convert", "clean", "stored as text"),
+    "ar_ap_aging": ("aging", "ageing", "debtors", "creditors", "receivable", "payable",
+                    "overdue invoices", "owes us", "we owe"),
+    "wht_schedule": ("wht schedule", "withholding tax schedule", "wht to remit",
+                     "credit note", "remit wht"),
+    "vat_return": ("vat return", "vat filing", "file vat", "output vat", "input vat"),
+    "payroll_schedule": ("payroll", "net pay", "salaries", "nsitf", "staff cost"),
+    "statement_of_affairs": ("statement of affairs", "net assets", "simple balance sheet",
+                             "for the bank", "visa", "tender"),
+    "cac_filing_tracker": ("cac", "annual return", "filing", "compliance", "overdue filing",
+                           "deadline"),
+    "annual_report_pack": ("annual report", "financial statements pack", "ias 1", "ifrs 18",
+                           "ifrs18", "full accounts", "sofp"),
 }
+
+# Job groups: a message about one accounting job offers that job's tools together
+# (research plan section 2), so the model sees the right compiler in a short menu.
+JOB_GROUPS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+    "receivables_payables": (("aging", "ageing", "debtor", "creditor", "receivable", "payable",
+                              "owes us", "we owe"), ("ar_ap_aging",)),
+    "tax_filing": (("wht", "withholding", "vat return", "vat filing", "credit note", "remit"),
+                   ("wht_schedule", "vat_return", "tax_compute")),
+    "payroll": (("payroll", "paye", "salar", "net pay", "pension", "nhf", "nsitf"),
+                ("payroll_schedule", "tax_compute")),
+    "reporting": (("statement of affairs", "annual report", "financial statements",
+                   "net assets", "ias 1", "ifrs 18", "ifrs18"),
+                  ("statement_of_affairs", "annual_report_pack", "build_statement")),
+    "compliance": (("cac", "annual return", "filing", "compliance", "deadline"),
+                   ("cac_filing_tracker",)),
+}
+
+
+def job_tools(message: str) -> list[str]:
+    """The tools of every job group the message is about, in group order."""
+    m = message.lower()
+    out: list[str] = []
+    for words, tools in JOB_GROUPS.values():
+        if any(w in m for w in words):
+            out += [t for t in tools if t not in out]
+    return out
 
 _DOC_TYPES = {
     "bank_statement": ("balance", "withdrawal", "deposit", "narration", "value date"),
@@ -131,6 +169,9 @@ class HeuristicDecisionLayer:
             scored.append((t.name, s))
         scored.sort(key=lambda x: x[1], reverse=True)
         chosen = [n for n in ALWAYS_OFFER if n in names]
+        for n in job_tools(message):
+            if n in names and n not in chosen and len(chosen) < k:
+                chosen.append(n)
         # Profit is a P&L figure: always offer the tools that produce it (report 5.1).
         if _profit_question(message):
             for n in ("categorise_rows", "build_statement",

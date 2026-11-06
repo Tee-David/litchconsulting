@@ -595,6 +595,7 @@ class ProviderRouter:
         task: str = "chat",
         validate: Callable[[str], str | None] | None = None,
         start_after: str | None = None,
+        deadline: float | None = None,
     ) -> RoutedResponse:
         """Try the pinned provider, then the rest of the chain in order.
 
@@ -602,6 +603,9 @@ class ProviderRouter:
         (e.g. bad JSON) so it counts as ``invalid_output`` and falls through.
         ``start_after`` skips providers up to and including that name (the harness
         uses it to move to the *next* provider after a failed retry).
+        ``deadline`` (a ``time.monotonic()`` value) bounds the whole call: each
+        provider gets at most the time left, and none is tried once it has passed,
+        so a slow chain fails fast with reason ``timeout``.
         """
         chain = self.chain(local_only=local_only)
         if not chain:
@@ -620,6 +624,10 @@ class ProviderRouter:
         prev: FallbackEvent | None = None
 
         for i, spec in enumerate(order):
+            left = None if deadline is None else deadline - time.monotonic()
+            if left is not None and left < 2.0:
+                fallbacks.append(FallbackEvent(spec.name, "timeout", "turn time limit reached"))
+                break
             ok, why = self._available(spec)
             if not ok and i < len(order) - 1:
                 ev = FallbackEvent(spec.name, why, "skipped", None)
@@ -634,7 +642,11 @@ class ProviderRouter:
             )
             p_hash = payload_hash(sent, schema)
             try:
-                resp = self.transport(spec, sent, schema, dict(params or {}))
+                call_params = dict(params or {})
+                if left is not None:
+                    call_params["timeout"] = min(float(call_params.get("timeout", spec.timeout)),
+                                                 left)
+                resp = self.transport(spec, sent, schema, call_params)
                 text = m.unmask(resp.text) if (cloud and m is not None) else resp.text
                 err = validate(text) if validate else None
                 if err:

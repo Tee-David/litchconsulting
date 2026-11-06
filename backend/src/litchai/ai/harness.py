@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import time
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -151,6 +152,12 @@ MAX_AGENT_STEPS = 8
 MAX_OFFERED_TOOLS = 8
 CONFIDENT_TOOLS = 5          # offered when the decision layer is confident (report R4)
 MAX_OBSERVATION_CHARS = 4000
+# Fail fast (VM retest: one turn waited 306 s). Each model call has a short limit
+# and moves down the chain on a timeout; the whole turn has a time budget.
+AGENT_CALL_TIMEOUT = 40.0    # seconds per cloud call
+LOCAL_CALL_TIMEOUT = 150.0   # seconds per call for a local-only client (CPU model)
+AGENT_TURN_BUDGET = 120.0    # seconds of model time for one cloud turn
+LOCAL_TURN_BUDGET = 240.0    # ... for a local-only turn
 HISTORY_FULL_MESSAGES = 4    # the last 2 turns (user + assistant) go in full
 HISTORY_MESSAGE_CHARS = 1500
 
@@ -358,6 +365,7 @@ def run_agent_loop(
     check_citation: Callable[[str], bool] | None = None,
     fallback_plan: Callable[[str], list[tuple[str, dict[str, Any]]]] | None = None,
     max_tools: int = MAX_OFFERED_TOOLS,
+    turn_budget: float | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Generator of step events; the last event is ``final`` (or ``error``).
 
@@ -385,11 +393,17 @@ def run_agent_loop(
     grounding_retries = 0
     yield {"type": "start", "tools": [t.name for t in tools], "max_steps": max_steps}
 
+    budget = turn_budget or (LOCAL_TURN_BUDGET if local_only else AGENT_TURN_BUDGET)
+    deadline = time.monotonic() + budget
+
     def call(extra: list[dict[str, str]], start_after: str | None = None) -> Any:
         return router.complete(base + transcript + extra, schema=AGENT_TURN_SCHEMA,
                                conversation_id=conversation_id, local_only=local_only,
                                masker=masker, task="agent_turn", start_after=start_after,
+                               deadline=deadline,
                                params={"temperature": 0.1, "max_tokens": 1200,
+                                       "timeout": LOCAL_CALL_TIMEOUT if local_only
+                                       else AGENT_CALL_TIMEOUT,
                                        "strict_schema": AGENT_TURN_STRICT_SCHEMA})
 
     step = 0
@@ -403,7 +417,7 @@ def run_agent_loop(
             try:
                 routed = call(extra, start_after)
             except AllProvidersFailed as exc:
-                yield {"type": "fallback", "from": "all", "reason": "unavailable",
+                yield {"type": "fallback", "from": "all", "reason": failure_kind(exc),
                        "to": None, "detail": str(exc)[:200]}
                 if step == 0 and fallback_plan is not None:
                     yield from _degraded(user, execute, fallback_plan, proposals, citations,

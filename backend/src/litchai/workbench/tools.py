@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from litchai.workbench import analysis, builders
+from litchai.workbench import analysis, builders, compiler_tools
 from litchai.workbench.charts import ChartError, preview, validate_spec
 from litchai.workbench.context import ToolContext, ToolError, ToolOutput, finish_batch
 from litchai.workbench.ops import OpBuilder
@@ -146,6 +146,142 @@ class CleanArgs(_Args):
 class WorkbookArgs(_Args):
     name: str
     sheets: list[NewSheetSpec] | None = None
+
+
+# --- compiler tools (research plan §2): explicit lines OR a sheet + column names ----
+class _FromSheet(_Args):
+    sheet: str | None = Field(None, description="Source sheet when lines are not given")
+    workbook_id: str | None = None
+    new_sheet_name: str | None = None
+
+
+class AgingItemArg(_Args):
+    party: str
+    reference: str = ""
+    amount: float
+    due_date: str = Field(description="YYYY-MM-DD")
+
+
+class AgingArgs(_FromSheet):
+    as_at: str = Field(description="YYYY-MM-DD")
+    kind: Literal["receivables", "payables"] = "receivables"
+    items: list[AgingItemArg] | None = None
+    party_column: str | None = None
+    reference_column: str | None = None
+    amount_column: str | None = None
+    due_column: str | None = None
+    period_label: str | None = None
+
+
+class WhtLineArg(_Args):
+    vendor: str
+    category: str
+    payee_type: Literal["corporate", "individual"] = "corporate"
+    gross_amount: float
+    exempt: bool = False
+
+
+class CreditNoteArg(_Args):
+    reference: str = ""
+    vendor: str = ""
+    amount: float
+
+
+class WhtScheduleArgs(_FromSheet):
+    lines: list[WhtLineArg] | None = None
+    credit_notes: list[CreditNoteArg] | None = None
+    vendor_column: str | None = None
+    category_column: str | None = None
+    payee_type_column: str | None = None
+    gross_column: str | None = None
+    default_category: str | None = None
+    default_payee_type: Literal["corporate", "individual"] = "corporate"
+    period_label: str | None = None
+
+
+class VatLineArg(_Args):
+    label: str = ""
+    net_amount: float
+
+
+class VatReturnArgs(_FromSheet):
+    standard_rated_sales: list[VatLineArg] | None = None
+    zero_rated_sales: list[VatLineArg] | None = None
+    exempt_sales: list[VatLineArg] | None = None
+    standard_rated_purchases: list[VatLineArg] | None = None
+    vat_credit_brought_forward: float = 0.0
+    type_column: str | None = None
+    amount_column: str | None = None
+    label_column: str | None = None
+    date_column: str | None = None
+    tin: str | None = None
+    period_label: str | None = None
+
+
+class EmployeeArg(_Args):
+    name: str
+    gross_annual: float
+    pension: bool = True
+    nhf: bool = False
+
+
+class PayrollArgs(_FromSheet):
+    employees: list[EmployeeArg] | None = None
+    name_column: str | None = None
+    gross_column: str | None = None
+    gross_is_monthly: bool = False
+    pension: bool = True
+    nhf: bool = False
+    period_label: str | None = None
+
+
+class BsLineArg(_Args):
+    label: str
+    amount: float
+
+
+class SoaArgs(_FromSheet):
+    as_at_label: str = Field(description='e.g. "As at 31 March 2026"')
+    non_current_assets: list[BsLineArg] | None = None
+    current_assets: list[BsLineArg] | None = None
+    current_liabilities: list[BsLineArg] | None = None
+    non_current_liabilities: list[BsLineArg] | None = None
+    equity: list[BsLineArg] | None = None
+    label_column: str | None = None
+    group_column: str | None = None
+    amount_column: str | None = None
+
+
+class ComplianceItemArg(_Args):
+    requirement: str
+    authority: str = "CAC"
+    due_date: str = Field(description="YYYY-MM-DD")
+    completed: bool = False
+    fee: float = 0.0
+
+
+class CacTrackerArgs(_FromSheet):
+    as_at: str = Field(description="YYYY-MM-DD")
+    items: list[ComplianceItemArg] | None = None
+    requirement_column: str | None = None
+    due_column: str | None = None
+    completed_column: str | None = None
+    fee_column: str | None = None
+    authority_column: str | None = None
+    rc_number: str | None = None
+    tin: str | None = None
+    period_label: str | None = None
+
+
+class AnnualReportArgs(_Args):
+    standard: Literal["ias1", "ifrs18"] | None = None
+    contract: dict[str, Any] = Field(description="The annual-report inputs: period_label, "
+                                     "as_at_label, schedules, sofp, bank_recon, pnl, socf")
+
+
+def _ct(fn: Callable[..., ToolOutput]) -> Callable[[ToolContext, BaseModel], ToolOutput]:
+    """Run a compiler tool with its typed args as plain dicts."""
+    return lambda c, a: fn(c, **a.model_dump(exclude_none=True))
 
 
 @dataclass(frozen=True)
@@ -291,6 +427,53 @@ TOOLS: tuple[WorkbenchTool, ...] = (
                   CleanArgs, lambda c, a: builders.clean_values(c, **_kw(a)),
                   ("fix the text dates", "convert text numbers", "clean the dates"),
                   risky=True),
+    # The seven template compilers. Each computes in Python, returns a basis block
+    # (rule, rates, config version) and proposes the formula schedule as a new sheet.
+    WorkbenchTool("ar_ap_aging", "write",
+                  "Age receivables or payables at an as-at date into Not due, 1–30, 31–60, "
+                  "61–90 and 90+ day buckets, with totals and the top parties. Give items, or "
+                  "a sheet with party, amount and due-date columns.", AgingArgs,
+                  _ct(compiler_tools.ar_ap_aging),
+                  ("age the debtors", "receivables aging", "who owes us over 90 days",
+                   "creditors aging")),
+    WorkbenchTool("wht_schedule", "write",
+                  "WHT schedule per vendor and category from the tax config: amount to "
+                  "remit, credit notes to request, small-supplier candidates flagged. Give "
+                  "lines, or a sheet with vendor, category and gross columns.",
+                  WhtScheduleArgs, _ct(compiler_tools.wht_schedule),
+                  ("wht schedule", "withholding tax to remit", "credit notes to request")),
+    WorkbenchTool("vat_return", "write",
+                  "VAT return: output VAT, input VAT, net payable, monthly split and the "
+                  "filing workings. Give the sales and purchase lines, or a sheet with VAT "
+                  "type (standard, zero, exempt, purchase) and net amount columns.",
+                  VatReturnArgs, _ct(compiler_tools.vat_return),
+                  ("prepare the vat return", "vat filing", "output and input vat")),
+    WorkbenchTool("payroll_schedule", "write",
+                  "Full payroll from the tax config: PAYE bands, pension, NHF, NSITF, net pay "
+                  "and employer cost per employee. Give employees, or a sheet with name and "
+                  "gross annual pay columns.", PayrollArgs,
+                  _ct(compiler_tools.payroll_schedule),
+                  ("run the payroll", "payroll schedule", "net pay for the staff")),
+    WorkbenchTool("statement_of_affairs", "write",
+                  "Statement of affairs (simple balance sheet) at a date: assets, "
+                  "liabilities, net assets and equity, with a balance check. Give the lines, "
+                  "or a sheet with account, class and amount columns.", SoaArgs,
+                  _ct(compiler_tools.statement_of_affairs),
+                  ("statement of affairs", "simple balance sheet for the bank",
+                   "net assets at year end")),
+    WorkbenchTool("cac_filing_tracker", "write",
+                  "CAC annual return and compliance tracker: completion %, overdue filings, "
+                  "next due dates and outstanding fees at an as-at date. Give items, or a "
+                  "sheet with requirement, due date and completed columns.", CacTrackerArgs,
+                  _ct(compiler_tools.cac_filing_tracker),
+                  ("cac annual return status", "which filings are overdue",
+                   "compliance tracker")),
+    WorkbenchTool("annual_report_pack", "write",
+                  "IAS 1 or IFRS 18 annual report pack: SOFP, P&L, cash flows, schedules and "
+                  "bank reconciliation as linked sheets, ready for review. Needs the full "
+                  "annual-report inputs as contract.", AnnualReportArgs,
+                  _ct(compiler_tools.annual_report_pack),
+                  ("prepare the annual report", "financial statements pack", "ifrs 18 accounts")),
 )
 
 TOOLS_BY_NAME = {t.name: t for t in TOOLS}
