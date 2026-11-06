@@ -237,6 +237,14 @@ export const expense = pgTable(
     currency: text("currency").notNull().default("NGN"),
     method: text("method"), // cash | transfer | card | cheque
     reference: text("reference"),
+    // Tax on the line (₦, entered from the receipt): VAT the firm can reclaim,
+    // and WHT the firm deducted and must remit to FIRS by the 21st.
+    vatInput: numeric("vat_input", { precision: 14, scale: 2 }).notNull().default("0"),
+    whtDeducted: numeric("wht_deducted", { precision: 14, scale: 2 }).notNull().default("0"),
+    // Receipt in the PRIVATE bucket under expenses/<id>/, virus-scanned on open.
+    receiptKey: text("receipt_key"),
+    receiptName: text("receipt_name"),
+    receiptScanStatus: text("receipt_scan_status").notNull().default("unscanned"),
     createdByUserId: text("created_by_user_id"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),

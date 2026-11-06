@@ -1,7 +1,7 @@
 import "server-only";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { payment, serviceRequestDocument } from "@/lib/db/schema";
+import { expense, payment, serviceRequestDocument } from "@/lib/db/schema";
 
 /**
  * Virus scanning for private uploads (client documents, deliverables, transfer
@@ -85,6 +85,17 @@ export async function ensureProofScanned(p: { id: string; proofKey: string; proo
   const r = await scanObject(p.proofKey);
   await db.update(payment).set({ proofScanStatus: r.status }).where(eq(payment.id, p.id));
   if (r.status === "infected") await tellAdminsInfected(`Transfer proof "${p.proofFileName ?? "receipt"}"`, r.signature, `/admin/billing/payments?proof=${p.id}`);
+  return r.status;
+}
+
+/** Same for an expense receipt. */
+export async function ensureReceiptScanned(e: { id: string; receiptKey: string; receiptName: string | null; receiptScanStatus: string | null }): Promise<ScanStatus> {
+  const current = (e.receiptScanStatus ?? "unscanned") as ScanStatus;
+  if (FINAL.has(current)) return current;
+  if (!scannerConfigured()) return current;
+  const r = await scanObject(e.receiptKey);
+  await db.update(expense).set({ receiptScanStatus: r.status }).where(eq(expense.id, e.id));
+  if (r.status === "infected") await tellAdminsInfected(`Expense receipt "${e.receiptName ?? "receipt"}"`, r.signature, "/admin/billing/expenses");
   return r.status;
 }
 

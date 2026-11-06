@@ -445,6 +445,12 @@ export const STATEMENTS = [
   `ALTER TABLE "invoice" ADD COLUMN IF NOT EXISTS "deleted_by" text`,
   `ALTER TABLE "service_request" ADD COLUMN IF NOT EXISTS "deleted_by" text`,
   `ALTER TABLE "ticket" ADD COLUMN IF NOT EXISTS "deleted_by" text`,
+  // Expenses: VAT input, WHT deducted and a private receipt per line.
+  `ALTER TABLE "expense" ADD COLUMN IF NOT EXISTS "vat_input" numeric(14,2) DEFAULT '0' NOT NULL`,
+  `ALTER TABLE "expense" ADD COLUMN IF NOT EXISTS "wht_deducted" numeric(14,2) DEFAULT '0' NOT NULL`,
+  `ALTER TABLE "expense" ADD COLUMN IF NOT EXISTS "receipt_key" text`,
+  `ALTER TABLE "expense" ADD COLUMN IF NOT EXISTS "receipt_name" text`,
+  `ALTER TABLE "expense" ADD COLUMN IF NOT EXISTS "receipt_scan_status" text DEFAULT 'unscanned' NOT NULL`,
 ];
 
 /**

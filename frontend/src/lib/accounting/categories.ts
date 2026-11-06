@@ -22,3 +22,6 @@ export const PAYMENT_METHODS = ["transfer", "card", "cash", "cheque"] as const;
 export function categoryMeta(key: string) {
   return EXPENSE_CATEGORIES.find((c) => c.key === key) ?? EXPENSE_CATEGORIES[EXPENSE_CATEGORIES.length - 1];
 }
+
+/** Private-bucket folder for an expense's receipt. Keys outside it are refused. */
+export const RECEIPT_PREFIX = (expenseId: string) => `expenses/${expenseId}/`;
