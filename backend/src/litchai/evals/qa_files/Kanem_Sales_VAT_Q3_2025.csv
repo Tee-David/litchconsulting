@@ -1,0 +1,13 @@
+Invoice date,Invoice no,Customer,Net amount,VAT status
+03/07/2025,INV-2025-310,Flour Mills,1475000.00,standard
+10/07/2025,INV-2025-311,Flour Mills,840000.00,standard
+17/07/2025,INV-2025-312,BUA Foods,1475000.00,standard
+24/07/2025,INV-2025-313,Flour Mills,840000.00,standard
+31/07/2025,INV-2025-314,Flour Mills,1475000.00,exempt
+07/08/2025,INV-2025-315,Dangote Cement,3900000.00,standard
+14/08/2025,INV-2025-316,Flour Mills,1475000.00,standard
+21/08/2025,INV-2025-317,Dangote Cement,1475000.00,standard
+28/08/2025,INV-2025-318,BUA Foods,840000.00,standard
+04/09/2025,INV-2025-319,BUA Foods,840000.00,exempt
+11/09/2025,INV-2025-320,Olam Nigeria,1475000.00,standard
+18/09/2025,INV-2025-321,Olam Nigeria,2650000.00,standard

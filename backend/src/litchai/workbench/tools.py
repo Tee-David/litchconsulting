@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from litchai.workbench import analysis, builders, compiler_tools
+from litchai.workbench import analysis, builders, compiler_tools, trial_balance
 from litchai.workbench.charts import ChartError, preview, validate_spec
 from litchai.workbench.context import ToolContext, ToolError, ToolOutput, finish_batch
 from litchai.workbench.ops import OpBuilder
@@ -273,6 +273,13 @@ class CacTrackerArgs(_FromSheet):
     period_label: str | None = None
 
 
+class TrialBalanceArgs(_Args):
+    sheet: str | None = Field(None, description="TB sheet; omitted = the first TB found")
+    workbook_id: str | None = None
+    write: bool = Field(True, description="false = figures only, no new sheets")
+    period_label: str | None = None
+
+
 class AnnualReportArgs(_Args):
     standard: Literal["ias1", "ifrs18"] | None = None
     contract: dict[str, Any] = Field(description="The annual-report inputs: period_label, "
@@ -427,6 +434,15 @@ TOOLS: tuple[WorkbenchTool, ...] = (
                   CleanArgs, lambda c, a: builders.clean_values(c, **_kw(a)),
                   ("fix the text dates", "convert text numbers", "clean the dates"),
                   risky=True),
+    WorkbenchTool("trial_balance_statements", "write",
+                  "From a trial balance: check debits equal credits, map each account to an "
+                  "IFRS line, and give the income statement (revenue, cost of sales, gross "
+                  "profit, admin, finance costs, profit before tax) and the balance sheet as "
+                  "new sheets. Use it for any profit, P&L or balance question on a TB.",
+                  TrialBalanceArgs,
+                  lambda c, a: trial_balance.trial_balance_statements(c, **_kw(a)),
+                  ("does the trial balance balance", "profit before tax from the tb",
+                   "income statement from the trial balance", "gross profit")),
     # The seven template compilers. Each computes in Python, returns a basis block
     # (rule, rates, config version) and proposes the formula schedule as a new sheet.
     WorkbenchTool("ar_ap_aging", "write",

@@ -241,11 +241,24 @@ def wht_schedule(ctx: ToolContext, *, lines: list[dict[str, Any]] | None = None,
     if lines is None:
         rows, _s, rng = sheet_rows(ctx, sheet, workbook_id, {
             "vendor": (vendor_column, ("vendor", "supplier", "payee", "name"), True),
-            "category": (category_column, ("category", "nature", "type of payment"),
-                         default_category is None),
-            "payee_type": (payee_type_column, ("payee type", "entity"), False),
+            "category": (category_column, ("category", "nature", "type of payment",
+                                           "payment type", "type"), default_category is None),
+            "payee_type": (payee_type_column, ("payee type", "entity", "company",
+                                               "individual"), False),
             "gross_amount": (gross_column, ("gross", "amount", "invoice"), True),
+            "date": (None, ("date",), False),
         })
+        # A yes/no column such as "Vendor is a company" gives the payee type.
+        _wb, _sh, table = ctx.find_sheet(sheet, workbook_id)
+        flag_col = next((c.name.lower() for c in table.columns
+                         if "company" in c.name.lower() or "individual" in c.name.lower()), "")
+        for r in rows:
+            v = r.get("payee_type")
+            if isinstance(v, str) and v.strip().lower() in ("yes", "no", "y", "n", "true",
+                                                             "false"):
+                is_yes = _flag(v)
+                company = is_yes if "company" in flag_col else not is_yes
+                r["payee_type"] = "corporate" if company else "individual"
         lines, cited = rows, [rng]
     out, used = [], {}
     for i, ln in enumerate(lines, start=1):
@@ -260,16 +273,32 @@ def wht_schedule(ctx: ToolContext, *, lines: list[dict[str, Any]] | None = None,
         pct = rates_cfg[cat][f"{payee}Pct"]
         used[f"{cat}/{payee}"] = pct
         wht = 0.0 if exempt else round(gross * pct / 100, 2)
+        when = ln.get("date")
+        month = None
+        if when not in (None, ""):
+            try:
+                month = _as_date(when, "date").strftime("%Y-%m")
+            except ToolError:
+                month = None
         out.append({"vendor": str(ln.get("vendor") or f"Line {i}"), "category": cat,
                     "payee_type": payee, "gross_amount": gross, "rate_pct": pct, "wht": wht,
-                    "exempt": exempt, "small_supplier_candidate": (not exempt and gross <= limit)})
+                    "exempt": exempt, "month": month})
+    # Small-supplier rule: a vendor paid limit or less in a month (per payment when
+    # there is no date). Flagged for review only; the WHT stays in the schedule.
+    per_month: dict[tuple[str, str], float] = {}
+    for x in out:
+        key = (x["vendor"], x["month"] or f"line-{id(x)}")
+        per_month[key] = per_month.get(key, 0.0) + x["gross_amount"]
+    for x in out:
+        key = (x["vendor"], x["month"] or f"line-{id(x)}")
+        x["small_supplier_candidate"] = (not x["exempt"]) and per_month[key] <= limit
     notes = credit_notes or []
     total = round(sum(x["wht"] for x in out), 2)
     by_cat: dict[str, float] = {}
     for x in out:
         by_cat[x["category"]] = round(by_cat.get(x["category"], 0.0) + x["wht"], 2)
     cn_total = round(sum(_money(n.get("amount"), "credit note amount") for n in notes), 2)
-    candidates = [x["vendor"] for x in out if x["small_supplier_candidate"]]
+    candidates = list(dict.fromkeys(x["vendor"] for x in out if x["small_supplier_candidate"]))
     data = {
         "total_wht": total, "to_remit": total, "by_category": by_cat,
         "credit_notes_total": cn_total, "credit_notes_to_request": round(total - cn_total, 2),
@@ -404,7 +433,15 @@ def payroll_schedule(ctx: ToolContext, *, employees: list[dict[str, Any]] | None
         rows, _s, rng = sheet_rows(ctx, sheet, workbook_id, {
             "name": (name_column, ("employee", "name", "staff"), True),
             "gross_annual": (gross_column, ("gross", "salary", "pay"), True),
+            "pension": (None, ("pension",), False),
+            "nhf": (None, ("nhf", "housing fund"), False),
         })
+        _wb, _sh, table = ctx.find_sheet(sheet, workbook_id)
+        gross_head = next((c.name.lower() for c in table.columns
+                           if (gross_column and c.name.lower() == gross_column.lower())
+                           or any(w in c.name.lower() for w in ("gross", "salary", "pay"))), "")
+        if "month" in gross_head:
+            gross_is_monthly = True
         employees, cited = rows, [rng]
     if not employees:
         raise ToolError("no employees found")
@@ -453,10 +490,12 @@ def payroll_schedule(ctx: ToolContext, *, employees: list[dict[str, Any]] | None
         client_name=ctx.client_name, period_label=_period(ctx, period_label),
         employees=[{"name": x["name"], "gross_annual": x["gross_annual"],
                     "pension": x["pension_on"], "nhf": x["nhf_on"]} for x in out]))
-    summary = (f"Payroll for {len(out)} staff: gross {totals['gross_annual']:,.2f}, PAYE "
-               f"{totals['paye']:,.2f}, pension {totals['pension']:,.2f}, NHF "
-               f"{totals['nhf']:,.2f}, net pay {totals['net_pay']:,.2f}; employer cost "
-               f"{employer_cost:,.2f} (annual).")
+    m = data["monthly"]
+    summary = (f"Payroll for {len(out)} staff. Monthly: gross {m['gross_annual']:,.2f}, PAYE "
+               f"{m['paye']:,.2f}, pension {m['pension']:,.2f}, NHF {m['nhf']:,.2f}, net pay "
+               f"{m['net_pay']:,.2f}. Annual: gross {totals['gross_annual']:,.2f}, PAYE "
+               f"{totals['paye']:,.2f}; employer cost {employer_cost:,.2f}."
+               + (" Gross pay was read as monthly." if gross_is_monthly else ""))
     return _out(ctx, compiled, "payroll_schedule", "Payroll schedule as a new sheet",
                 new_sheet_name or "Payroll", data, summary, cited)
 
