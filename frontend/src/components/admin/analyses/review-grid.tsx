@@ -9,10 +9,11 @@ import { useToast } from "@/components/admin/ui/toaster";
 import type { FigureLineage, LineItem, QueueEntry, TaxonomyCategory } from "@/lib/litchai/client";
 import { recategorize } from "@/app/admin/analyses/actions";
 import { formatMoney } from "@/lib/invoice/money";
+import { Select } from "@/components/ui/select";
 
 /**
  * Risk-ordered review grid. Reuses the admin DataTable; the category cell is an
- * inline <select> that recategorizes through the server action (which dual-writes
+ * inline category picker that recategorizes through the server action (which dual-writes
  * the correction so the ladder learns it). Explain-only, corrections-only (v1).
  */
 export function ReviewGrid({
@@ -94,19 +95,16 @@ export function ReviewGrid({
         cell: ({ row }) => {
           const li = row.original;
           return (
-            <select
-              defaultValue={li.category_code ?? ""}
+            <Select
+              aria-label={`Category for ${li.raw_text}`}
+              value={li.category_code ?? ""}
               disabled={pending && savingId === li.id}
-              onChange={(e) => onChangeCategory(li.id, e.target.value, li.category_code)}
-              className="max-w-[15rem] rounded-lg border border-hairline bg-paper px-2 py-1 text-sm text-ink"
-            >
-              {!li.category_code && <option value="">— uncategorized —</option>}
-              {categories.map((c) => (
-                <option key={c.code} value={c.code}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => onChangeCategory(li.id, v, li.category_code)}
+              placeholder="Uncategorized"
+              searchable
+              options={categories.map((c) => ({ value: c.code, label: c.label }))}
+              className="max-w-[15rem]"
+            />
           );
         },
       },

@@ -39,6 +39,7 @@ import { colLetter, parseRef, rangeLabel, rangeRef, type Range } from "./refs";
 import { ChartCard, type ChartProposal } from "./chart-card";
 import { EngineSheet } from "./engine-sheet";
 import { useVoice } from "./voice";
+import { Select } from "@/components/ui/select";
 
 type Live = { message: string; selection: string | null; events: WbEvent[] };
 
@@ -402,14 +403,13 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const tabs = (
     <div className="flex items-center gap-1 overflow-x-auto border-t border-hairline bg-surface px-2 py-1" role="tablist" aria-label="Sheets">
       {conv.workbooks.length > 1 ? (
-        <select
+        <Select
           aria-label="Workbook"
           value={wbId}
-          onChange={(e) => setWbId(e.target.value)}
-          className="mr-1 max-w-[160px] shrink-0 rounded-ctl border border-hairline bg-paper px-1.5 py-1 text-[12px] text-ink"
-        >
-          {conv.workbooks.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-        </select>
+          onChange={setWbId}
+          options={conv.workbooks.map((w) => ({ value: w.id, label: w.name }))}
+          className="mr-1 max-w-[180px] shrink-0"
+        />
       ) : null}
       {sheets.map((n) => {
         const isNew = baseSheets[wbId] ? !baseSheets[wbId].has(n) : false;

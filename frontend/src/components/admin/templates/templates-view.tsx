@@ -14,6 +14,7 @@ import type { TemplateRow } from "@/lib/db/queries/templates";
 import { uploadFile } from "@/lib/upload-client";
 import { formatBytes, extLabel } from "@/lib/files";
 import { cn } from "@/lib/utils";
+import { Select } from "@/components/ui/select";
 
 type Section = { heading: string; content: string };
 type Curated = {
@@ -318,19 +319,11 @@ export function TemplatesView({ imported = [] }: { imported?: TemplateRow[] }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-body">Category</label>
-              <select value={meta.category} onChange={(e) => setMeta((m) => ({ ...m, category: e.target.value }))} className={inputCls}>
-                {CATEGORY_OPTIONS.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+              <Select aria-label="Category" value={meta.category} onChange={(v) => setMeta((m) => ({ ...m, category: v }))} options={CATEGORY_OPTIONS.map((c) => ({ value: c, label: c }))} />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-body">Badge (optional)</label>
-              <select value={meta.badge} onChange={(e) => setMeta((m) => ({ ...m, badge: e.target.value }))} className={inputCls}>
-                <option value="">None</option>
-                <option value="Popular">Popular</option>
-                <option value="New">New</option>
-              </select>
+              <Select aria-label="Badge" value={meta.badge} onChange={(v) => setMeta((m) => ({ ...m, badge: v }))} options={[{ value: "", label: "None" }, { value: "Popular", label: "Popular" }, { value: "New", label: "New" }]} />
             </div>
           </div>
           <div>

@@ -807,22 +807,21 @@ export function SettingsView({
               </div>
               
               <div className="flex flex-wrap items-center gap-2">
-                <select
-                  defaultValue=""
+                <Select
+                  aria-label="Change role"
+                  value=""
                   disabled={bulkActioning}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (val === "admin" || val === "client") {
-                      handleBulkRoleChange(val);
-                    }
-                    e.target.value = "";
+                  placeholder="Change role…"
+                  onChange={(val) => {
+                    if (val === "admin" || val === "staff" || val === "client") handleBulkRoleChange(val);
                   }}
-                  className="rounded-lg border border-hairline bg-paper px-3 py-1.5 text-xs font-semibold text-ink outline-none"
-                >
-                  <option value="" disabled>Change Role...</option>
-                  <option value="admin">Make Administrator</option>
-                  <option value="client">Make Client</option>
-                </select>
+                  options={[
+                    { value: "admin", label: "Make admin" },
+                    { value: "staff", label: "Make staff" },
+                    { value: "client", label: "Make client" },
+                  ]}
+                  className="min-w-[10rem]"
+                />
 
                 <button
                   type="button"
@@ -940,15 +939,18 @@ export function SettingsView({
                               Administrator
                             </span>
                           ) : (
-                            <select
+                            <Select
+                              aria-label={`Role for ${u.name}`}
                               value={u.role || "client"}
                               disabled={isPendingAction}
-                              onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                              className="rounded border border-hairline bg-paper px-2 py-1 text-xs font-medium text-ink outline-none focus:border-brand"
-                            >
-                              <option value="admin">Administrator</option>
-                              <option value="client">Client</option>
-                            </select>
+                              onChange={(v) => handleRoleChange(u.id, v)}
+                              options={[
+                                { value: "admin", label: "Admin" },
+                                { value: "staff", label: "Staff" },
+                                { value: "client", label: "Client" },
+                              ]}
+                              className="min-w-[8rem]"
+                            />
                           )}
                         </td>
                         <td className="px-5 py-4">
@@ -1013,18 +1015,16 @@ export function SettingsView({
               <div className="flex items-center justify-between border-t border-hairline bg-surface/30 px-5 py-4 text-xs font-semibold text-body">
                 <div className="flex items-center gap-2">
                   <span>Rows per page</span>
-                  <select
-                    value={rowsPerPage}
-                    onChange={(e) => {
-                      setRowsPerPage(Number(e.target.value));
+                  <Select
+                    aria-label="Rows per page"
+                    value={String(rowsPerPage)}
+                    onChange={(v) => {
+                      setRowsPerPage(Number(v));
                       setCurrentPage(1);
                     }}
-                    className="rounded border border-hairline bg-paper px-2 py-1 text-xs font-medium text-ink outline-none"
-                  >
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                  </select>
+                    options={[10, 20, 50].map((n) => ({ value: String(n), label: String(n) }))}
+                    className="w-20"
+                  />
                 </div>
                 
                 <div className="flex items-center gap-4">

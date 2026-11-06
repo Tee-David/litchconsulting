@@ -13,6 +13,7 @@ import { recordManualPaymentAction } from "@/app/admin/billing/invoices/actions"
 import type { PaymentLine } from "@/app/admin/_lib/billing-data";
 import { downloadCsv } from "@/components/admin/ui/csv";
 import { cn } from "@/lib/utils";
+import { Select } from "@/components/ui/select";
 
 const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 const methodOf = (p: PaymentLine) =>
@@ -371,22 +372,18 @@ function RecordSheet({ open, onClose, invoices }: { open: boolean; onClose: () =
         <div className="space-y-4 text-sm">
           <label className="block">
             <span className="mb-1.5 block font-medium text-ink">Invoice</span>
-            <select
+            <Select
+              aria-label="Invoice"
               value={invoiceId}
-              onChange={(e) => {
-                setInvoiceId(e.target.value);
-                const i = invoices.find((x) => x.id === e.target.value);
+              onChange={(v) => {
+                setInvoiceId(v);
+                const i = invoices.find((x) => x.id === v);
                 if (i) setAmount(String(i.balance));
               }}
-              className={inputCls}
-            >
-              <option value="">Choose an unpaid invoice</option>
-              {invoices.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.number} · {i.client} · {formatMoney(i.balance, i.currency)} due
-                </option>
-              ))}
-            </select>
+              placeholder="Choose an unpaid invoice"
+              searchable
+              options={invoices.map((i) => ({ value: i.id, label: `${i.number} · ${i.client} · ${formatMoney(i.balance, i.currency)} due` }))}
+            />
           </label>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
@@ -400,13 +397,18 @@ function RecordSheet({ open, onClose, invoices }: { open: boolean; onClose: () =
           </div>
           <label className="block">
             <span className="mb-1.5 block font-medium text-ink">How it was paid</span>
-            <select value={channel} onChange={(e) => setChannel(e.target.value)} className={inputCls}>
-              <option value="bank_transfer">Bank transfer</option>
-              <option value="cheque">Cheque</option>
-              <option value="cash">Cash</option>
-              <option value="wht_credit">WHT credit note</option>
-              <option value="other">Other</option>
-            </select>
+            <Select
+              aria-label="How it was paid"
+              value={channel}
+              onChange={setChannel}
+              options={[
+                { value: "bank_transfer", label: "Bank transfer" },
+                { value: "cheque", label: "Cheque" },
+                { value: "cash", label: "Cash" },
+                { value: "wht_credit", label: "WHT credit note" },
+                { value: "other", label: "Other" },
+              ]}
+            />
           </label>
           <label className="block">
             <span className="mb-1.5 block font-medium text-ink">Note (optional, team only)</span>

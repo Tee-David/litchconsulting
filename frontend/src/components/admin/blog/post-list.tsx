@@ -28,6 +28,7 @@ import { CategoryManager } from "@/components/admin/categories/category-manager"
 import type { PostRow } from "@/lib/db/queries/posts";
 import type { Category } from "@/lib/db/schema";
 import { cn } from "@/lib/utils";
+import { Select } from "@/components/ui/select";
 
 const FILTERS = [
   { key: "all", label: "All" },
@@ -274,20 +275,16 @@ export function PostList({ posts, categories = [] }: { posts: PostRow[]; categor
           <div className="flex flex-col items-center justify-between gap-3 border-t border-hairline px-4 py-3 text-sm text-body sm:flex-row">
             <div className="flex items-center gap-2">
               <span>Rows per page</span>
-              <select
-                value={pageSize}
-                onChange={(e) => {
-                  setPageSize(Number(e.target.value));
+              <Select
+                aria-label="Rows per page"
+                value={String(pageSize)}
+                onChange={(v) => {
+                  setPageSize(Number(v));
                   setPage(1);
                 }}
-                className="rounded-lg border border-hairline bg-paper px-2 py-1 text-ink outline-none focus:border-brand"
-              >
-                {[10, 25, 50, 100].map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
+                options={[10, 25, 50, 100].map((s) => ({ value: String(s), label: String(s) }))}
+                className="w-20"
+              />
             </div>
             <div className="flex items-center gap-4">
               <span className="tabular-nums">

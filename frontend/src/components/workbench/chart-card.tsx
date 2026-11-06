@@ -24,6 +24,7 @@ import { Button } from "@/components/kit";
 import { useToast } from "@/components/admin/ui/toaster";
 import { decideBatchAction, runToolAction } from "@/lib/workbench/actions";
 import { cn } from "@/lib/utils";
+import { Select } from "@/components/ui/select";
 
 type Series = { name: string; ref: string; data: Array<number | null> };
 export type ChartProposal = {
@@ -251,16 +252,15 @@ export function ChartCard({
             {spec.anchor ? ` at ${spec.anchor}` : ""}
           </Button>
           {sheets.filter((n) => n !== spec.sheet).length ? (
-            <select
+            <Select
               aria-label="Move the chart to another sheet"
               disabled={working || busy}
               value=""
-              onChange={(e) => e.target.value && void repropose({ sheet: e.target.value })}
-              className="rounded-ctl border border-hairline bg-paper px-2 py-1 text-[12px] text-ink"
-            >
-              <option value="">Other sheet…</option>
-              {sheets.filter((n) => n !== spec.sheet).map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
+              placeholder="Other sheet…"
+              onChange={(v) => v && void repropose({ sheet: v })}
+              options={sheets.filter((n) => n !== spec.sheet).map((n) => ({ value: n, label: n }))}
+              className="min-w-[9rem]"
+            />
           ) : null}
           <Button size="sm" variant="ghost" disabled={working || busy} onClick={() => onDecide("reject")}>Discard</Button>
         </div>

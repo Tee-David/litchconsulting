@@ -8,6 +8,7 @@ import { Field, inputClass } from "@/components/auth/ui";
 import { saveCompanyDetailsAction, markOnboardingStepAction } from "@/app/account/actions";
 import { inviteColleagueAction } from "@/app/account/colleague-actions";
 import { cn } from "@/lib/utils";
+import { Select } from "@/components/ui/select";
 
 const ACCESS = [
   { value: "billing", label: "Billing contact", hint: "Gets invoices and receipts, and can pay." },
@@ -105,18 +106,12 @@ export function ClientWelcome({
           <label className="sr-only" htmlFor="colleague-access">
             Their access
           </label>
-          <select
-            id="colleague-access"
+          <Select
+            aria-label="What they can do"
             value={access}
-            onChange={(e) => setAccess(e.target.value as typeof access)}
-            className="h-11 rounded-ctl border border-line-strong bg-paper px-3 text-sm text-ink"
-          >
-            {ACCESS.map((a) => (
-              <option key={a.value} value={a.value}>
-                {a.label}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => setAccess(v as typeof access)}
+            options={ACCESS.map((a) => ({ value: a.value, label: a.label }))}
+          />
           <Button onClick={invite} disabled={pending || !email} className="h-11">
             <Plus className="size-4" aria-hidden /> Invite
           </Button>
