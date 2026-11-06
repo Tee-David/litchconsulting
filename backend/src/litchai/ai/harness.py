@@ -307,8 +307,7 @@ def compact_history(history: list[dict[str, str]] | None
     older = msgs[:-HISTORY_FULL_MESSAGES][-8:]
     lines = [f"- {'User asked' if m['role'] == 'user' else 'You answered'}: "
              f"{_clip(' '.join(m['content'].split()), 160)}" for m in older]
-    return recent, "
-".join(lines)
+    return recent, "\n".join(lines)
 
 
 def _clip(text: str, n: int) -> str:
@@ -352,10 +351,7 @@ def run_agent_loop(
     recent, summary = compact_history(history)
     sys_msg = system.replace("{tool_menu}", _tool_menu(tools))
     if summary:
-        sys_msg += "
-
-Earlier in this conversation (summary):
-" + summary
+        sys_msg += "\n\nEarlier in this conversation (summary):\n" + summary
     base: list[dict[str, str]] = [{"role": "system", "content": sys_msg}]
     base += recent
     base.append({"role": "user", "content": user})
