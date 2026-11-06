@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import io
 from datetime import date
+from pathlib import Path
 
 from openpyxl import Workbook
 
@@ -210,6 +211,26 @@ COMPLIANCE = [
 def compliance_xlsx() -> bytes:
     return _book("Filings", ["Requirement", "Authority", "Due date", "Completed", "Fee"],
                  COMPLIANCE)
+
+
+# The QA demo files (plans/qa/QA-TEST-PLAN.md section 2), as the user uploads them.
+# Each fixture is one or more files; non-xlsx files become xlsx working copies
+# through workbench/formats.py, exactly as in the live app.
+QA_FILES = Path(__file__).resolve().parent / "qa_files"
+QA_FIXTURES: dict[str, list[str]] = {
+    "qa_tb": ["Kanem_Trial_Balance_FY2025.xlsx"],
+    "qa_bankrec": ["Kanem_Bank_Statement_Oct2025.csv", "Kanem_Cash_Book_Oct2025.xlsx"],
+    "qa_wht": ["Kanem_Vendor_Payments_Q3_2025.xlsx"],
+    "qa_vat": ["Kanem_Sales_VAT_Q3_2025.csv"],
+    "qa_payroll": ["Kanem_Payroll_Oct2025.xlsx"],
+    "qa_assets_minutes": ["Kanem_Fixed_Asset_Register_2025.docx",
+                          "Kanem_Board_Minutes_Nov2025.txt"],
+    "qa_fuel": ["Kanem_Fuel_Card_March2025.json"],
+}
+
+
+def qa_files(fixture: str) -> list[tuple[str, bytes]]:
+    return [(n, (QA_FILES / n).read_bytes()) for n in QA_FIXTURES[fixture]]
 
 
 FIXTURES = {

@@ -166,7 +166,39 @@ def load_xlsx(data: bytes, *, wb_id: str, name: str, document_id: int | None = N
                 else:
                     sheet.set(c.row, c.column, Cell(value=raw, number_format=c.number_format))
         out.sheets[ws.title] = sheet
+    fill_uncached(out)
     return out
+
+
+MAX_UNCACHED = 20_000  # formulas evaluated on read (files saved without cached values)
+
+
+def fill_uncached(model: Workbook) -> int:
+    """A file written by openpyxl (or another tool that never ran Excel) has
+    formulas but no cached values, so a totals row reads as empty. Evaluate those
+    formulas with the safe evaluator and keep the result as the cell's preview
+    (``Sheet.value`` shows it); the formula itself is unchanged and LibreOffice
+    stays the authority at apply time. Returns how many cells were filled."""
+    from litchai.workbench.formula import Evaluator
+
+    todo = [(s.name, r, c) for s in model.sheets.values() for (r, c), cell in s.cells.items()
+            if cell.formula and cell.value is None and cell.preview is None]
+    if not todo:
+        return 0
+    ev = Evaluator(model)
+    filled = 0
+    for name, r, c in todo[:MAX_UNCACHED]:
+        cell = model.sheets[name].cells[(r, c)]
+        try:
+            v = ev.evaluate(cell.formula or "", name)
+        except Exception:  # noqa: BLE001, S112 — unsupported function or bad ref: leave it empty
+            continue
+        if isinstance(v, float):
+            v = round(v, 2)
+        if v is not None:
+            cell.preview = v
+            filled += 1
+    return filled
 
 
 def load_csv(data: bytes, *, wb_id: str, name: str, document_id: int | None = None) -> Workbook:

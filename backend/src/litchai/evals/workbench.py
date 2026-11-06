@@ -32,7 +32,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any
 
-from litchai.evals.fixtures import FIXTURES, scripted_categoriser
+from litchai.evals.fixtures import FIXTURES, QA_FIXTURES, qa_files, scripted_categoriser
 from litchai.workbench.ops import GateResult
 
 TOLERANCE = 0.005  # 0.5% for figures quoted in prose (rounding to "4.56m" etc.)
@@ -126,6 +126,15 @@ def _workbench(task: dict[str, Any]) -> tuple[Any, Any]:
     conv = wb.create(client_id=None, client_name="Okonkwo Agro-Allied Ltd",
                      period_label="Q1 2025")
     fixture = task["fixture"]
+    if fixture in QA_FIXTURES:
+        from litchai.workbench.formats import to_working_copy
+
+        conv.client_name, conv.period_label = "Kanem Logistics Nigeria Ltd", "FY2025"
+        for i, (name, data) in enumerate(qa_files(fixture), start=1):
+            copy = to_working_copy(data, name, wb_id=f"doc-{i}", document_id=i)
+            wb.attach_bytes(conv, copy.xlsx, name=name, origin=copy.origin, document_id=i,
+                            source=copy.source(name))
+        return wb, conv
     wb.attach_bytes(conv, FIXTURES[fixture](), name=f"{fixture}.xlsx", document_id=1)
     return wb, conv
 

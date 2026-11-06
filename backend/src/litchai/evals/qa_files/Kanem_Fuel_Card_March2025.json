@@ -1,0 +1,245 @@
+{
+ "account": "Kanem Logistics fleet card",
+ "transactions": [
+  {
+   "date": "2025-03-01",
+   "truck": "BRN-221-KA",
+   "station": "NNPC Kano",
+   "litres": 260,
+   "price_per_litre": 1045,
+   "amount": 271700
+  },
+  {
+   "date": "2025-03-02",
+   "truck": "BRN-221-KA",
+   "station": "Total Potiskum",
+   "litres": 340,
+   "price_per_litre": 1020,
+   "amount": 346800
+  },
+  {
+   "date": "2025-03-03",
+   "truck": "KAN-388-XB",
+   "station": "NNPC Kano",
+   "litres": 260,
+   "price_per_litre": 1060,
+   "amount": 275600
+  },
+  {
+   "date": "2025-03-04",
+   "truck": "KAN-388-XB",
+   "station": "Total Potiskum",
+   "litres": 260,
+   "price_per_litre": 1060,
+   "amount": 275600
+  },
+  {
+   "date": "2025-03-05",
+   "truck": "KAN-388-XB",
+   "station": "MRS Maiduguri",
+   "litres": 300,
+   "price_per_litre": 1045,
+   "amount": 313500
+  },
+  {
+   "date": "2025-03-06",
+   "truck": "KAN-509-XC",
+   "station": "Total Potiskum",
+   "litres": 340,
+   "price_per_litre": 1020,
+   "amount": 346800
+  },
+  {
+   "date": "2025-03-07",
+   "truck": "KAN-388-XB",
+   "station": "NNPC Kano",
+   "litres": 180,
+   "price_per_litre": 1020,
+   "amount": 183600
+  },
+  {
+   "date": "2025-03-08",
+   "truck": "KAN-509-XC",
+   "station": "Total Potiskum",
+   "litres": 220,
+   "price_per_litre": 1020,
+   "amount": 224400
+  },
+  {
+   "date": "2025-03-09",
+   "truck": "KAN-412-XA",
+   "station": "NNPC Kano",
+   "litres": 220,
+   "price_per_litre": 1045,
+   "amount": 229900
+  },
+  {
+   "date": "2025-03-10",
+   "truck": "KAN-388-XB",
+   "station": "NNPC Kano",
+   "litres": 340,
+   "price_per_litre": 1045,
+   "amount": 355300
+  },
+  {
+   "date": "2025-03-11",
+   "truck": "KAN-388-XB",
+   "station": "Total Potiskum",
+   "litres": 220,
+   "price_per_litre": 1060,
+   "amount": 233200
+  },
+  {
+   "date": "2025-03-12",
+   "truck": "KAN-388-XB",
+   "station": "Total Potiskum",
+   "litres": 260,
+   "price_per_litre": 1045,
+   "amount": 271700
+  },
+  {
+   "date": "2025-03-13",
+   "truck": "BRN-221-KA",
+   "station": "NNPC Kano",
+   "litres": 260,
+   "price_per_litre": 1060,
+   "amount": 275600
+  },
+  {
+   "date": "2025-03-14",
+   "truck": "KAN-509-XC",
+   "station": "NNPC Kano",
+   "litres": 300,
+   "price_per_litre": 1020,
+   "amount": 306000
+  },
+  {
+   "date": "2025-03-15",
+   "truck": "KAN-388-XB",
+   "station": "NNPC Kano",
+   "litres": 180,
+   "price_per_litre": 1060,
+   "amount": 190800
+  },
+  {
+   "date": "2025-03-16",
+   "truck": "KAN-388-XB",
+   "station": "NNPC Kano",
+   "litres": 300,
+   "price_per_litre": 1045,
+   "amount": 313500
+  },
+  {
+   "date": "2025-03-17",
+   "truck": "BRN-221-KA",
+   "station": "MRS Maiduguri",
+   "litres": 260,
+   "price_per_litre": 1060,
+   "amount": 275600
+  },
+  {
+   "date": "2025-03-18",
+   "truck": "BRN-221-KA",
+   "station": "MRS Maiduguri",
+   "litres": 340,
+   "price_per_litre": 1045,
+   "amount": 355300
+  },
+  {
+   "date": "2025-03-19",
+   "truck": "BRN-221-KA",
+   "station": "Total Potiskum",
+   "litres": 180,
+   "price_per_litre": 1020,
+   "amount": 183600
+  },
+  {
+   "date": "2025-03-20",
+   "truck": "KAN-509-XC",
+   "station": "Total Potiskum",
+   "litres": 340,
+   "price_per_litre": 1045,
+   "amount": 355300
+  },
+  {
+   "date": "2025-03-21",
+   "truck": "BRN-221-KA",
+   "station": "MRS Maiduguri",
+   "litres": 340,
+   "price_per_litre": 1045,
+   "amount": 355300
+  },
+  {
+   "date": "2025-03-22",
+   "truck": "KAN-388-XB",
+   "station": "Total Potiskum",
+   "litres": 180,
+   "price_per_litre": 1060,
+   "amount": 190800
+  },
+  {
+   "date": "2025-03-23",
+   "truck": "KAN-412-XA",
+   "station": "MRS Maiduguri",
+   "litres": 220,
+   "price_per_litre": 1045,
+   "amount": 229900
+  },
+  {
+   "date": "2025-03-24",
+   "truck": "KAN-388-XB",
+   "station": "MRS Maiduguri",
+   "litres": 220,
+   "price_per_litre": 1060,
+   "amount": 233200
+  },
+  {
+   "date": "2025-03-25",
+   "truck": "KAN-412-XA",
+   "station": "NNPC Kano",
+   "litres": 220,
+   "price_per_litre": 1060,
+   "amount": 233200
+  },
+  {
+   "date": "2025-03-26",
+   "truck": "BRN-221-KA",
+   "station": "Total Potiskum",
+   "litres": 220,
+   "price_per_litre": 1045,
+   "amount": 229900
+  },
+  {
+   "date": "2025-03-27",
+   "truck": "KAN-412-XA",
+   "station": "Total Potiskum",
+   "litres": 180,
+   "price_per_litre": 1020,
+   "amount": 183600
+  },
+  {
+   "date": "2025-03-28",
+   "truck": "BRN-221-KA",
+   "station": "MRS Maiduguri",
+   "litres": 340,
+   "price_per_litre": 1060,
+   "amount": 360400
+  },
+  {
+   "date": "2025-03-29",
+   "truck": "BRN-221-KA",
+   "station": "Total Potiskum",
+   "litres": 220,
+   "price_per_litre": 1060,
+   "amount": 233200
+  },
+  {
+   "date": "2025-03-30",
+   "truck": "KAN-412-XA",
+   "station": "Total Potiskum",
+   "litres": 260,
+   "price_per_litre": 1020,
+   "amount": 265200
+  }
+ ]
+}

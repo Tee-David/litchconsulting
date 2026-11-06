@@ -59,6 +59,36 @@ def _closing(sh: Sheet, table: Table, entries: list[dict[str, Any]]) -> tuple[fl
     return round(sum(e["amount"] for e in entries), 2), None
 
 
+_BANK_WORDS = ("bank statement", "statement", "bank", "narration")
+_BOOK_WORDS = ("cash book", "cashbook", "ledger", "books", "journal", "details")
+
+
+def _bank_and_books(ctx: ToolContext, dated_amounts: Any) -> tuple[tuple, tuple]:
+    """Pick the bank statement and the books among every dated money table, by the
+    file/sheet/column names (a cash book can have a running balance too)."""
+    from litchai.workbench.tables import detect_table
+
+    cands = []
+    for wb in ctx.workbooks.values():
+        for sh in wb.sheets.values():
+            t = detect_table(sh)
+            if t is None or not t.columns or not dated_amounts(t):
+                continue
+            if sh.formula_count() * 2 > len(sh.cells):
+                continue  # a computed schedule (often a pending proposal)
+            text = " ".join([wb.name, sh.name, *(c.name for c in t.columns)]).lower()
+            bank = sum(2 if w in text else 0 for w in _BANK_WORDS[:2]) + \
+                sum(1 for w in _BANK_WORDS[2:] if w in text) + (1 if t.col("balance") else 0)
+            book = sum(2 for w in _BOOK_WORDS if w in text)
+            cands.append((bank - book, wb, sh, t))
+    if len(cands) < 2:
+        raise ToolError("need two different sheets: a bank statement and a ledger/cash book")
+    cands.sort(key=lambda x: x[0], reverse=True)
+    _, wb_b, sh_b, t_b = cands[0]
+    _, wb_l, sh_l, t_l = cands[-1]
+    return (wb_b, sh_b, t_b), (wb_l, sh_l, t_l)
+
+
 def reconcile(ctx: ToolContext, *, bank_sheet: str | None = None,
               ledger_sheet: str | None = None, date_window_days: int = 3,
               write: bool = True, new_sheet_name: str = "Recon",
@@ -71,12 +101,15 @@ def reconcile(ctx: ToolContext, *, bank_sheet: str | None = None,
         return t.col("date") is not None and any(
             t.col(r) is not None for r in ("amount", "debit", "credit"))
 
-    wb_b, sh_b, t_b = ctx.find_sheet(
-        bank_sheet, prefer=lambda t: dated_amounts(t) and t.col("balance") is not None)
-    wb_l, sh_l, t_l = ctx.find_sheet(
-        ledger_sheet,
-        prefer=lambda t: dated_amounts(t) and t.sheet != sh_b.name
-        and t.col("balance") is None)
+    if bank_sheet or ledger_sheet:
+        wb_b, sh_b, t_b = ctx.find_sheet(
+            bank_sheet, prefer=lambda t: dated_amounts(t) and t.col("balance") is not None)
+        wb_l, sh_l, t_l = ctx.find_sheet(
+            ledger_sheet,
+            prefer=lambda t: dated_amounts(t) and t.sheet != sh_b.name
+            and t.col("balance") is None)
+    else:
+        (wb_b, sh_b, t_b), (wb_l, sh_l, t_l) = _bank_and_books(ctx, dated_amounts)
     if (wb_b.id, sh_b.name) == (wb_l.id, sh_l.name):
         raise ToolError("need two different sheets: a bank statement and a ledger/cash book")
     bank, ledger = _entries(sh_b, t_b), _entries(sh_l, t_l)
@@ -126,6 +159,11 @@ def reconcile(ctx: ToolContext, *, bank_sheet: str | None = None,
 
     books_opening = _opening_cash(sh_b, t_b) or 0.0
     books_close = round(books_opening + sum(lsign(e) for e in ledger), 2)
+    if t_l.col("balance") is not None:
+        # A cash book with its own running balance: its last balance is the books
+        # figure, and its opening is that balance less the book's own movement.
+        books_close, _ = _closing(sh_l, t_l, ledger)
+        books_opening = round(books_close - sum(lsign(e) for e in ledger), 2)
     if balance_per_books is not None:
         books_close = float(balance_per_books)
     dit = [e for e in ledger_only if lsign(e) > 0]       # in books, not yet in bank
@@ -147,7 +185,8 @@ def reconcile(ctx: ToolContext, *, bank_sheet: str | None = None,
         "bank_sheet": sh_b.name, "ledger_sheet": sh_l.name, "matched": len(pairs),
         "ledger_sign_flipped": flip, "balance_per_bank": bank_close,
         "balance_per_books": books_close, "books_opening_balance": books_opening,
-        "difference": difference,
+        "difference": difference, "adjusted_balance_per_bank": round(adj_bank, 2),
+        "adjusted_balance_per_books": round(adj_books, 2),
         "bank_only": [item(e, sh_b, t_b, "bank") for e in bank_only][:100],
         "ledger_only": [item(e, sh_l, t_l, "ledger") for e in ledger_only][:100],
         "deposits_in_transit": round(sum(lsign(e) for e in dit), 2),
@@ -160,7 +199,8 @@ def reconcile(ctx: ToolContext, *, bank_sheet: str | None = None,
         f"Closing balance per bank {bank_close:,.2f}; closing balance per books "
         f"{books_close:,.2f} (opening {books_opening:,.2f} + net movement "
         f"{books_close - books_opening:,.2f}). {len(pairs)} lines matched. Reconciling items: "
-        f"{items or 'none'}. Difference after these adjustments: {difference:,.2f}.")
+        f"{items or 'none'}. Adjusted balances: bank {adj_bank:,.2f}, books {adj_books:,.2f}. "
+        f"Difference after these adjustments: {difference:,.2f}.")
     if not write:
         return ToolOutput(data=data, summary=rec_summary)
 
@@ -351,6 +391,7 @@ def pnl_figures(ctx: ToolContext) -> dict[str, Any] | None:
     if mem and mem["figures"].get("net_profit") is not None:
         f = mem["figures"]
         return {"net_profit": f["net_profit"], "total_revenue": f.get("total_revenue"),
+                "total_fixed_assets": f.get("total_fixed_assets"),
                 "cell": mem["key_cells"].get("net_profit"), "from": "P&L built in this answer"}
     from litchai.workbench.formula import safe_preview
 
@@ -416,11 +457,27 @@ def tax_compute(ctx: ToolContext, *, kind: str, inputs: dict[str, Any] | None = 
             # Chained input: the profit comes from the P&L, never retyped by the model.
             found = pnl_figures(ctx)
             if found is None:
+                # A trial balance in the workbook: its PBT, read by the TB tool.
+                from litchai.workbench.trial_balance import (
+                    detect_trial_balance,
+                    trial_balance_statements,
+                )
+
+                if detect_trial_balance(ctx) is not None:
+                    tb = trial_balance_statements(ctx, write=False)
+                    if tb.data["balanced"]:
+                        found = pnl_figures(ctx)
+                        if found is not None:
+                            found["from"] = f"trial balance {tb.data['sheet']}"
+                            found["cell"] = tb.citations[-1] if tb.citations else None
+            if found is None:
                 raise ToolError("no profit given and no P&L found. Build the P&L first "
                                 "(build_statement kind=pnl), or pass net_profit_per_accounts.")
             p = {**p, "net_profit_per_accounts": found["net_profit"]}
             if "turnover" not in p and found.get("total_revenue") is not None:
                 p["turnover"] = found["total_revenue"]
+            if "total_fixed_assets" not in p and found.get("total_fixed_assets") is not None:
+                p["total_fixed_assets"] = found["total_fixed_assets"]
             data["profit_source"] = found
         npa = num("net_profit_per_accounts", num("profit_before_tax"))
         add = sum(to_number(x.get("amount")) or 0 for x in p.get("disallowable_addbacks", []))
