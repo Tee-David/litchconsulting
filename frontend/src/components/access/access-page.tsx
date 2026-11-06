@@ -129,7 +129,7 @@ export function AccessPage({ team, invites, work, unassigned, openInvite, tab: i
   };
 
   return (
-    <div className="mt-5 space-y-5">
+    <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <Segmented
           label="Team and access view"
@@ -141,9 +141,14 @@ export function AccessPage({ team, invites, work, unassigned, openInvite, tab: i
             { value: "assign", label: "Who is on what" },
           ]}
         />
-        <Button variant="primary" onClick={() => setInviteOpen(true)}>
-          <UserPlus className="size-4" aria-hidden /> Invite to the team
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <a href="/admin/settings/users" className="inline-flex min-h-[40px] items-center rounded-ctl px-3 text-sm font-medium text-body outline-none hover:bg-surface hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40">
+            All accounts (ban or delete)
+          </a>
+          <Button variant="primary" onClick={() => setInviteOpen(true)}>
+            <UserPlus className="size-4" aria-hidden /> Invite to the team
+          </Button>
+        </div>
       </div>
 
       {tab === "team" ? (

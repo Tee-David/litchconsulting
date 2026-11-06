@@ -33,7 +33,7 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 /** Turn the engine's failure text into words a person can act on. */
-function plainReason(reason: string): string {
+export function plainReason(reason: string): string {
   if (!reason) return "The analysis stopped.";
   if (/stalled|worker died/i.test(reason)) return "The analysis stopped part-way (the engine restarted).";
   if (/ForeignKey|taxonomy/i.test(reason)) return "The category list was missing on the AI server. It is fixed now.";
@@ -41,7 +41,7 @@ function plainReason(reason: string): string {
   return reason.length > 140 ? `${reason.slice(0, 140)}…` : reason;
 }
 
-function RetryButton({ documentId, reason }: { documentId: number; reason: string }) {
+export function RetryButton({ documentId, reason }: { documentId: number; reason: string }) {
   const router = useRouter();
   const toast = useToast();
   const [busy, setBusy] = useState(false);
