@@ -15,7 +15,7 @@ export default async function SettingsLayout({ children }: { children: React.Rea
     <div>
       <PageHead title="Settings" lede="How the firm and the platform run. Changes collect in the bar at the bottom." />
       <div className="grid gap-5 md:grid-cols-[220px_minmax(0,1fr)]">
-        <div data-tour="settings-tabs" className="md:sticky md:top-20 md:self-start">
+        <div data-tour="settings-tabs" className="min-w-0 md:sticky md:top-20 md:self-start">
           <SettingsNav />
         </div>
         <div className="min-w-0">{children}</div>

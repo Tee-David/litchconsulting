@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { ColumnDef } from "@tanstack/react-table";
 import { FileSearch } from "lucide-react";
@@ -21,6 +22,9 @@ export type AnalysisRow = {
 };
 
 /** The engine's status in plain words, with a tone. */
+/** A file with no transaction table (a trial balance, a template) is opened in the workbench, not sorted. */
+const notTransactions = (r: { status: string; reason: string }) => r.status === "extraction_failed" && /no recognizable header|not a recogni|no transaction/i.test(r.reason);
+
 function statusWords(s: string): { label: string; tone: "good" | "warn" | "bad" | "info" | "muted" } {
   if (s === "categorized") return { label: "Ready", tone: "good" };
   if (s === "extracted" || s === "categorizing") return { label: "Sorting rows", tone: "info" };
@@ -37,10 +41,11 @@ const TONE: Record<string, string> = {
   info: "bg-info-soft text-info",
   muted: "bg-surface text-muted",
 };
-const failed = (r: AnalysisRow) => statusWords(r.status).tone === "bad";
+const failed = (r: AnalysisRow) => statusWords(r.status).tone === "bad" && !notTransactions(r);
 
 /** Every file the AI has read, across clients, with retry for failures. */
 export function AnalysesTable({ rows }: { rows: AnalysisRow[] }) {
+  const router = useRouter();
   const columns = useMemo<ColumnDef<AnalysisRow, unknown>[]>(
     () => [
       {
@@ -75,13 +80,16 @@ export function AnalysesTable({ rows }: { rows: AnalysisRow[] }) {
         header: "Status",
         meta: { label: "Status", mobile: "badge" },
         cell: ({ row: { original: r } }) => {
-          const w = statusWords(r.status);
+          const w = notTransactions(r) ? { label: "Workbench only", tone: "muted" as const } : statusWords(r.status);
           return (
             <span className="flex flex-wrap items-center gap-2">
-              <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", TONE[w.tone])} title={failed(r) ? plainReason(r.reason) : undefined}>
+              <span
+                className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", TONE[w.tone])}
+                title={notTransactions(r) ? "No list of transactions to sort. Open it in the workbench to work on it." : failed(r) ? plainReason(r.reason) : undefined}
+              >
                 {w.label}
               </span>
-              {r.status === "extraction_failed" ? <RetryButton documentId={r.id} reason={plainReason(r.reason)} /> : null}
+              {r.status === "extraction_failed" && !notTransactions(r) ? <RetryButton documentId={r.id} reason={plainReason(r.reason)} /> : null}
             </span>
           );
         },
@@ -125,7 +133,8 @@ export function AnalysesTable({ rows }: { rows: AnalysisRow[] }) {
       getRowId={(r) => String(r.id)}
       views={views}
       filters={filters}
-      rowHref={(r) => `/admin/analyses/${r.id}`}
+      // A click handler, not rowHref: the Request cell holds its own link (no link inside a link).
+      onRowClick={(r) => router.push(`/admin/analyses/${r.id}`)}
       initialSort={[{ id: "createdAt", desc: true }]}
       searchPlaceholder="Search file, client or request"
       searchText={(r) => `${r.fileName} ${r.clientName} ${r.request?.number ?? ""}`}
