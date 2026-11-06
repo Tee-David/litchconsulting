@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { UserPlus } from "lucide-react";
 import { signIn } from "@/lib/auth-client";
 import { continueUrl } from "@/lib/post-auth";
 import { useToast } from "@/components/admin/ui/toaster";
+import { Turnstile, turnstileHeaders, type TurnstileHandle } from "@/components/ui/turnstile";
 import { acceptInvitationAction, prepareInviteGoogleAction } from "@/app/invite/[token]/actions";
 import { PasswordStrength, passwordIssue } from "./password-strength";
 import { AuthHeading, Callout, Field, GoogleButton, OrDivider, SubmitButton, authErrorText } from "./ui";
@@ -46,6 +47,8 @@ export function InviteAcceptForm({
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [googleBusy, setGoogleBusy] = useState(false);
+  const ts = useRef<TurnstileHandle>(null);
+  const [tsToken, setTsToken] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ name?: string; password?: string; form?: string }>(initialError ? { form: initialError } : {});
   const next = continueUrl(null);
   const expires = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Lagos" }).format(new Date(expiresAt));
@@ -66,7 +69,7 @@ export function InviteAcceptForm({
       else setErrors({ form: r.error });
       return;
     }
-    const { error } = await signIn.email({ email, password, callbackURL: next });
+    const { error } = await signIn.email({ email, password, callbackURL: next, fetchOptions: { headers: turnstileHeaders(tsToken) } });
     if (error) {
       setBusy(false);
       toast.toast("Your account is ready. Sign in to continue.");
@@ -137,6 +140,7 @@ export function InviteAcceptForm({
             {errors.form}
           </Callout>
         ) : null}
+        <Turnstile ref={ts} onToken={setTsToken} action="invite" />
         <SubmitButton busy={busy} busyLabel="Setting up…" disabled={googleBusy}>
           Accept and create account
         </SubmitButton>

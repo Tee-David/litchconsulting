@@ -83,7 +83,9 @@ export async function prepareSignupAction(input: z.infer<typeof signupSchema>): 
   const parsed = signupSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Enter a valid email address." };
   if (isDisposableEmail(parsed.data.email)) return { ok: false, error: "Use a permanent email address; we send your quotes and files there." };
-  const blocked = await guard("signup-prepare", parsed.data.turnstileToken);
+  // Rate limit only: the Turnstile check runs (fail closed) where the account is
+  // made, in the auth route, so the one-use token is not spent here.
+  const blocked = await guard("signup-prepare", parsed.data.turnstileToken, { turnstile: false });
   if (blocked) return { ok: false, error: blocked };
   const company = parsed.data.company?.trim() || undefined;
   // NDPA consent: when, and which version of the notice they agreed to.

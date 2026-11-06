@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { toNextJsHandler } from "better-auth/next-js";
-import { rateLimit, RATE_LIMITS, callerKey, tooManyRequests } from "@/lib/rate-limit";
+import { rateLimit, RATE_LIMITS, callerKey, callerIp, tooManyRequests } from "@/lib/rate-limit";
+import { TURNSTILE_HEADER, verifyTurnstile } from "@/lib/turnstile";
 
 export const runtime = "nodejs";
 
@@ -17,6 +18,14 @@ const LIMITED: Array<[RegExp, keyof typeof RATE_LIMITS]> = [
   [/\/(forget-password|request-password-reset|send-verification-email)/, "authReset"],
 ];
 
+/**
+ * Email + password sign-in and sign-up also need a passed Turnstile check, and
+ * fail CLOSED: if Cloudflare cannot be reached, the request is refused, never
+ * let through. (Google sign-in is checked by Google; contact and newsletter
+ * fail open.) The forms send the widget token in the `x-turnstile-token` header.
+ */
+const HUMAN_CHECK = /\/(sign-in|sign-up)\/email$/;
+
 export const GET = handler.GET;
 
 export async function POST(req: Request) {
@@ -25,6 +34,15 @@ export async function POST(req: Request) {
   if (match) {
     const limited = await rateLimit(callerKey(req.headers, match[1]), RATE_LIMITS[match[1]]);
     if (!limited.ok) return tooManyRequests(limited);
+  }
+  if (HUMAN_CHECK.test(path)) {
+    const human = await verifyTurnstile(req.headers.get(TURNSTILE_HEADER), callerIp(req.headers), "closed");
+    if (!human.ok) {
+      return Response.json(
+        { code: human.unavailable ? "SECURITY_CHECK_UNAVAILABLE" : "SECURITY_CHECK_FAILED", message: human.error },
+        { status: 403 },
+      );
+    }
   }
   return handler.POST(req);
 }
