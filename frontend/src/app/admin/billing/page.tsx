@@ -4,6 +4,7 @@ import { formatMoney } from "@/lib/invoice/money";
 import { ActLink, Kpi, PageHead } from "@/components/admin/ui/surface";
 import { BillingTabs } from "@/components/admin/billing/billing-tabs";
 import { BillingTable } from "@/components/admin/billing/billing-table";
+import { JobChain } from "@/components/admin/billing/job-chain";
 import { listBillingDocs, proofCount } from "../_lib/billing-data";
 
 export const dynamic = "force-dynamic";
@@ -56,6 +57,7 @@ export default async function BillingPage() {
         />
         <Kpi label="Part paid, balance due" value={short(sum(part, (d) => d.balance))} note={`${part.length} invoices`} href="/admin/billing?view=part" />
       </div>
+      <JobChain docs={docs} />
       <BillingTable docs={docs} />
     </div>
   );
