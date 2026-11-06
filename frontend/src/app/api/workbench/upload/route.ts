@@ -53,7 +53,8 @@ export async function POST(req: Request) {
   if (file.size <= 0 || file.size > MAX) return bad("The file must be under 4 MB here. Add larger files to the request first, then open them from the request.");
 
   // Who the file belongs to: the workbench's client, the request's client, or the firm.
-  let clientId = "litch-firm";
+  // Files not tied to a client belong to the firm (the engine needs a UUID owner).
+  let clientId = "00000000-0000-4000-8000-000000000001";
   let aiMode: "cloud_masked" | "local_only" = "cloud_masked";
   let clientName = "Litch Consulting";
   let linkedRequest: string | null = null;
