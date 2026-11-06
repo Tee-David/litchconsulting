@@ -138,10 +138,17 @@ def test_default_specs_from_env_and_legacy_chat():
         "LITCHAI_CHAT_MODEL": "gpt-oss-120b",
     })
     by = {s.name: s for s in specs}
-    assert [s.name for s in specs] == ["groq", "cloudflare", "cerebras", "sambanova", "local"]
+    assert [s.name for s in specs] == ["groq", "cloudflare", "sambanova", "local"]
     assert not by["cloudflare"].configured  # no CLOUDFLARE_ACCOUNT_ID in this env
     assert by["groq"].params["reasoning_effort"] == "medium"
-    assert by["cerebras"].api_key == "c"
+    assert "cerebras" not in by and "openrouter" not in by
+    cer = default_specs({"LITCHAI_CHAT_BASE_URL": "https://api.cerebras.ai/v1",
+                         "LITCHAI_CHAT_API_KEY": "c", "LITCHAI_PROVIDER_CHAIN": "cerebras"})
+    assert [s.name for s in cer] == ["cerebras"] and cer[0].api_key == "c"
+    orr = default_specs({"OPENROUTER_API_KEY": "o"})
+    assert [s.name for s in orr] == ["groq", "cloudflare", "sambanova", "openrouter", "local"]
+    assert next(s for s in orr if s.name == "openrouter").base_url == \
+        "https://openrouter.ai/api/v1"
     assert by["sambanova"].configured is False
     assert by["local"].api == "ollama" and by["local"].model == "gemma3:4b"
     llama = default_specs({"LITCHAI_LLAMA_SERVER_URL": "http://127.0.0.1:8080"})

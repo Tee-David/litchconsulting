@@ -111,8 +111,9 @@ The endpoint returns per-entity counts for the erasure record.
 
 ## Local model (llama-server) and the bench
 
-The workbench and Sage try Groq → Cloudflare Workers AI → Cerebras → SambaNova → local
-(`LITCHAI_PROVIDER_CHAIN` overrides). Workers AI needs `CLOUDFLARE_ACCOUNT_ID` and
+The workbench and Sage try Groq → Cloudflare Workers AI → SambaNova → OpenRouter (only when
+`OPENROUTER_API_KEY` is set) → local (`LITCHAI_PROVIDER_CHAIN` overrides; Cerebras is out of the
+default order). Workers AI needs `CLOUDFLARE_ACCOUNT_ID` and
 `CLOUDFLARE_API_TOKEN` in Doppler. "Local" is Ollama until `LITCHAI_LLAMA_SERVER_URL` is set,
 then llama.cpp's `llama-server` (`litchai-llama.service`, 127.0.0.1:8081, a Q4_0 model repacked
 for NEON, niced with a low CPU weight and no CPU quota, 6 GB memory cap). Clients on "local only"
