@@ -94,6 +94,7 @@ export const client = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: deletedAt(),
+    deletedBy: text("deleted_by"),
   },
   (t) => [index("client_email_idx").on(t.email)]
 );
@@ -143,6 +144,7 @@ export const invoice = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: deletedAt(),
+    deletedBy: text("deleted_by"),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     paidAt: timestamp("paid_at", { withTimezone: true }),
   },
@@ -293,6 +295,7 @@ export const ticket = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: deletedAt(),
+    deletedBy: text("deleted_by"),
     lastReplyAt: timestamp("last_reply_at", { withTimezone: true }),
   },
   (t) => [index("ticket_status_idx").on(t.status), index("ticket_created_idx").on(t.createdAt)]
@@ -387,6 +390,7 @@ export const serviceRequest = pgTable(
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: deletedAt(),
+    deletedBy: text("deleted_by"),
   },
   (t) => [
     index("service_request_client_idx").on(t.clientId),

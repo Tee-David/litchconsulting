@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Download, ScrollText } from "lucide-react";
-import { DataTable, EmptyState, type BulkAction, type TableFilter, type TableView } from "@/components/kit";
+import { Button, DataTable, EmptyState, type BulkAction, type TableFilter, type TableView } from "@/components/kit";
 import { downloadCsv } from "@/components/admin/ui/csv";
 
 export type AuditItem = {
@@ -55,6 +55,8 @@ const PHRASE: Record<string, string> = {
   "trash.restored": "Restored items from Trash",
   "trash.purged": "Emptied items from Trash",
   "user.deleted": "Deleted a user",
+  "auth.signed_in": "Signed in",
+  "auth.sign_in_failed": "Failed to sign in",
 };
 export const phrase = (a: string) => PHRASE[a] ?? a.replace(/[._]/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 
@@ -68,6 +70,9 @@ function summary(meta: Record<string, unknown> | null): string {
     .join(" · ")
     .slice(0, 160);
 }
+
+const exportCsv = (list: AuditItem[]) =>
+  downloadCsv("audit-log", ["When", "Who", "Action", "Code", "Record", "Record id", "Change"], list.map((r) => [r.createdAt, r.actorName ?? "System", phrase(r.action), r.action, r.entity, r.entityId ?? "", JSON.stringify(r.meta ?? {})]));
 
 const MONEY = /invoice|payment|quote|billing/;
 const PEOPLE = /user|access|invit|role|ai_mode|erase|export|assign/;
@@ -110,11 +115,19 @@ export function AuditView({ rows }: { rows: AuditItem[] }) {
       id: "csv",
       label: "Export CSV",
       icon: <Download className="size-4" />,
-      run: (sel) => downloadCsv("audit-log", ["When", "Who", "Action", "Code", "Record", "Record id", "Change"], sel.map((r) => [r.createdAt, r.actorName ?? "System", phrase(r.action), r.action, r.entity, r.entityId ?? "", JSON.stringify(r.meta ?? {})])),
+      run: (sel) => exportCsv(sel),
     },
   ];
   return (
-    <DataTable
+    <>
+      {rows.length > 0 && (
+        <div className="mb-3 flex justify-end">
+          <Button variant="secondary" size="sm" onClick={() => exportCsv(rows)}>
+            <Download className="size-4" /> Export CSV
+          </Button>
+        </div>
+      )}
+      <DataTable
       label="Audit log"
       storageKey="admin-audit"
       columns={columns}
@@ -127,6 +140,7 @@ export function AuditView({ rows }: { rows: AuditItem[] }) {
       searchPlaceholder="Search person, action or record"
       searchText={(r) => `${r.actorName ?? ""} ${phrase(r.action)} ${r.action} ${r.entity} ${summary(r.meta)}`}
       emptyState={<EmptyState icon={<ScrollText />} title="Nothing logged yet" why="Consequential actions (payments, deletions, status moves, access changes) are recorded here with who did them." />}
-    />
+      />
+    </>
   );
 }

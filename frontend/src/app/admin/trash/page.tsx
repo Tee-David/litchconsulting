@@ -21,10 +21,10 @@ export default async function TrashPage() {
     db.select().from(ticket).where(isNotNull(ticket.deletedAt)).orderBy(desc(ticket.deletedAt)).limit(500),
   ]);
   const items: TrashItem[] = [
-    ...clients.map((c) => ({ key: `client:${c.id}`, type: "client" as const, id: c.id, name: c.company || c.name, sub: c.email ?? "", deletedAt: c.deletedAt!.toISOString() })),
-    ...requests.map((r) => ({ key: `request:${r.id}`, type: "request" as const, id: r.id, name: `${r.number} · ${r.serviceName}`, sub: r.status.replace(/_/g, " "), deletedAt: r.deletedAt!.toISOString() })),
-    ...invoices.map((i) => ({ key: `invoice:${i.id}`, type: "invoice" as const, id: i.id, name: i.number, sub: i.billToCompany || i.billToName || "", deletedAt: i.deletedAt!.toISOString() })),
-    ...tickets.map((t) => ({ key: `ticket:${t.id}`, type: "ticket" as const, id: t.id, name: `${t.number} · ${t.subject}`, sub: t.requesterName ?? "", deletedAt: t.deletedAt!.toISOString() })),
+    ...clients.map((c) => ({ key: `client:${c.id}`, type: "client" as const, id: c.id, name: c.company || c.name, sub: c.email ?? "", deletedAt: c.deletedAt!.toISOString(), movedBy: c.deletedBy })),
+    ...requests.map((r) => ({ key: `request:${r.id}`, type: "request" as const, id: r.id, name: `${r.number} · ${r.serviceName}`, sub: r.status.replace(/_/g, " "), deletedAt: r.deletedAt!.toISOString(), movedBy: r.deletedBy })),
+    ...invoices.map((i) => ({ key: `invoice:${i.id}`, type: "invoice" as const, id: i.id, name: i.number, sub: i.billToCompany || i.billToName || "", deletedAt: i.deletedAt!.toISOString(), movedBy: i.deletedBy })),
+    ...tickets.map((t) => ({ key: `ticket:${t.id}`, type: "ticket" as const, id: t.id, name: `${t.number} · ${t.subject}`, sub: t.requesterName ?? "", deletedAt: t.deletedAt!.toISOString(), movedBy: t.deletedBy })),
   ].sort((a, b) => a.deletedAt.localeCompare(b.deletedAt));
 
   return (

@@ -55,10 +55,16 @@ export async function updateClient(id: string, input: ClientInput): Promise<Resu
   return { ok: true };
 }
 
+/** The signed-in person's name, for Trash's "Moved by". */
+async function whoName(): Promise<string | null> {
+  const u = await getSessionUser();
+  return u ? u.name || u.email : null;
+}
+
 /** Soft delete → Trash (recoverable; purged after 30 days). */
 export async function deleteClient(id: string): Promise<Result> {
   if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
-  await db.update(client).set({ deletedAt: new Date(), updatedAt: new Date() }).where(eq(client.id, id));
+  await db.update(client).set({ deletedAt: new Date(), deletedBy: await whoName(), updatedAt: new Date() }).where(eq(client.id, id));
   await recordAudit({ action: "client.deleted", entity: "client", entityId: id });
   revalidatePath("/admin/clients");
   revalidatePath("/admin/trash");
@@ -70,7 +76,7 @@ export async function bulkDeleteClients(ids: string[]): Promise<Result> {
   if (!ids || ids.length === 0) return { ok: true };
   await db
     .update(client)
-    .set({ deletedAt: new Date(), updatedAt: new Date() })
+    .set({ deletedAt: new Date(), deletedBy: await whoName(), updatedAt: new Date() })
     .where(inArray(client.id, ids));
   await recordAudit({ action: "client.bulk_deleted", entity: "client", meta: { count: ids.length } });
   revalidatePath("/admin/clients");

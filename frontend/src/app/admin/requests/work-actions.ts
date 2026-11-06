@@ -167,7 +167,7 @@ export async function trashRequestsAction(ids: string[]): Promise<Res> {
   if (!me) return DENIED;
   const parsed = z.array(uuid).min(1).max(200).safeParse(ids);
   if (!parsed.success) return { ok: false, error: "Select up to 200 requests." };
-  await db.update(serviceRequest).set({ deletedAt: new Date() }).where(inArray(serviceRequest.id, parsed.data));
+  await db.update(serviceRequest).set({ deletedAt: new Date(), deletedBy: me.displayName }).where(inArray(serviceRequest.id, parsed.data));
   await recordAudit({ action: "request.trashed", entity: "request", meta: { count: parsed.data.length, ids: parsed.data } });
   touch([]);
   revalidatePath("/admin/trash");

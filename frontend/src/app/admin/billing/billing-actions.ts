@@ -140,13 +140,14 @@ export async function bulkRemindInvoicesAction(ids: string[]): Promise<Res> {
 
 /** Bulk: move drafts / void documents with no money on them to Trash. */
 export async function bulkTrashDocsAction(ids: string[]): Promise<Res> {
-  if (!(await actor("billing"))) return DENIED;
+  const me = await actor("billing");
+  if (!me) return DENIED;
   const parsed = z.array(uuid).min(1).max(200).safeParse(ids);
   if (!parsed.success) return { ok: false, error: "Select up to 200 documents." };
   const rows = await db.select().from(invoice).where(inArray(invoice.id, parsed.data));
   const ok = rows.filter((r) => ["draft", "void", "declined", "expired"].includes(r.status) && num(r.amountPaid) === 0);
   if (!ok.length) return { ok: false, error: "Only drafts and void documents with no payments can go to Trash. Void the others first." };
-  await db.update(invoice).set({ deletedAt: new Date() }).where(inArray(invoice.id, ok.map((r) => r.id)));
+  await db.update(invoice).set({ deletedAt: new Date(), deletedBy: me.displayName }).where(inArray(invoice.id, ok.map((r) => r.id)));
   await recordAudit({ action: "invoice.trashed", entity: "invoice", meta: { numbers: ok.map((r) => r.number) } });
   billingRevalidate();
   revalidatePath("/admin/trash");
