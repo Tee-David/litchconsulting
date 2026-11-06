@@ -149,7 +149,10 @@ def run_task(
 # =====================================================================================
 MAX_AGENT_STEPS = 8
 MAX_OFFERED_TOOLS = 8
-MAX_OBSERVATION_CHARS = 6000
+CONFIDENT_TOOLS = 5          # offered when the decision layer is confident (report R4)
+MAX_OBSERVATION_CHARS = 4000
+HISTORY_FULL_MESSAGES = 4    # the last 2 turns (user + assistant) go in full
+HISTORY_MESSAGE_CHARS = 1500
 
 
 @dataclass(frozen=True)
@@ -176,9 +179,10 @@ class AgentTurn(BaseModel):
     plan: list[str] | None = None
     action: Literal["tool", "final"]
     tool: str | None = None
-    args: dict[str, Any] = Field(default_factory=dict)
+    args: dict[str, Any] | None = Field(default_factory=dict)
+    args_json: str | None = None    # strict-schema form: the args as a JSON string
     answer: str | None = None
-    citations: list[str] = Field(default_factory=list)
+    citations: list[str] | None = Field(default_factory=list)
 
 
 AGENT_TURN_SCHEMA: dict[str, Any] = {
@@ -193,6 +197,24 @@ AGENT_TURN_SCHEMA: dict[str, Any] = {
         "citations": {"type": "array", "items": {"type": "string"}},
     },
     "required": ["action"],
+}
+
+# Groq strict json_schema: every field is required and ``args`` travels as a JSON
+# string (strict mode does not allow a free-form object). The tolerant parser
+# stays as the fallback for providers without strict mode.
+AGENT_TURN_STRICT_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "thought": {"type": "string"},
+        "plan": {"type": ["array", "null"], "items": {"type": "string"}},
+        "action": {"type": "string", "enum": ["tool", "final"]},
+        "tool": {"type": ["string", "null"]},
+        "args_json": {"type": ["string", "null"]},
+        "answer": {"type": ["string", "null"]},
+        "citations": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["thought", "plan", "action", "tool", "args_json", "answer", "citations"],
+    "additionalProperties": False,
 }
 
 
@@ -240,6 +262,18 @@ def parse_turn(text: str, offered: set[str],
     except ValidationError as exc:
         return None, "reply did not match the schema: " + "; ".join(
             f"{'.'.join(str(x) for x in e['loc'])}: {e['msg']}" for e in exc.errors()[:4])
+    if turn.args is None:
+        turn.args = {}
+    if turn.citations is None:
+        turn.citations = []
+    if not turn.args and (turn.args_json or "").strip():
+        try:
+            parsed = json.loads(turn.args_json, strict=False)
+        except (json.JSONDecodeError, TypeError):
+            return None, "args_json was not a valid JSON object"
+        if not isinstance(parsed, dict):
+            return None, "args_json must be a JSON object"
+        turn.args = parsed
     if turn.action == "tool":
         if not turn.tool or turn.tool not in offered:
             return None, f"tool must be one of {sorted(offered)} (got {turn.tool!r})"
@@ -261,6 +295,23 @@ def _tool_menu(tools: list[AgentTool]) -> str:
                          for k, v in props.items())
         lines.append(f"- {t.name} [{t.kind}] ({args}) — {t.description}")
     return "\n".join(lines)
+
+
+def compact_history(history: list[dict[str, str]] | None
+                    ) -> tuple[list[dict[str, str]], str]:
+    """The last 2 turns in full (each capped), and a short summary of older turns."""
+    msgs = [m for m in (history or []) if m.get("role") in ("user", "assistant")
+            and (m.get("content") or "").strip()]
+    recent = [{"role": m["role"], "content": _clip(m["content"], HISTORY_MESSAGE_CHARS)}
+              for m in msgs[-HISTORY_FULL_MESSAGES:]]
+    older = msgs[:-HISTORY_FULL_MESSAGES][-8:]
+    lines = [f"- {'User asked' if m['role'] == 'user' else 'You answered'}: "
+             f"{_clip(' '.join(m['content'].split()), 160)}" for m in older]
+    return recent, "\n".join(lines)
+
+
+def _clip(text: str, n: int) -> str:
+    return text if len(text) <= n else text[:n].rstrip() + " …"
 
 
 def _type_hint(prop: dict[str, Any]) -> str:
@@ -286,15 +337,23 @@ def run_agent_loop(
     check_args: Callable[[str, dict[str, Any]], str | None] | None = None,
     check_citation: Callable[[str], bool] | None = None,
     fallback_plan: Callable[[str], list[tuple[str, dict[str, Any]]]] | None = None,
+    max_tools: int = MAX_OFFERED_TOOLS,
 ) -> Iterator[dict[str, Any]]:
-    """Generator of step events; the last event is ``final`` (or ``error``)."""
+    """Generator of step events; the last event is ``final`` (or ``error``).
+
+    Message order keeps a stable prefix for provider prompt caches: the system
+    prompt (fixed rules, then the tool menu, then the per-conversation context),
+    then the compacted history, then the question."""
     from litchai.ai.router import AllProvidersFailed
 
-    tools = tools[:MAX_OFFERED_TOOLS]
+    tools = tools[:max(1, min(max_tools, MAX_OFFERED_TOOLS))]
     offered = {t.name for t in tools}
+    recent, summary = compact_history(history)
     sys_msg = system.replace("{tool_menu}", _tool_menu(tools))
+    if summary:
+        sys_msg += "\n\nEarlier in this conversation (summary):\n" + summary
     base: list[dict[str, str]] = [{"role": "system", "content": sys_msg}]
-    base += [m for m in (history or []) if m.get("role") in ("user", "assistant")][-10:]
+    base += recent
     base.append({"role": "user", "content": user})
     transcript: list[dict[str, str]] = []
     proposals: list[dict[str, Any]] = []
@@ -310,7 +369,8 @@ def run_agent_loop(
         return router.complete(base + transcript + extra, schema=AGENT_TURN_SCHEMA,
                                conversation_id=conversation_id, local_only=local_only,
                                masker=masker, task="agent_turn", start_after=start_after,
-                               params={"temperature": 0.1, "max_tokens": 1200})
+                               params={"temperature": 0.1, "max_tokens": 1200,
+                                       "strict_schema": AGENT_TURN_STRICT_SCHEMA})
 
     step = 0
     while True:

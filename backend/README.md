@@ -191,11 +191,12 @@ backend/
 | --- | --- | --- | --- |
 | 1 | Groq | `openai/gpt-oss-120b` | `GROQ_API_KEY` |
 | 2 | Cloudflare Workers AI | `@cf/openai/gpt-oss-120b` | `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` (or `LITCHAI_CF_AI_TOKEN`) |
-| 3 | Cerebras | `gpt-oss-120b` | `CEREBRAS_API_KEY` |
-| 4 | SambaNova | `Meta-Llama-3.3-70B-Instruct` | `SAMBANOVA_API_KEY` |
+| 3 | SambaNova | `Meta-Llama-3.3-70B-Instruct` | `SAMBANOVA_API_KEY` |
+| 4 | OpenRouter (only when the key is set) | `openai/gpt-oss-120b:free` (`LITCHAI_OPENROUTER_MODEL`) | `OPENROUTER_API_KEY` |
 | 5 | Local | llama-server (`LITCHAI_LLAMA_SERVER_URL`), else Ollama (`LITCHAI_OLLAMA_HOST`) | `LITCHAI_LOCAL_MODEL` |
 
-The router pins one provider per conversation and falls back on timeout, rate limit, daily quota
+Cerebras (`CEREBRAS_API_KEY`) is not in the default order; name it in `LITCHAI_PROVIDER_CHAIN`
+to use it. The router pins one provider per conversation and falls back on timeout, rate limit, daily quota
 (`LITCHAI_<PROVIDER>_DAILY_REQUESTS/_TOKENS`) or invalid output, recording the reason. Every cloud
 call is masked first; clients set to **local only** never leave the VM. Every call is logged.
 
@@ -246,7 +247,7 @@ frontend (Vercel)  ──CF-Access-Client-Id/Secret──▶  ai.litchconsulting
 | `LITCHAI_DATABASE_URL` | Postgres (needs the `vector` and `pg_trgm` extensions) |
 | `LITCHAI_PRIVATE_KEY_PATH` | Blind-relay decrypt key on disk |
 | `R2_BUCKET` | Private R2 bucket for backups |
-| `GROQ_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `CEREBRAS_API_KEY`, `SAMBANOVA_API_KEY` | Cloud model providers (see AI models) |
+| `GROQ_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `CEREBRAS_API_KEY`, `SAMBANOVA_API_KEY`, `OPENROUTER_API_KEY` | Cloud model providers (see AI models) |
 | `LITCHAI_LLAMA_SERVER_URL`, `LITCHAI_LOCAL_MODEL`, `LITCHAI_OLLAMA_HOST` | Local model and embeddings |
 | `LITCHAI_PROVIDER_CHAIN` | Optional chain override |
 

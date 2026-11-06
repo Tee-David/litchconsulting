@@ -1,19 +1,22 @@
 """Model router (Phase 3.1) — one provider chain behind the ``Provider`` protocol.
 
-Default chain (override with ``LITCHAI_PROVIDER_CHAIN=groq,cloudflare,cerebras,sambanova,local``):
+Default chain (override with ``LITCHAI_PROVIDER_CHAIN=groq,cloudflare,sambanova,local``):
 
 1. **Groq** ``openai/gpt-oss-120b`` (``reasoning_effort=medium``: on ``low`` gpt-oss
    often writes its JSON into the reasoning channel and leaves ``content`` empty) — ``GROQ_API_KEY``
 2. **Cloudflare Workers AI** ``@cf/openai/gpt-oss-120b`` — ``CLOUDFLARE_ACCOUNT_ID`` +
    ``CLOUDFLARE_API_TOKEN`` (or ``LITCHAI_CF_AI_TOKEN``)
-3. **Cerebras** ``gpt-oss-120b`` — ``CEREBRAS_API_KEY``
-4. **SambaNova** ``Meta-Llama-3.3-70B-Instruct`` — ``SAMBANOVA_API_KEY``
+3. **SambaNova** ``Meta-Llama-3.3-70B-Instruct`` — ``SAMBANOVA_API_KEY``
+4. **OpenRouter** ``openai/gpt-oss-120b:free`` — only when ``OPENROUTER_API_KEY`` is set
+   (``LITCHAI_OPENROUTER_MODEL`` changes the model)
 5. **Local** — llama-server when ``LITCHAI_LLAMA_SERVER_URL`` is set (OpenAI-compatible
    ``/v1``), else Ollama at ``LITCHAI_OLLAMA_HOST`` (``LITCHAI_LOCAL_MODEL``, default
    ``gemma3:4b``).
 
 The legacy single-provider ``LITCHAI_CHAT_BASE_URL/API_KEY/MODEL`` still works: it
 fills the matching named slot (by host) when that slot has no key of its own.
+**Cerebras** (``CEREBRAS_API_KEY``) is not in the default order (its free tier answers
+402); name it in ``LITCHAI_PROVIDER_CHAIN`` to use it.
 
 Behaviour (ported in spirit from the realtors-practice LiteLLM router, without
 the LiteLLM dependency — every provider here speaks the OpenAI shape):
@@ -121,7 +124,11 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
             # Groq's JSON mode rejects gpt-oss replies at random (json_validate_failed
             # with an empty failed_generation); the prompt asks for JSON and the
             # harness parses and checks it, so JSON mode is off here.
-            params={"reasoning_effort": "medium", "_prompt_json": True},
+            # The agent loop's strict json_schema (all fields required, args as a JSON
+            # string) is checked by Groq server-side; tested with gpt-oss-120b.
+            # LITCHAI_GROQ_STRICT=0 turns it off.
+            params={"reasoning_effort": "medium", "_prompt_json": True,
+                    "_strict_schema": e.get("LITCHAI_GROQ_STRICT", "1") != "0"},
             daily_requests=_int_env("LITCHAI_GROQ_DAILY_REQUESTS") or 1000,
             daily_tokens=_int_env("LITCHAI_GROQ_DAILY_TOKENS") or 200_000,
             zero_retention=True,
@@ -155,6 +162,16 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
         daily_requests=_int_env("LITCHAI_CF_AI_DAILY_REQUESTS"),
         daily_tokens=_int_env("LITCHAI_CF_AI_DAILY_TOKENS"),
     )
+    # OpenRouter: an extra cloud slot, used only when OPENROUTER_API_KEY is set.
+    or_key = e.get("OPENROUTER_API_KEY") or None
+    specs["openrouter"] = ProviderSpec(
+        name="openrouter", kind="cloud",
+        model=e.get("LITCHAI_OPENROUTER_MODEL") or "openai/gpt-oss-120b:free",
+        base_url="https://openrouter.ai/api/v1", api_key=or_key,
+        params={"reasoning_effort": "medium"},
+        daily_requests=_int_env("LITCHAI_OPENROUTER_DAILY_REQUESTS") or 50,
+        daily_tokens=_int_env("LITCHAI_OPENROUTER_DAILY_TOKENS"),
+    )
     llama_url = e.get("LITCHAI_LLAMA_SERVER_URL", "").rstrip("/")
     if llama_url:
         specs["local"] = ProviderSpec(
@@ -182,7 +199,9 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
 
     order = [s.strip() for s in (e.get("LITCHAI_PROVIDER_CHAIN") or "").split(",") if s.strip()]
     if not order:
-        order = ["groq", "cloudflare", "cerebras", "sambanova",
+        # Cerebras is out of the default order (its free tier now answers 402); it
+        # stays available through LITCHAI_PROVIDER_CHAIN, e.g. "groq,cerebras,local".
+        order = ["groq", "cloudflare", "sambanova", *(["openrouter"] if or_key else []),
                  *(["chat"] if "chat" in specs else []), "local"]
     return [specs[n] for n in order if n in specs]
 
@@ -258,6 +277,11 @@ def _failed_generation(resp: Any) -> str | None:
 
 
 
+# Providers whose strict json_schema request was refused once in this process:
+# later calls use the prompt + tolerant parser instead.
+_STRICT_OFF: set[str] = set()
+
+
 Transport = Callable[[ProviderSpec, list[Message], dict[str, Any] | None, dict[str, Any]],
                      ProviderResponse]
 
@@ -300,11 +324,15 @@ def http_transport(
         for k, v in spec.params.items():
             if not k.startswith("_"):  # "_"-prefixed keys are local switches, never sent
                 body.setdefault(k, v)
-        if schema is not None and not spec.params.get("_prompt_json"):
-            body["response_format"] = (
-                {"type": "json_schema", "json_schema": {"name": "out", "schema": schema}}
-                if params.get("strict_schema") else {"type": "json_object"}
-            )
+        strict = params.get("strict_schema")
+        use_strict = (schema is not None and isinstance(strict, dict)
+                      and bool(spec.params.get("_strict_schema"))
+                      and spec.name not in _STRICT_OFF)
+        if use_strict:
+            body["response_format"] = {"type": "json_schema", "json_schema": {
+                "name": "turn", "schema": strict, "strict": True}}
+        elif schema is not None and not spec.params.get("_prompt_json"):
+            body["response_format"] = {"type": "json_object"}
         headers = {"Content-Type": "application/json"}
         if spec.api_key:
             headers["Authorization"] = f"Bearer {spec.api_key}"
@@ -321,6 +349,12 @@ def http_transport(
                     text=failed, finish_reason="json_validate_failed",
                     latency_ms=int((time.monotonic() - started) * 1000),
                 )
+            if use_strict:
+                # The provider refused the strict schema itself: turn strict off for
+                # this process and send the same request once without it.
+                _STRICT_OFF.add(spec.name)
+                return http_transport(spec, messages, schema,
+                                      {**params, "strict_schema": None, "timeout": timeout})
         if resp.status_code >= 400:
             raise classify_http_error(resp.status_code, resp.text)
         data = resp.json()

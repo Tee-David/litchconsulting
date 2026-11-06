@@ -22,7 +22,13 @@ from litchai.ai.decision import (
     gate_batch,
     routing_hints,
 )
-from litchai.ai.harness import AgentTool, Observation, run_agent_loop
+from litchai.ai.harness import (
+    CONFIDENT_TOOLS,
+    MAX_OFFERED_TOOLS,
+    AgentTool,
+    Observation,
+    run_agent_loop,
+)
 from litchai.ai.privacy import Masker
 from litchai.ai.tasks import PROMPTS_DIR
 from litchai.workbench.context import ToolContext, ToolError
@@ -82,10 +88,28 @@ def citation_checker(ctx: ToolContext):
     return ok
 
 
+def compact_data(value: Any, max_items: int = 20, max_str: int = 300, depth: int = 0) -> Any:
+    """What the model sees of a tool result: long lists cut to their first rows
+    (with a count of the rest), long strings cut. The full result stays on the VM
+    (grounding, "$tool.path" references and the UI use it)."""
+    if depth > 6:
+        return "…"
+    if isinstance(value, dict):
+        return {k: compact_data(v, max_items, max_str, depth + 1) for k, v in value.items()}
+    if isinstance(value, list):
+        head = [compact_data(v, max_items, max_str, depth + 1) for v in value[:max_items]]
+        if len(value) > max_items:
+            head.append(f"… {len(value) - max_items} more not shown")
+        return head
+    if isinstance(value, str) and len(value) > max_str:
+        return value[:max_str] + "…"
+    return value
+
+
 def _observation(out: Any, batch_info: dict[str, Any] | None) -> Observation:
     data = out.data
-    text = json.dumps({"summary": out.summary, "data": data, "citations": out.citations[:20],
-                       "proposal": batch_info}, default=str)
+    text = json.dumps({"summary": out.summary, "data": compact_data(data),
+                       "citations": out.citations[:20], "proposal": batch_info}, default=str)
     return Observation(ok=True, text=text, summary=out.summary, citations=out.citations,
                        proposal=batch_info, data=_trim(data))
 
@@ -131,7 +155,10 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
     decision = deps.decision or HeuristicDecisionLayer()
     ctx = wbench.context(conv, taxonomy=deps.taxonomy, categoriser=deps.categoriser)
     masker = _masker_for(conv, ctx)
-    offered = decision.select_tools(message, list(TOOLS))
+    route = decision.decide("tool_route", message, [t.name for t in TOOLS])
+    confident = route.confidence >= CONFIDENT_ROUTE
+    offered = decision.select_tools(message, list(TOOLS),
+                                    k=CONFIDENT_TOOLS if confident else MAX_OFFERED_TOOLS)
     tools = [AgentTool(t.name, t.description, t.schema(), t.kind)
              for t in (TOOLS_BY_NAME[n] for n in offered)]
     conv.messages.append({"role": "user", "content": message, "at": _now(),
@@ -170,6 +197,13 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
             return str(exc)
         return None
 
+    fast = _fast_path(message, route, ctx, execute) if not selection else None
+    if fast is not None:
+        for ev in fast:
+            yield ev
+        _finish(wbench, conv, masker, fast)
+        return
+
     pending = [f"- {b.id}: {b.title} ({b.summary})" for b in conv.batches
                if b.status == "pending"]
     template = (PROMPTS_DIR / "workbench_agent.md").read_text(encoding="utf-8")
@@ -184,19 +218,23 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
         user += "\n(Routing notes from the decision layer: " + " ".join(hints) + ")"
     history = [{"role": m["role"], "content": m["content"]} for m in conv.messages[:-1]
                if m.get("role") in ("user", "assistant")]
-    final: dict[str, Any] | None = None
     events: list[dict[str, Any]] = []
     for ev in run_agent_loop(system=system, user=user, tools=tools, execute=execute,
                              router=deps.router, history=history, conversation_id=conv.id,
                              local_only=conv.local_only, masker=masker, max_steps=max_steps,
                              check_args=check_args, check_citation=citation_checker(ctx),
-                             fallback_plan=fallback_plan):
+                             fallback_plan=fallback_plan, max_tools=len(tools)):
         if ev["type"] == "provider":
             conv.provider = ev["provider"]
-        if ev["type"] in ("final", "error"):
-            final = ev
-        events.append({k: v for k, v in ev.items() if k != "data"})
+        events.append(ev)
         yield ev
+    _finish(wbench, conv, masker, events)
+
+
+def _finish(wbench: Workbench, conv: Conversation, masker: Masker,
+            events: list[dict[str, Any]]) -> None:
+    final = next((e for e in reversed(events) if e["type"] in ("final", "error")), None)
+    events = [{k: v for k, v in e.items() if k != "data"} for e in events]
     conv.mask_state = masker.to_state()
     conv.messages.append({
         "role": "assistant", "at": _now(),
@@ -209,6 +247,39 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
                                                       "fallback", "provider", "retry")][:60],
     })
     wbench.store.save(conv)
+
+
+CONFIDENT_ROUTE = 0.8   # tool_route confidence that offers 5 tools instead of 8
+_OVERVIEW = re.compile(
+    r"^\s*(?:what(?:'s| is| are)? (?:in|on)|what sheets|which sheets|list the sheets|"
+    r"describe|give me an overview of|overview of|summari[sz]e)\b.{0,40}"
+    r"\b(?:workbook|file|files|spreadsheet|sheets?)\s*\??\s*$", re.IGNORECASE)
+
+
+def _fast_path(message: str, route: Any, ctx: ToolContext, execute: Any
+               ) -> list[dict[str, Any]] | None:
+    """Zero-token path for a simple, high-confidence read ("what is in this
+    workbook?"): the pipeline answers from the profile, with no model call."""
+    if not ctx.workbooks or route.choice != "profile_workbook" or route.confidence < 0.6:
+        return None
+    if not _OVERVIEW.match(message) or routing_hints(message):
+        return None
+    obs = execute("profile_workbook", {}, 1)
+    if not obs.ok:
+        return None
+    return [
+        {"type": "start", "tools": ["profile_workbook"], "max_steps": 1, "fast_path": True},
+        {"type": "tool_call", "step": 1, "tool": "profile_workbook", "args": {},
+         "layer": "pipeline"},
+        {"type": "tool_result", "step": 1, "tool": "profile_workbook", "ok": True,
+         "summary": obs.summary, "error": None, "proposal": None,
+         "citations": (obs.citations or [])[:20], "data": obs.data},
+        {"type": "final", "answer": "Here is what is in the workbook:\n" + obs.summary,
+         "citations": (obs.citations or [])[:40], "dropped_citations": [], "proposals": [],
+         "steps": 1, "fast_path": True,
+         "attribution": {"pipeline": ["profile_workbook"], "model": None,
+                         "decision": "heuristic"}},
+    ]
 
 
 def first_look(deps: TurnDeps, conv: Conversation) -> dict[str, Any]:
