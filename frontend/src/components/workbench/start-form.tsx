@@ -42,7 +42,7 @@ export function StartForm({
   const ready = useBlank ? blank.trim().length > 0 : picked.length > 0;
 
   return (
-    <section className="mt-5 rounded-card border border-hairline bg-paper p-4">
+    <section className="mt-4">
       <div className="flex gap-2" role="radiogroup" aria-label="Start from">
         {[
           { v: false, label: "Files from this request", icon: FolderOpen, disabled: !requestId },

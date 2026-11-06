@@ -102,6 +102,8 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
           note={change === null ? `Nothing collected in ${P.prev}` : `${change >= 0 ? "+" : ""}${change}% on ${P.prev}`}
           noteTone={change === null ? "muted" : change >= 0 ? "good" : "bad"}
           href="/admin/billing/payments"
+          trend={d.money.map((m) => m.collected)}
+          trendTone="info"
         />
         <Kpi
           label="Owed to us"
@@ -109,18 +111,23 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
           note={d.lateCount ? `${formatMoney(d.lateTotal)} late · ${d.owedCount} invoices` : `${d.owedCount} invoices, none late`}
           noteTone={d.lateCount ? "bad" : "muted"}
           href="/admin/billing?view=unpaid"
+          trend={d.money.map((m) => m.billed)}
+          trendTone={d.lateCount ? "warn" : "info"}
         />
         <Kpi
           label="Open requests"
           value={String(d.openTotal)}
           note={`${d.withUs} with us · ${d.withClient} with clients · ${Math.max(0, d.openTotal - d.withUs - d.withClient)} other`}
           href="/admin/requests"
+          trend={d.flow.map((f) => f.opened)}
         />
         <Kpi
           label="Delivered on time"
           value={onTimePct === null ? "—" : `${onTimePct}%`}
           note={d.deliveredCount ? `${d.onTime} of ${d.deliveredCount} in the last 90 days` : "Nothing delivered in the last 90 days"}
           noteTone={onTimePct !== null && onTimePct < 80 ? "warn" : "muted"}
+          trend={d.flow.map((f) => f.delivered)}
+          trendTone="good"
         />
       </div>
 

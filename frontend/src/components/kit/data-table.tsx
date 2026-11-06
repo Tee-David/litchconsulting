@@ -287,6 +287,19 @@ export function DataTable<T>({
     ) as Record<string, number | undefined>;
   }, [views, data, server]);
 
+  // Never open on an empty default view (e.g. "Active 0" while "All 3" has rows).
+  const autoViewDone = useRef(false);
+  useEffect(() => {
+    if (autoViewDone.current || !views?.length || server) return;
+    autoViewDone.current = true;
+    if (useUrl && params.get("view")) return; // the user chose a view
+    if (view !== views[0].id || (viewCounts[view] ?? 1) > 0) return;
+    const firstWithRows = views.find((v) => (viewCounts[v.id] ?? 0) > 0);
+    if (firstWithRows) setView(firstWithRows.id);
+    // Run once, after the first counts are known.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewCounts]);
+
   /* --------------------------------------------------------------- table */
   const selectCol: ColumnDef<T, unknown> = useMemo(
     () => ({
@@ -821,27 +834,101 @@ function Checkbox({
 }
 
 function FilterSelect<T>({ filter, value, onChange }: { filter: TableFilter<T>; value: string; onChange: (v: string) => void }) {
+  // Quick-filter chip: "+ Service" until a value is chosen, then "Service: X ×".
+  // A designed menu (never a browser select), searchable when it has over 5 options.
+  const [open, setOpen] = useState(false);
+  const [find, setFind] = useState("");
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onEsc = (e: globalThis.KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("mousedown", onDoc);
+    document.addEventListener("keydown", onEsc);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onEsc);
+    };
+  }, [open]);
+  const chosen = filter.options.find((o) => o.value === value);
+  const options = find.trim()
+    ? filter.options.filter((o) => o.label.toLowerCase().includes(find.trim().toLowerCase()))
+    : filter.options;
   return (
-    <label className="relative">
-      <span className="sr-only">{filter.label}</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={cn(
-          "h-10 appearance-none rounded-ctl border bg-paper pl-3 pr-8 text-sm outline-none transition-colors focus:border-accent focus:ring-2 focus:ring-accent/20",
-          value ? "border-accent text-ink" : "border-line-strong text-body",
-        )}
-      >
-        <option value="">{filter.label}: all</option>
-        {filter.options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-            {typeof o.count === "number" ? ` (${o.count})` : ""}
-          </option>
-        ))}
-      </select>
-      <ChevronRight className="pointer-events-none absolute right-2.5 top-1/2 size-4 -translate-y-1/2 rotate-90 text-muted" aria-hidden />
-    </label>
+    <div className="relative" ref={ref}>
+      {chosen ? (
+        <span className="inline-flex h-10 items-center rounded-full border border-accent bg-brand-tint text-sm text-ink">
+          <button
+            type="button"
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            onClick={() => setOpen((o) => !o)}
+            className="h-full rounded-l-full pl-3.5 pr-1.5 outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          >
+            <span className="text-body">{filter.label}:</span> <span className="font-medium">{chosen.label}</span>
+          </button>
+          <button
+            type="button"
+            aria-label={`Clear ${filter.label} filter`}
+            onClick={() => onChange("")}
+            className="grid h-full place-items-center rounded-r-full pl-1 pr-2.5 text-muted outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40"
+          >
+            <X className="size-3.5" aria-hidden />
+          </button>
+        </span>
+      ) : (
+        <button
+          type="button"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+          className="inline-flex h-10 items-center gap-1 rounded-full border border-dashed border-line-strong bg-paper px-3.5 text-sm font-medium text-body outline-none hover:border-accent hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40"
+        >
+          <span aria-hidden>+</span> {filter.label}
+        </button>
+      )}
+      {open ? (
+        <div className="absolute left-0 z-30 mt-1.5 w-60 rounded-ctl border border-hairline bg-paper p-1.5 shadow-lg">
+          {filter.options.length > 5 ? (
+            <input
+              type="search"
+              value={find}
+              onChange={(e) => setFind(e.target.value)}
+              placeholder={`Find ${filter.label.toLowerCase()}`}
+              aria-label={`Find ${filter.label.toLowerCase()}`}
+              autoFocus
+              className="mb-1 h-9 w-full rounded-lg border border-line-strong bg-paper px-2.5 text-sm text-ink outline-none placeholder:text-faint focus:border-accent"
+            />
+          ) : null}
+          <ul role="listbox" aria-label={filter.label} className="max-h-64 overflow-y-auto">
+            {options.map((o) => (
+              <li key={o.value}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={o.value === value}
+                  onClick={() => {
+                    onChange(o.value === value ? "" : o.value);
+                    setOpen(false);
+                    setFind("");
+                  }}
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-ink hover:bg-surface"
+                >
+                  <span className={cn("grid size-4 place-items-center rounded-full border", o.value === value ? "border-act bg-act text-act-ink" : "border-line-strong")}>
+                    {o.value === value ? <Check className="size-3" aria-hidden /> : null}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                  {typeof o.count === "number" ? <span className="tabular-nums text-xs text-muted">{o.count}</span> : null}
+                </button>
+              </li>
+            ))}
+            {!options.length ? <li className="px-2 py-2 text-sm text-muted">No match</li> : null}
+          </ul>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
