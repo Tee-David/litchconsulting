@@ -277,3 +277,44 @@ export async function deliverAction(input: z.infer<typeof deliverSchema>): Promi
     return fail(e, "The file was not saved.");
   }
 }
+
+// --- open an analyzed engine document in a new workbench ----------------------------
+/**
+ * "Open in workbench" from an Analysis result. The client, request and AI mode
+ * come from the server, never from the browser.
+ */
+export async function openDocumentInWorkbenchAction(engineDocId: number): Promise<Res<{ id: string }>> {
+  const u = await getSessionUser();
+  if (!u || u.banned || roleOf(u) !== "admin") return DENIED;
+  if (!Number.isInteger(engineDocId) || engineDocId <= 0) return { ok: false, error: "Unknown file." };
+  try {
+    const { getReview } = await import("@/lib/litchai/client");
+    const review = await getReview(engineDocId);
+    const [link] = await db
+      .select({ requestId: serviceRequestDocument.requestId })
+      .from(serviceRequestDocument)
+      .where(eq(serviceRequestDocument.litchaiDocumentId, String(engineDocId)))
+      .limit(1);
+    const ctx = link ? await requestContext(link.requestId) : null;
+    const clientName = ctx?.c?.company || ctx?.c?.name || "Client";
+    const title = ctx ? `${ctx.req.number} · ${review.document.filename}` : review.document.filename;
+    const res = await wbStart({
+      client_id: review.document.client_id || null,
+      document_ids: [engineDocId],
+      ai_mode: ctx?.c?.aiMode === "local_only" ? "local_only" : "cloud_masked",
+      client_name: clientName,
+      title,
+    });
+    await db.insert(workbenchConversation).values({
+      id: res.conversation.id,
+      requestId: ctx ? ctx.req.id : null,
+      clientId: ctx ? ctx.req.clientId : null,
+      title,
+      createdBy: u.id,
+    });
+    await recordAudit({ action: "workbench.opened", entity: ctx ? "request" : "workbench", entityId: ctx?.req.id ?? res.conversation.id, meta: { conversation: res.conversation.id, fromAnalysis: engineDocId } });
+    return { ok: true, id: res.conversation.id };
+  } catch (e) {
+    return fail(e, "The workbench could not open this file.");
+  }
+}

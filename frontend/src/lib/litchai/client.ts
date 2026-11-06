@@ -360,3 +360,47 @@ export function assistantChat(
 export function reindexKnowledge(): Promise<{ ok: boolean; chunks_indexed: number }> {
   return litchai("/knowledge/reindex", { method: "POST" });
 }
+
+/** Deterministic findings and figures for one analyzed document (engine contract insights-v1). */
+export type InsightFinding = {
+  id: string;
+  kind: "large_amount" | "duplicate" | "round_amount" | "weekend" | "out_of_period" | "balance_break" | "concentration" | "uncategorised" | "benford" | "tax_hint";
+  severity: "high" | "medium" | "low";
+  title: string;
+  why: string;
+  amount: number | null;
+  line_ids: number[];
+};
+export type Counterparty = { name: string; total: number; share: number; lines: number };
+export type DocumentInsights = {
+  document_id: number;
+  version: string;
+  computed_at: string;
+  kind: "bank_statement" | "ledger" | "sales" | "payments" | "other";
+  currency: string;
+  period: { start: string; end: string } | null;
+  figures: {
+    money_in: number;
+    money_out: number;
+    net: number;
+    lines: number;
+    needs_review: number;
+    opening_balance: number | null;
+    closing_balance: number | null;
+    balance_ok: boolean | null;
+  };
+  by_month: { month: string; in: number; out: number }[];
+  by_category: { code: string; label: string; total: number; lines: number }[];
+  counterparties: { customers: Counterparty[]; suppliers: Counterparty[] };
+  findings: InsightFinding[];
+  summary: string | null;
+  summary_by: "rules" | "model" | null;
+};
+
+/** Insights for a document, or null while the engine has none (404) or is older than insights-v1. */
+export async function getInsights(documentId: number): Promise<DocumentInsights | null> {
+  const res = await litchaiRaw(`/documents/${documentId}/insights`);
+  if (res.status === 404 || res.status === 405) return null;
+  if (!res.ok) throw new Error(`insights HTTP ${res.status}`);
+  return (await res.json()) as DocumentInsights;
+}

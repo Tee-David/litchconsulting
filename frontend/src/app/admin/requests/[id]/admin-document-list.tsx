@@ -125,9 +125,9 @@ export function AdminDocumentList({
           )}
           {/\.(xlsx|xls|csv)$/i.test(doc.fileName) && (
             <Link
-              href={`/admin/analyses/editor?requestId=${requestId}&documentId=${doc.id}`}
+              href={`/admin/analyses/w/new?requestId=${requestId}`}
               className="grid size-8 place-items-center rounded-full text-muted transition-colors hover:bg-surface hover:text-ink"
-              title="Open in spreadsheet editor"
+              title="Open in the workbench"
             >
               <Table2 className="size-4" />
             </Link>
