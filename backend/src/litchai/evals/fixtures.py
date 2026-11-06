@@ -135,9 +135,90 @@ def ledger_bank_injected_xlsx() -> bytes:
     return buf.getvalue()
 
 
+def _book(title: str, header: list[str], rows: list[tuple]) -> bytes:
+    wb = Workbook()
+    ws = wb.active
+    ws.title = title
+    ws.append(header)
+    for row in rows:
+        ws.append(list(row))
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
+
+
+# Receivables at 31 Mar 2026. Golden: total 2,900,000; not due 1,000,000; 1-30 500,000
+# (11 days); 31-60 750,000 (49 days); 61-90 250,000 (85 days); 90+ 400,000 (121 days);
+# overdue 1,900,000; top debtor Acme Ltd 1,500,000.
+RECEIVABLES = [
+    ("Acme Ltd", "INV-001", 1_000_000, date(2026, 4, 15)),
+    ("Acme Ltd", "INV-002", 500_000, date(2026, 3, 20)),
+    ("Kanem Logistics", "INV-003", 750_000, date(2026, 2, 10)),
+    ("Okafor Stores", "INV-004", 250_000, date(2026, 1, 5)),
+    ("Delta Foods", "INV-005", 400_000, date(2025, 11, 30)),
+]
+
+
+def receivables_xlsx() -> bytes:
+    return _book("Debtors", ["Customer", "Invoice", "Outstanding", "Due date"], RECEIVABLES)
+
+
+# Vendor payments (tax config 2026.1 rates). Golden WHT: consultancy corporate 10% of
+# 3,000,000 = 300,000; rent individual 10% of 1,200,000 = 120,000; supply corporate 5% of
+# 2,500,000 = 125,000; consultancy individual 5% of 600,000 = 30,000. Total 575,000.
+# Credit notes received 300,000 -> to request 275,000. Small-supplier candidates
+# (<= 2,000,000): Ngozi Rentals, Bola Design.
+VENDOR_PAYMENTS = [
+    ("Zenith Advisory", "consultancy", "corporate", 3_000_000),
+    ("Ngozi Rentals", "rent", "individual", 1_200_000),
+    ("Lagos Steel Supply", "supply", "corporate", 2_500_000),
+    ("Bola Design", "consultancy", "individual", 600_000),
+]
+
+
+def vendor_payments_xlsx() -> bytes:
+    return _book("Payments", ["Vendor", "Category", "Payee type", "Gross"], VENDOR_PAYMENTS)
+
+
+# VAT lines (net amounts, 7.5%). Golden: standard sales 4,000,000 -> output 300,000;
+# zero-rated 1,000,000; exempt 500,000; purchases 2,000,000 -> input 150,000;
+# net payable 150,000; Jan output 150,000 / input 75,000.
+VAT_LINES = [
+    (date(2026, 1, 10), "Consulting fees", "standard", 2_000_000),
+    (date(2026, 2, 12), "Training fees", "standard", 2_000_000),
+    (date(2026, 1, 20), "Export services", "zero", 1_000_000),
+    (date(2026, 2, 5), "Medical supplies", "exempt", 500_000),
+    (date(2026, 1, 25), "Office equipment", "purchase", 1_000_000),
+    (date(2026, 3, 3), "Software licences", "purchase", 1_000_000),
+]
+
+
+def vat_lines_xlsx() -> bytes:
+    return _book("VAT", ["Date", "Description", "VAT type", "Net amount"], VAT_LINES)
+
+
+# Filings at 30 Jun 2026. Golden: 4 items, 1 done (25%), 2 overdue (CAC annual return,
+# PAYE remittance), outstanding fees 75,000 (50,000 + 25,000; VAT fee 0).
+COMPLIANCE = [
+    ("CAC annual return 2025", "CAC", date(2026, 6, 1), "no", 50_000),
+    ("PAYE remittance May", "LIRS", date(2026, 6, 10), "no", 25_000),
+    ("VAT return May", "NRS", date(2026, 6, 21), "yes", 10_000),
+    ("VAT return June", "NRS", date(2026, 7, 21), "no", 0),
+]
+
+
+def compliance_xlsx() -> bytes:
+    return _book("Filings", ["Requirement", "Authority", "Due date", "Completed", "Fee"],
+                 COMPLIANCE)
+
+
 FIXTURES = {
     "ledger_bank": ledger_bank_xlsx,
     "ledger_bank_injected": ledger_bank_injected_xlsx,
     "trial_balance": trial_balance_xlsx,
     "payroll": payroll_xlsx,
+    "receivables": receivables_xlsx,
+    "vendor_payments": vendor_payments_xlsx,
+    "vat_lines": vat_lines_xlsx,
+    "compliance": compliance_xlsx,
 }

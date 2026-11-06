@@ -100,3 +100,20 @@ the scratch database. It never touches the production database and takes up to a
 minute. The result (each table's rows in the backup and restored) is kept in the
 audit log and shown on the Backups page. Run it after schema changes and at least
 monthly.
+
+## Workbench file types and accounting schedules
+
+The analyses workbench opens .xlsx and .xlsm files as they are. It makes an xlsx
+working copy of every other file type and keeps the original unchanged. For .csv,
+.tsv and .txt files, it detects the separator, the encoding, the decimal style and
+the date order. A .json list of records becomes a table. Each table in a .docx file
+becomes a sheet, and the text goes to a Notes sheet. LibreOffice converts .xls and
+.ods files. The first look tells you which files were converted and what was lost.
+
+The workbench co-pilot can also prepare seven accounting schedules as proposals:
+debtors or creditors aging, a WHT schedule with the credit notes still to request,
+a VAT return, a payroll with PAYE, pension, NHF and NSITF, a statement of affairs,
+a CAC and compliance filing tracker, and an IAS 1 or IFRS 18 annual report pack.
+Each one shows its basis: the rule, the rates and the tax-config version. Nothing
+changes in the file until you accept the proposal, and the recompute check then
+confirms every formula.

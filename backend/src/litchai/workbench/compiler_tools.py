@@ -462,21 +462,20 @@ def payroll_schedule(ctx: ToolContext, *, employees: list[dict[str, Any]] | None
 
 
 # --- 5. Statement of affairs --------------------------------------------------------
-_SOA_GROUPS = {
-    "non_current_assets": ("non-current asset", "non current asset", "fixed asset", "nca"),
-    "current_assets": ("current asset", "ca"),
-    "current_liabilities": ("current liabilit", "cl"),
-    "non_current_liabilities": ("non-current liabilit", "non current liabilit",
-                                "long-term liabilit", "ncl"),
-    "equity": ("equity", "capital", "reserve"),
+_SOA_GROUPS = {  # (words a class starts with, exact abbreviations)
+    "non_current_assets": (("non-current asset", "non current asset", "fixed asset"), ("nca",)),
+    "non_current_liabilities": (("non-current liabilit", "non current liabilit",
+                                 "long-term liabilit"), ("ncl",)),
+    "current_assets": (("current asset",), ("ca",)),
+    "current_liabilities": (("current liabilit",), ("cl",)),
+    "equity": (("equity", "capital", "share capital", "reserve", "retained"), ()),
 }
 
 
 def _soa_group(text: str) -> str | None:
     t = text.strip().lower()
-    for g in ("non_current_assets", "non_current_liabilities", "current_assets",
-              "current_liabilities", "equity"):
-        if any(t == w or t.startswith(w) for w in _SOA_GROUPS[g]):
+    for g, (words, exact) in _SOA_GROUPS.items():
+        if t in exact or any(t.startswith(w) for w in words):
             return g
     return None
 

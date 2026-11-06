@@ -29,6 +29,7 @@ import sys
 import time
 from dataclasses import asdict, dataclass, field
 from importlib import resources
+from pathlib import Path
 from typing import Any
 
 from litchai.evals.fixtures import FIXTURES, scripted_categoriser
@@ -151,6 +152,18 @@ def prepare(task: dict[str, Any], prep: list | None = None) -> tuple[Any, Any]:
     return wb, conv
 
 
+# Synthetic compiler contracts (backend/fixtures/synthetic) for oracle-only tasks.
+SYNTHETIC = Path(__file__).resolve().parents[3] / "fixtures" / "synthetic"
+
+
+def oracle_args(oracle: dict[str, Any]) -> dict[str, Any]:
+    args = dict(oracle.get("args", {}))
+    if oracle.get("contract_file"):
+        args["contract"] = json.loads((SYNTHETIC / oracle["contract_file"])
+                                      .read_text(encoding="utf-8"))
+    return args
+
+
 def run_oracle(task: dict[str, Any]) -> dict[str, Any]:
     """The deterministic proof of a task's golden: returns the oracle tool output."""
     from litchai.workbench.tools import run_tool
@@ -158,7 +171,7 @@ def run_oracle(task: dict[str, Any]) -> dict[str, Any]:
     oracle = task["oracle"]
     wb, conv = prepare(task, oracle.get("prep", task.get("prep", [])))
     ctx = wb.context(conv, taxonomy=_taxonomy(), categoriser=scripted_categoriser)
-    return run_tool(ctx, oracle["tool"], oracle.get("args", {})).data
+    return run_tool(ctx, oracle["tool"], oracle_args(oracle)).data
 
 
 def verify_task(task: dict[str, Any]) -> list[str]:
@@ -320,6 +333,8 @@ def main(argv: list[str] | None = None) -> int:
             print("  FAIL", f)
         return 1 if failures else 0
 
+    # Oracle-only tasks (inputs a chat prompt cannot carry) are proven offline only.
+    tasks = [t for t in tasks if not t.get("oracle_only")]
     scores: list[TaskScore] = []
     for provider in args.provider:
         for i, task in enumerate(tasks):
