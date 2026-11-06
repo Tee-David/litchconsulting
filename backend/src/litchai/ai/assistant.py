@@ -512,6 +512,56 @@ def _routing_text(message: str, history: list[dict[str, str]] | None) -> str:
     return message
 
 
+_POLITE = re.compile(
+    r"^\s*(?:(?:please|kindly|sage|ok(?:ay)?|now|also|then)[\s,]+)*"
+    r"(?:(?:can|could|would|will) you(?: please)?|i (?:want|need|would like|'d like) you to|"
+    r"help me(?: to)?|let'?s|go ahead and)?\s*(?:please\s+)?", re.IGNORECASE)
+_QUESTION_START = re.compile(
+    r"^(?:how|what|why|when|where|who|whom|which|whose|is|are|was|were|do|does|did|can|could|"
+    r"should|would|will|may|might|must|shall|has|have|explain|tell me|describe|i wonder)\b",
+    re.IGNORECASE)
+# The imperative verbs that may open a write, per write tool.
+_WRITE_VERBS: dict[str, tuple[str, ...]] = {
+    "create_quote": ("create", "make", "draft", "prepare", "raise", "generate", "issue", "quote",
+                     "send", "set up", "write"),
+    "create_invoice": ("create", "make", "draft", "prepare", "raise", "generate", "issue",
+                       "invoice", "bill", "send", "set up", "write"),
+    "recategorize_line": ("reclassify", "recategorize", "recategorise", "move", "change", "set",
+                          "categorise", "categorize", "put"),
+    "transition_engagement": _ENGAGEMENT_ACTIONS + ("move", "send", "mark"),
+}
+
+
+def write_intent(message: str, tool: Tool, slots: dict[str, Any]) -> bool:
+    """A write needs an instruction, not a question: an imperative verb first
+    (after any polite lead such as "please" or "can you"), and an object
+    (a client or amount; a line; an engagement). "How does a client pay an
+    invoice?" is a question about invoices, never a request to make one."""
+    text = _POLITE.sub("", message.strip(), count=1).strip()
+    if not text or _QUESTION_START.match(text):
+        return False
+    first = text.lower()
+    if not any(re.match(rf"{re.escape(v)}\b", first) for v in _WRITE_VERBS.get(tool.name, ())):
+        return False
+    if tool.name in ("create_quote", "create_invoice"):
+        return bool(slots.get("client_name") or slots.get("amount")
+                    or re.search(r"\b(?:this|the|a|our) client\b|\b(?:for|to)\s+\w", first))
+    if tool.name == "recategorize_line":
+        return slots.get("line_item_id") is not None
+    if tool.name == "transition_engagement":
+        return slots.get("engagement_id") is not None
+    return True
+
+
+def _read_instead(message: str, router: SemanticRouter | None) -> tuple[Tool, float | None]:
+    """The best READ tool for a message that looked like a write but is not one."""
+    if router is not None:
+        for tool, score in _prefer_knowledge_on_tie(router.score(message), router.tie_epsilon):
+            if tool.kind == "read":
+                return (tool, score) if score >= router.threshold else (DEFAULT_TOOL, None)
+    return DEFAULT_TOOL, None
+
+
 def route_message(
     message: str,
     router: SemanticRouter,
@@ -524,9 +574,16 @@ def route_message(
     hit = router.route(_routing_text(message, history))
     if hit is not None:
         tool, score = hit
-        return RouteDecision(tool=tool, slots=extract_slots(message, tool), method="semantic", score=score)
-    tool, slots = llm_route(message, provider=provider, cache=cache, telemetry=telemetry)
-    return RouteDecision(tool=tool, slots=slots, method="llm")
+        decision = RouteDecision(tool=tool, slots=extract_slots(message, tool), method="semantic",
+                                 score=score)
+    else:
+        tool, slots = llm_route(message, provider=provider, cache=cache, telemetry=telemetry)
+        decision = RouteDecision(tool=tool, slots=slots, method="llm")
+    if decision.tool.kind == "write" and not write_intent(message, decision.tool, decision.slots):
+        read, score = _read_instead(message, router)
+        return RouteDecision(tool=read, slots=extract_slots(message, read),
+                             method=decision.method, score=score)
+    return decision
 
 
 # --- tool execution (READ = data, WRITE = proposal) ------------------------

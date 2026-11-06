@@ -174,3 +174,71 @@ def test_endpoint_uses_the_cloud_chain_and_local_only_flag(tmp_path):
         body = c.post("/assistant/chat", json={"message": "how does a client pay an invoice",
                                                "local_only": True}).json()
         assert body["engine"]["provider"] == "local"
+
+
+# --- questions never route to a write tool (VM retest regression) -------------
+QUESTIONS = [
+    "How does a client pay an invoice?",
+    "How do I create an invoice?",
+    "how do i raise a quote for Acme Ltd for 500k",
+    "What happens when an invoice is overdue?",
+    "What is a quote?",
+    "Can a client pay an invoice by bank transfer?",
+    "Why was the invoice for Acme Ltd not sent?",
+    "Explain how quotes become invoices",
+    "please tell me how billing works",
+    "Is there an invoice for Kanem Logistics?",
+    "What happens when I approve engagement 4?",
+    "how do I reclassify line 5",
+]
+COMMANDS = [
+    ("Create a quote for Acme Ltd for 500,000 naira.", "create_quote"),
+    ("please create an invoice for Okonkwo Farms for 1.2m", "create_invoice"),
+    ("Can you draft an invoice for Acme Ltd for 300k?", "create_invoice"),
+    ("bill Kanem Logistics 300k for the payroll work", "create_invoice"),
+    ("make a quote for okonkwo farms", "create_quote"),
+    ("raise an invoice for this client", "create_invoice"),
+    ("approve engagement 4", "transition_engagement"),
+    ("reclassify line 5 to bank charges", "recategorize_line"),
+]
+
+
+@pytest.mark.parametrize("message", QUESTIONS)
+def test_questions_are_not_write_intents(message):
+    for name in ("create_invoice", "create_quote", "transition_engagement", "recategorize_line"):
+        tool = A.TOOLS_BY_NAME[name]
+        assert not A.write_intent(message, tool, A.extract_slots(message, tool)), (message, name)
+
+
+@pytest.mark.parametrize(("message", "tool"), COMMANDS)
+def test_imperatives_with_an_object_are_write_intents(message, tool):
+    t = A.TOOLS_BY_NAME[tool]
+    assert A.write_intent(message, t, A.extract_slots(message, t))
+
+
+def test_imperatives_without_an_object_are_not_writes():
+    t = A.TOOLS_BY_NAME["create_invoice"]
+    assert not A.write_intent("create an invoice", t, A.extract_slots("create an invoice", t))
+    assert not A.write_intent("approve engagement", A.TOOLS_BY_NAME["transition_engagement"], {})
+
+
+class _WriteFirstRouter(A.SemanticRouter):
+    """A router that ranks create_invoice first, as the VM did for the question."""
+
+    def score(self, message):
+        return [(A.TOOLS_BY_NAME["create_invoice"], 0.82),
+                (A.TOOLS_BY_NAME["search_knowledge"], 0.71),
+                (A.TOOLS_BY_NAME["general_chat"], 0.40)]
+
+
+def test_a_question_that_ranks_a_write_first_is_answered_not_proposed():
+    repo, emb = InMemoryRepository(), FakeEmbedder()
+    K.reindex(repo, emb)
+    router = _WriteFirstRouter(emb)
+    d = A.route_message("How does a client pay an invoice?", router, provider=FakeProvider())
+    assert d.tool.kind == "read" and d.tool.name == "search_knowledge"
+    out = A.answer_chat("How does a client pay an invoice?", repo=repo, embedder=emb,
+                        provider=FakeProvider(), router=router)
+    assert out.proposal is None and out.tool != "create_invoice"
+    d = A.route_message("Create an invoice for Acme Ltd for 300k", router, provider=FakeProvider())
+    assert d.tool.name == "create_invoice"
