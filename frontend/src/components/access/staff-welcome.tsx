@@ -8,6 +8,7 @@ import { Button } from "@/components/kit";
 import { Field } from "@/components/auth/ui";
 import { markOnboardingStepAction, saveAlertPrefsAction, updateNameAction } from "@/app/account/actions";
 import { cn } from "@/lib/utils";
+import { Select } from "@/components/ui/select";
 
 type Pref = { category: string; label: string; hint: string; mode: "immediate" | "digest" | "off"; email: boolean; push: boolean };
 
@@ -138,16 +139,17 @@ export function StaffWelcome({
                           <span className="block text-[12.5px] text-muted">{p.hint}</span>
                         </td>
                         <td className="px-2 py-3">
-                          <select
+                          <Select
                             aria-label={`${p.label}: timing`}
                             value={p.mode}
-                            onChange={(e) => set(p.category, { mode: e.target.value as Pref["mode"] })}
-                            className="h-9 rounded-ctl border border-line-strong bg-paper px-2 text-sm text-ink"
-                          >
-                            <option value="immediate">Right away</option>
-                            <option value="digest">Daily summary</option>
-                            <option value="off">Bell only</option>
-                          </select>
+                            onChange={(v) => set(p.category, { mode: v as Pref["mode"] })}
+                            options={[
+                              { value: "immediate", label: "Right away" },
+                              { value: "digest", label: "Daily summary" },
+                              { value: "off", label: "Bell only" },
+                            ]}
+                            className="min-w-[10rem]"
+                          />
                         </td>
                         <td className="px-2 py-3 text-center">
                           <input type="checkbox" aria-label={`${p.label}: email`} checked={p.email} disabled={p.mode !== "immediate"} onChange={(e) => set(p.category, { email: e.target.checked })} className="size-4 accent-[var(--color-act)]" />

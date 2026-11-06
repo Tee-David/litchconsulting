@@ -5,6 +5,7 @@ import { Layers, Coins, Boxes, Gauge } from "lucide-react";
 import { StatCard } from "@/components/admin/ui/stat-card";
 import { ExportMenu, type ExportColumn } from "@/components/admin/ui/export-menu";
 import { cn } from "@/lib/utils";
+import { Select } from "@/components/ui/select";
 
 /* Curated Litch model portfolios — risk-graded asset allocations (illustrative). */
 const MODELS = [
@@ -102,9 +103,7 @@ export function ModelPortfolios() {
       {/* Model selector */}
       <div className="flex flex-col gap-3 rounded-card border border-hairline bg-paper p-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
-          <select value={modelId} onChange={(e) => setModelId(e.target.value)} className="h-10 rounded-lg border border-hairline bg-paper px-3 text-sm font-semibold text-ink outline-none focus:border-brand">
-            {MODELS.map((m) => (<option key={m.id} value={m.id}>{m.name}</option>))}
-          </select>
+          <Select aria-label="Model" value={modelId} onChange={setModelId} options={MODELS.map((m) => ({ value: m.id, label: m.name }))} className="min-w-[14rem]" />
           <p className="hidden max-w-md text-sm text-body sm:block">{model.desc}</p>
         </div>
         <ExportMenu rows={funds} columns={exportCols} filename={`${model.id}-model-portfolio`} title={`${model.name} — risk ${level}`} />

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Receipt } from "lucide-react";
 import { DataTable, EmptyState, StatusChip } from "@/components/kit";
@@ -64,6 +65,7 @@ const columns: ColumnDef<BillingRow, unknown>[] = [
 ];
 
 export function BillingTable({ rows }: { rows: BillingRow[] }) {
+  const router = useRouter();
   return (
     <DataTable
       label="Invoices and quotes"
@@ -71,7 +73,8 @@ export function BillingTable({ rows }: { rows: BillingRow[] }) {
       columns={columns}
       data={rows}
       getRowId={(r) => r.id}
-      rowHref={(r) => (r.kind === "quote" ? `/dashboard/quotes/${r.id}` : `/dashboard/invoices/${r.id}`)}
+      // A click handler, not rowHref: the Action cell holds its own link (no link inside a link).
+      onRowClick={(r) => router.push(r.kind === "quote" ? `/dashboard/quotes/${r.id}` : `/dashboard/invoices/${r.id}`)}
       searchPlaceholder="Search by number or project"
       searchText={(r) => `${r.number} ${r.title} ${r.requestNumber ?? ""}`}
       views={[

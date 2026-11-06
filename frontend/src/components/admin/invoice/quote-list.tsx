@@ -23,6 +23,7 @@ import {
   bulkSetInvoiceStatusAction,
 } from "@/app/admin/billing/invoices/actions";
 import { FileSignature, BadgeCheck, Send as SendIcon, FileEdit, Loader2 } from "lucide-react";
+import { Select } from "@/components/ui/select";
 
 function RowActions({ row }: { row: InvoiceRow }) {
   const [open, setOpen] = useState(false);
@@ -176,33 +177,31 @@ export function QuoteList({ quotes }: { quotes: InvoiceRow[] }) {
                 <span>{selected.length} quotes selected</span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <select
-                  defaultValue=""
+                <Select
+                  aria-label="Change status"
+                  value=""
                   disabled={busy}
-                  onChange={async (e) => {
-                    const val = e.target.value;
-                    if (val) {
-                      setBusy(true);
-                      const ids = selected.map((q) => q.id);
-                      const res = await bulkSetInvoiceStatusAction(ids, val);
-                      setBusy(false);
-                      if (res.ok) {
-                        toast.success("Statuses updated.");
-                        router.refresh();
-                      } else {
-                        toast.error(res.error || "Failed to update statuses.");
-                      }
+                  placeholder="Change status…"
+                  onChange={async (val) => {
+                    if (!val) return;
+                    setBusy(true);
+                    const res = await bulkSetInvoiceStatusAction(selected.map((q) => q.id), val);
+                    setBusy(false);
+                    if (res.ok) {
+                      toast.success("Statuses updated.");
+                      router.refresh();
+                    } else {
+                      toast.error(res.error || "Failed to update statuses.");
                     }
-                    e.target.value = "";
                   }}
-                  className="rounded-lg border border-hairline bg-paper px-3 py-1.5 text-xs font-semibold text-ink outline-none cursor-pointer"
-                >
-                  <option value="" disabled>Change Status...</option>
-                  <option value="draft">Mark as Draft</option>
-                  <option value="sent">Mark as Sent</option>
-                  <option value="accepted">Mark as Accepted</option>
-                  <option value="declined">Mark as Declined</option>
-                </select>
+                  options={[
+                    { value: "draft", label: "Mark as draft" },
+                    { value: "sent", label: "Mark as sent" },
+                    { value: "accepted", label: "Mark as accepted" },
+                    { value: "declined", label: "Mark as declined" },
+                  ]}
+                  className="min-w-[11rem]"
+                />
                 <button
                   type="button"
                   disabled={busy}
@@ -239,13 +238,7 @@ export function QuoteList({ quotes }: { quotes: InvoiceRow[] }) {
             getRowId={(r) => r.id}
             toolbar={
               <>
-                <select value={status} onChange={(e) => setStatus(e.target.value)} className="h-9 rounded-lg border border-hairline bg-paper px-3 text-sm capitalize text-ink outline-none focus:border-brand">
-                  {["all", "draft", "sent", "accepted", "declined"].map((s) => (
-                    <option key={s} value={s} className="capitalize">
-                      {s === "all" ? "All statuses" : s}
-                    </option>
-                  ))}
-                </select>
+                <Select aria-label="Status" value={status} onChange={setStatus} options={["all", "draft", "sent", "accepted", "declined"].map((s) => ({ value: s, label: s === "all" ? "All statuses" : s[0].toUpperCase() + s.slice(1) }))} className="min-w-[10rem]" />
                 <ExportMenu rows={filtered} columns={exportColumns} filename="quotes" title="Quotes" />
               </>
             }

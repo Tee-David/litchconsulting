@@ -7,6 +7,7 @@ import { Button } from "@/components/kit";
 import { useToast } from "@/components/admin/ui/toaster";
 import { formatMoney } from "@/lib/invoice/money";
 import { setDepositAction } from "@/app/admin/billing/billing-actions";
+import { Select } from "@/components/ui/select";
 
 /**
  * Deposit terms on one invoice. The client pays the deposit first (invoice →
@@ -76,13 +77,13 @@ export function DepositCard({
           <div className="flex flex-wrap items-end gap-2">
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-ink">Deposit</span>
-              <select value={pct} onChange={(e) => setPct(e.target.value)} className="h-9 rounded-ctl border border-line-strong bg-paper px-2 text-sm text-ink">
-                {[30, 40, 50, 60, 70].map((p) => (
-                  <option key={p} value={p}>
-                    {p}% ({formatMoney(Math.round(total * p) / 100, currency)})
-                  </option>
-                ))}
-              </select>
+              <Select
+                aria-label="Deposit percentage"
+                value={String(pct)}
+                onChange={(v) => setPct(v)}
+                options={[30, 40, 50, 60, 70].map((p) => ({ value: String(p), label: `${p}% (${formatMoney(Math.round(total * p) / 100, currency)})` }))}
+                className="min-w-[12rem]"
+              />
             </label>
             <Button size="sm" disabled={busy} onClick={() => save(Number(pct))}>
               {busy ? <Loader2 className="size-4 animate-spin" /> : null} Ask for a deposit

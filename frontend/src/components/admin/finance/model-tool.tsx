@@ -11,6 +11,7 @@ import { ExportMenu, type ExportColumn } from "@/components/admin/ui/export-menu
 import { useToast } from "@/components/admin/ui/toaster";
 import { formatMoney, num, CURRENCIES } from "@/lib/invoice/money";
 import { cn } from "@/lib/utils";
+import { Select } from "@/components/ui/select";
 
 /* ----------------------------- types & defaults ----------------------------- */
 type OpexLine = { id: string; label: string; amount: number };
@@ -223,15 +224,11 @@ export function ModelTool() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={lbl}>Currency</label>
-              <select value={inp.currency} onChange={(e) => set("currency", e.target.value)} className={field}>
-                {CURRENCIES.map((c) => (<option key={c.code} value={c.code}>{c.symbol} {c.code}</option>))}
-              </select>
+              <Select aria-label="Currency" value={inp.currency} onChange={(v) => set("currency", v)} searchable options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.symbol} ${c.code}` }))} />
             </div>
             <div>
               <label className={lbl}>Horizon (months)</label>
-              <select value={inp.months} onChange={(e) => set("months", Number(e.target.value))} className={field}>
-                {[12, 18, 24, 36, 48, 60].map((n) => (<option key={n} value={n}>{n}</option>))}
-              </select>
+              <Select aria-label="Months" value={String(inp.months)} onChange={(v) => set("months", Number(v))} options={[12, 18, 24, 36, 48, 60].map((n) => ({ value: String(n), label: String(n) }))} />
             </div>
             <div>
               <label className={lbl}>Starting revenue / mo</label>

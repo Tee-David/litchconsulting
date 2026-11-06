@@ -5,19 +5,21 @@ import { SettingsNav } from "@/components/admin/settings/settings-nav";
 export const dynamic = "force-dynamic";
 
 /**
- * Settings: firm details and users, team and access (owned by the access
- * page), notifications, backups with a restore test, and integrations with
- * live health. Each section has its own URL.
+ * Settings: a section menu on the left and the section on the right. Each
+ * section has its own URL. Changes to firm and billing details collect in the
+ * save bar at the bottom.
  */
 export default async function SettingsLayout({ children }: { children: React.ReactNode }) {
   await requireArea("settings", "/admin/settings");
   return (
     <div>
-      <PageHead title="Settings" lede="How the firm and the platform run." />
-      <div data-tour="settings-tabs">
-        <SettingsNav />
+      <PageHead title="Settings" lede="How the firm and the platform run. Changes collect in the bar at the bottom." />
+      <div className="grid gap-5 md:grid-cols-[220px_minmax(0,1fr)]">
+        <div data-tour="settings-tabs" className="min-w-0 md:sticky md:top-20 md:self-start">
+          <SettingsNav />
+        </div>
+        <div className="min-w-0">{children}</div>
       </div>
-      {children}
     </div>
   );
 }

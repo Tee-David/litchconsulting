@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useMemo } from "react";
+import { Select } from "@/components/ui/select";
 
 const PAGE_SIZES = [10, 15, 25, 50];
 
@@ -249,17 +250,13 @@ export function DataTable<T>({
       <div className="flex flex-col items-center justify-between gap-3 text-sm text-body sm:flex-row">
         <div className="flex items-center gap-2">
           <span>Rows per page</span>
-          <select
-            value={pageSize}
-            onChange={(e) => table.setPageSize(Number(e.target.value))}
-            className="rounded-lg border border-hairline bg-paper px-2 py-1 text-ink outline-none focus:border-brand"
-          >
-            {PAGE_SIZES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
+          <Select
+            aria-label="Rows per page"
+            value={String(pageSize)}
+            onChange={(v) => table.setPageSize(Number(v))}
+            options={PAGE_SIZES.map((s) => ({ value: String(s), label: String(s) }))}
+            className="w-20"
+          />
         </div>
         <div className="flex items-center gap-4">
           <span className="tabular-nums">

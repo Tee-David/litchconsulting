@@ -24,6 +24,7 @@ import {
   bulkSetInvoiceStatusAction,
 } from "@/app/admin/billing/invoices/actions";
 import { Wallet, BadgeCheck, Clock, AlertTriangle, Loader2 } from "lucide-react";
+import { Select } from "@/components/ui/select";
 
 const STATUSES = ["all", "draft", "sent", "paid", "overdue", "void"];
 
@@ -255,33 +256,31 @@ export function InvoiceList({ invoices }: { invoices: InvoiceRow[] }) {
                 <span>{selected.length} invoices selected</span>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <select
-                  defaultValue=""
+                <Select
+                  aria-label="Change status"
+                  value=""
                   disabled={busy}
-                  onChange={async (e) => {
-                    const val = e.target.value;
-                    if (val) {
-                      setBusy(true);
-                      const ids = selected.map((i) => i.id);
-                      const res = await bulkSetInvoiceStatusAction(ids, val);
-                      setBusy(false);
-                      if (res.ok) {
-                        toast.success("Statuses updated.");
-                        router.refresh();
-                      } else {
-                        toast.error(res.error || "Failed to update statuses.");
-                      }
+                  placeholder="Change status…"
+                  onChange={async (val) => {
+                    if (!val) return;
+                    setBusy(true);
+                    const res = await bulkSetInvoiceStatusAction(selected.map((i) => i.id), val);
+                    setBusy(false);
+                    if (res.ok) {
+                      toast.success("Statuses updated.");
+                      router.refresh();
+                    } else {
+                      toast.error(res.error || "Failed to update statuses.");
                     }
-                    e.target.value = "";
                   }}
-                  className="rounded-lg border border-hairline bg-paper px-3 py-1.5 text-xs font-semibold text-ink outline-none cursor-pointer"
-                >
-                  <option value="" disabled>Change Status...</option>
-                  <option value="draft">Mark as Draft</option>
-                  <option value="sent">Mark as Sent</option>
-                  <option value="paid">Mark as Paid</option>
-                  <option value="void">Mark as Void</option>
-                </select>
+                  options={[
+                    { value: "draft", label: "Mark as draft" },
+                    { value: "sent", label: "Mark as sent" },
+                    { value: "paid", label: "Mark as paid" },
+                    { value: "void", label: "Mark as void" },
+                  ]}
+                  className="min-w-[11rem]"
+                />
                 <button
                   type="button"
                   disabled={busy}
@@ -319,17 +318,7 @@ export function InvoiceList({ invoices }: { invoices: InvoiceRow[] }) {
             toolbar={
               <>
                 <DateRangeFilter onChange={setDateRange} />
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value)}
-                  className="h-9 rounded-lg border border-hairline bg-paper px-3 text-sm capitalize text-ink outline-none focus:border-brand"
-                >
-                  {STATUSES.map((s) => (
-                    <option key={s} value={s} className="capitalize">
-                      {s === "all" ? "All statuses" : s}
-                    </option>
-                  ))}
-                </select>
+                <Select aria-label="Status" value={status} onChange={setStatus} options={STATUSES.map((s) => ({ value: s, label: s === "all" ? "All statuses" : s[0].toUpperCase() + s.slice(1).replace(/_/g, " ") }))} className="min-w-[10rem]" />
                 <ExportMenu rows={filtered} columns={exportColumns} filename="invoices" title="Invoices" />
               </>
             }

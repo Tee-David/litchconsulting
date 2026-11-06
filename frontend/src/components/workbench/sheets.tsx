@@ -7,6 +7,7 @@ import type { WbBatch, WbConversation, WbFirstLook, WbGate } from "@/lib/litchai
 import { Button, Sheet } from "@/components/kit";
 import { parseRef, rangeLabel, type Range } from "./refs";
 import { cn } from "@/lib/utils";
+import { Select } from "@/components/ui/select";
 
 export type FileOption = { id: string; fileName: string; kind: string; stage: string | null; usable: boolean; litchaiDocumentId: string | null; litchaiStatus: string | null };
 
@@ -127,9 +128,7 @@ export function AttachSheet({
         </label>
         {mode === "sheet" && (
           <div className="ml-6 grid gap-2 sm:grid-cols-2">
-            <select aria-label="Workbook" className={input} value={wb} onChange={(e) => setWb(e.target.value)}>
-              {workbooks.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
+            <Select aria-label="Workbook" value={wb} onChange={setWb} options={workbooks.map((w) => ({ value: w.id, label: w.name }))} />
             <input aria-label="Sheet name" className={input} placeholder="Sheet name" maxLength={31} value={name} onChange={(e) => setName(e.target.value)} />
           </div>
         )}
@@ -353,9 +352,7 @@ export function DeliverSheet({
         {workbooks.length > 1 && (
           <label className="block text-sm">
             <span className="mb-1 block font-medium text-ink">Workbook</span>
-            <select className={input} value={wb} onChange={(e) => setWb(e.target.value)}>
-              {workbooks.map((w) => <option key={w.id} value={w.id}>{w.name}</option>)}
-            </select>
+            <Select aria-label="Workbook" value={wb} onChange={setWb} options={workbooks.map((w) => ({ value: w.id, label: w.name }))} />
           </label>
         )}
         <fieldset className="space-y-2">

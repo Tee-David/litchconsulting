@@ -19,7 +19,6 @@ import {
   CheckCircle2,
   Search,
   Users,
-  Settings,
   Mail,
   UserCheck,
   Lock,
@@ -30,6 +29,7 @@ import { useToast } from "@/components/admin/ui/toaster";
 import { Select } from "@/components/ui/select";
 import { uploadFile } from "@/lib/upload-client";
 import { CURRENCIES } from "@/lib/invoice/money";
+import taxConfig from "@/lib/tax/nigeria-tax-config.json";
 import {
   saveOrgSettingsAction,
   createAdminUserAction,
@@ -91,19 +91,21 @@ export function SettingsView({
   placeholders,
   users = [],
   currentUser,
+  section = "firm",
 }: {
   initial: OrgSettingsInput;
   placeholders: Placeholders;
   users?: User[];
   currentUser?: SessionUser | null;
+  /** Which settings page this is: Firm details, Billing and tax, or the user list. */
+  section?: "firm" | "billing" | "users";
 }) {
   const router = useRouter();
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
   const avatarRef = useRef<HTMLInputElement>(null);
 
-  // Tabs: "profile" | "general" | "users"
-  const [activeTab, setActiveTab] = useState<"profile" | "general" | "users">("profile");
+  const activeTab = section === "users" ? "users" : "general";
 
   // General Settings State
   const [form, setForm] = useState<OrgSettingsInput>(initial);
@@ -138,6 +140,8 @@ export function SettingsView({
 
   const set = <K extends keyof OrgSettingsInput>(k: K, v: OrgSettingsInput[K]) =>
     setForm((f) => ({ ...f, [k]: v }));
+  // Changes collect in the bar at the bottom, as in the design.
+  const changed = (Object.keys(initial) as (keyof OrgSettingsInput)[]).filter((k) => (form[k] ?? "") !== (initial[k] ?? "")).length;
 
   async function onLogo(file: File) {
     setUploading(true);
@@ -353,50 +357,7 @@ export function SettingsView({
 
   return (
     <div className="space-y-6">
-      {/* Tabs Switcher */}
-      <div className="no-scrollbar flex overflow-x-auto overscroll-x-contain touch-pan-x border-b border-hairline">
-        <button
-          type="button"
-          onClick={() => setActiveTab("profile")}
-          className={cn(
-            "flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3.5 py-3 text-sm font-semibold transition-all sm:px-5",
-            activeTab === "profile"
-              ? "border-brand text-brand dark:border-white dark:text-white"
-              : "border-transparent text-body hover:text-ink"
-          )}
-        >
-          <UserCheck className="size-4" />
-          My Profile
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("general")}
-          className={cn(
-            "flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3.5 py-3 text-sm font-semibold transition-all sm:px-5",
-            activeTab === "general"
-              ? "border-brand text-brand dark:border-white dark:text-white"
-              : "border-transparent text-body hover:text-ink"
-          )}
-        >
-          <Settings className="size-4" />
-          Organisation & Defaults
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("users")}
-          className={cn(
-            "flex shrink-0 items-center gap-2 whitespace-nowrap border-b-2 px-3.5 py-3 text-sm font-semibold transition-all sm:px-5",
-            activeTab === "users"
-              ? "border-brand text-brand dark:border-white dark:text-white"
-              : "border-transparent text-body hover:text-ink"
-          )}
-        >
-          <Users className="size-4" />
-          User Management
-        </button>
-      </div>
-
-      {activeTab === "profile" && (
+      {section === "firm" && (
         <div className="max-w-2xl">
           <Section
             icon={UserCheck}
@@ -508,7 +469,7 @@ export function SettingsView({
       {activeTab === "general" && (
         <div className="space-y-6">
           <div className="grid gap-6 lg:grid-cols-2">
-            {/* Organisation profile */}
+            {section === "firm" && (
             <Section
               icon={Building2}
               title="Organisation profile"
@@ -534,23 +495,11 @@ export function SettingsView({
                     className={inputCls}
                   />
                 </div>
-                <div>
-                  <label className={labelCls}>Default currency</label>
-                  <Select
-                    value={form.defaultCurrency || "NGN"}
-                    onChange={(v) => set("defaultCurrency", v)}
-                    searchable
-                    aria-label="Default currency"
-                    options={CURRENCIES.map((c) => ({
-                      value: c.code,
-                      label: `${c.symbol} ${c.code} — ${c.label}`,
-                    }))}
-                  />
-                </div>
               </div>
             </Section>
+            )}
 
-            {/* Branding */}
+            {section === "firm" && (
             <Section
               icon={ImageIcon}
               title="Branding"
@@ -611,8 +560,36 @@ export function SettingsView({
                 </div>
               </div>
             </Section>
+            )}
 
-            {/* Bank / payment details */}
+            {section === "billing" && (
+            <Section
+              icon={ReceiptText}
+              title="Currency and tax"
+              description="Defaults for new quotes and invoices. Tax rates come from the versioned Nigerian tax file."
+            >
+              <div className="space-y-4">
+                <div>
+                  <label className={labelCls}>Default currency</label>
+                  <Select
+                    value={form.defaultCurrency || "NGN"}
+                    onChange={(v) => set("defaultCurrency", v)}
+                    searchable
+                    aria-label="Default currency"
+                    options={CURRENCIES.map((c) => ({ value: c.code, label: `${c.symbol} ${c.code} — ${c.label}` }))}
+                  />
+                </div>
+                <dl className="grid grid-cols-[1fr_auto] gap-x-4 gap-y-2 text-sm">
+                  <dt className="text-body">VAT</dt>
+                  <dd className="tabular-nums text-ink">{taxConfig.vat.standardRatePct}%</dd>
+                  <dt className="text-body">Tax rules</dt>
+                  <dd className="text-ink">{taxConfig.law} · v{taxConfig.version}</dd>
+                </dl>
+              </div>
+            </Section>
+            )}
+
+            {section === "billing" && (
             <Section
               icon={Landmark}
               title="Payment details"
@@ -650,8 +627,9 @@ export function SettingsView({
                 </div>
               </div>
             </Section>
+            )}
 
-            {/* Invoice defaults */}
+            {section === "billing" && (
             <Section
               icon={ReceiptText}
               title="Invoice defaults"
@@ -668,19 +646,33 @@ export function SettingsView({
                 />
               </div>
             </Section>
+            )}
           </div>
 
-          <div className="sticky bottom-4 z-10 flex justify-end">
-            <button
-              type="button"
-              onClick={save}
-              disabled={saving || uploading}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-brand/20 transition-colors hover:bg-brand-hover disabled:opacity-60 keep-brand"
-            >
-              {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save
-              settings
-            </button>
-          </div>
+          {(changed > 0 || saving || uploading) && (
+            <div role="region" aria-label="Unsaved changes" className="sticky bottom-4 z-10 flex flex-wrap items-center gap-3 rounded-card border border-hairline bg-paper px-4 py-3 shadow-lg">
+              <span className="text-sm text-body">
+                <b className="text-ink">{changed} {changed === 1 ? "change" : "changes"}</b> not saved
+              </span>
+              <span className="grow" />
+              <button
+                type="button"
+                onClick={() => setForm(initial)}
+                disabled={saving || uploading}
+                className="min-h-[40px] rounded-ctl px-3 text-sm font-medium text-body transition-colors hover:bg-surface hover:text-ink disabled:opacity-60"
+              >
+                Discard
+              </button>
+              <button
+                type="button"
+                onClick={save}
+                disabled={saving || uploading || changed === 0}
+                className="keep-brand inline-flex min-h-[40px] items-center gap-1.5 rounded-ctl bg-brand px-4 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-60"
+              >
+                {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />} Save
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -815,22 +807,21 @@ export function SettingsView({
               </div>
               
               <div className="flex flex-wrap items-center gap-2">
-                <select
-                  defaultValue=""
+                <Select
+                  aria-label="Change role"
+                  value=""
                   disabled={bulkActioning}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    if (val === "admin" || val === "client") {
-                      handleBulkRoleChange(val);
-                    }
-                    e.target.value = "";
+                  placeholder="Change role…"
+                  onChange={(val) => {
+                    if (val === "admin" || val === "staff" || val === "client") handleBulkRoleChange(val);
                   }}
-                  className="rounded-lg border border-hairline bg-paper px-3 py-1.5 text-xs font-semibold text-ink outline-none"
-                >
-                  <option value="" disabled>Change Role...</option>
-                  <option value="admin">Make Administrator</option>
-                  <option value="client">Make Client</option>
-                </select>
+                  options={[
+                    { value: "admin", label: "Make admin" },
+                    { value: "staff", label: "Make staff" },
+                    { value: "client", label: "Make client" },
+                  ]}
+                  className="min-w-[10rem]"
+                />
 
                 <button
                   type="button"
@@ -948,15 +939,18 @@ export function SettingsView({
                               Administrator
                             </span>
                           ) : (
-                            <select
+                            <Select
+                              aria-label={`Role for ${u.name}`}
                               value={u.role || "client"}
                               disabled={isPendingAction}
-                              onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                              className="rounded border border-hairline bg-paper px-2 py-1 text-xs font-medium text-ink outline-none focus:border-brand"
-                            >
-                              <option value="admin">Administrator</option>
-                              <option value="client">Client</option>
-                            </select>
+                              onChange={(v) => handleRoleChange(u.id, v)}
+                              options={[
+                                { value: "admin", label: "Admin" },
+                                { value: "staff", label: "Staff" },
+                                { value: "client", label: "Client" },
+                              ]}
+                              className="min-w-[8rem]"
+                            />
                           )}
                         </td>
                         <td className="px-5 py-4">
@@ -1021,18 +1015,16 @@ export function SettingsView({
               <div className="flex items-center justify-between border-t border-hairline bg-surface/30 px-5 py-4 text-xs font-semibold text-body">
                 <div className="flex items-center gap-2">
                   <span>Rows per page</span>
-                  <select
-                    value={rowsPerPage}
-                    onChange={(e) => {
-                      setRowsPerPage(Number(e.target.value));
+                  <Select
+                    aria-label="Rows per page"
+                    value={String(rowsPerPage)}
+                    onChange={(v) => {
+                      setRowsPerPage(Number(v));
                       setCurrentPage(1);
                     }}
-                    className="rounded border border-hairline bg-paper px-2 py-1 text-xs font-medium text-ink outline-none"
-                  >
-                    <option value={10}>10</option>
-                    <option value={20}>20</option>
-                    <option value={50}>50</option>
-                  </select>
+                    options={[10, 20, 50].map((n) => ({ value: String(n), label: String(n) }))}
+                    className="w-20"
+                  />
                 </div>
                 
                 <div className="flex items-center gap-4">
