@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
+import { z } from "zod";
 import { db } from "@/lib/db/client";
 import {
   client,
@@ -319,4 +320,48 @@ export async function inviteClientContactAction(input: { clientId: string; email
     console.error("[clients] contact invite failed:", err);
     return { ok: false, error: "The invitation was not sent. Try again." };
   }
+}
+
+/* ------------------------------- CSV import -------------------------------- */
+
+const importRow = z.object({
+  name: z.string().trim().max(200).optional().default(""),
+  company: z.string().trim().max(200).optional().default(""),
+  email: z.string().trim().max(254).optional().default(""),
+  phone: z.string().trim().max(60).optional().default(""),
+  address: z.string().trim().max(500).optional().default(""),
+  taxId: z.string().trim().max(100).optional().default(""),
+});
+
+/**
+ * Import clients from a CSV (parsed in the browser). Rows without a name or
+ * company, with a bad email, or whose email already exists are skipped and
+ * reported. Audit-logged.
+ */
+export async function importClientsAction(rows: unknown[]): Promise<{ ok: boolean; created?: number; skipped?: { line: number; reason: string }[]; error?: string }> {
+  const me = await getSessionUser();
+  if (!me || !(await isAdmin())) return { ok: false, error: "Only Admin can import clients." };
+  if (!Array.isArray(rows) || rows.length === 0) return { ok: false, error: "The file has no rows." };
+  if (rows.length > 500) return { ok: false, error: "Import up to 500 clients at a time." };
+
+  const existing = await db.select({ email: client.email }).from(client).where(isNull(client.deletedAt));
+  const seen = new Set(existing.map((e) => (e.email ?? "").toLowerCase()).filter(Boolean));
+  const skipped: { line: number; reason: string }[] = [];
+  const toInsert: ReturnType<typeof values>[] = [];
+  rows.forEach((raw, i) => {
+    const line = i + 2; // header is line 1
+    const r = importRow.safeParse(raw);
+    if (!r.success) return void skipped.push({ line, reason: "A value is too long." });
+    const v = r.data;
+    if (!v.name && !v.company) return void skipped.push({ line, reason: "No name or company." });
+    const email = v.email.toLowerCase();
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return void skipped.push({ line, reason: `"${v.email}" is not an email address.` });
+    if (email && seen.has(email)) return void skipped.push({ line, reason: `${v.email} is already a client.` });
+    if (email) seen.add(email);
+    toInsert.push(values({ ...v, email }));
+  });
+  if (toInsert.length) await db.insert(client).values(toInsert);
+  await recordAudit({ action: "client.imported", entity: "client", actorId: me.id, actorName: me.name || me.email, meta: { count: toInsert.length, skipped: skipped.length } });
+  revalidatePath("/admin/clients");
+  return { ok: true, created: toInsert.length, skipped };
 }

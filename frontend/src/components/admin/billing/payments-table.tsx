@@ -48,6 +48,23 @@ export function PaymentsTable({ lines, openInvoices }: { lines: PaymentLine[]; o
     }
   };
   const proof = lines.find((l) => l.id === proofId) ?? null;
+  const [exportOpen, setExportOpen] = useState(false);
+  // Months that have confirmed money, newest first, for the accounts export.
+  const months = useMemo(() => [...new Set(lines.filter((l) => l.status === "success").map((l) => l.at.slice(0, 7)))].sort().reverse(), [lines]);
+  const [exportMonth, setExportMonth] = useState("all");
+  const exportForAccounts = () => {
+    const rows = lines.filter((l) => l.status === "success" && (exportMonth === "all" || l.at.startsWith(exportMonth)));
+    downloadCsv(
+      `payments-for-accounts-${exportMonth}`,
+      ["Date", "Reference", "Client", "Invoice", "Request", "Method", "Amount", "Currency", "Debit account", "Credit account", "Confirmed on"],
+      rows.map((p) => [
+        p.at.slice(0, 10), p.reference, p.payer, p.invoiceNumber ?? "", p.requestNumber ?? "", methodOf(p), p.amount, p.currency,
+        // A WHT credit note settles the invoice without cash: it is a tax asset, not bank.
+        p.channel === "wht_credit" ? "WHT receivable" : "Bank", "Trade receivables", p.confirmedAt?.slice(0, 10) ?? p.at.slice(0, 10),
+      ]),
+    );
+    setExportOpen(false);
+  };
   const pending = lines.filter((l) => l.status === "proof");
 
   const columns = useMemo<ColumnDef<PaymentLine, unknown>[]>(
@@ -135,9 +152,14 @@ export function PaymentsTable({ lines, openInvoices }: { lines: PaymentLine[]; o
         bulkActions={bulk}
         onRowClick={(p) => (p.status === "proof" || p.hasProof ? setProofId(p.id) : router.push(`/admin/billing/invoices/${p.invoiceId}`))}
         toolbarEnd={
-          <Button size="sm" onClick={() => setRecordOpen(true)}>
-            <Plus className="size-4" /> Record a payment
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setExportOpen(true)}>
+              <Download className="size-4" /> Export for accounts
+            </Button>
+            <Button size="sm" onClick={() => setRecordOpen(true)}>
+              <Plus className="size-4" /> Record a payment
+            </Button>
+          </div>
         }
         emptyState={
           <EmptyState
@@ -150,6 +172,29 @@ export function PaymentsTable({ lines, openInvoices }: { lines: PaymentLine[]; o
       />
       <ProofSheet line={proof} onClose={closeProof} onNext={() => setProofId(pending.find((p) => p.id !== proofId)?.id ?? null)} hasNext={pending.filter((p) => p.id !== proofId).length > 0} />
       <RecordSheet open={recordOpen} onClose={() => setRecordOpen(false)} invoices={openInvoices} />
+      <Sheet
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        title="Export for accounts"
+        description="Confirmed payments only, one row each, with the accounts the bookkeeper posts them to."
+        size="sm"
+        footer={
+          <>
+            <Button onClick={() => setExportOpen(false)}>Cancel</Button>
+            <Button variant="primary" onClick={exportForAccounts}>
+              <Download className="size-4" /> Download CSV
+            </Button>
+          </>
+        }
+      >
+        <span className="mb-1 block text-xs font-medium text-body">Period</span>
+        <Select
+          aria-label="Period"
+          value={exportMonth}
+          onChange={setExportMonth}
+          options={[{ value: "all", label: "All confirmed payments" }, ...months.map((m) => ({ value: m, label: new Date(`${m}-01T12:00:00`).toLocaleDateString("en-GB", { month: "long", year: "numeric" }) }))]}
+        />
+      </Sheet>
     </>
   );
 }
