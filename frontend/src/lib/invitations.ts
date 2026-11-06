@@ -27,12 +27,8 @@ import { FIRM_PENDING_ERROR, supersedePlan } from "@/lib/invitation-rules";
 export const INVITE_TTL_DAYS = 7;
 export const INVITE_PASSWORD_MIN = 10;
 export type InviteRole = "admin" | "staff" | "client";
-export type ColleagueAccess = "billing" | "reviewer" | "viewer";
-export const COLLEAGUE_ACCESS: Record<ColleagueAccess, { label: string; hint: string }> = {
-  billing: { label: "Billing contact", hint: "Gets invoices and receipts, and can pay." },
-  reviewer: { label: "Reviewer", hint: "Can approve drafts and answer asks." },
-  viewer: { label: "Can view", hint: "Sees requests, files and invoices." },
-};
+import type { ColleagueAccess } from "./invitations-shared";
+export { COLLEAGUE_ACCESS, type ColleagueAccess } from "./invitations-shared";
 export type InviteState = "pending" | "redeemed" | "revoked" | "expired";
 export type InvitationRow = typeof invitation.$inferSelect;
 

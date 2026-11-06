@@ -298,3 +298,25 @@ export async function eraseClientAiDataAction(clientId: string): Promise<Result>
   }
 }
 
+
+/* ----------------------------- Client contacts ----------------------------- */
+
+/** Invite a colleague of this client to the portal, with an access level. Audit-logged. */
+export async function inviteClientContactAction(input: { clientId: string; email: string; access: string }): Promise<Result> {
+  const me = await getSessionUser();
+  if (!me || !(await isAdmin())) return { ok: false, error: "Only Admin can invite client contacts." };
+  const { createInvitation, sendInvitationEmail, InvitationError } = await import("@/lib/invitations");
+  const access = (["billing", "reviewer", "viewer"] as const).find((a) => a === input.access);
+  if (!access) return { ok: false, error: "Choose what they can do." };
+  try {
+    const { invitation, token } = await createInvitation({ email: input.email, role: "client", clientId: input.clientId, access, invitedBy: me.id });
+    await sendInvitationEmail(invitation, token, me.name || me.email).catch((e) => console.error("[clients] contact invite email failed:", e));
+    await recordAudit({ action: "invitation.created", entity: "invitation", entityId: invitation.id, actorId: me.id, actorName: me.name || me.email, meta: { email: invitation.email, role: "client", access, clientId: input.clientId } });
+    revalidatePath(`/admin/clients/${input.clientId}`);
+    return { ok: true, id: input.clientId };
+  } catch (err) {
+    if (err instanceof InvitationError) return { ok: false, error: err.message };
+    console.error("[clients] contact invite failed:", err);
+    return { ok: false, error: "The invitation was not sent. Try again." };
+  }
+}

@@ -1,22 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import {
-  ArrowLeft,
-  BadgeCheck,
-  Briefcase,
-  CalendarClock,
-  ChevronRight,
-  Clock,
-  FileText,
-  Hash,
-  LifeBuoy,
-  Mail,
-  MapPin,
-  Phone,
-  Plus,
-  Table2,
-  Wallet,
-} from "lucide-react";
+import { Briefcase, CalendarClock, FileText, LifeBuoy, Mail, Phone, Plus, Table2 } from "lucide-react";
 import { getClient, findDuplicateClients } from "@/lib/db/queries/clients";
 import { getUserByIdOrEmail, portalStatusOf, type PortalStatus } from "@/lib/db/queries/users";
 import { listClientInvoices } from "@/lib/db/queries/invoices";
@@ -31,13 +15,13 @@ import { listClientNotes } from "@/lib/db/queries/notes";
 import { clientActivity } from "@/lib/db/queries/notifications";
 import { EditClientButton } from "@/components/admin/client/edit-client-button";
 import { Badge, invoiceStatusTone, type BadgeTone } from "@/components/admin/ui/badge";
-import { StatCard } from "@/components/admin/ui/stat-card";
+import { Kpi, PageHead, Panel } from "@/components/admin/ui/surface";
+import { StatusChip } from "@/components/kit";
 import { QueryTabs } from "@/components/admin/ui/tabs";
 import { ERASURE_HOLD_DAYS } from "@/lib/privacy/erase";
 import { EmptyState } from "@/components/admin/ui/empty-state";
 import { GroupedBars } from "@/components/charts";
 import { Avatar } from "@/components/ui/avatar";
-import { ActiveRequestCard } from "@/components/requests/active-request-card";
 import {
   requestStatusTone,
   STATUS_LABELS,
@@ -51,17 +35,25 @@ import { ClientQuickActions } from "./client-quick-actions";
 import { DocDownloadButton } from "./doc-download-button";
 import { ActivityList } from "./activity-list";
 import { BillingExport } from "./billing-export";
+import { InviteContactButton } from "./invite-contact-button";
+import { COLLEAGUE_ACCESS } from "@/lib/invitations-shared";
 
 import { requireArea } from "@/lib/server-user";
 import { PrivacyPanel } from "@/components/admin/client/privacy-panel";
 import { AiModeTag } from "@/components/admin/client/client-table";
 import { db } from "@/lib/db/client";
-import { payment as paymentTable, serviceRequest as requestTable, serviceRequestDocument as docTable } from "@/lib/db/schema";
+import {
+  clientMember as memberTable,
+  payment as paymentTable,
+  serviceRequest as requestTable,
+  serviceRequestDocument as docTable,
+  user as userTable,
+} from "@/lib/db/schema";
 import { eq as eqOp, sql as sqlOp } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
-const TABS = ["overview", "services", "billing", "documents", "support", "activity", "privacy"] as const;
+const TABS = ["overview", "requests", "billing", "files", "notes", "support", "activity", "privacy"] as const;
 type Tab = (typeof TABS)[number];
 
 const PORTAL_BADGE: Record<PortalStatus, { label: string; tone: BadgeTone }> = {
@@ -98,311 +90,370 @@ export default async function ClientHubPage({
   await requireArea("clients", "/admin/clients");
   const { id } = await params;
   const tabParam = (await searchParams).tab;
-  const tab: Tab = TABS.includes(tabParam as Tab) ? (tabParam as Tab) : "overview";
+  // Old tab names still open the right tab (links in emails and history).
+  const OLD_TABS: Record<string, Tab> = { services: "requests", documents: "files" };
+  const wanted = (tabParam && OLD_TABS[tabParam]) || tabParam;
+  const tab: Tab = TABS.includes(wanted as Tab) ? (wanted as Tab) : "overview";
 
   const clientRow = await getClient(id);
   if (!clientRow) notFound();
 
-  const [portalUser, invoices, requests, tickets, duplicates] = await Promise.all([
+  const [portalUser, invoices, requests, tickets, duplicates, members] = await Promise.all([
     getUserByIdOrEmail(clientRow.userId, clientRow.email),
     listClientInvoices(id),
     listClientRequests(id),
     listClientTickets(id),
     findDuplicateClients(clientRow.email, id),
+    db
+      .select({ id: userTable.id, name: userTable.name, email: userTable.email, access: memberTable.access })
+      .from(memberTable)
+      .innerJoin(userTable, eqOp(userTable.id, memberTable.userId))
+      .where(eqOp(memberTable.clientId, id)),
   ]);
 
-  const portal = PORTAL_BADGE[portalStatusOf(portalUser)];
-  const billed = invoices.filter((i) => i.kind === "invoice").reduce((s, i) => s + num(i.total), 0);
-  const paid = invoices
-    .filter((i) => i.kind === "invoice")
-    .reduce((s, i) => s + num(i.amountPaid), 0);
-  const outstanding = round2(billed - paid);
-  const overdueAmount = round2(
-    invoices
-      .filter((i) => i.kind === "invoice" && i.status === "overdue")
-      .reduce((s, i) => s + num(i.total) - num(i.amountPaid), 0)
-  );
+  const portalState = portalStatusOf(portalUser);
+  const portal = PORTAL_BADGE[portalState];
+  const yearAgo = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
+  const realInvoices = invoices.filter((i) => i.kind === "invoice" && i.status !== "void" && i.status !== "draft");
+  const lastYear = realInvoices.filter((i) => (i.issueDate || "") >= yearAgo);
+  const billed12 = round2(lastYear.reduce((s, i) => s + num(i.total), 0));
+  const unpaid = realInvoices.filter((i) => num(i.total) - num(i.amountPaid) > 0.005);
+  const outstanding = round2(unpaid.reduce((s, i) => s + num(i.total) - num(i.amountPaid), 0));
+  const overdueCount = unpaid.filter((i) => i.status === "overdue").length;
   const activeRequests = requests.filter(
     (r) => !TERMINAL_STATUSES.includes(r.status as (typeof TERMINAL_STATUSES)[number])
   );
   const openTickets = tickets.filter((t) => t.status === "open" || t.status === "pending");
   const displayName = clientRow.company || clientRow.name;
+  const firstName = (clientRow.name || displayName).split(" ")[0];
 
-  const detail = [
-    clientRow.email && { icon: Mail, value: clientRow.email, href: `mailto:${clientRow.email}` },
-    clientRow.phone && { icon: Phone, value: clientRow.phone, href: `tel:${clientRow.phone}` },
-    clientRow.address && { icon: MapPin, value: clientRow.address },
-    clientRow.taxId && { icon: Hash, value: `Tax ID: ${clientRow.taxId}` },
-  ].filter(Boolean) as { icon: typeof Mail; value: string; href?: string }[];
+  // One line of facts under the name, as in the design: tax ID · address · client since.
+  const facts = [
+    clientRow.taxId ? `TIN/RC ${clientRow.taxId}` : null,
+    clientRow.address,
+    `client since ${formatDate(clientRow.createdAt)}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const owner: Contact[] = portalUser
+    ? [{ key: portalUser.id, name: portalUser.name || clientRow.name, line: `${portalUser.email} · owner`, email: portalUser.email }]
+    : clientRow.email
+      ? [{ key: "profile", name: clientRow.name, line: `${clientRow.email} · ${portal.label.toLowerCase()}`, email: clientRow.email }]
+      : [];
+  const contacts: Contact[] = [
+    ...owner,
+    ...members
+      .filter((m) => m.id !== portalUser?.id)
+      .map((m) => ({
+        key: m.id,
+        name: m.name || m.email,
+        line: `${m.email} · ${(COLLEAGUE_ACCESS[m.access as keyof typeof COLLEAGUE_ACCESS]?.label ?? m.access).toLowerCase()}`,
+        email: m.email,
+      })),
+  ];
 
   return (
-    <div className="space-y-6">
-      <Link
-        href="/admin/clients"
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-body hover:text-ink"
-      >
-        <ArrowLeft className="size-4" /> Clients
-      </Link>
-
-      {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-4">
-          <Avatar name={displayName} email={clientRow.email} size={14} />
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="font-display text-[1.6rem] font-bold leading-tight tracking-tight text-ink">{displayName}</h1>
-              <AiModeTag mode={clientRow.aiMode} />
-              <Badge tone={portal.tone}>{portal.label}</Badge>
-              {overdueAmount > 0 && (
-                <Badge tone="danger">{formatMoney(overdueAmount)} overdue</Badge>
-              )}
-              {duplicates.length > 0 && <Badge tone="warning">possible duplicate</Badge>}
-              {clientRow.erasureRequestedAt && (
-                <Badge tone="danger">
-                  Erasure on {formatDate(new Date(clientRow.erasureRequestedAt.getTime() + ERASURE_HOLD_DAYS * 86_400_000))}
-                </Badge>
-              )}
-            </div>
-            <p className="mt-0.5 text-sm text-body">
-              {clientRow.company && clientRow.name !== clientRow.company ? `${clientRow.name} · ` : ""}
-              Client since {formatDate(clientRow.createdAt)}
-            </p>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href={`/admin/billing/invoices/new?clientId=${id}`}
-            className="inline-flex items-center gap-1.5 rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover keep-brand"
-          >
-            <Plus className="size-4" /> New invoice
-          </Link>
-          {clientRow.email && (
-            <a
-              href={`mailto:${clientRow.email}`}
-              className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-4 py-2 text-sm font-semibold text-body transition-colors hover:bg-surface"
+    <div>
+      <PageHead
+        title={displayName}
+        lede={<span className="text-[14px]">{facts}</span>}
+        meta={
+          <>
+            <AiModeTag mode={clientRow.aiMode} />
+            {portalState !== "active" && <Badge tone={portal.tone}>{portal.label}</Badge>}
+            {duplicates.length > 0 && <Badge tone="warning">possible duplicate</Badge>}
+            {clientRow.erasureRequestedAt && (
+              <Badge tone="danger">
+                Erasure on {formatDate(new Date(clientRow.erasureRequestedAt.getTime() + ERASURE_HOLD_DAYS * 86_400_000))}
+              </Badge>
+            )}
+          </>
+        }
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Link
+              href={`/admin/billing/invoices/new?clientId=${id}`}
+              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-ctl border border-hairline bg-paper px-3.5 text-sm font-medium text-ink outline-none transition-colors hover:bg-surface focus-visible:ring-2 focus-visible:ring-accent/40"
             >
-              <Mail className="size-4" /> Email
-            </a>
-          )}
-          <EditClientButton client={clientRow} />
-          <ClientQuickActions
-            clientId={id}
-            clientName={displayName}
-            canInvite={portalStatusOf(portalUser) === "no-account" && Boolean(clientRow.email)}
-            duplicates={duplicates.map((d) => ({
-              id: d.id,
-              name: d.name,
-              company: d.company,
-              hasAccount: Boolean(d.userId),
-              createdAt: (d.createdAt as Date).toISOString(),
-            }))}
-            aiConfigured={Boolean(process.env.LITCHAI_API_URL)}
-          />
-        </div>
-      </div>
-
-      {/* KPIs */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-        <StatCard label="Total billed" value={formatMoney(billed)} icon={Wallet} />
-        <StatCard label="Paid" value={formatMoney(paid)} icon={BadgeCheck} />
-        <StatCard label="Outstanding" value={formatMoney(outstanding)} icon={Clock} />
-        <StatCard label="Active services" value={activeRequests.length} icon={Briefcase} />
-        <StatCard
-          label="Open tickets"
-          value={openTickets.length}
-          icon={LifeBuoy}
-          hint={`${tickets.length} all time`}
-        />
-      </div>
+              <Plus className="size-4" /> New invoice
+            </Link>
+            <EditClientButton client={clientRow} />
+            <ClientQuickActions
+              clientId={id}
+              clientName={displayName}
+              canInvite={portalState === "no-account" && Boolean(clientRow.email)}
+              duplicates={duplicates.map((d) => ({
+                id: d.id,
+                name: d.name,
+                company: d.company,
+                hasAccount: Boolean(d.userId),
+                createdAt: (d.createdAt as Date).toISOString(),
+              }))}
+              aiConfigured={Boolean(process.env.LITCHAI_API_URL)}
+            />
+            {clientRow.email && (
+              <a
+                href={`mailto:${clientRow.email}`}
+                className="keep-brand inline-flex min-h-[40px] items-center gap-1.5 rounded-ctl bg-brand px-3.5 text-sm font-semibold text-white outline-none transition-colors hover:bg-brand-hover focus-visible:ring-2 focus-visible:ring-accent/40"
+              >
+                <Mail className="size-4" /> Email {firstName}
+              </a>
+            )}
+          </div>
+        }
+      />
 
       <QueryTabs
         defaultValue="overview"
         tabs={[
           { label: "Overview", value: "overview" },
-          { label: "Services", value: "services", count: requests.length },
+          { label: "Requests", value: "requests", count: requests.length },
           { label: "Billing", value: "billing", count: invoices.length },
-          { label: "Documents", value: "documents" },
-          { label: "Support", value: "support", count: openTickets.length },
-          { label: "Activity", value: "activity" },
+          { label: "Files", value: "files" },
+          { label: "Notes", value: "notes" },
           { label: "Privacy and data", value: "privacy" },
         ]}
       />
 
-      {tab === "overview" && (
-        <OverviewTab
-          clientId={id}
-          email={clientRow.email}
-          detail={detail}
-          notesText={clientRow.notes}
-          activeRequests={activeRequests}
-        />
-      )}
-      {tab === "services" && (
-        <ServicesTab clientId={id} email={clientRow.email} requests={requests} />
-      )}
-      {tab === "billing" && <BillingTab clientId={id} invoices={invoices} />}
-      {tab === "documents" && <DocumentsTab clientId={id} />}
-      {tab === "support" && <SupportTab tickets={tickets} />}
-      {tab === "activity" && <ActivityTab clientId={id} />}
-      {tab === "privacy" && (
-        <PrivacyTab
-          clientId={id}
-          name={displayName}
-          aiMode={clientRow.aiMode}
-          reason={clientRow.aiModeReason}
-          setBy={clientRow.aiModeSetBy}
-          setAt={clientRow.aiModeSetAt ? clientRow.aiModeSetAt.toISOString() : null}
-          erasureDueAt={clientRow.erasureRequestedAt ? new Date(clientRow.erasureRequestedAt.getTime() + ERASURE_HOLD_DAYS * 86_400_000).toISOString() : null}
-          requests={requests.length}
-          tickets={tickets.length}
-          invoices={invoices.length}
-        />
-      )}
+      <div className="mt-5 space-y-5">
+        {tab === "overview" && (
+          <OverviewTab
+            clientId={id}
+            clientName={displayName}
+            email={clientRow.email}
+            phone={clientRow.phone}
+            notesText={clientRow.notes}
+            requests={requests}
+            openTickets={openTickets}
+            contacts={contacts}
+            kpis={{
+              billed12,
+              billedCount: lastYear.length,
+              outstanding,
+              unpaidCount: unpaid.length,
+              overdueCount,
+              open: activeRequests.length,
+              openFirst: activeRequests[0]?.serviceName ?? null,
+            }}
+          />
+        )}
+        {tab === "requests" && <ServicesTab clientId={id} email={clientRow.email} requests={requests} />}
+        {tab === "billing" && <BillingTab clientId={id} invoices={invoices} />}
+        {tab === "files" && <DocumentsTab clientId={id} />}
+        {tab === "notes" && <NotesTab clientId={id} />}
+        {tab === "support" && <SupportTab tickets={tickets} />}
+        {tab === "activity" && <ActivityTab clientId={id} />}
+        {tab === "privacy" && (
+          <PrivacyTab
+            clientId={id}
+            name={displayName}
+            aiMode={clientRow.aiMode}
+            reason={clientRow.aiModeReason}
+            setBy={clientRow.aiModeSetBy}
+            setAt={clientRow.aiModeSetAt ? clientRow.aiModeSetAt.toISOString() : null}
+            erasureDueAt={clientRow.erasureRequestedAt ? new Date(clientRow.erasureRequestedAt.getTime() + ERASURE_HOLD_DAYS * 86_400_000).toISOString() : null}
+            requests={requests.length}
+            tickets={tickets.length}
+            invoices={invoices.length}
+          />
+        )}
+      </div>
     </div>
   );
 }
+
+type Contact = { key: string; name: string; line: string; email: string | null };
+type ReqRow = Awaited<ReturnType<typeof listClientRequests>>[number];
+const isClosed = (r: ReqRow) => TERMINAL_STATUSES.includes(r.status as (typeof TERMINAL_STATUSES)[number]);
 
 /* --------------------------------- Overview -------------------------------- */
 
 async function OverviewTab({
   clientId,
+  clientName,
   email,
-  detail,
+  phone,
   notesText,
-  activeRequests,
+  requests,
+  openTickets,
+  contacts,
+  kpis,
 }: {
   clientId: string;
+  clientName: string;
   email: string | null;
-  detail: { icon: typeof Mail; value: string; href?: string }[];
+  phone: string | null;
   notesText: string | null;
-  activeRequests: Awaited<ReturnType<typeof listClientRequests>>;
+  requests: ReqRow[];
+  openTickets: Awaited<ReturnType<typeof listClientTickets>>;
+  contacts: Contact[];
+  kpis: { billed12: number; billedCount: number; outstanding: number; unpaidCount: number; overdueCount: number; open: number; openFirst: string | null };
 }) {
   const [consultations, notes, activity] = await Promise.all([
     listClientConsultations(clientId, email),
     listClientNotes(clientId),
-    clientActivity(clientId, 8),
+    clientActivity(clientId, 6),
   ]);
-  const upcoming = consultations.filter(
-    (c) => c.status !== "cancelled" && c.startsAt && (c.startsAt as Date) > new Date()
-  );
+  const upcoming = consultations.filter((c) => c.status !== "cancelled" && c.startsAt && (c.startsAt as Date) > new Date());
+  // Open work first, then the most recent closed jobs.
+  const shown = [...requests].sort((a, b) => Number(isClosed(a)) - Number(isClosed(b))).slice(0, 6);
+  const latestNotes = notes.slice(0, 2);
+  const linkCls = "text-sm font-medium text-accent hover:underline";
 
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
-      <div className="space-y-6 lg:col-span-2">
-        {activeRequests.length > 0 ? (
-          <div className="grid gap-4 md:grid-cols-2">
-            {activeRequests.slice(0, 4).map((req) => (
-              <ActiveRequestCard key={req.id} req={req} hrefBase="/admin/requests" />
-            ))}
-          </div>
-        ) : (
-          <div className="rounded-card border border-hairline bg-paper p-8">
-            <EmptyState
-              icon={Briefcase}
-              title="No active services"
-              description="When this client requests a service (or you invoice them), progress shows up here."
-            />
-          </div>
-        )}
-
-        {upcoming.length > 0 && (
-          <div className="rounded-card border border-hairline bg-paper">
-            <div className="border-b border-hairline px-5 py-4">
-              <h3 className="font-display text-sm font-bold text-ink">Upcoming consultations</h3>
-            </div>
-            <div className="divide-y divide-hairline">
-              {upcoming.map((c) => (
-                <div key={c.id} className="flex items-center justify-between gap-3 px-5 py-3">
-                  <div className="flex items-center gap-3">
-                    <span className="grid size-9 place-items-center rounded-full bg-brand-tint text-brand">
-                      <CalendarClock className="size-4" />
-                    </span>
-                    <div>
-                      <p className="text-sm font-semibold text-ink">
-                        {c.startsAt ? formatDateTime(c.startsAt) : "Unscheduled"}
-                      </p>
-                      <p className="text-xs text-muted">{c.name || c.email}</p>
-                    </div>
-                  </div>
-                  {c.meetingUrl && (
-                    <a
-                      href={c.meetingUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs font-semibold text-brand hover:underline"
-                    >
-                      Join call
-                    </a>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Recent activity preview */}
-        <div className="rounded-card border border-hairline bg-paper">
-          <div className="flex items-center justify-between border-b border-hairline px-5 py-4">
-            <h3 className="font-display text-sm font-bold text-ink">Recent activity</h3>
-            <Link href="?tab=activity" className="text-sm font-medium text-brand hover:underline">
-              View all
-            </Link>
-          </div>
-          {activity.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-muted">Nothing yet.</p>
-          ) : (
-            <div className="divide-y divide-hairline">
-              {activity.map((a) => (
-                <Link
-                  key={a.id}
-                  href={a.href}
-                  className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-surface"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-ink">{a.title}</p>
-                    <p className="truncate text-xs text-muted">{a.description}</p>
-                  </div>
-                  <span className="flex shrink-0 items-center gap-2 text-xs text-muted">
-                    {formatDateTime(a.at)} <ChevronRight className="size-4" />
-                  </span>
-                </Link>
-              ))}
-            </div>
-          )}
+    <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="min-w-0 space-y-5">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Kpi label="Billed, 12 months" value={formatMoney(kpis.billed12)} note={`${kpis.billedCount} ${kpis.billedCount === 1 ? "invoice" : "invoices"}`} />
+          <Kpi
+            label="Owes"
+            value={formatMoney(kpis.outstanding)}
+            note={kpis.outstanding <= 0 ? "All paid" : kpis.overdueCount ? `${kpis.overdueCount} overdue` : `${kpis.unpaidCount} unpaid`}
+            noteTone={kpis.outstanding <= 0 ? "good" : kpis.overdueCount ? "bad" : "muted"}
+            href={kpis.outstanding > 0 ? "?tab=billing" : undefined}
+          />
+          <Kpi label="Open" value={String(kpis.open)} note={kpis.openFirst ?? "No open requests"} />
         </div>
-      </div>
 
-      {/* Rail */}
-      <div className="space-y-6">
-        <NotesRail clientId={clientId} notes={notes} />
-        <div className="rounded-card border border-hairline bg-paper p-5">
-          <h3 className="mb-3 font-display text-sm font-bold text-ink">Contact</h3>
-          {detail.length === 0 ? (
-            <p className="text-sm text-body">No contact details yet — use Edit to add them.</p>
+        <Panel
+          title="Requests"
+          action={requests.length > shown.length ? <Link href="?tab=requests" className={linkCls}>All {requests.length}</Link> : undefined}
+          bodyClassName="p-0"
+        >
+          {shown.length === 0 ? (
+            <div className="p-6">
+              <EmptyState icon={Briefcase} title="No requests yet" description="Requests this client sends from the portal land here." />
+            </div>
           ) : (
-            <ul className="space-y-3">
-              {detail.map((d, i) => (
-                <li key={i} className="flex items-start gap-3 text-sm">
-                  <d.icon className="mt-0.5 size-4 shrink-0 text-muted" />
-                  {d.href ? (
-                    <a href={d.href} className="break-all text-ink hover:text-brand">
-                      {d.value}
-                    </a>
-                  ) : (
-                    <span className="text-ink">{d.value}</span>
-                  )}
+            <ul className="divide-y divide-hairline">
+              {shown.map((r) => (
+                <li key={r.id}>
+                  <Link href={`/admin/requests/${r.id}`} className="flex min-h-[56px] items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-surface sm:px-5">
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-semibold text-ink">{r.serviceName}</span>
+                      <span className="block truncate text-xs text-muted">
+                        {r.number} · {isClosed(r) ? `closed ${formatDate(r.updatedAt)}` : `opened ${formatDate(r.createdAt)}`}
+                      </span>
+                    </span>
+                    <StatusChip domain="request" status={r.status} size="sm" />
+                  </Link>
                 </li>
               ))}
             </ul>
           )}
-          {notesText && (
-            <div className="mt-4 border-t border-hairline pt-3">
-              <p className="text-xs font-medium text-body">Profile notes</p>
-              <p className="mt-1 whitespace-pre-line text-sm text-ink">{notesText}</p>
+        </Panel>
+
+        <Panel title="Activity" action={activity.length ? <Link href="?tab=activity" className={linkCls}>All activity</Link> : undefined} bodyClassName="p-0">
+          {activity.length === 0 ? (
+            <p className="px-5 py-6 text-sm text-muted">Nothing yet.</p>
+          ) : (
+            <ul className="divide-y divide-hairline">
+              {activity.map((a) => (
+                <li key={a.id}>
+                  <Link href={a.href} className="flex min-h-[52px] items-center justify-between gap-3 px-4 py-3 transition-colors hover:bg-surface sm:px-5">
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm text-ink">{a.title}</span>
+                      <span className="block truncate text-xs text-muted">{a.description}</span>
+                    </span>
+                    <span className="shrink-0 text-xs text-muted">{formatDateTime(a.at)}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+
+        {upcoming.length > 0 && (
+          <Panel title="Upcoming consultations" bodyClassName="p-0">
+            <ul className="divide-y divide-hairline">
+              {upcoming.map((c) => (
+                <li key={c.id} className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
+                  <span className="flex items-center gap-3">
+                    <CalendarClock className="size-4 text-muted" />
+                    <span className="text-sm font-semibold text-ink">{c.startsAt ? formatDateTime(c.startsAt) : "Unscheduled"}</span>
+                  </span>
+                  {c.meetingUrl && (
+                    <a href={c.meetingUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-accent hover:underline">
+                      Join call
+                    </a>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        )}
+      </div>
+
+      <div className="min-w-0 space-y-5">
+        <Panel title="Contacts">
+          {contacts.length === 0 ? (
+            <p className="text-sm text-body">No contact yet. Use Edit to add an email.</p>
+          ) : (
+            <ul className="space-y-3">
+              {contacts.map((c) => (
+                <li key={c.key} className="flex items-center gap-3">
+                  <Avatar name={c.name} email={c.email} size={9} />
+                  <span className="min-w-0">
+                    <span className="block truncate text-[13.5px] font-semibold text-ink">{c.name}</span>
+                    <span className="block truncate text-xs text-muted">{c.line}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {phone && (
+            <a href={`tel:${phone}`} className="mt-3 flex min-h-[32px] items-center gap-2 text-sm text-body hover:text-ink">
+              <Phone className="size-4 text-muted" /> {phone}
+            </a>
+          )}
+          <div className="mt-4">
+            <InviteContactButton clientId={clientId} clientName={clientName} />
+          </div>
+        </Panel>
+
+        <Panel title="Notes" action={<Link href="?tab=notes" className={linkCls}>{notes.length ? `All ${notes.length}` : "Add"}</Link>}>
+          {latestNotes.length === 0 && !notesText ? (
+            <p className="text-sm text-body">No notes yet. Notes are for the team only.</p>
+          ) : (
+            <div className="space-y-3">
+              {notesText && <p className="whitespace-pre-line text-[13px] text-body">{notesText}</p>}
+              {latestNotes.map((n) => (
+                <div key={n.id}>
+                  <p className="whitespace-pre-line text-[13px] text-body">{n.body}</p>
+                  <p className="mt-1 text-xs text-muted">{formatDate(n.createdAt)} · team only</p>
+                </div>
+              ))}
             </div>
           )}
-        </div>
+        </Panel>
+
+        {openTickets.length > 0 && (
+          <Panel title="Open support" action={<Link href="?tab=support" className={linkCls}>All</Link>} bodyClassName="p-0">
+            <ul className="divide-y divide-hairline">
+              {openTickets.slice(0, 3).map((t) => (
+                <li key={t.id}>
+                  <Link href="/admin/help-desk" className="flex min-h-[48px] items-center gap-2 px-4 py-2.5 text-sm hover:bg-surface sm:px-5">
+                    <LifeBuoy className="size-4 shrink-0 text-muted" />
+                    <span className="truncate text-ink">{t.subject}</span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        )}
       </div>
+    </div>
+  );
+}
+
+/* ---------------------------------- Notes ---------------------------------- */
+
+async function NotesTab({ clientId }: { clientId: string }) {
+  const notes = await listClientNotes(clientId);
+  return (
+    <div className="max-w-2xl">
+      <NotesRail clientId={clientId} notes={notes} />
     </div>
   );
 }
