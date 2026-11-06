@@ -21,6 +21,7 @@ import type { TeamMember } from "@/app/admin/_lib/requests-data";
 import { AssignSheet } from "./assign-sheet";
 import { MoveSheet } from "./move-sheet";
 import { cn } from "@/lib/utils";
+import { REQUEST_DOC_ACCEPT } from "@/lib/upload-types";
 
 const fmt = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
@@ -361,7 +362,7 @@ export function DeliverablesPanel({
         </p>
         <Uploader
           target={{ kind: "request", requestId }}
-          accept=".xlsx,.xls,.csv,.pdf,.docx,.pptx,.png,.jpg,.jpeg,.zip"
+          accept={`${REQUEST_DOC_ACCEPT},.pptx,.zip`}
           submitLabel={stage === "draft" ? "Save draft" : "Publish final and tell the client"}
           hint="XLSX, CSV, PDF, DOCX, PPTX, images or ZIP · up to 25 MB each"
           onSubmit={async (results) => {

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { canWorkOnRequest } from "@/lib/server-user";
 import { presignPrivatePut, r2PrivateConfigured, uploadPrivateObject } from "@/lib/r2";
+import { REQUEST_DOC_FORMATS, allowedRequestDoc } from "@/lib/upload-types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,23 +12,13 @@ export const dynamic = "force-dynamic";
  * Assigned staff and admins only.
  */
 
-const ALLOWED: Record<string, string[]> = {
-  "application/pdf": ["pdf"],
-  "text/csv": ["csv"],
-  "application/vnd.ms-excel": ["xls", "csv"],
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ["xlsx"],
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ["docx"],
-  "image/png": ["png"],
-  "image/jpeg": ["jpg", "jpeg"],
-};
 const MAX = 25 * 1024 * 1024;
 const RELAY_MAX = 4 * 1024 * 1024;
 const slug = (n: string) => n.toLowerCase().replace(/[^a-z0-9.]+/g, "-").replace(/^-+|-+$/g, "").slice(-80);
 const bad = (error: string, status = 400) => NextResponse.json({ ok: false, error }, { status });
 
 function check(name: string, type: string, size: number) {
-  const ext = name.split(".").pop()?.toLowerCase() ?? "";
-  if (!ALLOWED[type]?.includes(ext)) return "Allowed formats: XLSX, XLS, CSV, PDF, DOCX, PNG, JPG.";
+  if (!allowedRequestDoc(name, type)) return `Allowed formats: ${REQUEST_DOC_FORMATS}.`;
   if (size <= 0 || size > MAX) return "Files must be under 25 MB.";
   return null;
 }

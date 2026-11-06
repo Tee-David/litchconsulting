@@ -156,6 +156,14 @@ ALLOWED_MIME = {
     "text/csv",
     "application/vnd.ms-excel",
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    # Workbench formats (made into an xlsx working copy; workbench/formats.py).
+    "application/vnd.ms-excel.sheet.macroEnabled.12",
+    "application/vnd.ms-excel.sheet.macroenabled.12",
+    "application/vnd.oasis.opendocument.spreadsheet",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "text/tab-separated-values",
+    "text/plain",
+    "application/json",
     "image/png",
     "image/jpeg",
 }

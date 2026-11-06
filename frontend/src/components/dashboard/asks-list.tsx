@@ -8,6 +8,7 @@ import { useToast } from "@/components/admin/ui/toaster";
 import { uploadRequestFile } from "@/lib/upload-client";
 import { supplyItemAction } from "@/app/dashboard/requests/flow-actions";
 import { cn } from "@/lib/utils";
+import { REQUEST_DOC_ACCEPT } from "@/lib/upload-types";
 
 export type AskItem = {
   id: string;
@@ -22,7 +23,7 @@ export type AskItem = {
 };
 
 const fmt = (iso: string) => new Date(iso).toLocaleDateString("en-NG", { timeZone: "Africa/Lagos", weekday: "short", day: "numeric", month: "short" });
-const ACCEPT = ".xlsx,.xls,.csv,.pdf,.docx,.png,.jpg,.jpeg";
+const ACCEPT = REQUEST_DOC_ACCEPT;
 
 /** The client's asks: answer or upload in place, or say "I do not have it". */
 export function AsksList({ requestId, items, who }: { requestId: string; items: AskItem[]; who: string }) {

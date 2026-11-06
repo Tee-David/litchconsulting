@@ -4,6 +4,7 @@ import { db } from "@/lib/db/client";
 import { client, serviceRequest, serviceRequestDocument, workbenchConversation } from "@/lib/db/schema";
 import { canWorkOnRequest, getSessionUser } from "@/lib/server-user";
 import { roleOf } from "@/lib/access";
+import { WORKBENCH_SHEET_TYPES } from "@/lib/upload-types";
 
 /**
  * Workbench access. A conversation is reachable when its request is one the
@@ -20,7 +21,8 @@ export async function workbenchAccess(id: string) {
   return { ok: true as const, row, user: u, role: roleOf(u) };
 }
 
-export const SHEET_TYPES = /\.(xlsx|xlsm|csv)$/i;
+/** Opened as an xlsx working copy (or as is for xlsx); see backend workbench/formats.py. */
+export const SHEET_TYPES = WORKBENCH_SHEET_TYPES;
 export const PDF_TYPE = /\.pdf$/i;
 
 export type RequestFile = {

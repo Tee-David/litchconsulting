@@ -79,6 +79,9 @@ class WorkbookRef:
     origin: str
     document_id: int | None = None
     versions: list[dict[str, Any]] = field(default_factory=list)  # {n, sha, at, batch_id, gate}
+    # The original file when this is a converted working copy:
+    # {filename, format, converted, notes}. The original stays untouched.
+    source: dict[str, Any] | None = None
 
     @property
     def current_sha(self) -> str:
@@ -239,7 +242,8 @@ class Workbench:
         return conv
 
     def attach_bytes(self, conv: Conversation, data: bytes, *, name: str, origin: str = "xlsx",
-                     document_id: int | None = None) -> WorkbookRef:
+                     document_id: int | None = None,
+                     source: dict[str, Any] | None = None) -> WorkbookRef:
         wb_id = f"doc-{document_id}" if document_id is not None else f"file-{len(conv.workbooks)+1}"
         if any(w.id == wb_id for w in conv.workbooks):
             return conv.workbook_ref(wb_id)
@@ -247,7 +251,7 @@ class Workbench:
         sha = self.blobs.put(data)
         ref = WorkbookRef(id=wb_id, name=name, origin=origin, document_id=document_id,
                           versions=[{"n": 1, "sha": sha, "at": _now(), "batch_id": None,
-                                     "gate": None}])
+                                     "gate": None}], source=source)
         conv.workbooks.append(ref)
         return ref
 

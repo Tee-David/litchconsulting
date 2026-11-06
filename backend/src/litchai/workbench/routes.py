@@ -120,7 +120,8 @@ def register_workbench_routes(app: FastAPI) -> None:
         return conv
 
     def _attach_document(wb: Workbench, conv: Conversation, document_id: int) -> None:
-        from litchai.workbench.model import from_line_items, load_csv, to_xlsx_bytes
+        from litchai.workbench.formats import FormatError, is_workbench_file, to_working_copy
+        from litchai.workbench.model import from_line_items
 
         repo = wb.repo  # type: ignore[attr-defined]
         doc = repo.get_document(document_id)
@@ -129,21 +130,22 @@ def register_workbench_routes(app: FastAPI) -> None:
         if conv.client_id and doc.client_id != conv.client_id:
             raise HTTPException(409, f"document {document_id} belongs to a different client")
         name = doc.filename
-        low = name.lower()
-        is_sheet = low.endswith((".xlsx", ".xlsm")) or doc.mime == XLSX_MIME
-        is_csv = low.endswith(".csv") or doc.mime == "text/csv"
-        if is_sheet or is_csv:
+        # Spreadsheets, delimited text, JSON, Word and old Excel / ODS become an xlsx
+        # working copy; the original stays untouched in storage and is cited.
+        if is_workbench_file(name, doc.mime):
             try:
                 plain = state.decryptor(state.storage.read(doc.client_id, doc.source_hash))
             except FileNotFoundError as exc:
                 raise HTTPException(410, f"document {document_id} file is gone") from exc
             try:
-                data = plain if is_sheet else to_xlsx_bytes(
-                    load_csv(plain, wb_id=f"doc-{doc.id}", name=name))
-                wb.attach_bytes(conv, data, name=name, origin="xlsx" if is_sheet else "csv",
-                                document_id=doc.id)
+                copy = to_working_copy(plain, name, doc.mime, wb_id=f"doc-{doc.id}",
+                                       document_id=doc.id)
+                wb.attach_bytes(conv, copy.xlsx, name=name, origin=copy.origin,
+                                document_id=doc.id, source=copy.source(name))
             except HTTPException:
                 raise
+            except FormatError as exc:
+                raise HTTPException(422, f"unreadable file: {exc}") from exc
             except Exception as exc:  # a damaged file: tell the user, not a 500
                 raise HTTPException(422, f"unreadable file: {name} could not be opened "
                                     f"({type(exc).__name__})") from exc

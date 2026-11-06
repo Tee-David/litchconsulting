@@ -18,6 +18,7 @@ import { recordRequestDocumentAction } from "@/app/dashboard/requests/actions";
 import { uploadRequestFile } from "@/lib/upload-client";
 import { Uploader } from "@/components/ui/uploader";
 import { formatDateTime } from "@/lib/format-date";
+import { REQUEST_DOC_ACCEPT } from "@/lib/upload-types";
 
 /**
  * Guided required-documents checklist: one slot per required doc with
@@ -32,7 +33,7 @@ type SlotState =
   | { phase: "saving" }
   | { phase: "error"; message: string };
 
-const ACCEPT = ".xlsx,.xls,.csv,.pdf,.docx,.png,.jpg,.jpeg";
+const ACCEPT = REQUEST_DOC_ACCEPT;
 
 export function DocsChecklist({
   requestId,

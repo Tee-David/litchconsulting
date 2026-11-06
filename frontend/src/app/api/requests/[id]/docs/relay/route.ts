@@ -5,6 +5,7 @@ import { serviceRequest } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/server-user";
 import { getClientForUser } from "@/lib/db/queries/clients";
 import { uploadPrivateObject, r2PrivateConfigured } from "@/lib/r2";
+import { REQUEST_DOC_FORMATS, allowedRequestDoc } from "@/lib/upload-types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,15 +19,6 @@ export const dynamic = "force-dynamic";
  */
 
 const MAX_BYTES = 4 * 1024 * 1024; // stays under the serverless body limit
-const ALLOWED: Record<string, string[]> = {
-  "application/pdf": ["pdf"],
-  "text/csv": ["csv"],
-  "application/vnd.ms-excel": ["xls", "csv"],
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ["xlsx"],
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ["docx"],
-  "image/png": ["png"],
-  "image/jpeg": ["jpg", "jpeg"],
-};
 
 function slugify(name: string) {
   return name
@@ -72,11 +64,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
     );
   }
   const contentType = file.type || "application/octet-stream";
-  const exts = ALLOWED[contentType];
-  const ext = file.name.split(".").pop()?.toLowerCase() || "";
-  if (!exts || !exts.includes(ext)) {
+  if (!allowedRequestDoc(file.name, contentType)) {
     return NextResponse.json(
-      { ok: false, error: "Allowed formats: XLSX, XLS, CSV, PDF, DOCX, PNG, JPG" },
+      { ok: false, error: `Allowed formats: ${REQUEST_DOC_FORMATS}` },
       { status: 400 }
     );
   }

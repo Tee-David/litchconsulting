@@ -6,6 +6,7 @@ import { getSessionUser } from "@/lib/server-user";
 import { getClientForUser } from "@/lib/db/queries/clients";
 import { presignPrivatePut, presignPrivateGet, r2PrivateConfigured } from "@/lib/r2";
 import { downloadBlock, ensureDocumentScanned } from "@/lib/uploads/scan";
+import { REQUEST_DOC_FORMATS, allowedRequestDoc } from "@/lib/upload-types";
 
 export const dynamic = "force-dynamic";
 
@@ -17,15 +18,6 @@ export const dynamic = "force-dynamic";
  */
 
 const MAX_BYTES = 25 * 1024 * 1024;
-const ALLOWED: Record<string, string[]> = {
-  "application/pdf": ["pdf"],
-  "text/csv": ["csv"],
-  "application/vnd.ms-excel": ["xls", "csv"],
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": ["xlsx"],
-  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ["docx"],
-  "image/png": ["png"],
-  "image/jpeg": ["jpg", "jpeg"],
-};
 
 async function authorize(requestId: string) {
   const user = await getSessionUser();
@@ -72,11 +64,9 @@ export async function POST(req: Request, ctx: { params: Promise<{ id: string }> 
   if (sizeBytes > MAX_BYTES) {
     return NextResponse.json({ ok: false, error: "File is larger than 25 MB" }, { status: 400 });
   }
-  const exts = ALLOWED[contentType];
-  const ext = fileName.split(".").pop()?.toLowerCase() || "";
-  if (!exts || !exts.includes(ext)) {
+  if (!allowedRequestDoc(fileName, contentType)) {
     return NextResponse.json(
-      { ok: false, error: "Allowed formats: XLSX, XLS, CSV, PDF, DOCX, PNG, JPG" },
+      { ok: false, error: `Allowed formats: ${REQUEST_DOC_FORMATS}` },
       { status: 400 }
     );
   }
