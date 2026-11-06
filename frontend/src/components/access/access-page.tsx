@@ -17,6 +17,8 @@ import {
   signOutEverywhereAction,
 } from "@/app/admin/settings/access/actions";
 import { cn } from "@/lib/utils";
+import { accessMatrix } from "@/lib/access";
+import { Check, Minus } from "lucide-react";
 
 export type TeamRow = {
   id: string;
@@ -72,10 +74,10 @@ type Confirm = { kind: "reset" | "signout" | "revoke" | "role"; id: string; labe
  * no page title of its own. Tabs: the team (roles, two-step, devices) with its
  * invitations, and who is working on what.
  */
-export function AccessPage({ team, invites, work, unassigned, openInvite, tab: initialTab }: { team: TeamRow[]; invites: InviteRow[]; work: AssignmentRow[]; unassigned: number; openInvite: boolean; tab: "team" | "assign" }) {
+export function AccessPage({ team, invites, work, unassigned, openInvite, tab: initialTab }: { team: TeamRow[]; invites: InviteRow[]; work: AssignmentRow[]; unassigned: number; openInvite: boolean; tab: "team" | "assign" | "roles" }) {
   const toast = useToast();
   const router = useRouter();
-  const [tab, setTab] = useState<"team" | "assign">(initialTab);
+  const [tab, setTab] = useState<"team" | "assign" | "roles">(initialTab);
   const [inviteOpen, setInviteOpen] = useState(openInvite);
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [pending, start] = useTransition();
@@ -132,9 +134,10 @@ export function AccessPage({ team, invites, work, unassigned, openInvite, tab: i
         <Segmented
           label="Team and access view"
           value={tab}
-          onChange={(v) => setTab(v as "team" | "assign")}
+          onChange={(v) => setTab(v as "team" | "assign" | "roles")}
           options={[
             { value: "team", label: `Team ${team.length}` },
+            { value: "roles", label: "What each role can do" },
             { value: "assign", label: "Who is on what" },
           ]}
         />
@@ -179,17 +182,29 @@ export function AccessPage({ team, invites, work, unassigned, openInvite, tab: i
                           <span className="block text-[13px] text-muted">{t.email}</span>
                         </td>
                         <td className="px-3 py-3">
-                          <select
+                          <div
+                            role="radiogroup"
                             aria-label={`Role for ${t.name || t.email}`}
-                            value={t.role}
-                            disabled={pending || t.me || lastAdmin}
                             title={t.me ? "You cannot change your own role" : lastAdmin ? "The last Admin cannot be demoted. Make someone else Admin first." : undefined}
-                            onChange={(e) => setConfirm({ kind: "role", id: t.id, label: t.name || t.email, role: e.target.value as "admin" | "staff" })}
-                            className="h-9 rounded-ctl border border-line-strong bg-paper px-2 text-sm text-ink disabled:opacity-60"
+                            className="inline-flex rounded-ctl border border-line-strong bg-paper p-0.5"
                           >
-                            <option value="staff">Staff</option>
-                            <option value="admin">Admin</option>
-                          </select>
+                            {(["staff", "admin"] as const).map((r) => (
+                              <button
+                                key={r}
+                                type="button"
+                                role="radio"
+                                aria-checked={t.role === r}
+                                disabled={pending || t.me || lastAdmin || t.role === r}
+                                onClick={() => setConfirm({ kind: "role", id: t.id, label: t.name || t.email, role: r })}
+                                className={cn(
+                                  "h-8 rounded-[calc(var(--radius-ctl)-2px)] px-2.5 text-[13px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+                                  t.role === r ? "bg-act text-act-ink" : "text-body hover:text-ink disabled:opacity-60",
+                                )}
+                              >
+                                {r === "admin" ? "Admin" : "Staff"}
+                              </button>
+                            ))}
+                          </div>
                         </td>
                         <td className="px-3 py-3">
                           {t.twoStep ? (
@@ -279,6 +294,33 @@ export function AccessPage({ team, invites, work, unassigned, openInvite, tab: i
             )}
           </Panel>
         </>
+      ) : tab === "roles" ? (
+        <Panel title="What each role can do" sub="From the access map the server enforces. Staff never see money amounts.">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] text-sm">
+              <thead>
+                <tr className="border-b border-hairline text-left text-[12px] font-semibold uppercase tracking-wide text-muted">
+                  <th className="py-2 pr-3 font-semibold">Area</th>
+                  <th className="px-3 py-2 text-center font-semibold">Admin</th>
+                  <th className="px-3 py-2 text-center font-semibold">Staff</th>
+                  <th className="px-3 py-2 text-center font-semibold">Client</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-hairline">
+                {accessMatrix().map((row) => (
+                  <tr key={row.area}>
+                    <td className="py-2.5 pr-3 text-ink">{row.label}</td>
+                    {([row.admin, row.staff, row.client] as const).map((on, i) => (
+                      <td key={i} className="px-3 py-2.5 text-center">
+                        {on ? <Check className="mx-auto size-4 text-good" aria-label="Yes" /> : <Minus className="mx-auto size-4 text-faint" aria-label="No" />}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Panel>
       ) : (
         <div className="space-y-5" data-tour="access-assign">
           {unassigned ? (
