@@ -51,7 +51,14 @@ export type WbBatch = {
 };
 
 export type WbVersion = { n: number; sha: string; at: string; batch_id: string | null; gate: WbGate | null };
-export type WbWorkbookRef = { id: string; name: string; origin: string; document_id: number | null; versions: WbVersion[] };
+export type WbWorkbookRef = {
+  id: string;
+  name: string;
+  origin: string;
+  document_id: number | null;
+  versions: WbVersion[];
+  source?: { filename: string; format: string; converted: boolean; notes: string[] } | null;
+};
 
 /** One harness event (SSE frame). `type` drives the UI. */
 export type WbEvent = { type: string; [k: string]: unknown };
@@ -100,7 +107,11 @@ export type WbFirstLook = {
   workbooks: WbProfile[];
   anomalies: { count: number; by_kind: Record<string, number>; findings: WbFinding[] };
   suggestions: string[];
+  /** Files that became an xlsx working copy (the original is kept and cited). */
+  conversions?: WbConversion[];
 };
+
+export type WbConversion = { workbook_id: string; filename: string; format: string; converted: boolean; notes: string[] };
 
 export type WbCell = {
   ref: string;

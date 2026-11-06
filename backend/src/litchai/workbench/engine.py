@@ -305,5 +305,8 @@ def first_look(deps: TurnDeps, conv: Conversation) -> dict[str, Any]:
     if anomalies.get("by_kind", {}).get("text_date"):
         suggestions.append(f"Fix the {anomalies['by_kind']['text_date']} text dates")
     suggestions.append("Chart monthly totals")
+    # Files that became an xlsx working copy: say so, with what was lost.
+    conversions = [{"workbook_id": ref.id, **ref.source} for ref in conv.workbooks
+                   if ref.source and ref.source.get("converted")]
     return {"workbooks": profiles, "anomalies": anomalies, "suggestions": suggestions[:5],
-            "layer": "pipeline"}
+            "conversions": conversions, "layer": "pipeline"}

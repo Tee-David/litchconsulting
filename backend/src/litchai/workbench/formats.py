@@ -94,9 +94,9 @@ def to_working_copy(data: bytes, filename: str, mime: str | None = None, *,
         out = soffice_to_xlsx(data, ext)
         kind = ext[1:]
         return Converted(out, kind, converted=True, notes=[
-            f"Converted from {kind.upper()} to XLSX with LibreOffice. Values and formulas are "
+            (f"Converted from {kind.upper()} to XLSX with LibreOffice. Values and formulas are "
             "kept; macros, some formatting and embedded images may be lost. The original file "
-            "is unchanged."])
+            "is unchanged.")])
     if len(data) > MAX_TEXT_BYTES:
         raise FormatError(f"{filename} is too large to read as text (over 20 MB).")
     if ext == ".json":
@@ -232,8 +232,8 @@ def delimited_workbook(data: bytes, *, wb_id: str, name: str, document_id: int |
             raise FormatError(f"{name}: no column separator was found, so it is not a table.")
         return _notes_workbook(text.splitlines(), wb_id=wb_id, name=name,
                                document_id=document_id), [
-            f"Read as text ({enc}). It is not a table, so each line is a row on the "
-            f"{NOTES_SHEET} sheet."]
+            (f"Read as text ({enc}). It is not a table, so each line is a row on the "
+            f"{NOTES_SHEET} sheet.")]
     rows = list(csv.reader(io.StringIO(text), delimiter=delim))[:MAX_ROWS]
     flat = [c for r in rows[1:200] for c in r if c.strip()]
     decimal = number_style(flat)
@@ -288,8 +288,8 @@ def json_workbook(data: bytes, *, wb_id: str, name: str, document_id: int | None
     if recs is None:
         lines = json.dumps(obj, indent=2, ensure_ascii=False, default=str).splitlines()
         return _notes_workbook(lines, wb_id=wb_id, name=name, document_id=document_id), [
-            f"The JSON is not a list of records, so it is shown as text on the {NOTES_SHEET} "
-            "sheet."]
+            (f"The JSON is not a list of records, so it is shown as text on the {NOTES_SHEET} "
+            "sheet.")]
     headers: list[str] = []
     for rec in recs[:MAX_ROWS]:
         for k in rec:
@@ -327,7 +327,7 @@ def docx_workbook(data: bytes, *, wb_id: str, name: str, document_id: int | None
         import docx  # python-docx
 
         doc = docx.Document(io.BytesIO(data))
-    except Exception as exc:  # noqa: BLE001 — any parse failure is "unreadable"
+    except Exception as exc:
         raise FormatError(f"{name} could not be opened as a Word document.") from exc
     sheets: dict[str, Sheet] = {}
     for i, table in enumerate(doc.tables, start=1):
@@ -369,7 +369,8 @@ def soffice_to_xlsx(data: bytes, ext: str, timeout: int = 120) -> bytes:
         cmd = ["soffice", "--headless", "--norestore", f"-env:UserInstallation=file://{profile}",
                "--convert-to", "xlsx:Calc MS Excel 2007 XML", "--outdir", tmp, str(src)]
         try:
-            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            proc = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout,
+                                  check=False)
         except subprocess.TimeoutExpired as exc:
             raise FormatError("The conversion took too long. Save the file as .xlsx and add "
                               "it again.") from exc

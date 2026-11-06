@@ -101,6 +101,17 @@ export function FirstLookCard({
           </ul>
         )}
 
+        {(look.conversions ?? []).map((c) => (
+          <div key={c.workbook_id} className="rounded-ctl border border-hairline bg-surface px-2.5 py-1.5 text-[12px] text-body" role="note">
+            <p className="font-medium text-ink">
+              {c.filename}: working copy made from {c.format.toUpperCase()}. The original file is kept unchanged.
+            </p>
+            {c.notes.map((n) => (
+              <p key={n} className="mt-0.5">{n}</p>
+            ))}
+          </div>
+        ))}
+
         {look.suggestions.length > 0 && (
           <div className="flex flex-wrap gap-1.5 pt-0.5">
             {look.suggestions.map((s) => (
