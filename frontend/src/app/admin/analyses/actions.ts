@@ -187,3 +187,18 @@ export async function askAssistant(
     return { ok: false, error: err instanceof Error ? err.message : "Assistant unavailable" };
   }
 }
+
+/** "Analyze again" on a failed analysis. The backend resets the failed rows and runs it again. */
+export async function retryDocumentAction(documentId: number): Promise<Result> {
+  if (!(await isAdmin())) return { ok: false, error: "Unauthorized" };
+  if (!Number.isInteger(documentId) || documentId <= 0) return { ok: false, error: "Unknown document." };
+  try {
+    const { retryDocument } = await import("@/lib/litchai/client");
+    await retryDocument(documentId);
+    revalidatePath("/admin/analyses");
+    return { ok: true };
+  } catch (err) {
+    console.error("[analyses] retry failed:", err);
+    return { ok: false, error: "The AI engine did not accept the retry. Try again in a minute." };
+  }
+}

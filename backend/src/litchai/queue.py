@@ -72,7 +72,18 @@ def ingest_document(document_id: int) -> str:
         storage = Storage()
         decrypt = build_decryptor()
         try:
-            doc = run_ingest(repo, storage, document_id, scanner=build_scanner(), decrypt=decrypt)
+            current = repo.get_document(document_id)
+            if current is not None and current.status == DocumentStatus.EXTRACTION_FAILED.value:
+                # Retry ("Analyze again"): the file was already scanned clean. Drop
+                # the rows of the failed attempt (events cascade), then extract again.
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM line_items WHERE document_id = %s", (document_id,))
+                    cur.execute("DELETE FROM extraction_chunks WHERE document_id = %s", (document_id,))
+                conn.commit()
+                repo.set_document_progress(document_id, {"stage": "extracting", "retry": True})
+                doc = repo.transition_document(document_id, DocumentStatus.EXTRACTING, {"retry": True})
+            else:
+                doc = run_ingest(repo, storage, document_id, scanner=build_scanner(), decrypt=decrypt)
             if doc.status == DocumentStatus.EXTRACTING.value:
                 doc = extract_document(repo, storage, document_id, decrypt=decrypt)
             if doc.status == DocumentStatus.EXTRACTED.value:

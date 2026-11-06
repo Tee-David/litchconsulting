@@ -279,6 +279,11 @@ export function listDocuments(clientId?: string): Promise<{ documents: LitchaiDo
   return litchai(`/documents${qs}`);
 }
 
+/** Analyze a failed document again (backend accepts only extraction_failed). */
+export function retryDocument(documentId: number): Promise<{ document_id: number; status: string }> {
+  return litchai(`/documents/${documentId}/retry`, { method: "POST" });
+}
+
 /** Single-document status/progress — the polling surface for relayed uploads. */
 export function getDocument(documentId: number): Promise<{
   document_id: number;

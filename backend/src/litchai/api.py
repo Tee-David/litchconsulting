@@ -349,6 +349,10 @@ def create_app(
         source_hash = hashlib.sha256(ciphertext).hexdigest()
         existing = repo.find_document_by_hash(client_id, source_hash)
         if existing is not None:
+            # The same file again after a failure means "analyze again".
+            if existing.status == "extraction_failed":
+                await ingest_task.defer_async(document_id=existing.id)
+                return {"document_id": existing.id, "status": "retrying", "duplicate": True}
             return {"document_id": existing.id, "status": existing.status, "duplicate": True}
 
         app.state.storage.store(client_id, source_hash, ciphertext)
@@ -363,6 +367,17 @@ def create_app(
         )
         await ingest_task.defer_async(document_id=doc.id)
         return {"document_id": doc.id, "status": doc.status, "duplicate": False}
+
+    @app.post("/documents/{document_id}/retry", status_code=202)
+    async def retry_document(document_id: int, repo: Repository = Depends(get_repo)) -> dict[str, Any]:
+        """Analyze a failed document again (only from extraction_failed)."""
+        doc = repo.get_document(document_id)
+        if doc is None:
+            raise HTTPException(404, "unknown document")
+        if doc.status != "extraction_failed":
+            raise HTTPException(409, f"document is {doc.status}; only a failed analysis can be retried")
+        await ingest_task.defer_async(document_id=document_id)
+        return {"document_id": document_id, "status": "retrying"}
 
     @app.get("/documents/{document_id}")
     async def get_document(
