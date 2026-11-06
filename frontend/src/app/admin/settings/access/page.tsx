@@ -113,5 +113,5 @@ export default async function TeamAccessPage({ searchParams }: { searchParams: P
     )
     .catch(() => [{ n: 0 }]);
 
-  return <AccessPage team={team} invites={inviteRows} work={work} unassigned={unassigned} openInvite={sp.invite === "1"} tab={sp.tab === "assign" ? "assign" : "team"} />;
+  return <AccessPage team={team} invites={inviteRows} work={work} unassigned={unassigned} openInvite={sp.invite === "1"} tab={sp.tab === "assign" ? "assign" : sp.tab === "roles" ? "roles" : "team"} />;
 }

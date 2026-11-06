@@ -37,6 +37,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Select } from "@/components/ui/select";
 
 /* ──────────────────────────────────────────────────────────────────────────
  * DataTable (kit) — the one table for every list in the three dashboards.
@@ -615,21 +616,14 @@ export function DataTable<T>({
       {/* Footer: page size + pagination */}
       <div className="flex flex-col gap-3 text-sm text-muted sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2">
-          <label htmlFor={`${label}-size`} className="whitespace-nowrap">
-            Rows per page
-          </label>
-          <select
-            id={`${label}-size`}
-            value={pageSize}
-            onChange={(e) => changeSize(Number(e.target.value))}
-            className="h-9 rounded-ctl border border-line-strong bg-paper px-2 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
-          >
-            {pageSizes.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
+          <span className="whitespace-nowrap">Rows per page</span>
+          <Select
+            aria-label="Rows per page"
+            value={String(pageSize)}
+            onChange={(v) => changeSize(Number(v))}
+            options={pageSizes.map((n) => ({ value: String(n), label: String(n) }))}
+            className="w-20"
+          />
           <span className="whitespace-nowrap tabular-nums" aria-live="polite">
             {from}–{to} of {total.toLocaleString("en-NG")}
           </span>
