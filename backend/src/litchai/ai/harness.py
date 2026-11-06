@@ -149,7 +149,8 @@ def run_task(
 # stream the plan live (SSE).
 # =====================================================================================
 MAX_AGENT_STEPS = 8
-MAX_OFFERED_TOOLS = 8
+MAX_OFFERED_TOOLS = 6
+MAX_MALFORMED = 2            # malformed steps per turn before the deterministic plan runs
 CONFIDENT_TOOLS = 5          # offered when the decision layer is confident (report R4)
 MAX_OBSERVATION_CHARS = 4000
 # Fail fast (VM retest: one turn waited 306 s). Each model call has a short limit
@@ -293,14 +294,31 @@ def parse_turn(text: str, offered: set[str],
     return turn, None
 
 
+# Token-light menu (per-minute token limits): rarely used optional arguments are
+# left out of the menu (the schema still accepts them) and long descriptions cut.
+MENU_SKIP_ARGS = {"workbook_id", "new_sheet_name", "period_label", "round_threshold", "z",
+                  "header", "only_blank", "anchor", "y_format", "date_window_days",
+                  "description_column", "category_column", "tin", "rc_number"}
+MENU_MAX_OPTIONAL = 5
+MENU_MAX_DESCRIPTION = 240
+MENU_FULL_DESCRIPTION = {"tax_compute"}  # its description lists the valid inputs
+
+
 def _tool_menu(tools: list[AgentTool]) -> str:
     lines = []
     for t in tools:
         props = t.parameters.get("properties", {})
         req = set(t.parameters.get("required", []))
-        args = ", ".join(f"{k}{'' if k in req else '?'}: {_type_hint(v)}"
-                         for k, v in props.items())
-        lines.append(f"- {t.name} [{t.kind}] ({args}) — {t.description}")
+        opt = [k for k in props if k not in req and k not in MENU_SKIP_ARGS]
+        shown = [k for k in props if k in req] + opt[:MENU_MAX_OPTIONAL]
+        args = ", ".join(f"{k}{'' if k in req else '?'}: {_type_hint(props[k])}"
+                         for k in shown)
+        if len(opt) > MENU_MAX_OPTIONAL:
+            args += ", …"
+        desc = t.description
+        if t.name not in MENU_FULL_DESCRIPTION and len(desc) > MENU_MAX_DESCRIPTION:
+            desc = desc[:MENU_MAX_DESCRIPTION].rsplit(" ", 1)[0] + " …"
+        lines.append(f"- {t.name} [{t.kind}] ({args}) — {desc}")
     return "\n".join(lines)
 
 
@@ -391,6 +409,7 @@ def run_agent_loop(
     # Figures the answer may quote: the question, the chat so far, tool results.
     grounded: list[float] = figures_in(" ".join(m["content"] for m in base[1:]))
     grounding_retries = 0
+    malformed = 0
     yield {"type": "start", "tools": [t.name for t in tools], "max_steps": max_steps}
 
     budget = turn_budget or (LOCAL_TURN_BUDGET if local_only else AGENT_TURN_BUDGET)
@@ -439,6 +458,15 @@ def run_agent_loop(
                 break
             yield {"type": "retry", "step": step + 1, "attempt": attempt + 1,
                    "provider": routed.provider, "error": last_err}
+            malformed += 1
+            if malformed >= MAX_MALFORMED and fallback_plan is not None:
+                # Each retry resends the whole prompt (per-minute token limits): after two
+                # malformed steps the decision layer's deterministic plan answers instead.
+                yield {"type": "fallback", "from": routed.provider, "reason": "invalid",
+                       "to": None, "detail": (last_err or "")[:200]}
+                yield from _degraded(user, execute, fallback_plan, proposals, citations,
+                                     check_citation, reason="invalid")
+                return
             extra = [{"role": "assistant", "content": routed.text[:2000]},
                      {"role": "user", "content": f"Your reply was invalid: {last_err}. "
                       "Reply again with ONE JSON object that follows the schema."}]
@@ -567,7 +595,8 @@ def _check_citations(cites: list[str], check: Callable[[str], bool] | None
 def _degraded(user: str, execute: Callable[[str, dict[str, Any], int], Observation],
               plan_fn: Callable[[str], list[tuple[str, dict[str, Any]]]],
               proposals: list[dict[str, Any]], citations: list[str],
-              check: Callable[[str], bool] | None) -> Iterator[dict[str, Any]]:
+              check: Callable[[str], bool] | None,
+              reason: str = "unavailable") -> Iterator[dict[str, Any]]:
     """No model at all: the decision layer picks a deterministic plan and the
     pipeline runs it. The answer is the tools' own summaries."""
     plan = plan_fn(user)
@@ -585,8 +614,11 @@ def _degraded(user: str, execute: Callable[[str, dict[str, Any], int], Observati
                "citations": (obs.citations or [])[:20], "data": obs.data}
         summaries.append(obs.summary if obs.ok else f"{name}: {obs.error}")
     good, dropped = _check_citations(citations, check)
-    yield {"type": "final", "answer": "No language model is reachable, so I ran the pipeline "
-           "directly:\n" + "\n".join(f"- {s}" for s in summaries), "citations": good,
+    lead = ("The AI model's steps could not be used, so I ran the pipeline directly:"
+            if reason == "invalid" else
+            "No language model is reachable, so I ran the pipeline directly:")
+    yield {"type": "final", "answer": lead + "\n" + "\n".join(f"- {s}" for s in summaries),
+           "citations": good,
            "dropped_citations": dropped, "proposals": proposals, "steps": len(plan),
            "degraded": True,
            "attribution": {"pipeline": used, "model": None, "decision": "heuristic"}}

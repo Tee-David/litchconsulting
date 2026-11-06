@@ -70,14 +70,14 @@ def test_tool_results_shown_to_the_model_are_compact():
     assert len(small["note"]) == 301 and small["total"] == 12
 
 
-def test_confident_route_offers_five_tools_else_eight():
+def test_confident_route_offers_five_tools_else_six():
     deps, conv, _t = _deps({"groq": [{"action": "final", "answer": "ok"}] * 2})
     starts = []
     for q in ("Reconcile the bank statement to the ledger and match every line",
               "hello there"):
         starts.append(next(e for e in run_turn(deps, conv, q) if e["type"] == "start"))
     assert len(starts[0]["tools"]) == 5 and "reconcile" in starts[0]["tools"]
-    assert len(starts[1]["tools"]) == 8
+    assert len(starts[1]["tools"]) == 6
 
 
 def test_overview_question_takes_the_zero_token_fast_path():
@@ -124,3 +124,23 @@ def test_strict_schema_refusal_falls_back_to_the_prompt(monkeypatch):
     http_transport(spec, msgs, {"type": "object"}, {"strict_schema": AGENT_TURN_STRICT_SCHEMA})
     assert "response_format" not in bodies[2]  # strict stays off for the process
     assert all(not k.startswith("_") for b in bodies for k in b)
+
+
+def test_two_malformed_steps_run_the_deterministic_plan():
+    router, t = _router({"groq": ["garbage", '{"action": "final", "answer": ""}', "never"]})
+    events = list(run_agent_loop(
+        system="S {tool_menu}", user="go", tools=[ECHO], execute=_execute, router=router,
+        fallback_plan=lambda msg: [("echo", {"x": "plan"})]))
+    assert len(t.calls) == 2  # no third prompt is sent
+    final = events[-1]
+    assert final["type"] == "final" and final["degraded"]
+    assert final["answer"].startswith("The AI model's steps could not be used")
+    assert [e["tool"] for e in events if e["type"] == "tool_call"] == ["echo"]
+
+
+def test_the_first_prompt_stays_small():
+    from litchai.evals.prompt_size import measure
+
+    rows = measure()
+    assert max(r["tokens_est"] for r in rows) <= 1300
+    assert sum(r["tokens_est"] for r in rows) / len(rows) <= 1150

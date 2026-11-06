@@ -235,7 +235,7 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
                              router=deps.router, history=history, conversation_id=conv.id,
                              local_only=conv.local_only, masker=masker, max_steps=max_steps,
                              check_args=check_args, check_citation=citation_checker(ctx),
-                             fallback_plan=fallback_plan, max_tools=len(tools)):
+                             fallback_plan=_plan_for(has_tb), max_tools=len(tools)):
         if ev["type"] == "provider":
             conv.provider = ev["provider"]
         events.append(ev)
@@ -421,3 +421,17 @@ def first_look(deps: TurnDeps, conv: Conversation) -> dict[str, Any]:
                    if ref.source and ref.source.get("converted")]
     return {"workbooks": profiles, "anomalies": anomalies, "suggestions": suggestions[:5],
             "conversions": conversions, "layer": "pipeline"}
+
+
+def _plan_for(has_tb: bool) -> Any:
+    """The deterministic plan when the model is down or keeps sending malformed
+    steps: on a trial balance, its statements (and CIT when asked); else the
+    decision layer's keyword plan."""
+    def plan(message: str) -> list[tuple[str, dict[str, Any]]]:
+        if has_tb and _TB_INTENT.search(message) and not _TB_OTHER_JOB.search(message):
+            steps: list[tuple[str, dict[str, Any]]] = [("trial_balance_statements", {})]
+            if _TB_TAX.search(message):
+                steps.append(("tax_compute", {"kind": "cit"}))
+            return steps
+        return fallback_plan(message)
+    return plan
