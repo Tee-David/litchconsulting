@@ -440,6 +440,11 @@ export const STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS "workbench_conversation_request_idx" ON "workbench_conversation" ("request_id")`,
   // Virus scan of bank-transfer proofs (documents already carry scan_status).
   `ALTER TABLE "payment" ADD COLUMN IF NOT EXISTS "proof_scan_status" text DEFAULT 'unscanned' NOT NULL`,
+  // Trash shows who moved each item there.
+  `ALTER TABLE "client" ADD COLUMN IF NOT EXISTS "deleted_by" text`,
+  `ALTER TABLE "invoice" ADD COLUMN IF NOT EXISTS "deleted_by" text`,
+  `ALTER TABLE "service_request" ADD COLUMN IF NOT EXISTS "deleted_by" text`,
+  `ALTER TABLE "ticket" ADD COLUMN IF NOT EXISTS "deleted_by" text`,
 ];
 
 /**

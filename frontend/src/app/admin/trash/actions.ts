@@ -26,10 +26,10 @@ export async function restoreTrashAction(items: z.infer<typeof list>): Promise<R
   if (!parsed.success) return { ok: false, error: "Select something to restore." };
   const p = parsed.data;
   const ids = (t: string) => group(p, t);
-  if (ids("client").length) await db.update(client).set({ deletedAt: null }).where(and(inArray(client.id, ids("client")), isNull(client.erasedAt)));
-  if (ids("request").length) await db.update(serviceRequest).set({ deletedAt: null }).where(inArray(serviceRequest.id, ids("request")));
-  if (ids("invoice").length) await db.update(invoice).set({ deletedAt: null }).where(inArray(invoice.id, ids("invoice")));
-  if (ids("ticket").length) await db.update(ticket).set({ deletedAt: null }).where(inArray(ticket.id, ids("ticket")));
+  if (ids("client").length) await db.update(client).set({ deletedAt: null, deletedBy: null }).where(and(inArray(client.id, ids("client")), isNull(client.erasedAt)));
+  if (ids("request").length) await db.update(serviceRequest).set({ deletedAt: null, deletedBy: null }).where(inArray(serviceRequest.id, ids("request")));
+  if (ids("invoice").length) await db.update(invoice).set({ deletedAt: null, deletedBy: null }).where(inArray(invoice.id, ids("invoice")));
+  if (ids("ticket").length) await db.update(ticket).set({ deletedAt: null, deletedBy: null }).where(inArray(ticket.id, ids("ticket")));
   await recordAudit({ action: "trash.restored", entity: "trash", meta: { count: p.length, types: [...new Set(p.map((i) => i.type))] } });
   touch();
   return { ok: true, message: `Restored ${p.length} ${p.length === 1 ? "item" : "items"}.` };

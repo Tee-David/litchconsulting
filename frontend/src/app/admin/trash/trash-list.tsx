@@ -8,7 +8,7 @@ import { Button, ConfirmSheet, DataTable, EmptyState, type BulkAction, type Tabl
 import { useToast } from "@/components/admin/ui/toaster";
 import { purgeTrashAction, restoreTrashAction } from "./actions";
 
-export type TrashItem = { key: string; type: "client" | "request" | "invoice" | "ticket"; id: string; name: string; sub: string; deletedAt: string };
+export type TrashItem = { key: string; type: "client" | "request" | "invoice" | "ticket"; id: string; name: string; sub: string; deletedAt: string; movedBy: string | null };
 
 const TYPE_LABEL: Record<TrashItem["type"], string> = { client: "Client", request: "Request", invoice: "Invoice or quote", ticket: "Support ticket" };
 const daysLeft = (iso: string) => Math.max(0, 30 - Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000));
@@ -41,6 +41,14 @@ export function TrashList({ items }: { items: TrashItem[] }) {
         header: "Moved to Trash",
         meta: { label: "Moved to Trash", mobile: "meta" },
         cell: ({ row }) => <span className="text-body">{new Date(row.original.deletedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>,
+      },
+      {
+        id: "movedBy",
+        accessorFn: (t) => t.movedBy ?? "",
+        header: "Moved by",
+        meta: { label: "Moved by" },
+        // Rows trashed before this column existed have no name.
+        cell: ({ row }) => <span className="text-body">{row.original.movedBy || "—"}</span>,
       },
       {
         id: "left",
@@ -94,7 +102,7 @@ export function TrashList({ items }: { items: TrashItem[] }) {
         views={views}
         bulkActions={bulk}
         searchPlaceholder="Search Trash"
-        searchText={(t) => `${t.name} ${t.sub}`}
+        searchText={(t) => `${t.name} ${t.sub} ${t.movedBy ?? ""}`}
         emptyState={<EmptyState icon={<Trash2 />} title="Trash is empty" why="Deleted clients, requests, invoices and tickets wait here for 30 days, so a mistake is never final." />}
       />
       <ConfirmSheet
