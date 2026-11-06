@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Download, FileSpreadsheet, FileText, Loader2 } from "lucide-react";
+import { Download, FileSpreadsheet, FileText, Loader2, Upload } from "lucide-react";
+import { WORKBENCH_UPLOAD_ACCEPT } from "@/lib/workbench/upload-client";
 import type { WbBatch, WbConversation, WbFirstLook, WbGate } from "@/lib/litchai/workbench";
 import { Button, Sheet } from "@/components/kit";
 import { parseRef, rangeLabel, type Range } from "./refs";
@@ -21,6 +22,7 @@ export function AttachSheet({
   workbooks,
   requestHref,
   onAttach,
+  onUpload,
   onNewSheet,
   onNewWorkbook,
 }: {
@@ -31,10 +33,13 @@ export function AttachSheet({
   workbooks: Array<{ id: string; name: string }>;
   requestHref: string | null;
   onAttach: (fileIds: string[]) => Promise<boolean>;
+  /** Add a file from this computer (encrypted on the server). */
+  onUpload: (file: File) => Promise<boolean>;
   onNewSheet: (workbookId: string, name: string) => Promise<boolean>;
   onNewWorkbook: (name: string) => Promise<boolean>;
 }) {
-  const [mode, setMode] = useState<"file" | "sheet" | "book">(files.length ? "file" : "sheet");
+  const [mode, setMode] = useState<"upload" | "file" | "sheet" | "book">(files.length ? "file" : "upload");
+  const [upload, setUpload] = useState<File | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
   const [wb, setWb] = useState(workbooks[0]?.id ?? "");
   const [name, setName] = useState("");
@@ -44,17 +49,19 @@ export function AttachSheet({
   const go = async () => {
     setBusy(true);
     const ok =
-      mode === "file" ? await onAttach(picked)
+      mode === "upload" ? (upload ? await onUpload(upload) : false)
+      : mode === "file" ? await onAttach(picked)
       : mode === "sheet" ? await onNewSheet(wb, name.trim())
       : await onNewWorkbook(name.trim());
     setBusy(false);
     if (ok) {
       setPicked([]);
       setName("");
+      setUpload(null);
       onClose();
     }
   };
-  const ready = mode === "file" ? picked.length > 0 : name.trim().length > 0 && (mode === "book" || wb);
+  const ready = mode === "upload" ? Boolean(upload) : mode === "file" ? picked.length > 0 : name.trim().length > 0 && (mode === "book" || wb);
 
   return (
     <Sheet
@@ -68,12 +75,23 @@ export function AttachSheet({
           <Button onClick={onClose} disabled={busy}>Cancel</Button>
           <Button variant="primary" onClick={go} disabled={!ready || busy}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-            {mode === "file" ? `Add ${picked.length || ""} file${picked.length === 1 ? "" : "s"}` : mode === "sheet" ? "Propose sheet" : "Propose workbook"}
+            {mode === "upload" ? "Add file" : mode === "file" ? `Add ${picked.length || ""} file${picked.length === 1 ? "" : "s"}` : mode === "sheet" ? "Propose sheet" : "Propose workbook"}
           </Button>
         </>
       }
     >
       <div className="space-y-2" role="radiogroup" aria-label="What to add">
+        <label className={radio}>
+          <input type="radio" name="att" checked={mode === "upload"} onChange={() => setMode("upload")} className="mt-1" />
+          <span><b className="block text-sm text-ink">A file from your computer</b><span className="text-[12.5px] text-muted">XLSX, XLS, ODS, CSV, TSV, TXT, JSON, DOCX or PDF, up to 4 MB</span></span>
+        </label>
+        {mode === "upload" && (
+          <label className="ml-6 flex min-h-[44px] cursor-pointer items-center gap-2 rounded-ctl border border-dashed border-line-strong px-3 py-2 text-[13px] text-body hover:bg-cloud">
+            <Upload className="size-4 text-muted" aria-hidden />
+            <span className="min-w-0 flex-1 truncate">{upload ? upload.name : "Choose a file"}</span>
+            <input type="file" accept={WORKBENCH_UPLOAD_ACCEPT} className="sr-only" onChange={(e) => setUpload(e.target.files?.[0] ?? null)} />
+          </label>
+        )}
         <label className={radio}>
           <input type="radio" name="att" checked={mode === "file"} onChange={() => setMode("file")} className="mt-1" />
           <span><b className="block text-sm text-ink">A file from this request</b><span className="text-[12.5px] text-muted">{free.length ? `${free.length} not open yet` : "Every file is already open"}</span></span>

@@ -108,6 +108,9 @@ export function crumbsFor(pathname: string): Crumb[] {
   let acc = item.href;
   rest.forEach((seg) => {
     acc += `/${seg}`;
+    // "/analyses/w/<id>" is the workbench: "w" is not a page of its own.
+    if (seg === "w") return;
+    if (/^wb-[0-9a-f]+$/i.test(seg)) return void out.push({ label: "Workbench", href: acc });
     out.push({ label: isId(seg) ? "Details" : SEGMENT_LABEL[seg] ?? seg.replace(/-/g, " ").replace(/^\w/, (c) => c.toUpperCase()), href: acc });
   });
   return out.map((c, i, a) => (i === a.length - 1 ? { label: c.label } : c));

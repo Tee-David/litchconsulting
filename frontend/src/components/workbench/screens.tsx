@@ -86,7 +86,7 @@ export async function StartScreen({ requestId, base, isAdmin }: { requestId: str
   const reqLabel = ctx ? `${ctx.req.number} · ${ctx.c?.company || ctx.c?.name || "Client"}` : "No request";
   const starters = [
     { icon: FolderOpen, title: ctx ? `From ${ctx.req.number}` : "From a request", text: ctx ? `${files.length} ${files.length === 1 ? "file" : "files"} on this request` : "Open a request, then its files" },
-    { icon: Upload, title: "Upload files", text: "XLSX, CSV or PDF, via the request's files" },
+    { icon: Upload, title: "Upload files", text: "From your computer: XLSX, XLS, ODS, CSV, JSON, DOCX or PDF" },
     { icon: Table2, title: "New blank workbook", text: "Describe it and Sage lays it out" },
     { icon: LayoutTemplate, title: "Start from a template", text: "P&L · CIT · VAT return · PAYE · Bank rec" },
   ];
@@ -115,7 +115,7 @@ export async function StartScreen({ requestId, base, isAdmin }: { requestId: str
               <h2 className="mt-3 font-display text-base font-semibold text-ink">Open a workbook, CSV or PDF</h2>
               <p className="mt-1 text-sm text-body">
                 Choose the files Sage should read. It reads every sheet first and tells you what it found. Nothing in a file changes until you accept.
-                {local ? " This client is set to local only, so nothing leaves our server." : " Files are encrypted before they leave your browser and are scanned on our server."}
+                {local ? " This client is set to local only, so nothing leaves our server." : " Files are encrypted before they reach the analysis server."}
               </p>
               <div className="text-left">
                 <StartForm

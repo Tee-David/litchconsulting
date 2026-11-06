@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileSpreadsheet, FileText, FolderOpen, Loader2, Table2 } from "lucide-react";
+import { FileSpreadsheet, FileText, FolderOpen, Loader2, Table2, Upload } from "lucide-react";
 import { Button, EmptyState } from "@/components/kit";
 import { startWorkbenchAction } from "@/lib/workbench/actions";
+import { uploadToWorkbench, WORKBENCH_UPLOAD_ACCEPT } from "@/lib/workbench/upload-client";
 import type { FileOption } from "./sheets";
 import { cn } from "@/lib/utils";
 
@@ -23,13 +24,28 @@ export function StartForm({
   const usable = files.filter((f) => f.usable);
   const [picked, setPicked] = useState<string[]>(usable.slice(0, 4).map((f) => f.id));
   const [blank, setBlank] = useState(files.length ? "" : "New workbook");
-  const [useBlank, setUseBlank] = useState(files.length === 0);
+  // "files" = from this request · "blank" = new workbook · "upload" = from this computer
+  const [mode, setMode] = useState<"files" | "blank" | "upload">(requestId && files.length ? "files" : "upload");
+  const useBlank = mode === "blank";
+  const [upload, setUpload] = useState<File | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const open = async () => {
     setBusy(true);
     setError(null);
+    if (mode === "upload") {
+      if (!upload) return setBusy(false);
+      const up = await uploadToWorkbench(upload, { requestId });
+      if (!up.ok) {
+        setBusy(false);
+        setError(up.error);
+        return;
+      }
+      router.push(`${base}/analyses/w/${up.id}`);
+      return;
+    }
     const res = await startWorkbenchAction({ requestId, fileIds: useBlank ? [] : picked, blank: useBlank ? blank.trim() : null });
     if (!res.ok) {
       setBusy(false);
@@ -39,25 +55,26 @@ export function StartForm({
     router.push(`${base}/analyses/w/${res.id}`);
   };
 
-  const ready = useBlank ? blank.trim().length > 0 : picked.length > 0;
+  const ready = mode === "upload" ? Boolean(upload) : useBlank ? blank.trim().length > 0 : picked.length > 0;
 
   return (
     <section className="mt-4">
-      <div className="flex gap-2" role="radiogroup" aria-label="Start from">
+      <div className="flex flex-col gap-2 sm:flex-row" role="radiogroup" aria-label="Start from">
         {[
-          { v: false, label: "Files from this request", icon: FolderOpen, disabled: !requestId },
-          { v: true, label: "A new blank workbook", icon: Table2, disabled: false },
-        ].map((o) => (
+          { v: "upload" as const, label: "Upload from your computer", icon: Upload, disabled: false, hide: false },
+          { v: "files" as const, label: "Files from this request", icon: FolderOpen, disabled: !requestId, hide: !requestId },
+          { v: "blank" as const, label: "A new blank workbook", icon: Table2, disabled: false, hide: false },
+        ].filter((o) => !o.hide).map((o) => (
           <button
-            key={String(o.v)}
+            key={o.v}
             type="button"
             role="radio"
-            aria-checked={useBlank === o.v}
+            aria-checked={mode === o.v}
             disabled={o.disabled}
-            onClick={() => setUseBlank(o.v)}
+            onClick={() => setMode(o.v)}
             className={cn(
-              "flex flex-1 items-center gap-2 rounded-ctl border px-3 py-2.5 text-left text-sm disabled:opacity-50",
-              useBlank === o.v ? "border-act bg-info-soft font-semibold text-ink" : "border-hairline text-body hover:bg-cloud",
+              "flex min-h-[44px] flex-1 items-center gap-2 rounded-ctl border px-3 py-2.5 text-left text-sm disabled:opacity-50",
+              mode === o.v ? "border-act bg-info-soft font-semibold text-ink" : "border-hairline text-body hover:bg-cloud",
             )}
           >
             <o.icon className="size-4 shrink-0" aria-hidden /> {o.label}
@@ -65,7 +82,26 @@ export function StartForm({
         ))}
       </div>
 
-      {!useBlank ? (
+      {mode === "upload" ? (
+        <div className="mt-4">
+          <input ref={fileRef} type="file" accept={WORKBENCH_UPLOAD_ACCEPT} className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => setUpload(e.target.files?.[0] ?? null)} />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            onDragOver={(e) => e.preventDefault()}
+            onDrop={(e) => {
+              e.preventDefault();
+              const f = e.dataTransfer.files?.[0];
+              if (f) setUpload(f);
+            }}
+            className="flex w-full flex-col items-center gap-1 rounded-ctl border border-dashed border-line-strong px-4 py-6 text-center text-sm text-body outline-none hover:bg-cloud focus-visible:ring-2 focus-visible:ring-act/30"
+          >
+            <Upload className="size-5 text-muted" aria-hidden />
+            {upload ? <b className="text-ink">{upload.name}</b> : <b className="text-ink">Choose a file, or drop it here</b>}
+            <span className="text-[12px] text-muted">XLSX, XLS, ODS, CSV, TSV, TXT, JSON, DOCX or PDF · up to 4 MB · encrypted before it leaves this server</span>
+          </button>
+        </div>
+      ) : !useBlank ? (
         files.length === 0 ? (
           <EmptyState
             compact

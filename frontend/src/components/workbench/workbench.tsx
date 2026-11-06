@@ -33,6 +33,7 @@ import { FirstLookCard } from "./first-look";
 import { Proposals } from "./proposals";
 import { TurnView } from "./turn";
 import { WhyPopover } from "./why";
+import { uploadToWorkbench } from "@/lib/workbench/upload-client";
 import { AttachSheet, DeliverSheet, EditBatchSheet, HistorySheet, RangeSheet, type FileOption } from "./sheets";
 import { colLetter, parseRef, rangeLabel, rangeRef, type Range } from "./refs";
 import { ChartCard, type ChartProposal } from "./chart-card";
@@ -735,6 +736,21 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           const added = res.conversation.workbooks[res.conversation.workbooks.length - 1];
           if (added) setWbId(added.id);
           toast.success(res.message ?? "Added.");
+          return true;
+        }}
+        onUpload={async (file) => {
+          const res = await uploadToWorkbench(file, { conversationId: conv.id });
+          if (!res.ok || !res.conversation || !res.firstLook) {
+            toast.error(res.ok ? "The file was added, but the view did not refresh. Reload the page." : res.error);
+            return false;
+          }
+          const look = res.firstLook;
+          setConv(res.conversation);
+          setLook(look);
+          setSheetsBy((p) => ({ ...p, ...Object.fromEntries(look.workbooks.map((w) => [w.workbook_id, w.sheet_names])) }));
+          const added = res.conversation.workbooks[res.conversation.workbooks.length - 1];
+          if (added) setWbId(added.id);
+          toast.success("Added. Sage has read the new file.");
           return true;
         }}
         onNewSheet={async (workbookId, name) => {

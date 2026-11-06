@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { ArrowLeft, PlugZap, Table2 } from "lucide-react";
@@ -20,6 +21,8 @@ export default async function ReviewPage({
 }) {
   const { documentId } = await params;
   const id = Number(documentId);
+  // Only numeric engine ids are documents ("/analyses/w" and the like are not).
+  if (!Number.isInteger(id) || id <= 0) redirect("/admin/analyses");
 
   let review: ReviewData | null = null;
   let categories: TaxonomyCategory[] = [];
