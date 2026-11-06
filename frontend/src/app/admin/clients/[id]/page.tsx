@@ -129,7 +129,7 @@ export default async function ClientHubPage({
 
   // One line of facts under the name, as in the design: tax ID · address · client since.
   const facts = [
-    clientRow.taxId ? `TIN/RC ${clientRow.taxId}` : null,
+    clientRow.taxId ? (/\b(TIN|RC)\b/i.test(clientRow.taxId) ? clientRow.taxId : `TIN ${clientRow.taxId}`) : null,
     clientRow.address,
     `client since ${formatDate(clientRow.createdAt)}`,
   ]
