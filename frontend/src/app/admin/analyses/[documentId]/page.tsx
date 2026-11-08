@@ -90,7 +90,8 @@ export default async function AnalysisResultPage({ params }: { params: Promise<{
   })())
     .slice()
     .sort((a, b) => b.total - a.total);
-  const donut = [...byCategory.slice(0, 6).map((c) => ({ label: c.label, value: c.total })), ...(byCategory.length > 6 ? [{ label: "Other", value: byCategory.slice(6).reduce((s, c) => s + c.total, 0) }] : [])];
+  // Top 5 and "Other", so the legend leaves room for the ring.
+  const donut = [...byCategory.slice(0, 5).map((c) => ({ label: c.label, value: c.total })), ...(byCategory.length > 5 ? [{ label: "Other", value: byCategory.slice(5).reduce((s, c) => s + c.total, 0) }] : [])];
   const months = (insights?.by_month ?? []).map((m) => ({ label: new Date(`${m.month}-01T12:00:00`).toLocaleDateString("en-GB", { month: "short" }), in: m.in, out: m.out }));
   const period = insights?.period ? `${dateLabel(insights.period.start)} to ${dateLabel(insights.period.end)}` : null;
   const ready = DONE.has(doc.status);
@@ -172,7 +173,7 @@ export default async function AnalysisResultPage({ params }: { params: Promise<{
             )}
           </Panel>
           <Panel title="By category">
-            {donut.length ? <Donut data={donut} height={220} format="money" /> : <p className="text-sm text-body">No categories yet.</p>}
+            {donut.length ? <Donut data={donut} height={300} format="money" /> : <p className="text-sm text-body">No categories yet.</p>}
           </Panel>
         </div>
 
@@ -195,7 +196,7 @@ export default async function AnalysisResultPage({ params }: { params: Promise<{
           </div>
         ) : null}
 
-        <AnalysisBody documentId={id} findings={insights?.findings ?? []} lines={lines} categories={categories} currency={currency} />
+        <AnalysisBody documentId={id} checked={Boolean(insights)} findings={insights?.findings ?? []} lines={lines} categories={categories} currency={currency} />
 
         {sources.length ? (
           <Panel title="Where the figures come from">

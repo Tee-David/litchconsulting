@@ -38,8 +38,11 @@ export function AnalysisBody({
   lines,
   categories,
   currency,
+  checked,
 }: {
   documentId: number;
+  /** False while the engine has no insights yet: "nothing found" would be untrue. */
+  checked: boolean;
   findings: InsightFinding[];
   lines: LineItem[];
   categories: TaxonomyCategory[];
@@ -156,7 +159,15 @@ export function AnalysisBody({
       <Panel title="What we found" sub={findings.length ? `${findings.length} ${findings.length === 1 ? "finding" : "findings"}, most important first` : undefined}>
         {findings.length === 0 ? (
           <p className="flex items-center gap-2 text-sm text-body">
-            <CheckCircle2 className="size-4 text-good" aria-hidden /> Nothing unusual was found in this file.
+            {checked ? (
+              <>
+                <CheckCircle2 className="size-4 text-good" aria-hidden /> Nothing unusual was found in this file.
+              </>
+            ) : (
+              <>
+                <Info className="size-4 text-info" aria-hidden /> The checks for unusual amounts, duplicates and tax have not run on this file yet.
+              </>
+            )}
           </p>
         ) : (
           <ul className="grid gap-3 sm:grid-cols-2">
