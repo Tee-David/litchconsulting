@@ -131,6 +131,8 @@ def groq_specs(e: dict[str, str], key: str | None, legacy_model: str | None
                                   "_strict_schema": strict_on and model in GROQ_STRICT_MODELS}
         if "gpt-oss" in model:
             params["reasoning_effort"] = "medium"
+            # max_tokens also counts the reasoning: 1200 left the JSON cut off or empty.
+            params["_min_max_tokens"] = 3000
         req, tok = GROQ_DAILY.get(model, (None, None))
         if i == 0:
             req = _int_env("LITCHAI_GROQ_DAILY_REQUESTS") or req
@@ -190,7 +192,7 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
         model=e.get("LITCHAI_CF_AI_MODEL") or "@cf/openai/gpt-oss-120b",
         base_url=f"https://api.cloudflare.com/client/v4/accounts/{cf_acct}/ai/v1",
         api_key=cf_key if cf_acct else None,
-        params={"reasoning_effort": "medium"},
+        params={"reasoning_effort": "medium", "_min_max_tokens": 4096},
         daily_requests=_int_env("LITCHAI_CF_AI_DAILY_REQUESTS"),
         daily_tokens=_int_env("LITCHAI_CF_AI_DAILY_TOKENS"),
     )
@@ -243,6 +245,11 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
 
 
 # --- errors -----------------------------------------------------------------
+# A per-minute 429 that clears within this many seconds is waited out on the same
+# model instead of dropping to a weaker provider.
+SHORT_RATE_WAIT = 6.0
+
+
 class ProviderError(RuntimeError):
     def __init__(self, reason: str, detail: str, retry_after: float | None = None) -> None:
         super().__init__(f"{reason}: {detail}")
@@ -385,7 +392,8 @@ def http_transport(
         body = {"model": spec.model, "messages": messages,
                 "temperature": params.get("temperature", 0.0)}
         if params.get("max_tokens"):
-            body["max_tokens"] = params["max_tokens"]
+            body["max_tokens"] = max(int(params["max_tokens"]),
+                                     int(spec.params.get("_min_max_tokens") or 0))
         for k, v in spec.params.items():
             if not k.startswith("_"):  # "_"-prefixed keys are local switches, never sent
                 body.setdefault(k, v)
@@ -429,7 +437,7 @@ def http_transport(
         text = msg.get("content") or ""
         if not text.strip() and schema is not None:
             # gpt-oss sometimes puts the whole answer in the reasoning channel.
-            text = _json_tail(msg.get("reasoning") or "") or ""
+            text = _json_tail(msg.get("reasoning") or msg.get("reasoning_content") or "") or ""
         return ProviderResponse(
             text=text,
             finish_reason=choice.get("finish_reason"),
@@ -699,6 +707,11 @@ class ProviderRouter:
                 fallbacks.append(FallbackEvent(spec.name, "timeout", "turn time limit reached"))
                 break
             ok, why = self._available(spec)
+            if not ok and why == "rate_limit":
+                wait = self._cooldown.get(spec.name, 0.0) - time.monotonic()
+                if 0 < wait <= SHORT_RATE_WAIT and (left is None or left > wait + 15.0):
+                    time.sleep(wait)
+                    ok, why = self._available(spec)
             if not ok and i < len(order) - 1:
                 ev = FallbackEvent(spec.name, why, "skipped", None)
                 fallbacks.append(ev)
