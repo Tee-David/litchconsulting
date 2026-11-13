@@ -305,7 +305,7 @@ def _tb_fast_path(message: str, ctx: ToolContext, execute: Any
     events: list[dict[str, Any]] = [
         {"type": "start", "tools": [t for t, _ in steps], "max_steps": len(steps),
          "fast_path": True},
-        {"type": "plan", "steps": [t for t, _ in steps], "layer": "decision"}]
+        {"type": "plan", "steps": [t for t, _ in steps], "layer": "decision", "fast_path": True}]
     outs, cites, proposals = [], [], []
     for i, (name, args) in enumerate(steps, start=1):
         events.append({"type": "tool_call", "step": i, "tool": name, "args": args,

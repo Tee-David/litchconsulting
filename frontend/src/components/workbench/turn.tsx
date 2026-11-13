@@ -125,12 +125,15 @@ export function TurnView({
   onRetry?: () => void;
 }) {
   const plan = events.find((e) => e.type === "plan");
-  // The trial balance fast path is the pipeline by design (no model needed); any other
-  // decision-layer plan means the models could not be used.
-  const fastPath = events.some((e) => e.type === "start" && (e as { fast_path?: boolean }).fast_path);
   const calls = events.filter((e) => e.type === "tool_call");
   const results = new Map(events.filter((e) => e.type === "tool_result").map((e) => [Number(e.step), e]));
   const fallbacks = events.filter((e) => e.type === "fallback");
+  // A decision-layer plan is "no model reachable" only when the turn shows a provider
+  // failure. Otherwise the pipeline answered by design (the trial balance fast path),
+  // including turns saved before the plan carried the fast_path flag.
+  const fastPath =
+    events.some((e) => (e.type === "start" || e.type === "plan") && (e as { fast_path?: boolean }).fast_path) ||
+    fallbacks.length === 0;
   const retries = events.filter((e) => e.type === "retry");
   const provider = [...events].reverse().find((e) => e.type === "provider");
   const final = events.find((e) => e.type === "final");
