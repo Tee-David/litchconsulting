@@ -25,7 +25,7 @@ from typing import Any
 
 from openpyxl import load_workbook
 
-from litchai.workbench.model import Cell, Sheet, Workbook, parse_a1
+from litchai.workbench.model import Cell, Sheet, Workbook, a1, parse_a1
 
 OP_KINDS = ("set_cell", "create_sheet", "delete_sheet", "create_workbook", "add_chart",
             "remove_chart")
@@ -115,21 +115,68 @@ class OpBuilder:
     def __init__(self, model: Workbook, tool: str) -> None:
         self.model = model
         self.tool = tool
-        self.ops: list[Operation] = []
+        self._ops: list[Operation] = []
         self._new_sheets: set[str] = set()
+        # Sheets Sage made before that this batch rewrites: their filled cells.
+        self._replaced: dict[str, set[tuple[int, int]]] = {}
+        # Sheets that only exist in an older pending proposal, made again from empty.
+        self._fresh: set[str] = set()
 
-    def create_sheet(self, name: str, reason: str) -> str:
+    @property
+    def ops(self) -> list[Operation]:
+        """The batch. On a sheet that is rebuilt in place, cells the new version does
+        not write are cleared, so no stale figures stay behind."""
+        if not self._replaced:
+            return self._ops
+        written = {(op.sheet, (op.cell or "").upper()) for op in self._ops if op.op == "set_cell"}
+        clears: list[Operation] = []
+        for name, cells in self._replaced.items():
+            sheet = self.model.sheets[name]
+            for r, c in sorted(cells):
+                ref = a1(r, c)
+                if (name, ref) in written:
+                    continue
+                cur = sheet.get(r, c)
+                clears.append(Operation(
+                    "set_cell", self.model.id, sheet=name, cell=ref,
+                    old_value=cur.value if cur else None, old_formula=cur.formula if cur else None,
+                    new_value=None, new_formula=None, tool=self.tool, kind="changed",
+                    reason="cleared: not in the new version of this sheet"))
+        return [*self._ops, *clears]
+
+    def create_sheet(self, name: str, reason: str, *, reuse: bool = True) -> str:
+        """A sheet for this batch. With ``reuse``, a sheet Sage made earlier under the
+        same name is rebuilt in place (a changed proposal) instead of a new copy;
+        a sheet the person made is never reused. A sheet that only exists in an older
+        proposal still waiting is made again under the same name; that older proposal
+        is set aside when this batch is added (``Workbench.add_batch``)."""
+        if reuse:
+            want = unique_sheet_name(Workbook(id="", name=""), name).lower()
+            for existing in self.model.sheets.values():
+                if existing.name.lower() != want or existing.name in self._replaced:
+                    continue
+                if existing.proposed and existing.name not in self._fresh:
+                    self._fresh.add(existing.name)
+                    self._ops.append(Operation("create_sheet", self.model.id,
+                                               sheet=existing.name, reason=reason,
+                                               tool=self.tool, kind="new"))
+                    return existing.name
+                if existing.name in self.model.generated and not existing.proposed:
+                    self._replaced[existing.name] = {
+                        rc for rc, cell in existing.cells.items()
+                        if cell.value is not None or cell.formula}
+                    return existing.name
         name = unique_sheet_name(self.model, name, self._new_sheets)
         self._new_sheets.add(name)
-        self.ops.append(Operation("create_sheet", self.model.id, sheet=name, reason=reason,
-                                  tool=self.tool, kind="new"))
+        self._ops.append(Operation("create_sheet", self.model.id, sheet=name, reason=reason,
+                                   tool=self.tool, kind="new"))
         return name
 
     def set(self, sheet: str, cell: str, *, value: Any = None, formula: str | None = None,
             reason: str = "", source_rows: list[str] | None = None, preview: Any = None,
             number_format: str | None = None) -> Operation:
         old_v = old_f = None
-        if sheet in self.model.sheets:
+        if sheet in self.model.sheets and sheet not in self._fresh:
             r, c = parse_a1(cell)
             cur = self.model.sheets[sheet].get(r, c)
             if cur is not None:
@@ -143,13 +190,13 @@ class OpBuilder:
             source_rows=list(source_rows or []), preview_value=preview,
             kind="changed" if (old_v is not None or old_f is not None) else "new",
         )
-        self.ops.append(op)
+        self._ops.append(op)
         return op
 
     def chart(self, sheet: str, spec: dict[str, Any], reason: str) -> Operation:
         op = Operation("add_chart", self.model.id, sheet=sheet, cell=spec.get("anchor"),
                        chart=spec, reason=reason, tool=self.tool, kind="new")
-        self.ops.append(op)
+        self._ops.append(op)
         return op
 
 
@@ -174,7 +221,7 @@ def overlay(model: Workbook, ops: list[Operation]) -> None:
         if op.workbook_id != model.id:
             continue
         if op.op == "create_sheet" and op.sheet and op.sheet not in model.sheets:
-            model.sheets[op.sheet] = Sheet(op.sheet)
+            model.sheets[op.sheet] = Sheet(op.sheet, proposed=True)
         elif op.op == "delete_sheet" and op.sheet:
             model.sheets.pop(op.sheet, None)
         elif op.op == "set_cell" and op.sheet and op.cell:

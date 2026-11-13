@@ -716,7 +716,8 @@ def create_workbook(ctx: ToolContext, *, name: str, sheets: list[dict[str, Any]]
 def _layout(ctx: ToolContext, wb: Workbook, name: str, headers: list[str] | None,
             rows: list[list[Any]] | None, title: str | None, tool: str) -> ToolOutput:
     b = OpBuilder(wb, tool)
-    target = b.create_sheet(name, f"New sheet {name}")
+    # An explicit "new sheet" always makes a new sheet; it never rebuilds one.
+    target = b.create_sheet(name, f"New sheet {name}", reuse=False)
     r = 1
     if title:
         b.set(target, "A1", value=title, reason="title")

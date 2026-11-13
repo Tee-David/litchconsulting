@@ -86,6 +86,8 @@ class Sheet:
     name: str
     cells: dict[tuple[int, int], Cell] = field(default_factory=dict)
     source_pages: dict[int, int] = field(default_factory=dict)  # row -> PDF page
+    # True while the sheet exists only in a pending proposal (not in the file yet).
+    proposed: bool = False
 
     @property
     def max_row(self) -> int:
@@ -126,6 +128,9 @@ class Workbook:
     sheets: dict[str, Sheet] = field(default_factory=dict)
     document_id: int | None = None
     origin: str = "xlsx"         # xlsx | csv | line_items | new
+    # Sheets Sage made in this workbench (accepted). A tool that builds the same
+    # statement again updates that sheet instead of adding "Balance Sheet 2".
+    generated: set[str] = field(default_factory=set)
 
     def sheet(self, name: str | None) -> Sheet:
         if name is None:

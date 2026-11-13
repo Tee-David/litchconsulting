@@ -266,6 +266,16 @@ class Workbench:
             out[ref.id] = load_xlsx(self.blobs.get(ref.current_sha), wb_id=ref.id, name=ref.name,
                                     document_id=ref.document_id)
             out[ref.id].origin = ref.origin
+        # Sheets Sage made and you accepted (and did not undo): these may be rebuilt.
+        for b in conv.batches:
+            if b.status != "accepted":
+                continue
+            for op in b.ops:
+                if op.workbook_id in out and op.sheet:
+                    if op.op == "create_sheet":
+                        out[op.workbook_id].generated.add(op.sheet)
+                    elif op.op == "delete_sheet":
+                        out[op.workbook_id].generated.discard(op.sheet)
         if with_pending:
             for b in conv.batches:
                 if b.status != "pending":
@@ -288,6 +298,7 @@ class Workbench:
 
     def add_batch(self, conv: Conversation, batch: Batch, step: int | None = None) -> Batch:
         batch.step = step
+        _supersede(conv, batch)
         conv.batches.append(batch)
         return batch
 
@@ -453,6 +464,22 @@ class Workbench:
             if v["n"] == version:
                 return self.blobs.get(v["sha"])
         raise WorkbenchError(f"no version {version}")
+
+
+def _supersede(conv: Conversation, batch: Batch) -> None:
+    """A new proposal that makes the same sheet as an older one still waiting
+    replaces it: the older one is set aside (rejected, with the reason), so asking
+    twice never gives "Balance Sheet 2"."""
+    made = {(op.workbook_id, op.sheet) for op in batch.ops
+            if op.op == "create_sheet" and op.sheet}
+    if not made:
+        return
+    for older in conv.batches:
+        if older.status != "pending":
+            continue
+        if any(o.op == "create_sheet" and (o.workbook_id, o.sheet) in made for o in older.ops):
+            older.status, older.decided_at = "rejected", _now()
+            older.summary = f"{older.summary} · replaced by a newer proposal".strip(" ·")
 
 
 def _drop_placeholder_sheet(xlsx: bytes) -> bytes:
