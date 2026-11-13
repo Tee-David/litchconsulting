@@ -64,6 +64,45 @@ def refs_used(formula: str) -> list[str]:
     return [v for k, v in tokens(formula) if k in ("ref", "range")]
 
 
+# Functions a person may type in the workbench (E2). Wider than ALLOWED_FUNCS: the
+# engine previews its own formulas in Python, but a person's formula is computed by
+# LibreOffice in the recompute gate, which reports #NAME? and other errors.
+USER_FUNCS = ALLOWED_FUNCS | {
+    "AVERAGEIF", "AVERAGEIFS", "MAXIFS", "MINIFS", "SUMPRODUCT", "PRODUCT", "ROUNDUP",
+    "ROUNDDOWN", "INT", "MOD", "POWER", "SQRT", "CEILING", "FLOOR", "VLOOKUP", "HLOOKUP",
+    "XLOOKUP", "LOOKUP", "INDEX", "MATCH", "XMATCH", "CHOOSE", "IFS", "SWITCH", "IFNA",
+    "XOR", "TRUE", "FALSE", "CONCAT", "CONCATENATE", "TEXTJOIN", "SUBSTITUTE", "REPLACE",
+    "FIND", "SEARCH", "PROPER", "EXACT", "REPT", "TODAY", "NOW", "EDATE", "NETWORKDAYS",
+    "WORKDAY", "DATEDIF", "WEEKDAY", "WEEKNUM", "DAYS", "ISERROR", "ISTEXT", "ISNA",
+    "N", "STDEV", "STDEV.S", "VAR", "VAR.S", "LARGE", "SMALL", "RANK", "RANK.EQ",
+    "COUNTBLANK", "PMT", "NPV", "IRR", "XNPV", "XIRR", "FV", "PV", "RATE", "NPER",
+    "SLN", "DB", "DDB", "UNIQUE", "SORT", "FILTER", "TRANSPOSE", "ROW", "COLUMN",
+    "ROWS", "COLUMNS", "OFFSET", "INDIRECT", "ADDRESS",
+}
+
+
+def check_user_formula(formula: str) -> None:
+    """A person's formula: it must tokenise, use known spreadsheet functions only, and
+    balance its brackets. The value comes from LibreOffice, not from Python."""
+    # Only for this check: bare TRUE/FALSE (VLOOKUP's last argument) and a percent sign
+    # are normal in Excel but not in the engine's tokenizer. The saved formula is unchanged.
+    src = re.sub(r"(?i)\b(TRUE|FALSE)\b(?!\s*\()", "1", formula).replace("%", "")
+    toks = tokens(src)
+    bad = {v.upper() for k, v in toks if k == "func"} - USER_FUNCS
+    if bad:
+        raise FormulaError(f"unknown function: {', '.join(sorted(bad))}")
+    depth = 0
+    for kind, val in toks:
+        if kind == "func" or (kind == "op" and val == "("):
+            depth += 1
+        elif kind == "op" and val == ")":
+            depth -= 1
+            if depth < 0:
+                raise FormulaError("a closing bracket has no opening bracket")
+    if depth:
+        raise FormulaError("a bracket is not closed")
+
+
 def check_formula(formula: str) -> None:
     bad = functions_used(formula) - ALLOWED_FUNCS
     if bad:

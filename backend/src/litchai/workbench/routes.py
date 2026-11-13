@@ -70,6 +70,14 @@ class AcceptBatch(BaseModel):
     edits: dict[int, dict[str, Any]] | None = None
 
 
+class UserEdits(BaseModel):
+    """A person's own edits (E2). Saved at once as a version named after them."""
+    workbook_id: str
+    author: str = Field(default="you", min_length=1, max_length=80)
+    # Each: {sheet, cell, value? | formula? | clear?, number_format?}
+    edits: list[dict[str, Any]] = Field(min_length=1, max_length=5000)
+
+
 class RunTool(BaseModel):
     args: dict[str, Any] = Field(default_factory=dict)
 
@@ -310,6 +318,69 @@ def register_workbench_routes(app: FastAPI) -> None:
                 result["batch"]["risk_reasons"] = gate.reasons
                 wb.store.save(conv)
             return result
+
+    @app.post("/workbench/conversations/{conversation_id}/edits")
+    def user_edits(conversation_id: str, body: UserEdits) -> dict[str, Any]:
+        """A person's typed values, formulas, formats and clears. They go through the
+        same operation log as Sage's proposals (versions, undo, recompute gate), but
+        are accepted at once: the person already decided."""
+        from litchai.workbench.formula import FormulaError, check_user_formula
+        from litchai.workbench.model import parse_a1
+        from litchai.workbench.ops import OpBuilder, new_batch
+
+        author = " ".join(body.author.split())[:80] or "you"
+        with _workbench() as wb:
+            conv = _get(wb, conversation_id)
+            model = wb.models(conv, with_pending=False).get(body.workbook_id)
+            if model is None:
+                raise HTTPException(404, "workbook not found")
+            ob = OpBuilder(model, "user_edit")
+            reason = f"Typed by {author}"
+            for i, e in enumerate(body.edits):
+                sheet = str(e.get("sheet") or "")
+                cell = str(e.get("cell") or "").replace("$", "").upper()
+                if sheet not in model.sheets:
+                    raise HTTPException(422, f"edit {i + 1}: there is no sheet {sheet!r}")
+                try:
+                    r, c = parse_a1(cell)
+                except Exception as exc:  # noqa: BLE001
+                    raise HTTPException(422, f"edit {i + 1}: {cell!r} is not a cell") from exc
+                nf = e.get("number_format")
+                nf = str(nf)[:64] if nf else None
+                formula = e.get("formula")
+                if formula:
+                    f = str(formula).strip()
+                    f = f if f.startswith("=") else "=" + f
+                    try:
+                        check_user_formula(f)
+                    except FormulaError as exc:
+                        raise HTTPException(422, f"{sheet}!{cell}: {exc}") from exc
+                    ob.set(sheet, cell, formula=f, number_format=nf, reason=reason)
+                elif e.get("clear") or ("value" in e and e["value"] in ("", None)):
+                    ob.set(sheet, cell, value=None, number_format=nf, reason=reason)
+                elif "value" in e:
+                    v = e["value"]
+                    if not isinstance(v, (str, int, float, bool)):
+                        raise HTTPException(422, f"edit {i + 1}: a value must be text, a number or true/false")
+                    ob.set(sheet, cell, value=v[:32000] if isinstance(v, str) else v,
+                           number_format=nf, reason=reason)
+                elif nf is not None:
+                    cur = model.sheets[sheet].get(r, c)
+                    ob.set(sheet, cell, value=cur.value if cur else None,
+                           formula=cur.formula if cur and cur.formula else None,
+                           number_format=nf, reason=f"Format set by {author}")
+                else:
+                    raise HTTPException(422, f"edit {i + 1}: nothing to change")
+            n = len(ob.ops)
+            batch = new_batch(f"Edited by {author}", f"{n} cell{'s' if n != 1 else ''}",
+                              "user_edit", ob.ops)
+            wb.add_batch(conv, batch)
+            try:
+                done = wb.accept(conv, batch.id)
+            except WorkbenchError as exc:
+                raise HTTPException(409, str(exc)) from exc
+            wb.store.save(conv)
+            return {"batch": done.to_dict(), "conversation": conv.public()}
 
     # --- proposals --------------------------------------------------------------------
     @app.get("/workbench/conversations/{conversation_id}/batches")
