@@ -78,6 +78,12 @@ class UserEdits(BaseModel):
     edits: list[dict[str, Any]] = Field(min_length=1, max_length=5000)
 
 
+class RestoreVersion(BaseModel):
+    """R4: bring back an earlier version as a new version (undoable)."""
+    version: int = Field(ge=1)
+    author: str = Field(default="you", min_length=1, max_length=80)
+
+
 class RunTool(BaseModel):
     args: dict[str, Any] = Field(default_factory=dict)
 
@@ -350,7 +356,7 @@ def register_workbench_routes(app: FastAPI) -> None:
                     raise HTTPException(422, f"edit {i + 1}: there is no sheet {sheet!r}")
                 try:
                     r, c = parse_a1(cell)
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     raise HTTPException(422, f"edit {i + 1}: {cell!r} is not a cell") from exc
                 nf = e.get("number_format")
                 nf = str(nf)[:64] if nf else None
@@ -428,6 +434,21 @@ def register_workbench_routes(app: FastAPI) -> None:
     def undo_batch(conversation_id: str, batch_id: str) -> dict[str, Any]:
         return _decide(conversation_id, batch_id, "undo")
 
+    @app.post("/workbench/conversations/{conversation_id}/workbooks/{workbook_id}/restore")
+    def restore_version(conversation_id: str, workbook_id: str,
+                        body: RestoreVersion) -> dict[str, Any]:
+        author = " ".join(body.author.split())[:80] or "you"
+        with _workbench() as wb:
+            conv = _get(wb, conversation_id)
+            try:
+                done = wb.restore(conv, workbook_id, body.version, author)
+            except KeyError as exc:
+                raise HTTPException(404, "workbook not found") from exc
+            except WorkbenchError as exc:
+                raise HTTPException(409, str(exc)) from exc
+            wb.store.save(conv)
+            return {"batch": done.to_dict(), "conversation": conv.public()}
+
     # --- workbooks / charts -----------------------------------------------------------
     @app.get("/workbench/conversations/{conversation_id}/workbooks/{workbook_id}.xlsx")
     def download_workbook(conversation_id: str, workbook_id: str,
@@ -472,12 +493,20 @@ def register_workbench_routes(app: FastAPI) -> None:
 
     @app.get("/workbench/conversations/{conversation_id}/workbooks/{workbook_id}/sheets/{sheet}")
     def sheet_cells(conversation_id: str, workbook_id: str, sheet: str, r0: int = 1,
-                    r1: int = 200, c0: int = 1, c1: int = 52) -> dict[str, Any]:
+                    r1: int = 200, c0: int = 1, c1: int = 52,
+                    version: int | None = None) -> dict[str, Any]:
         """A window of one sheet for the grid: value, formula, preview, and the
-        pending batch (diff colour + why) for each cell."""
+        pending batch (diff colour + why) for each cell. With ``version``: that saved
+        version, read-only, without proposals (the history preview)."""
         with _workbench() as wb:
             conv = _get(wb, conversation_id)
-            models = wb.models(conv)
+            if version is not None:
+                try:
+                    models = {workbook_id: wb.version_model(conv, workbook_id, version)}
+                except (KeyError, WorkbenchError) as exc:
+                    raise HTTPException(404, str(exc)) from exc
+            else:
+                models = wb.models(conv)
             if workbook_id not in models:
                 raise HTTPException(404, "workbook not found")
             try:
@@ -486,7 +515,7 @@ def register_workbench_routes(app: FastAPI) -> None:
                 raise HTTPException(404, str(exc)) from exc
             pending: dict[tuple[str, str], dict[str, Any]] = {}
             for b in conv.batches:
-                if b.status != "pending":
+                if b.status != "pending" or version is not None:
                     continue
                 for op in b.ops:
                     if op.op == "set_cell" and op.workbook_id == workbook_id \

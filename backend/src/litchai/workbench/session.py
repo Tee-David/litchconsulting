@@ -388,6 +388,63 @@ class Workbench:
         record_as.status, record_as.decided_at = "accepted", _now()
         return record_as
 
+    def version_sha(self, conv: Conversation, wb_id: str, version: int) -> str:
+        for v in conv.workbook_ref(wb_id).versions:
+            if v["n"] == version:
+                return v["sha"]
+        raise WorkbenchError(f"no version {version}")
+
+    def version_model(self, conv: Conversation, wb_id: str, version: int) -> Workbook:
+        """One saved version as a model, for a read-only preview."""
+        ref = conv.workbook_ref(wb_id)
+        m = load_xlsx(self.blobs.get(self.version_sha(conv, wb_id, version)), wb_id=ref.id,
+                      name=ref.name, document_id=ref.document_id)
+        m.origin = ref.origin
+        return m
+
+    def restore(self, conv: Conversation, wb_id: str, version: int, author: str) -> Batch:
+        """Bring back an earlier version as a NEW version: the differences are written as
+        ordinary cell changes, so the restore is in the history and can be undone.
+        Sheets added after that version stay, with their cells cleared (a sheet delete
+        could not be undone)."""
+        from litchai.workbench.model import a1
+        from litchai.workbench.ops import OpBuilder, new_batch
+
+        ref = conv.workbook_ref(wb_id)
+        if version == ref.versions[-1]["n"]:
+            raise WorkbenchError("that is already the current version")
+        target = self.version_model(conv, wb_id, version)
+        current = self.models(conv, with_pending=False)[wb_id]
+        ob = OpBuilder(current, "restore")
+        reason = f"Restored version {version} by {author}"
+        for name, sheet in target.sheets.items():
+            if name not in current.sheets:
+                ob.create_sheet(name, reason)
+            cur = current.sheets.get(name)
+            for (r, c), cell in sheet.cells.items():
+                old = cur.get(r, c) if cur else None
+                if old is not None and old.formula == cell.formula and (
+                        cell.formula or old.value == cell.value) \
+                        and (old.number_format or "General") == (cell.number_format or "General"):
+                    continue
+                if cell.formula is None and cell.value is None and old is None:
+                    continue
+                ob.set(name, a1(r, c), value=None if cell.formula else cell.value,
+                       formula=cell.formula, number_format=cell.number_format, reason=reason)
+        for name, cur in current.sheets.items():
+            keep = target.sheets.get(name)
+            for (r, c), old in cur.cells.items():
+                if (keep is None or keep.get(r, c) is None) and (
+                        old.value is not None or old.formula):
+                    ob.set(name, a1(r, c), value=None, reason=reason)
+        if not ob.ops:
+            raise WorkbenchError(f"version {version} has the same cells as the current one")
+        n = sum(1 for op in ob.ops if op.op == "set_cell")
+        batch = new_batch(f"Restored version {version} by {author}",
+                          f"{n} cell{'s' if n != 1 else ''}", "restore", ob.ops)
+        self.add_batch(conv, batch)
+        return self.accept(conv, batch.id)
+
     def download(self, conv: Conversation, wb_id: str, version: int | None = None) -> bytes:
         ref = conv.workbook_ref(wb_id)
         if version is None:
