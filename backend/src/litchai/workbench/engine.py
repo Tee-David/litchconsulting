@@ -149,8 +149,27 @@ def _trim(data: dict[str, Any], limit: int = 12000) -> dict[str, Any]:
     return {"truncated": True, "keys": list(data)[:30]}
 
 
+def pop_last_turn(conv: Conversation) -> list[dict[str, Any]]:
+    """A5: take the last question and its answer out of the thread, to keep them as an
+    earlier branch of the next question (edit and resend, regenerate). Branches the old
+    question already had come along, so no version is ever lost."""
+    msgs = conv.messages
+    if len(msgs) >= 2 and msgs[-1].get("role") == "assistant" and msgs[-2].get("role") == "user":
+        user, answer = msgs[-2], msgs[-1]
+        del msgs[-2:]
+    elif msgs and msgs[-1].get("role") == "user":
+        user, answer = msgs[-1], None
+        del msgs[-1:]
+    else:
+        return []
+    older = list(user.get("branches") or [])
+    plain = {k: v for k, v in user.items() if k != "branches"}
+    return [*older, {"user": plain, "assistant": answer}]
+
+
 def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
-             selection: str | None = None, max_steps: int = 8) -> Iterator[dict[str, Any]]:
+             selection: str | None = None, max_steps: int = 8,
+             replace_last: bool = False) -> Iterator[dict[str, Any]]:
     wbench = deps.workbench
     decision = deps.decision or HeuristicDecisionLayer()
     ctx = wbench.context(conv, taxonomy=deps.taxonomy, categoriser=deps.categoriser)
@@ -167,8 +186,9 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
         offered = ["trial_balance_statements", *offered][:max(len(offered), 1)]
     tools = [AgentTool(t.name, t.description, t.schema(), t.kind)
              for t in (TOOLS_BY_NAME[n] for n in offered)]
+    branches = pop_last_turn(conv) if replace_last else []
     conv.messages.append({"role": "user", "content": message, "at": _now(),
-                          "selection": selection})
+                          "selection": selection, **({"branches": branches} if branches else {})})
 
     results: dict[str, Any] = {}  # tool name → its latest data, for "$tool.path" references
 

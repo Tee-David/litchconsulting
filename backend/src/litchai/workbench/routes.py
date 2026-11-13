@@ -16,7 +16,8 @@ import json
 import os
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from typing import Any
+from datetime import UTC, datetime
+from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import StreamingResponse
@@ -57,6 +58,16 @@ class SendMessage(BaseModel):
     message: str = Field(min_length=1, max_length=8000)
     selection: str | None = None           # optional hint only — never required
     max_steps: int = Field(8, ge=1, le=8)
+    # A5: edit-and-resend or regenerate. The last question and answer are kept as an
+    # earlier branch of this question.
+    replace_last: bool = False
+
+
+class MessageFeedback(BaseModel):
+    """A1/H1: Good or Bad on one Sage answer, with an optional note."""
+    vote: Literal["good", "bad"] | None = None
+    note: str = Field(default="", max_length=1000)
+    author: str = Field(default="you", min_length=1, max_length=80)
 
 
 class UpdateConversation(BaseModel):
@@ -289,7 +300,8 @@ def register_workbench_routes(app: FastAPI) -> None:
             with _workbench() as wb:
                 conv = _get(wb, conversation_id)
                 yield from run_turn(_deps(wb, conv), conv, body.message,
-                                    selection=body.selection, max_steps=body.max_steps)
+                                    selection=body.selection, max_steps=body.max_steps,
+                                    replace_last=body.replace_last)
 
         if not stream:
             out = list(events())
@@ -306,6 +318,33 @@ def register_workbench_routes(app: FastAPI) -> None:
         return StreamingResponse(sse(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache",
                                           "X-Accel-Buffering": "no"})
+
+    @app.post("/workbench/conversations/{conversation_id}/messages/{index}/feedback")
+    def message_feedback(conversation_id: str, index: int,
+                         body: MessageFeedback) -> dict[str, Any]:
+        """Store a vote on one answer with what produced it (route, tools, model), so
+        routing mistakes can be counted (H1). ``vote: null`` takes a vote back."""
+        with _workbench() as wb:
+            conv = _get(wb, conversation_id)
+            msgs = conv.messages
+            if not 0 <= index < len(msgs) or msgs[index].get("role") != "assistant":
+                raise HTTPException(404, "no Sage answer at that place")
+            m = conv.messages[index]
+            if body.vote is None:
+                m.pop("feedback", None)
+            else:
+                steps = m.get("steps") or []
+                m["feedback"] = {
+                    "vote": body.vote, "note": body.note.strip()[:1000],
+                    "by": " ".join(body.author.split())[:80] or "you", "at": datetime.now(UTC).isoformat(timespec="seconds"),
+                    "tools": [s.get("tool") for s in steps if s.get("type") == "tool_call"][:12],
+                    "layer": next((s.get("layer") for s in steps if s.get("type") == "plan"), None),
+                    "model": (m.get("attribution") or {}).get("model"),
+                    "provider": next((s.get("provider") for s in steps
+                                      if s.get("type") == "provider"), None),
+                }
+            wb.store.save(conv)
+            return {"conversation": conv.public()}
 
     @app.post("/workbench/conversations/{conversation_id}/tools/{tool}")
     def run_tool_direct(conversation_id: str, tool: str, body: RunTool) -> dict[str, Any]:
