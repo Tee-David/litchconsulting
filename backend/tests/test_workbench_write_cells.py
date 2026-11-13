@@ -15,12 +15,14 @@ def test_write_cells_proposes_checked_formulas(tmp_path):
         url = f"/workbench/conversations/{cid}/tools/write_cells"
         r = c.post(url, json={"args": {"sheet": "Ledger", "reason": "totals", "cells": [
             {"cell": "H1", "value": "Check"},
-            {"cell": "H2", "formula": "SUM(1,2)", "number_format": "#,##0.00"}]}})
+            {"cell": "H2", "formula": "SUM(1,2)", "number_format": "#,##0.00"},
+            {"cell": "H3", "value": "=H2*2"}]}})
         assert r.status_code == 200, r.text
         out = r.json()
-        assert out["batch"]["status"] == "pending" and out["data"]["cells"] == 2
+        assert out["batch"]["status"] == "pending" and out["data"]["cells"] == 3
         assert out["data"]["formula_results"][0]["formula"] == "=SUM(1,2)"
         assert out["data"]["formula_results"][0]["result"] == 3
+        assert out["data"]["formula_results"][1] == {"cell": "H3", "formula": "=H2*2", "result": 6}
         # Refused: unknown function, bad cell, unknown sheet.
         assert c.post(url, json={"args": {"cells": [{"cell": "A1", "formula": "=WEBSERVICE(1)"}]}}
                       ).status_code == 422

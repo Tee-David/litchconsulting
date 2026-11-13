@@ -387,6 +387,9 @@ def _write_cells(ctx: ToolContext, a: WriteCellsArgs) -> ToolOutput:
             parse_a1(ref)
         except Exception as exc:  # noqa: BLE001 - any parse failure is the model's input
             raise ToolError(f"{w.cell!r} is not a cell reference") from exc
+        # Models often put a formula in value: a value that starts with = is one.
+        if not w.formula and isinstance(w.value, str) and w.value.strip().startswith("="):
+            w.formula, w.value = w.value.strip(), None
         if w.formula:
             f = w.formula.strip()
             f = f if f.startswith("=") else "=" + f
