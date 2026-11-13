@@ -48,8 +48,9 @@ numbers to real values, and new sheets or new workbooks.
 
 ## Proposals: accept, edit, reject, undo
 
-Nothing Sage does changes the file until you accept it. Every write comes back as a
-proposal: new cells, changed cells and new sheets are highlighted in the grid, each
+Nothing Sage does changes the file until you accept it. (Your own typed edits, pastes and
+formats are not proposals: they save at once as a new version; see "Editing cells
+yourself".) Every write from Sage comes back as a proposal: new cells, changed cells and new sheets are highlighted in the grid, each
 with a "why" note showing the tool, the reason and the source rows. Accept applies
 it and recalculates the workbook; if a formula would break (for example #REF!), the
 accept is blocked and the previous version is kept. You can edit a proposed cell
@@ -60,8 +61,10 @@ gets a closer look.
 
 ## Editing cells yourself
 
-Admins, and staff on requests assigned to them, can edit the sheet directly, like in
-Excel or Google Sheets. Select a cell and type, or press F2 or double-click to change
+How to type in a cell, edit a value, enter a formula, paste from Excel or Google Sheets,
+clear cells, change the number format and undo your own edits in the workbench. Admins,
+and staff on requests assigned to them, can edit the sheet directly, like in Excel or
+Google Sheets; these edits save at once and are not proposals. Select a cell and type, or press F2 or double-click to change
 what is there; Enter saves and moves down, Tab saves and moves right, Esc cancels. You
 can also edit in the formula bar. A value starting with = is a formula; while you type,
 a list of functions (SUM, SUMIF, VLOOKUP, XLOOKUP, INDEX, MATCH, IF and many more)
