@@ -87,8 +87,8 @@ export const buildAdminAttention = cache(async (): Promise<AttentionItem[]> => {
     db
       .select({
         t: ticket,
-        lastRole: sql<string>`(SELECT ${ticketMessage.authorRole} FROM ${ticketMessage} WHERE ${ticketMessage.ticketId} = ${ticket.id} ORDER BY ${ticketMessage.createdAt} DESC LIMIT 1)`,
-        lastBody: sql<string>`(SELECT ${ticketMessage.body} FROM ${ticketMessage} WHERE ${ticketMessage.ticketId} = ${ticket.id} ORDER BY ${ticketMessage.createdAt} DESC LIMIT 1)`,
+        lastRole: sql<string>`(SELECT ${ticketMessage.authorRole} FROM ${ticketMessage} WHERE ${ticketMessage.ticketId} = "ticket"."id" ORDER BY ${ticketMessage.createdAt} DESC LIMIT 1)`,
+        lastBody: sql<string>`(SELECT ${ticketMessage.body} FROM ${ticketMessage} WHERE ${ticketMessage.ticketId} = "ticket"."id" ORDER BY ${ticketMessage.createdAt} DESC LIMIT 1)`,
       })
       .from(ticket)
       .where(and(isNull(ticket.deletedAt), inArray(ticket.status, ["open", "pending"])))
