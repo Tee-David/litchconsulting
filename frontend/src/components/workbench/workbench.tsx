@@ -89,6 +89,8 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   // S2: tab colour and hidden state per sheet, from the grid's last read.
   const [infoBy, setInfoBy] = useState<Record<string, Record<string, SheetInfo>>>({});
   const [sheetBusy, setSheetBusy] = useState(false);
+  // A sheet just renamed or duplicated: open it even before the next read lists it.
+  const pendingName = useRef<string | null>(null);
   // R4: a saved version shown read-only in the grid (null = the live workbook).
   const [previewV, setPreviewV] = useState<number | null>(null);
   const [restoring, setRestoring] = useState(false);
@@ -201,7 +203,12 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     window.addEventListener("pointerup", up);
   };
 
-  const sheet = sheetBy[wbId] ?? sheetsBy[wbId]?.[0] ?? "Sheet1";
+  // The chosen sheet, or the first visible one when it is gone (deleted, hidden, renamed
+  // elsewhere). A new name not yet in the list is kept until the next read lists it.
+  const listed = sheetsBy[wbId];
+  const visibleSheets = (listed ?? []).filter((n) => !infoBy[wbId]?.[n]?.hidden);
+  const chosen = sheetBy[wbId];
+  const sheet = chosen && (!listed || listed.includes(chosen) || pendingName.current === chosen) ? chosen : (visibleSheets[0] ?? listed?.[0] ?? "Sheet1");
 
   // Resume where you were: the file, the sheet and the selected range, per workbench,
   // kept on this device. Restored once on open; saved as you move.
@@ -398,8 +405,10 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
       setConv(res.conversation);
       setRedoStack([]);
       const others = (sheetsBy[wbId] ?? []).filter((n) => n !== name && !infoBy[wbId]?.[n]?.hidden);
-      if (action === "rename" && sheet === name) setSheetBy((p) => ({ ...p, [wbId]: res.name }));
-      if (action === "copy") setSheetBy((p) => ({ ...p, [wbId]: res.name }));
+      if ((action === "rename" && sheet === name) || action === "copy") {
+        pendingName.current = res.name;
+        setSheetBy((p) => ({ ...p, [wbId]: res.name }));
+      }
       if ((action === "delete" || action === "hide") && sheet === name && others[0]) setSheetBy((p) => ({ ...p, [wbId]: others[0] }));
       setGridVersion((v) => v + 1);
       toast.action(action === "delete" ? `Deleted ${name}.` : (res.message ?? "Done."), { label: "Undo", onAction: () => void stepRef.current("undo") });
