@@ -140,7 +140,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const toggleFormulas = useCallback(() => setShowFormulas((v) => !v), []);
   // E2: a person's own edits. Each save is a named version; undo and redo walk them.
   const [redoStack, setRedoStack] = useState<string[]>([]);
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "offline">("idle");
   const [formatRequest, setFormatRequest] = useState<{ kind: "currency" | "percent" | "thousands" | "plain" | "dec+" | "dec-"; nonce: number } | null>(null);
   const [fxText, setFxText] = useState<string | null>(null);
   const formatSel = (kind: "currency" | "percent" | "thousands" | "plain" | "dec+" | "dec-") => setFormatRequest({ kind, nonce: Date.now() });
@@ -240,11 +240,97 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const hasPdf = Boolean(activeRef?.origin === "line_items" && activeRef.document_id && pdfDocs.includes(activeRef.document_id));
   const batchById = useMemo(() => new Map(conv.batches.map((b) => [b.id, b])), [conv.batches]);
 
+  // Never lose work: an edit that cannot reach the server (offline, network error) is
+  // kept on this device and sent when the connection returns or the workbench reopens.
+  const queueKey = `litch.wb.queue.${conv.id}`;
+  const inFlight = useRef(0);
+  const [queued, setQueued] = useState(0);
+  const readQueue = useCallback((): { wbId: string; edits: WbUserEdit[] }[] => {
+    try {
+      return JSON.parse(window.localStorage.getItem(queueKey) || "[]");
+    } catch {
+      return [];
+    }
+  }, [queueKey]);
+  const writeQueue = useCallback(
+    (q: { wbId: string; edits: WbUserEdit[] }[]) => {
+      try {
+        if (q.length) window.localStorage.setItem(queueKey, JSON.stringify(q));
+        else window.localStorage.removeItem(queueKey);
+      } catch {
+        /* storage full or blocked: the edit stays only on screen */
+      }
+      setQueued(q.reduce((n, x) => n + x.edits.length, 0));
+    },
+    [queueKey],
+  );
+  const flushQueue = useCallback(async () => {
+    let q = readQueue();
+    if (!q.length || !navigator.onLine) return;
+    setSaveState("saving");
+    while (q.length) {
+      const item = q[0];
+      try {
+        const res = await saveEditsAction({ conversationId: conv.id, workbookId: item.wbId, edits: item.edits });
+        if (!res.ok) toast.error(`A change kept on this device could not be saved: ${res.error}`);
+        else setConv(res.conversation);
+      } catch {
+        setSaveState("offline");
+        return; // still offline: try again later
+      }
+      q = q.slice(1);
+      writeQueue(q);
+    }
+    setGridVersion((v) => v + 1);
+    setSaveState("saved");
+  }, [readQueue, writeQueue, conv.id, toast]);
+  useEffect(() => {
+    setQueued(readQueue().reduce((n, x) => n + x.edits.length, 0));
+    void flushQueue();
+    const online = () => void flushQueue();
+    const offline = () => setSaveState((s) => (s === "saving" ? s : "offline"));
+    // Ask before leaving while a save is running or edits wait on this device.
+    const leave = (e: BeforeUnloadEvent) => {
+      if (inFlight.current > 0 || readQueue().length) {
+        e.preventDefault();
+        e.returnValue = "";
+      }
+    };
+    window.addEventListener("online", online);
+    window.addEventListener("offline", offline);
+    window.addEventListener("beforeunload", leave);
+    return () => {
+      window.removeEventListener("online", online);
+      window.removeEventListener("offline", offline);
+      window.removeEventListener("beforeunload", leave);
+    };
+  }, [flushQueue, readQueue]);
+
   const commitEdits = useCallback(
     async (edits: WbUserEdit[]) => {
       if (!wbId || !edits.length) return false;
+      const keep = () => {
+        writeQueue([...readQueue(), { wbId, edits }]);
+        setSaveState("offline");
+        return true;
+      };
+      if (!navigator.onLine) return keep();
+      // Older edits still wait on this device: keep the order, so send them first.
+      if (readQueue().length) {
+        keep();
+        void flushQueue();
+        return true;
+      }
       setSaveState("saving");
-      const res = await saveEditsAction({ conversationId: conv.id, workbookId: wbId, edits });
+      inFlight.current++;
+      let res: Awaited<ReturnType<typeof saveEditsAction>>;
+      try {
+        res = await saveEditsAction({ conversationId: conv.id, workbookId: wbId, edits });
+      } catch {
+        return keep();
+      } finally {
+        inFlight.current--;
+      }
       if (!res.ok) {
         setSaveState("idle");
         toast.error(res.error);
@@ -257,7 +343,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
       if (edits.length > 1) toast.success(res.message ?? "Saved.");
       return true;
     },
-    [conv.id, wbId, toast],
+    [conv.id, wbId, toast, readQueue, writeQueue, flushQueue],
   );
   // Undo comes from the saved history, so it works after a reload and covers accepted
   // Sage changes too: the newest accepted change that is not itself a plain undo.
@@ -622,7 +708,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
       <button type="button" className={cn(tb, "w-auto px-1.5 font-mono text-[11.5px]")} onClick={() => formatSel("dec+")} disabled={!selection} aria-label="More decimal places" title="More decimals">.00→</button>
       <button type="button" className={cn(tb, "w-auto px-2 text-[12px]")} onClick={() => formatSel("plain")} disabled={!selection} aria-label="Plain number format" title="Plain number">123</button>
       <span className="ml-auto pr-1.5 text-[12px] text-muted" aria-live="polite">
-        {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved as a new version" : "Type in a cell to edit. Sage's changes stay proposals."}
+        {saveState === "saving" ? "Saving…" : saveState === "offline" || queued ? `Offline: ${queued} change${queued === 1 ? "" : "s"} kept on this device` : saveState === "saved" ? "All changes saved" : "Type in a cell to edit. Sage's changes stay proposals."}
       </span>
     </div>
   ) : null;
