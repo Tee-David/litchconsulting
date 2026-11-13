@@ -1,6 +1,6 @@
 "use server";
 
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
 import { serviceRequestDocument, serviceRequestEvent, workbenchConversation } from "@/lib/db/schema";
@@ -17,6 +17,7 @@ import {
   wbRunTool,
   wbStart,
   wbUserEdits,
+  wbListByDocument,
   type WbBatch,
   type WbConversation,
   type WbFirstLook,
@@ -343,6 +344,17 @@ export async function openDocumentInWorkbenchAction(engineDocId: number): Promis
       .where(eq(serviceRequestDocument.litchaiDocumentId, String(engineDocId)))
       .limit(1);
     const ctx = link ? await requestContext(link.requestId) : null;
+    // Resume: reopen this person's newest workbench for the document, if there is one.
+    const existing = await wbListByDocument(engineDocId).catch(() => ({ conversations: [] as { id: string }[] }));
+    const ids = existing.conversations.map((c) => c.id);
+    if (ids.length) {
+      const mine = await db
+        .select({ id: workbenchConversation.id, createdBy: workbenchConversation.createdBy })
+        .from(workbenchConversation)
+        .where(inArray(workbenchConversation.id, ids));
+      const pick = ids.find((cid) => mine.some((m) => m.id === cid && m.createdBy === u.id));
+      if (pick) return { ok: true, id: pick, message: "Opened where you left off." };
+    }
     const clientName = ctx?.c?.company || ctx?.c?.name || "Client";
     const title = ctx ? `${ctx.req.number} · ${review.document.filename}` : review.document.filename;
     const res = await wbStart({

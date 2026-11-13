@@ -139,7 +139,6 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   };
   const toggleFormulas = useCallback(() => setShowFormulas((v) => !v), []);
   // E2: a person's own edits. Each save is a named version; undo and redo walk them.
-  const [undoStack, setUndoStack] = useState<string[]>([]);
   const [redoStack, setRedoStack] = useState<string[]>([]);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [formatRequest, setFormatRequest] = useState<{ kind: "currency" | "percent" | "thousands" | "plain" | "dec+" | "dec-"; nonce: number } | null>(null);
@@ -216,7 +215,6 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
       }
       setConv(res.conversation);
       setGridVersion((v) => v + 1);
-      setUndoStack((st) => [...st, res.batch.id].slice(-50));
       setRedoStack([]);
       setSaveState("saved");
       if (edits.length > 1) toast.success(res.message ?? "Saved.");
@@ -224,10 +222,21 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     },
     [conv.id, wbId, toast],
   );
+  // Undo comes from the saved history, so it works after a reload and covers accepted
+  // Sage changes too: the newest accepted change that is not itself a plain undo.
+  // (A redo is the undo of an undo, so it can be undone again.)
+  const undoId = useMemo(() => {
+    for (let i = conv.batches.length - 1; i >= 0; i--) {
+      const b = conv.batches[i];
+      if (b.status !== "accepted") continue;
+      const plainUndo = Boolean(b.inverse_of) && !batchById.get(b.inverse_of as string)?.inverse_of;
+      if (!plainUndo) return b.id;
+    }
+    return null;
+  }, [conv.batches, batchById]);
   const stepEdit = useCallback(
     async (dir: "undo" | "redo") => {
-      const from = dir === "undo" ? undoStack : redoStack;
-      const id = from[from.length - 1];
+      const id = dir === "undo" ? undoId : redoStack[redoStack.length - 1];
       if (!id) return;
       setSaveState("saving");
       // Redo = undo the undo: both are the engine's normal batch undo, each a new version.
@@ -239,15 +248,10 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
       }
       setConv(res.conversation);
       setGridVersion((v) => v + 1);
-      if (dir === "undo") {
-        setUndoStack((st) => st.slice(0, -1));
-        setRedoStack((st) => [...st, res.batch.id]);
-      } else {
-        setRedoStack((st) => st.slice(0, -1));
-        setUndoStack((st) => [...st, res.batch.id]);
-      }
+      if (dir === "undo") setRedoStack((st) => [...st, res.batch.id]);
+      else setRedoStack((st) => st.slice(0, -1));
     },
-    [undoStack, redoStack, conv.id, toast],
+    [undoId, redoStack, conv.id, toast],
   );
 
   const refresh = useCallback(async () => {
@@ -540,7 +544,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const tb = "grid size-8 place-items-center rounded-ctl text-body hover:bg-cloud hover:text-ink disabled:cursor-not-allowed disabled:opacity-40";
   const editBar = wbId ? (
     <div className="flex flex-wrap items-center gap-0.5 border-b border-hairline px-1.5 py-1" role="toolbar" aria-label="Edit">
-      <button type="button" className={tb} onClick={() => void stepEdit("undo")} disabled={!undoStack.length || saveState === "saving"} aria-label="Undo" title="Undo your last edit (Ctrl+Z)">
+      <button type="button" className={tb} onClick={() => void stepEdit("undo")} disabled={!undoId || saveState === "saving"} aria-label="Undo" title="Undo the last change (Ctrl+Z)">
         <Undo2 className="size-4" />
       </button>
       <button type="button" className={tb} onClick={() => void stepEdit("redo")} disabled={!redoStack.length || saveState === "saving"} aria-label="Redo" title="Redo (Ctrl+Y)">
@@ -1050,6 +1054,18 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           : "h-[calc(100dvh-9rem)] min-h-[520px] rounded-card border border-hairline lg:h-[calc(100dvh-7.5rem)]",
       )}
       onKeyDownCapture={(e) => {
+        const k = e.key.toLowerCase();
+        // Undo and redo work anywhere in the workbench, except inside a text field
+        // (there they undo the typing, as in every editor).
+        if ((e.ctrlKey || e.metaKey) && (k === "z" || k === "y")) {
+          const t = e.target as HTMLElement;
+          if (!t.closest("input, textarea, [contenteditable='true']")) {
+            e.preventDefault();
+            e.stopPropagation();
+            void stepEdit(k === "y" || e.shiftKey ? "redo" : "undo");
+            return;
+          }
+        }
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
           e.preventDefault();
           openFind();

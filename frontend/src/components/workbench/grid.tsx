@@ -109,7 +109,8 @@ export function Grid({
   const editInput = useRef<HTMLInputElement>(null);
   // E2.6 fill handle: the cell the drag has reached, while dragging.
   const [fillTo, setFillTo] = useState<{ r: number; c: number } | null>(null);
-  const key = `${conversationId}|${workbookId}|${sheet}|${version}`;
+  // The cache is dropped only for a new sheet; a new version refreshes in place (below).
+  const key = `${conversationId}|${workbookId}|${sheet}`;
   const keyRef = useRef(key);
 
   const load = useCallback(
@@ -152,6 +153,20 @@ export function Grid({
     setEditing(null);
     void load(0);
   }, [key, load]);
+
+  // A new version of the same sheet (a save, an accept, an undo): refresh the loaded
+  // blocks in place. The cells stay on screen until the new values arrive, so nothing
+  // blinks, and a fill or paste started now still reads real cells.
+  const blocksRef = useRef(blocks);
+  blocksRef.current = blocks;
+  const seenVersion = useRef(version);
+  useEffect(() => {
+    if (version === seenVersion.current) return;
+    seenVersion.current = version;
+    const ids = [...blocksRef.current.keys()];
+    loading.current.clear();
+    void Promise.all((ids.length ? ids : [0]).map((b) => load(b))).then(() => setOptimistic(new Map()));
+  }, [version, load]);
 
   // The data extent, and the view extent. Like Excel, the view goes 100 rows and
   // 10 columns past the data (at least A to Z), so a person can type below or beside it.

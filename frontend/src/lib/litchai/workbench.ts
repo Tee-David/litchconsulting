@@ -204,6 +204,10 @@ export const wbDecide = (id: string, batchId: string, action: "accept" | "reject
     json(action === "accept" ? { edits: edits ?? null } : {}),
   );
 
+/** Workbenches that hold one document, newest first (to resume instead of starting again). */
+export const wbListByDocument = (documentId: number) =>
+  call<{ conversations: { id: string; updated_at?: string }[] }>(`/workbench/conversations?document_id=${documentId}&limit=20`);
+
 /** A person's own edits (E2): saved at once as a version named after them. */
 export type WbUserEdit = { sheet: string; cell: string; value?: string | number | boolean | null; formula?: string; clear?: boolean; number_format?: string };
 export const wbUserEdits = (id: string, workbookId: string, author: string, edits: WbUserEdit[]) =>
