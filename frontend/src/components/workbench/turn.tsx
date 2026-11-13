@@ -125,6 +125,9 @@ export function TurnView({
   onRetry?: () => void;
 }) {
   const plan = events.find((e) => e.type === "plan");
+  // The trial balance fast path is the pipeline by design (no model needed); any other
+  // decision-layer plan means the models could not be used.
+  const fastPath = events.some((e) => e.type === "start" && (e as { fast_path?: boolean }).fast_path);
   const calls = events.filter((e) => e.type === "tool_call");
   const results = new Map(events.filter((e) => e.type === "tool_result").map((e) => [Number(e.step), e]));
   const fallbacks = events.filter((e) => e.type === "fallback");
@@ -141,7 +144,7 @@ export function TurnView({
         <div className="rounded-card border border-hairline bg-paper">
           <p className="border-b border-hairline px-3 py-2 text-[12px] font-semibold text-ink">
             Plan · {planSteps.length} step{planSteps.length === 1 ? "" : "s"}
-            {plan?.layer === "decision" ? <span className="ml-2 font-normal text-muted">(no model reachable: run directly)</span> : null}
+            {plan?.layer === "decision" ? <span className="ml-2 font-normal text-muted">{fastPath ? "(answered by the pipeline, no model needed)" : "(no model reachable: run directly)"}</span> : null}
           </p>
           <ol className="space-y-1 px-3 py-2">
             {planSteps.map((p, i) => {

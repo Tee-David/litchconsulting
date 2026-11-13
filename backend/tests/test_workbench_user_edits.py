@@ -77,3 +77,16 @@ def test_list_by_document_finds_the_existing_workbench(tmp_path):
         found = c.get("/workbench/conversations", params={"document_id": doc.id}).json()["conversations"]
         assert [x["id"] for x in found] == [cid]
         assert c.get("/workbench/conversations", params={"document_id": 99999}).json()["conversations"] == []
+
+
+def test_trial_balance_fast_path_only_for_questions():
+    from litchai.workbench.engine import _tb_question
+
+    assert _tb_question("Does the trial balance balance?")
+    assert _tb_question("What is the profit before tax?")
+    assert _tb_question("Build the P&L as a new sheet")
+    # The sheet's name alone is not the intent, and edits always go to the model.
+    assert not _tb_question("Add a column that shows debit minus credit for each row on the trial balance")
+    assert not _tb_question("Add Total Credit column on Trial balance")
+    assert not _tb_question("Sort the trial balance by account code")
+    assert not _tb_question("Highlight the rows on the trial balance where the balance is negative")

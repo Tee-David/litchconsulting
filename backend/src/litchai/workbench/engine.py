@@ -274,13 +274,26 @@ _TB_OTHER_JOB = re.compile(
     r"ageing|chart|plot|pivot|categori[sz]e|anomal|duplicate)", re.IGNORECASE)
 _TB_TAX = re.compile(r"\b(cit|company income tax|development levy|small company|tax on)",
                      re.IGNORECASE)
+# An edit request is never a question for the fast path, even on a trial balance.
+_TB_EDIT_JOB = re.compile(
+    r"\b(add|insert|create|columns?|rows?|formulas?|fill|sort|filter|format|rename|"
+    r"delete|remove|highlight|copy|move|merge|bold|colou?r|clear)\b", re.IGNORECASE)
+_TB_NAME = re.compile(r"\btrial[\s_-]*balances?\b", re.IGNORECASE)
+
+
+def _tb_question(message: str) -> bool:
+    """A question the trial balance answers by itself. "trial balance" is the sheet's
+    name, not the intent, so it is taken out before the intent is looked for."""
+    text = _TB_NAME.sub(" ", message)
+    return (bool(_TB_INTENT.search(text)) and not _TB_OTHER_JOB.search(message)
+            and not _TB_EDIT_JOB.search(message))
 
 
 def _tb_fast_path(message: str, ctx: ToolContext, execute: Any
                   ) -> list[dict[str, Any]] | None:
     """A trial balance is open and the question is about its profit, statements,
     balance or CIT: the pipeline answers with no model step (fast and sure)."""
-    if not _TB_INTENT.search(message) or _TB_OTHER_JOB.search(message):
+    if not _tb_question(message):
         return None
     m = message.lower()
     only_check = bool(re.search(r"\bbalanc", m)) and not re.search(
@@ -428,7 +441,7 @@ def _plan_for(has_tb: bool) -> Any:
     steps: on a trial balance, its statements (and CIT when asked); else the
     decision layer's keyword plan."""
     def plan(message: str) -> list[tuple[str, dict[str, Any]]]:
-        if has_tb and _TB_INTENT.search(message) and not _TB_OTHER_JOB.search(message):
+        if has_tb and _tb_question(message):
             steps: list[tuple[str, dict[str, Any]]] = [("trial_balance_statements", {})]
             if _TB_TAX.search(message):
                 steps.append(("tax_compute", {"kind": "cit"}))
