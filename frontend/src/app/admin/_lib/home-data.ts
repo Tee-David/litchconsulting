@@ -37,6 +37,24 @@ function buckets(period: HomePeriod, now = new Date()): Bucket[] {
   });
 }
 
+/**
+ * Request-flow buckets. The month view counts by week (Monday to Sunday), so a
+ * request shows as a real bar and not a one-day needle. Week and year views
+ * keep the money buckets (days, months).
+ */
+function flowBuckets(period: HomePeriod, money: Bucket[], now = new Date()): Bucket[] {
+  if (period !== "month") return money;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const first = new Date(money[0].start);
+  const monday = new Date(first.getFullYear(), first.getMonth(), first.getDate() - ((first.getDay() + 6) % 7));
+  const out: Bucket[] = [];
+  for (let s = monday; s.getTime() <= today.getTime(); s = new Date(s.getFullYear(), s.getMonth(), s.getDate() + 7)) {
+    const e = new Date(s.getFullYear(), s.getMonth(), s.getDate() + 7);
+    out.push({ key: s.toISOString().slice(0, 10), label: `Week of ${s.toLocaleString("en-GB", { day: "numeric", month: "short" })}`, start: s.getTime(), end: e.getTime() });
+  }
+  return out;
+}
+
 /** Turnaround text ("3–5 business days", "2 weeks") → calendar days, or null. */
 export function turnaroundDays(text: string | null | undefined): number | null {
   if (!text) return null;
@@ -52,7 +70,9 @@ export function turnaroundDays(text: string | null | undefined): number | null {
 export async function homeData(period: HomePeriod) {
   const now = new Date();
   const bs = buckets(period, now);
+  const fbs = flowBuckets(period, bs, now);
   const from = new Date(bs[0].start);
+  const flowFrom = new Date(Math.min(bs[0].start, fbs[0].start));
   const span = bs[bs.length - 1].end - bs[0].start;
   const prevFrom = new Date(bs[0].start - span);
   const today = lagosToday(now);
@@ -83,7 +103,7 @@ export async function homeData(period: HomePeriod) {
     db
       .select({ created: serviceRequest.createdAt, delivered: serviceRequest.deliveredAt })
       .from(serviceRequest)
-      .where(and(isNull(serviceRequest.deletedAt), sql`(${serviceRequest.createdAt} >= ${from} OR ${serviceRequest.deliveredAt} >= ${from})`)),
+      .where(and(isNull(serviceRequest.deletedAt), sql`(${serviceRequest.createdAt} >= ${flowFrom} OR ${serviceRequest.deliveredAt} >= ${flowFrom})`)),
     db
       .select({ userId: requestAssignment.userId, name: user.name, email: user.email, status: serviceRequest.status })
       .from(requestAssignment)
@@ -113,15 +133,19 @@ export async function homeData(period: HomePeriod) {
     return new Date(r.delivered!).getTime() - new Date(r.created).getTime() <= (t ?? 14) * D;
   }).length;
 
-  const money = bs.map((b) => ({
-    label: b.label,
-    billed: billed.filter((i) => {
+  // Running totals over the period: "how much have we billed and collected so far".
+  // Daily amounts are mostly zero, so a per-day line drew a spike per invoice.
+  let runBilled = 0;
+  let runCollected = 0;
+  const money = bs.map((b) => {
+    runBilled += billed.filter((i) => {
       const t = new Date(i.issueDate).getTime();
       return t >= b.start && t < b.end;
-    }).reduce((s, i) => s + num(i.total), 0),
-    collected: paid.filter((p) => paidAt(p) >= b.start && paidAt(p) < b.end).reduce((s, p) => s + amt(p), 0),
-  }));
-  const flow = bs.map((b) => ({
+    }).reduce((s, i) => s + num(i.total), 0);
+    runCollected += paid.filter((p) => paidAt(p) >= b.start && paidAt(p) < b.end).reduce((s, p) => s + amt(p), 0);
+    return { label: b.label, billed: runBilled, collected: runCollected };
+  });
+  const flow = fbs.map((b) => ({
     label: b.label,
     opened: opened.filter((r) => new Date(r.created).getTime() >= b.start && new Date(r.created).getTime() < b.end).length,
     delivered: opened.filter((r) => r.delivered && new Date(r.delivered).getTime() >= b.start && new Date(r.delivered).getTime() < b.end).length,

@@ -5,7 +5,7 @@ import { buildAdminAttention } from "@/lib/attention/admin";
 import { formatMoney } from "@/lib/invoice/money";
 import { countInvoices } from "@/lib/invoice/late";
 import { AttentionList } from "@/components/kit";
-import { AreaTrend, GroupedBars } from "@/components/charts";
+import { AreaTrend, ChartKey, GroupedBars } from "@/components/charts";
 import { ActLink, Kpi, PageHead, Panel } from "@/components/admin/ui/surface";
 import { UrlSegmented } from "@/components/admin/ui/url-segmented";
 import { homeData, isHomePeriod, type HomePeriod } from "./_lib/home-data";
@@ -51,8 +51,14 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   const change = d.collectedPrev > 0 ? Math.round(((d.collected - d.collectedPrev) / d.collectedPrev) * 100) : null;
   const onTimePct = d.deliveredCount ? Math.round((d.onTime / d.deliveredCount) * 100) : null;
   const stageMax = Math.max(1, ...d.stages.map((s) => s.n));
-  const hasMoney = d.money.some((m) => m.billed || m.collected);
-  const hasFlow = d.flow.some((f) => f.opened || f.delivered);
+  const moneySeries = [
+    { key: "billed", label: "Billed" },
+    { key: "collected", label: "Collected" },
+  ];
+  const flowSeries = [
+    { key: "opened", label: "Opened" },
+    { key: "delivered", label: "Delivered" },
+  ];
 
   return (
     <div className="space-y-5">
@@ -129,39 +135,31 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
         <div className="space-y-5">
           <Panel
             tour="billed-collected"
-            title="Billed and collected"
-            sub={P.chart}
+            title="How much have we billed and collected?"
+            sub={
+              <>
+                {`Running total, ${P.chart}`}
+                <ChartKey series={moneySeries} className="ml-3 align-middle" />
+              </>
+            }
             action={
               <Link href="/admin/billing" className="text-sm font-medium text-accent hover:underline">
                 Billing
               </Link>
             }
           >
-            {hasMoney ? (
-              <AreaTrend
-                data={d.money}
-                series={[
-                  { key: "billed", label: "Billed" },
-                  { key: "collected", label: "Collected" },
-                ]}
-                format="money"
-              />
-            ) : (
-              <p className="py-10 text-center text-sm text-body">No invoices issued or payments received in the {P.chart}.</p>
-            )}
+            <AreaTrend data={d.money} series={moneySeries} format="money" curve="step" legend={false} empty={`No invoices or payments in the ${P.chart}.`} />
           </Panel>
-          <Panel title="Requests opened and delivered" sub={P.chart}>
-            {hasFlow ? (
-              <GroupedBars
-                data={d.flow}
-                series={[
-                  { key: "opened", label: "Opened" },
-                  { key: "delivered", label: "Delivered" },
-                ]}
-              />
-            ) : (
-              <p className="py-10 text-center text-sm text-body">No requests opened or delivered in the {P.chart}.</p>
-            )}
+          <Panel
+            title="Are we delivering as fast as requests come in?"
+            sub={
+              <>
+                {period === "month" ? `By week, ${P.chart}` : P.chart}
+                <ChartKey series={flowSeries} className="ml-3 align-middle" />
+              </>
+            }
+          >
+            <GroupedBars data={d.flow} series={flowSeries} legend={false} empty={`No requests opened or delivered in the ${P.chart}.`} />
           </Panel>
         </div>
         <div className="space-y-5">
