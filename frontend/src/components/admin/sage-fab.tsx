@@ -12,7 +12,8 @@ import { SageIcon } from "./sage-icon";
  */
 export function SageFab() {
   const pathname = usePathname();
-  if (pathname?.startsWith("/admin/sage")) return null;
+  // The workbench has its own Sage panel, and this button covered its Send button.
+  if (pathname?.startsWith("/admin/sage") || pathname?.startsWith("/admin/analyses/w/")) return null;
 
   return (
     <Link

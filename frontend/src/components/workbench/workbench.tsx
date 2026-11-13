@@ -12,7 +12,11 @@ import {
   History,
   Loader2,
   Lock,
+  Maximize2,
+  Minimize2,
+  Minus,
   Paperclip,
+  Plus,
   Send,
   ShieldAlert,
   ShieldCheck,
@@ -40,6 +44,7 @@ import { ChartCard, type ChartProposal } from "./chart-card";
 import { EngineSheet } from "./engine-sheet";
 import { useVoice } from "./voice";
 import { Select } from "@/components/ui/select";
+import { SAGE_MAX, SAGE_MIN, clampSage, stepZoom, useWorkbenchPrefs } from "./layout";
 
 type Live = { message: string; selection: string | null; events: WbEvent[] };
 
@@ -104,6 +109,51 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     mq.addEventListener("change", sync);
     return () => mq.removeEventListener("change", sync);
   }, []);
+
+  // Layout: Split (sheet + Sage), Focus (sheet only, Sage opens inside the editor), and Full screen.
+  const [prefs, setPrefs] = useWorkbenchPrefs();
+  const [full, setFull] = useState(false);
+  const [focusSage, setFocusSage] = useState(false);
+  const split = prefs.layout === "split";
+  const zoomBy = useCallback((step: 1 | -1 | 0) => setPrefs({ zoom: stepZoom(prefs.zoom, step) }), [prefs.zoom, setPrefs]);
+  const shell = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // Esc leaves full screen, unless a sheet or popover is open (Esc closes that first).
+      if (e.key === "Escape" && full && !sheetOpen && !why && !editing) setFull(false);
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "j" && desktop) {
+        e.preventDefault();
+        if (split) setPrefs({ layout: "focus" });
+        setFocusSage((o) => (split ? true : !o));
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [full, sheetOpen, why, editing, desktop, split, setPrefs]);
+  useEffect(() => {
+    if (!full) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [full]);
+
+  // Drag the divider to set the Sage width (split layout).
+  const startResize = (e: React.PointerEvent) => {
+    const box = shell.current?.getBoundingClientRect();
+    if (!box) return;
+    e.preventDefault();
+    const move = (ev: PointerEvent) => setPrefs({ sageWidth: clampSage(box.right - ev.clientX) });
+    const up = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      document.body.style.cursor = "";
+    };
+    document.body.style.cursor = "col-resize";
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
 
   const sheet = sheetBy[wbId] ?? sheetsBy[wbId]?.[0] ?? "Sheet1";
   const activeRef = conv.workbooks.find((w) => w.id === wbId) ?? null;
@@ -372,6 +422,31 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
             <Send className="size-3.5" /> Send to client
           </Button>
         ) : null}
+        <span className="mx-0.5 hidden h-5 w-px bg-hairline lg:block" aria-hidden />
+        <div className="hidden items-center gap-1.5 lg:flex">
+          <Segmented
+            size="sm"
+            label="Layout"
+            value={prefs.layout}
+            onChange={(v) => {
+              setPrefs({ layout: v });
+              setFocusSage(false);
+            }}
+            options={[
+              { value: "split", label: "Split" },
+              { value: "focus", label: "Focus" },
+            ]}
+          />
+          {!split ? (
+            <Button size="sm" variant={focusSage ? "secondary" : "ghost"} onClick={() => setFocusSage((o) => !o)} aria-pressed={focusSage} title="Open or close Sage (Ctrl+J)">
+              <SageIcon className="size-3.5" /> Sage
+              {pending.length ? <span className="rounded-full bg-warn-soft px-1.5 text-[11px] font-semibold text-warn">{pending.length}</span> : null}
+            </Button>
+          ) : null}
+          <Button size="sm" variant="ghost" onClick={() => setFull((f) => !f)} aria-pressed={full} aria-label={full ? "Leave full screen" : "Full screen"} title={full ? "Leave full screen (Esc)" : "Full screen"}>
+            {full ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+          </Button>
+        </div>
       </div>
     </div>
   );
@@ -431,6 +506,17 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           </button>
         );
       })}
+      <div className="ml-auto flex shrink-0 items-center gap-0.5 pl-2" role="group" aria-label="Zoom">
+        <button type="button" onClick={() => zoomBy(-1)} disabled={prefs.zoom <= 0.5} className="grid size-7 place-items-center rounded-ctl text-muted hover:bg-cloud hover:text-ink disabled:opacity-40" aria-label="Zoom out" title="Zoom out (Ctrl + minus)">
+          <Minus className="size-3.5" />
+        </button>
+        <button type="button" onClick={() => zoomBy(0)} className="min-w-[3.25rem] rounded-ctl px-1.5 py-1 text-center text-[12px] tabular-nums text-body hover:bg-cloud hover:text-ink" title="Back to 100 % (Ctrl + 0)" aria-label={`Zoom ${Math.round(prefs.zoom * 100)} %, reset to 100 %`}>
+          {Math.round(prefs.zoom * 100)} %
+        </button>
+        <button type="button" onClick={() => zoomBy(1)} disabled={prefs.zoom >= 2} className="grid size-7 place-items-center rounded-ctl text-muted hover:bg-cloud hover:text-ink disabled:opacity-40" aria-label="Zoom in" title="Zoom in (Ctrl + plus)">
+          <Plus className="size-3.5" />
+        </button>
+      </div>
     </div>
   );
 
@@ -470,6 +556,8 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
                 if (rect && (cell?.pending || cell?.f)) setWhy({ cell, ref: `${sheet}!${colLetter(at.c)}${at.r}`, rect });
               }}
               onMeta={onMeta}
+              zoom={prefs.zoom}
+              onZoom={zoomBy}
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
@@ -517,6 +605,11 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         <button type="button" onClick={() => setView("sheet")} className="rounded p-1 text-muted hover:bg-cloud lg:hidden" aria-label="Back to the sheet">
           <X className="size-4" />
         </button>
+        {!split ? (
+          <button type="button" onClick={() => setFocusSage(false)} className="hidden rounded p-1 text-muted hover:bg-cloud hover:text-ink lg:block" aria-label="Close Sage" title="Close Sage (Ctrl+J)">
+            <X className="size-4" />
+          </button>
+        ) : null}
       </div>
       <div ref={scroller} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3" aria-live="polite">
         {look ? <FirstLookCard look={look} onCite={goTo} onSuggest={(s) => void send(s)} disabled={running} /> : null}
@@ -660,7 +753,17 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   );
 
   return (
-    <div className="flex h-[calc(100dvh-9rem)] min-h-[520px] w-full min-w-0 flex-col overflow-hidden rounded-card border border-hairline bg-paper lg:h-[calc(100dvh-7.5rem)]">
+    <div
+      className={cn(
+        "flex w-full min-w-0 flex-col overflow-hidden bg-paper",
+        full
+          ? "fixed inset-0 z-[45] h-dvh"
+          : "h-[calc(100dvh-9rem)] min-h-[520px] rounded-card border border-hairline lg:h-[calc(100dvh-7.5rem)]",
+      )}
+      role={full ? "dialog" : undefined}
+      aria-modal={full || undefined}
+      aria-label={full ? "Workbench, full screen" : undefined}
+    >
       {header}
       <div className="flex items-center justify-center border-b border-hairline px-3 py-1.5 lg:hidden">
         <Segmented
@@ -674,10 +777,44 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           ]}
         />
       </div>
-      <div className="flex min-h-0 flex-1">
+      <div ref={shell} className="relative flex min-h-0 flex-1">
         <div className="flex min-w-0 flex-1 flex-col">{gridArea}</div>
-        {desktop ? (
-          <aside className="hidden w-[410px] shrink-0 border-l border-hairline lg:flex lg:flex-col" aria-label="Sage">
+        {desktop && split ? (
+          <>
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize Sage"
+              aria-valuemin={SAGE_MIN}
+              aria-valuemax={SAGE_MAX}
+              aria-valuenow={prefs.sageWidth}
+              tabIndex={0}
+              onPointerDown={startResize}
+              onDoubleClick={() => setPrefs({ sageWidth: 410 })}
+              onKeyDown={(e) => {
+                if (e.key === "ArrowLeft") setPrefs({ sageWidth: clampSage(prefs.sageWidth + 16) });
+                if (e.key === "ArrowRight") setPrefs({ sageWidth: clampSage(prefs.sageWidth - 16) });
+              }}
+              title="Drag to resize. Double-click to reset."
+              className="group relative hidden w-1.5 shrink-0 cursor-col-resize touch-none outline-none lg:block"
+            >
+              <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-hairline group-hover:w-0.5 group-hover:bg-accent group-focus-visible:w-0.5 group-focus-visible:bg-accent" />
+            </div>
+            <aside className="hidden shrink-0 lg:flex lg:flex-col" style={{ width: prefs.sageWidth }} aria-label="Sage">
+              {panel}
+            </aside>
+          </>
+        ) : null}
+        {/* Focus: the sheet fills the editor; Sage opens inside it at the right edge, over the sheet. */}
+        {desktop && !split ? (
+          <aside
+            className={cn(
+              "absolute inset-y-0 right-0 z-30 hidden w-[min(420px,92%)] flex-col border-l border-hairline shadow-lg",
+              focusSage && "lg:flex",
+            )}
+            aria-label="Sage"
+            aria-hidden={!focusSage}
+          >
             {panel}
           </aside>
         ) : null}
