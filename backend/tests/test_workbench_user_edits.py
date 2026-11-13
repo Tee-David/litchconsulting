@@ -67,3 +67,13 @@ def test_user_formula_check():
         except FormulaError:
             continue
         raise AssertionError(f"{bad} should be refused")
+
+
+def test_list_by_document_finds_the_existing_workbench(tmp_path):
+    app, _, doc, _ = _setup(tmp_path)
+    with queue.replace_connector(testing.InMemoryConnector()), _client(app) as c:
+        cid = c.post("/workbench/conversations", json={
+            "client_id": "c1", "document_ids": [doc.id], "client_name": "Okonkwo Agro"}).json()["conversation"]["id"]
+        found = c.get("/workbench/conversations", params={"document_id": doc.id}).json()["conversations"]
+        assert [x["id"] for x in found] == [cid]
+        assert c.get("/workbench/conversations", params={"document_id": 99999}).json()["conversations"] == []

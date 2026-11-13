@@ -204,11 +204,18 @@ def register_workbench_routes(app: FastAPI) -> None:
             return {"conversation": conv.public(), "first_look": look}
 
     @app.get("/workbench/conversations")
-    def list_conversations(client_id: str | None = None, limit: int = 50) -> dict[str, Any]:
+    def list_conversations(client_id: str | None = None, limit: int = 50,
+                           document_id: int | None = None) -> dict[str, Any]:
+        """Newest first. ``document_id``: only workbenches that hold that document, so
+        "Open in workbench" can resume the existing one instead of starting again."""
         with _workbench() as wb:
+            convs = wb.store.list(client_id, 200 if document_id is not None else min(limit, 200))
+            if document_id is not None:
+                convs = [c for c in convs
+                         if any(getattr(w, "document_id", None) == document_id for w in c.workbooks)]
             return {"conversations": [
                 {k: v for k, v in c.public().items() if k not in ("messages", "batches")}
-                for c in wb.store.list(client_id, min(limit, 200))]}
+                for c in convs[:min(limit, 200)]]}
 
     @app.get("/workbench/conversations/{conversation_id}")
     def get_conversation(conversation_id: str) -> dict[str, Any]:
