@@ -52,7 +52,6 @@ export function Proposals({
     if (working) setExpanded(false);
     else if (open.length) setExpanded(true);
     // Only when the number waiting or the working state changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open.length, working]);
   if (!open.length && !decided.length) return null;
   const list = expanded ? [...open, ...(showDecided ? decided : [])] : [];

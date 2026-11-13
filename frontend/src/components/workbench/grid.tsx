@@ -48,8 +48,6 @@ export function Grid({
   onToggleFormulas,
   editable = false,
   onCommit,
-  onUndo,
-  onRedo,
   formatRequest = null,
 }: {
   conversationId: string;
@@ -673,12 +671,6 @@ export function Grid({
     const mod = e.ctrlKey || e.metaKey;
     if (editable) {
       const k = e.key.toLowerCase();
-      if (mod && (k === "z" || k === "y")) {
-        e.preventDefault();
-        if (k === "y" || e.shiftKey) onRedo?.();
-        else onUndo?.();
-        return;
-      }
       if (mod && k === "v") {
         e.preventDefault();
         void pasteAt();

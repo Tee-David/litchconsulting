@@ -253,6 +253,24 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     },
     [undoId, redoStack, conv.id, toast],
   );
+  // Ctrl+Z, Ctrl+Y and Ctrl+Shift+Z work anywhere while the workbench is open, even when
+  // the focus is on the page itself (after a reload or a click on an empty area). Text
+  // fields keep their own undo, and an open dialog keeps the keys.
+  const stepRef = useRef(stepEdit);
+  stepRef.current = stepEdit;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase();
+      if (!(e.ctrlKey || e.metaKey) || (k !== "z" && k !== "y")) return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest?.("input, textarea, select, [contenteditable='true']")) return;
+      if (document.querySelector("[role=dialog][aria-modal=true]:not([aria-label^='Workbench'])")) return;
+      e.preventDefault();
+      void stepRef.current(k === "y" || e.shiftKey ? "redo" : "undo");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const refresh = useCallback(async () => {
     const res = await getConversationAction(conv.id);
@@ -1082,18 +1100,6 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           : "h-[calc(100dvh-9rem)] min-h-[520px] rounded-card border border-hairline lg:h-[calc(100dvh-7.5rem)]",
       )}
       onKeyDownCapture={(e) => {
-        const k = e.key.toLowerCase();
-        // Undo and redo work anywhere in the workbench, except inside a text field
-        // (there they undo the typing, as in every editor).
-        if ((e.ctrlKey || e.metaKey) && (k === "z" || k === "y")) {
-          const t = e.target as HTMLElement;
-          if (!t.closest("input, textarea, [contenteditable='true']")) {
-            e.preventDefault();
-            e.stopPropagation();
-            void stepEdit(k === "y" || e.shiftKey ? "redo" : "undo");
-            return;
-          }
-        }
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
           e.preventDefault();
           openFind();
