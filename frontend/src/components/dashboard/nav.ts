@@ -5,7 +5,7 @@
  */
 
 export type ShellKind = "staff" | "client";
-export type NavIcon = "home" | "inbox" | "wallet" | "folder" | "help" | "bell" | "settings" | "table" | "msg";
+export type NavIcon = "home" | "inbox" | "wallet" | "folder" | "help" | "bell" | "settings" | "table" | "msg" | "sage";
 
 export type NavItem = {
   label: string;
@@ -25,6 +25,7 @@ export const NAV: Record<ShellKind, NavItem[]> = {
     { label: "My requests", href: "/work/requests", icon: "inbox", tour: "requests", group: "main", bottom: true },
     { label: "Files", href: "/work/analyses", icon: "table", tour: "analyses", group: "main", bottom: true },
     { label: "Conversations", href: "/work/conversations", icon: "msg", tour: "conversations", group: "main", bottom: true, count: "threads" },
+    { label: "Sage", href: "/work/sage", icon: "sage", tour: "sage", group: "main" },
     { label: "Notifications", href: "/work/notifications", icon: "bell", tour: "notifications", group: "general", bottom: true, count: "unread" },
   ],
   client: [

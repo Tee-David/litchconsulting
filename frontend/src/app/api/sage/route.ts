@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { isAdmin } from "@/lib/server-user";
-import { assistantChat } from "@/lib/litchai/client";
+import { assistantChat, type AssistantResponse } from "@/lib/litchai/client";
+import { sageCaller } from "@/lib/sage/caller";
 import { db } from "@/lib/db/client";
 import { client } from "@/lib/db/schema";
 
@@ -19,31 +19,67 @@ function relayFailure(raw: string) {
   return { error: "unavailable", answer: "Sage cannot reach its AI service right now. Try again in a minute. Your question was not lost: send it again." };
 }
 
+const EMPTY = { citations: [], tool: "none", routed_by: "none", can_answer: false, tool_result: null, proposal: null };
+
+/**
+ * Sage relay for admins and staff. The caller's role and scope come from the
+ * session (never the body): staff send their assigned request ids and the
+ * workbench conversations on them; their app reads are request_work only,
+ * over those ids, with no money. A staff answer is shown only when the
+ * engine confirms it applied the scope (`scope_applied`).
+ */
 export async function POST(req: Request) {
-  if (!(await isAdmin())) return new Response("Unauthorized", { status: 401 });
+  const caller = await sageCaller();
+  if (!caller) return new Response("Unauthorized", { status: 401 });
+  if (!process.env.LITCHAI_API_URL) {
+    return NextResponse.json({ ...EMPTY, answer: "Sage is not connected yet. An admin must connect the assistant service.", error: "unavailable", offline: true });
+  }
 
   try {
-    const { message, history, scope, clientId, conversationId } = await req.json();
+    const body = await req.json();
+    const message = typeof body.message === "string" ? body.message.slice(0, 3000) : "";
+    if (!message.trim()) return NextResponse.json({ ...EMPTY, answer: "Write a question first.", error: "invalid" });
+    const history = Array.isArray(body.history)
+      ? (body.history as { role?: unknown; content?: unknown }[])
+          .filter((h) => (h.role === "user" || h.role === "assistant") && typeof h.content === "string")
+          .slice(-20)
+          .map((h) => ({ role: String(h.role), content: String(h.content).slice(0, 4000) }))
+      : [];
+    const staff = caller.role === "staff";
+    // Staff never read one client's operational context: firm scope only.
+    const scope: "firm" | "client" = !staff && body.scope === "client" ? "client" : "firm";
+    const clientId = scope === "client" && typeof body.clientId === "string" && /^[0-9a-f-]{36}$/i.test(body.clientId) ? body.clientId : undefined;
+
     // A local-only client's data never leaves the VM: tell the engine.
     let localOnly = false;
-    if (scope === "client" && typeof clientId === "string" && /^[0-9a-f-]{36}$/i.test(clientId)) {
+    if (clientId) {
       const [c] = await db.select({ aiMode: client.aiMode }).from(client).where(eq(client.id, clientId)).limit(1);
       localOnly = c?.aiMode === "local_only";
     }
-    const opts = { localOnly, conversationId: typeof conversationId === "string" ? conversationId : undefined };
-    let result = await assistantChat(message, history, scope, clientId, { tools: true }, opts);
-    // Two-pass app read: the engine asks for live app data (billing, privacy,
-    // requests, backups); read it here, behind isAdmin(), and ask again.
+    const opts = {
+      localOnly,
+      conversationId: typeof body.conversationId === "string" ? body.conversationId : undefined,
+      caller: { role: caller.role, requestIds: caller.requestIds, workbenchIds: caller.workbenchIds },
+    };
+    let result: AssistantResponse = await assistantChat(message, history, scope, clientId, { tools: true }, opts);
+    // Two-pass app read: the engine asks for live app data; read it here,
+    // behind the caller's role, and ask again.
     if (result.needs_app_data) {
-      const { resolveSageAppRead } = await import("@/lib/sage/app-reads");
-      const data = await resolveSageAppRead(result.needs_app_data).catch((e: unknown) => {
+      const reads = await import("@/lib/sage/app-reads");
+      const need = result.needs_app_data;
+      const data = await (staff ? reads.resolveStaffSageAppRead(need, caller.requestIds ?? []) : reads.resolveSageAppRead(need)).catch((e: unknown) => {
         console.error("[sage] app read failed:", e instanceof Error ? e.message : e);
         return { error: "That data couldn't be read right now." };
       });
-      result = await assistantChat(message, history, scope, clientId, {
-        tools: true,
-        data: { tool: result.needs_app_data.tool, data },
-      }, opts);
+      result = await assistantChat(message, history, scope, clientId, { tools: true, data: { tool: need.tool, data } }, opts);
+    }
+    if (staff && result.scope_applied !== true) {
+      // The engine did not confirm the staff scope: show nothing of the answer.
+      return NextResponse.json({ ...EMPTY, answer: "", held: true, scope_applied: false });
+    }
+    if (staff && result.proposal) {
+      // Staff cannot confirm writes in this version; the UI shows "Only an admin can do this".
+      result = { ...result, proposal: { ...result.proposal, ready: false } };
     }
     return NextResponse.json(result);
   } catch (err) {
@@ -51,6 +87,6 @@ export async function POST(req: Request) {
     console.error("[sage] relay error:", raw);
     // Never a bare 500: Sage answers in words, with a next step.
     const f = relayFailure(raw);
-    return NextResponse.json({ answer: f.answer, citations: [], tool: "none", routed_by: "none", can_answer: false, tool_result: null, proposal: null, error: f.error });
+    return NextResponse.json({ ...EMPTY, answer: f.answer, error: f.error });
   }
 }

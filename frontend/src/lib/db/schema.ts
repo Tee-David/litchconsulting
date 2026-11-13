@@ -664,6 +664,7 @@ export const sageMessage = pgTable(
     role: text("role").notNull(),
     content: text("content").notNull(),
     citations: jsonb("citations"), // string[] source labels, assistant turns only
+    meta: jsonb("meta"), // SageMessageMeta: tool, data, proposal and its state, engine (assistant turns)
     createdAt: createdAt(),
   },
   (t) => [index("sage_message_conversation_idx").on(t.conversationId, t.createdAt)]

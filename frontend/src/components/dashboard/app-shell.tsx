@@ -11,6 +11,7 @@ import {
   LifeBuoy,
   LogOut,
   Menu,
+  MessageCircleQuestionMark,
   MessagesSquare,
   Search,
   Settings,
@@ -35,6 +36,7 @@ const ICONS: Record<NavIcon, typeof Home> = {
   settings: Settings,
   table: Table2,
   msg: MessagesSquare,
+  sage: MessageCircleQuestionMark,
 };
 
 export type ShellCounts = Partial<Record<NonNullable<NavItem["count"]>, number>>;

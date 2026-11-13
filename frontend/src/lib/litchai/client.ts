@@ -159,6 +159,17 @@ export type AssistantResponse = {
   error?: "quota" | "timeout" | "unavailable" | null;
   /** Which engine wrote the words (null when no model was needed). */
   engine?: { provider: string; model: string; kind: "cloud" | "local"; masked: boolean } | null;
+  /** True when the engine applied the caller's role (staff: assigned requests only, no money, no writes). */
+  scope_applied?: boolean;
+};
+
+/** Who is asking, sent with every chat call. Built on the server only, never from the browser. */
+export type SageCaller = {
+  role: "admin" | "staff";
+  /** Staff: their assigned request ids. Admin: null (everything). */
+  requestIds: string[] | null;
+  /** Staff: workbench conversation ids linked to those requests. Admin: null. */
+  workbenchIds: string[] | null;
 };
 
 /** Per-engagement `/engagements/{id}/ask` response (AI Studio review panel). */
@@ -339,8 +350,9 @@ export function assistantChat(
   scope: "firm" | "client" = "firm",
   clientId?: string,
   app?: { tools: boolean; data?: { tool: string; data: Record<string, unknown> } },
-  opts?: { localOnly?: boolean; conversationId?: string },
+  opts?: { localOnly?: boolean; conversationId?: string; caller?: SageCaller },
 ): Promise<AssistantResponse> {
+  const caller = opts?.caller ?? { role: "admin" as const, requestIds: null, workbenchIds: null };
   return litchai("/assistant/chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -353,6 +365,9 @@ export function assistantChat(
       app_data: app?.data ?? null,
       local_only: opts?.localOnly ?? false,
       conversation_id: opts?.conversationId ?? null,
+      role: caller.role,
+      request_ids: caller.requestIds,
+      workbench_ids: caller.workbenchIds,
     }),
   });
 }

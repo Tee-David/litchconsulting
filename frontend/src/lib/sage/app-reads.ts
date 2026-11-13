@@ -21,7 +21,8 @@ import { listPrivateObjects, r2PrivateConfigured } from "@/lib/r2";
  * Sage's app-side reads (two-pass contract). The engine routes a question to one
  * of these tools and returns `needs_app_data`; the admin-guarded `/api/sage`
  * relay runs the read here and sends the result back so the answer is grounded
- * on live data. Read-only, small, and only ever called after `isAdmin()`.
+ * on live data. Read-only and small. `resolveSageAppRead` runs for admins
+ * only; staff go through `resolveStaffSageAppRead` (assigned requests, no money).
  */
 export type AppReadRequest = {
   tool: string;
@@ -143,11 +144,17 @@ async function assigneesFor(requestIds: string[]) {
   return out;
 }
 
-async function requestWork(requestNumber: string | null, clientId: string | null) {
+/**
+ * `onlyIds` (staff): the read is limited to these request ids. A request
+ * outside them reads as not found, and the result carries no money fields.
+ */
+async function requestWork(requestNumber: string | null, clientId: string | null, onlyIds?: string[]) {
+  if (onlyIds && !onlyIds.length) return { active_count: 0, note: "No requests are assigned to you yet.", where: "My requests" };
+  const scopeIds = onlyIds ? inArray(serviceRequest.id, onlyIds) : undefined;
   if (requestNumber) {
     const [r] = await db.select().from(serviceRequest)
-      .where(and(eq(serviceRequest.number, requestNumber), isNull(serviceRequest.deletedAt))).limit(1);
-    if (!r) return { error: `No request ${requestNumber} found.` };
+      .where(and(eq(serviceRequest.number, requestNumber), isNull(serviceRequest.deletedAt), scopeIds)).limit(1);
+    if (!r) return { error: onlyIds ? `${requestNumber} is not one of your assigned requests.` : `No request ${requestNumber} found.` };
     const [asks, rounds, people] = await Promise.all([
       db.select().from(requestItem).where(eq(requestItem.requestId, r.id)).orderBy(desc(requestItem.createdAt)).limit(30),
       db.select().from(reviewRound).where(eq(reviewRound.requestId, r.id)).orderBy(asc(reviewRound.round)),
@@ -170,7 +177,7 @@ async function requestWork(requestNumber: string | null, clientId: string | null
   const active = await db
     .select({ id: serviceRequest.id, number: serviceRequest.number, status: serviceRequest.status, service: serviceRequest.serviceName })
     .from(serviceRequest)
-    .where(and(isNull(serviceRequest.deletedAt), notInArray(serviceRequest.status, CLOSED), clientId ? eq(serviceRequest.clientId, clientId) : undefined))
+    .where(and(isNull(serviceRequest.deletedAt), notInArray(serviceRequest.status, CLOSED), clientId ? eq(serviceRequest.clientId, clientId) : undefined, scopeIds))
     .orderBy(desc(serviceRequest.createdAt))
     .limit(300);
   const ids = active.map((r) => r.id);
@@ -212,6 +219,17 @@ async function backupStatus() {
       : null,
     where: "Settings → Backups",
   };
+}
+
+/**
+ * Staff read: ONLY request_work, ONLY over the staff member's assigned
+ * requests (ids resolved on the server from request_assignment), and with no
+ * client filter. Billing, privacy and backup reads are never run for staff.
+ */
+export async function resolveStaffSageAppRead(req: AppReadRequest, assignedIds: string[]): Promise<Record<string, unknown>> {
+  if (req.tool !== "request_work") return { error: "Only an admin can see that." };
+  const n = req.slots?.request_number;
+  return requestWork(typeof n === "string" && /^REQ-\d{4}-\d+$/.test(n) ? n : null, null, assignedIds);
 }
 
 export async function resolveSageAppRead(req: AppReadRequest): Promise<Record<string, unknown>> {

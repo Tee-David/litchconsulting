@@ -451,6 +451,8 @@ export const STATEMENTS = [
   `ALTER TABLE "expense" ADD COLUMN IF NOT EXISTS "receipt_key" text`,
   `ALTER TABLE "expense" ADD COLUMN IF NOT EXISTS "receipt_name" text`,
   `ALTER TABLE "expense" ADD COLUMN IF NOT EXISTS "receipt_scan_status" text DEFAULT 'unscanned' NOT NULL`,
+  // ---- Sage answer details (sources, figures, proposal state) for reopened threads ----
+  `ALTER TABLE "sage_message" ADD COLUMN IF NOT EXISTS "meta" jsonb`,
 ];
 
 /**
