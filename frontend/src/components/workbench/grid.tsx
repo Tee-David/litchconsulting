@@ -154,11 +154,11 @@ export function Grid({
   }, [key, load]);
 
   // The data extent, and the view extent. Like Excel, the view goes 100 rows and
-  // 3 columns past the data, so a person can type below or beside it.
+  // 10 columns past the data (at least A to Z), so a person can type below or beside it.
   const dataRow = Math.max(1, meta?.maxRow ?? 1);
   const dataCol = Math.max(1, meta?.maxCol ?? 1);
   const maxRow = meta ? dataRow + 100 : 0;
-  const maxCol = Math.min(MAX_COLS, Math.max(dataCol + 3, 6));
+  const maxCol = Math.min(MAX_COLS, Math.max(dataCol + 10, 26));
   const first = Math.max(1, Math.floor((view.top - headH) / rowH) - 10);
   const last = Math.min(maxRow, Math.ceil((view.top + view.height) / rowH) + 10);
 
