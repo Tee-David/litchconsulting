@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, useSpring } from "framer-motion";
+import { usePathname } from "next/navigation";
 
 interface Position {
   x: number;
@@ -181,6 +182,18 @@ export function SmoothCursor({
 }
 
 /** Mounts the smooth cursor on desktop. Touch/reduced-motion devices are unaffected. */
+/**
+ * Working screens keep the system cursor. There it must change with the task
+ * (text, cell, resize, hand, not-allowed), and the decorative arrow cannot.
+ * The smooth cursor stays on the public marketing pages only.
+ */
+const WORKING_ROUTES = [
+  "/admin", "/work", "/dashboard", "/account", "/i/", "/pay", "/invite", "/get-started", "/request",
+  "/login", "/signup", "/forgot-password", "/reset-password", "/verify-email", "/unsubscribe",
+];
+
 export function SmoothCursorMount() {
+  const pathname = usePathname() ?? "/";
+  if (WORKING_ROUTES.some((p) => pathname === p.replace(/\/$/, "") || pathname.startsWith(p.endsWith("/") ? p : `${p}/`))) return null;
   return <SmoothCursor />;
 }
