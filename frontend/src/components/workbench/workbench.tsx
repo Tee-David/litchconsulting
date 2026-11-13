@@ -268,9 +268,14 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     [wbId],
   );
 
-  // Keep the thread pinned to the newest step.
+  // Follow the newest message while the person is at the bottom of the thread. If they
+  // scrolled up to read, stay put and offer "Jump to latest" instead.
+  const [atBottom, setAtBottom] = useState(true);
   useEffect(() => {
+    if (!atBottom) return;
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
+    // Follow new steps and messages only; scrolling itself must not trigger this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [live?.events.length, conv.messages.length]);
 
   // The PDF beside its extracted table: fetched once as a blob (the site
@@ -342,6 +347,8 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     async (message: string) => {
       const msg = message.trim();
       if (!msg || running) return;
+      // A new question always brings the thread back to the newest message.
+      setAtBottom(true);
       const sel = context ?? selection;
       const selText = sel ? rangeLabel(sel) : null;
       setText("");
@@ -904,7 +911,15 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           </button>
         ) : null}
       </div>
-      <div ref={scroller} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3" aria-live="polite">
+      <div
+        ref={scroller}
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 48);
+        }}
+        className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3"
+        aria-live="polite"
+      >
         {look ? <FirstLookCard look={look} onCite={goTo} onSuggest={(s) => void send(s)} disabled={running} /> : null}
         {!look && conv.messages.length === 0 && !live ? (
           <p className="rounded-card border border-dashed border-hairline p-3 text-[13px] text-body">
@@ -946,14 +961,27 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
             }}
           />
         ))}
-        <Proposals
-          batches={conv.batches}
-          busy={busyBatch}
-          onDecide={(b, a) => void decide(b, a)}
-          onEdit={setEditing}
-          onJump={goTo}
-        />
       </div>
+      {!atBottom ? (
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" })}
+            className="absolute -top-12 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1 rounded-full border border-hairline bg-paper px-3 py-1.5 text-[12px] font-medium text-ink shadow-md hover:bg-cloud"
+          >
+            <ChevronDown className="size-3.5" aria-hidden /> {running ? "Sage is working · jump to latest" : "Jump to latest"}
+          </button>
+        </div>
+      ) : null}
+      {/* Proposals sit between the thread and the composer: never on top of the live reply. */}
+      <Proposals
+        batches={conv.batches}
+        busy={busyBatch}
+        onDecide={(b, a) => void decide(b, a)}
+        onEdit={setEditing}
+        onJump={goTo}
+        working={running}
+      />
       <form
         className="border-t border-hairline bg-paper p-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))]"
         onSubmit={(e) => {

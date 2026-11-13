@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertTriangle, Check, Layers, Loader2, Pencil, ShieldAlert, Undo2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertTriangle, Check, ChevronDown, Layers, Loader2, Pencil, ShieldAlert, Undo2 } from "lucide-react";
 import type { WbBatch } from "@/lib/litchai/workbench";
 import { Button } from "@/components/kit";
 import { cn } from "@/lib/utils";
@@ -28,33 +29,58 @@ export function Proposals({
   onDecide,
   onEdit,
   onJump,
+  working = false,
 }: {
   batches: WbBatch[];
   busy: string | null;
   onDecide: (b: WbBatch | "all", action: "accept" | "reject" | "undo") => void;
   onEdit: (b: WbBatch) => void;
   onJump: (ref: string) => void;
+  /** Sage is answering: stay folded so the live reply is never covered. */
+  working?: boolean;
 }) {
-  const own = batches.filter((b) => !b.inverse_of);
+  // A person's own typed edits are saved versions, not proposals: they live in Versions.
+  const own = batches.filter((b) => !b.inverse_of && b.tool !== "user_edit");
   const open = own.filter((b) => b.status === "pending" || b.status === "blocked");
-  const recent = own.filter((b) => b.status === "accepted" || b.status === "rejected" || b.status === "undone").slice(-5).reverse();
-  if (!open.length && !recent.length) return null;
+  const decided = own.filter((b) => b.status === "accepted" || b.status === "rejected" || b.status === "undone").slice(-5).reverse();
   const pending = open.filter((b) => b.status === "pending");
+  const cells = open.reduce((n, b) => n + b.counts.new_cells + b.counts.changed_cells, 0);
+  const [expanded, setExpanded] = useState(false);
+  const [showDecided, setShowDecided] = useState(false);
+  // Open by itself when new proposals arrive and Sage has finished; fold while it works.
+  useEffect(() => {
+    if (working) setExpanded(false);
+    else if (open.length) setExpanded(true);
+    // Only when the number waiting or the working state changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open.length, working]);
+  if (!open.length && !decided.length) return null;
+  const list = expanded ? [...open, ...(showDecided ? decided : [])] : [];
 
   return (
-    <section className="rounded-card border border-hairline bg-paper" aria-label="Proposed changes">
-      <header className="flex items-center gap-2 border-b border-hairline px-3 py-2">
+    <section className="border-t border-hairline bg-paper" aria-label="Proposed changes">
+      <button
+        type="button"
+        onClick={() => setExpanded((x) => !x)}
+        aria-expanded={expanded}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-cloud"
+      >
         <Layers className="size-4 text-muted" aria-hidden />
-        <h3 className="text-[13px] font-semibold text-ink">Proposed changes</h3>
-        <span className="ml-auto text-[12px] text-muted">{pending.length ? `${pending.length} waiting` : "All decided"}</span>
-      </header>
+        <span className="text-[13px] font-semibold text-ink">Proposed changes</span>
+        <span className={cn("ml-auto text-[12px]", pending.length ? "font-medium text-warn" : "text-muted")}>
+          {pending.length ? `${pending.length} waiting · ${cells.toLocaleString("en-NG")} cell${cells === 1 ? "" : "s"}` : "All decided"}
+        </span>
+        <ChevronDown className={cn("size-4 text-muted transition-transform duration-150", expanded && "rotate-180")} aria-hidden />
+      </button>
+      {expanded ? (
+      <div className="max-h-[42vh] overflow-y-auto border-t border-hairline">
       <ul className="divide-y divide-hairline">
-        {[...open, ...recent].map((b) => {
+        {list.map((b) => {
           const ref = firstRef(b);
           const isBusy = busy === b.id;
           const kind = b.counts.changed_cells ? "changed" : "new";
           return (
-            <li key={b.id} className={cn("px-3 py-2.5", b.status !== "pending" && b.status !== "blocked" && "opacity-80")}>
+            <li key={b.id} className={cn("px-3", b.status !== "pending" && b.status !== "blocked" ? "py-1.5 opacity-80" : "py-2.5")}>
               <div className="flex items-start gap-2.5">
                 <span
                   aria-hidden
@@ -64,7 +90,7 @@ export function Proposals({
                   <button type="button" className="text-left text-[13px] font-semibold text-ink hover:underline" onClick={() => ref && onJump(ref)} disabled={!ref}>
                     {b.title}
                   </button>
-                  <p className="text-[12px] text-muted">{batchLine(b) || b.summary}</p>
+                  {b.status === "pending" || b.status === "blocked" ? <p className="text-[12px] text-muted">{batchLine(b) || b.summary}</p> : null}
                   {b.risk === "risky" ? (
                     <p className="mt-1 flex items-start gap-1 text-[12px] text-warn">
                       <ShieldAlert className="mt-0.5 size-3.5 shrink-0" aria-hidden /> Review closely: {(b.risk_reasons ?? []).join("; ") || "overwrites existing values"}.
@@ -82,7 +108,7 @@ export function Proposals({
                       <p className="mt-0.5 text-muted">The previous version is kept. Edit the cells, or ask Sage for a fresh proposal.</p>
                     </div>
                   ) : null}
-                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <div className={cn("flex flex-wrap items-center gap-1.5", b.status === "pending" || b.status === "blocked" ? "mt-2" : "mt-0.5")}>
                     {b.status === "pending" || b.status === "blocked" ? (
                       <>
                         <Button size="sm" variant="primary" disabled={Boolean(busy)} onClick={() => onDecide(b, "accept")}>
@@ -122,7 +148,14 @@ export function Proposals({
           );
         })}
       </ul>
-      {pending.length > 1 ? (
+      {decided.length ? (
+        <button type="button" onClick={() => setShowDecided((x) => !x)} className="w-full border-t border-hairline px-3 py-1.5 text-left text-[12px] text-muted hover:bg-cloud hover:text-ink">
+          {showDecided ? "Hide decided" : `Show ${decided.length} decided`}
+        </button>
+      ) : null}
+      </div>
+      ) : null}
+      {expanded && pending.length > 1 ? (
         <footer className="flex flex-wrap items-center gap-2 border-t border-hairline px-3 py-2.5">
           <Button size="sm" variant="primary" disabled={Boolean(busy)} onClick={() => onDecide("all", "accept")}>
             Accept all {pending.length}
@@ -132,7 +165,7 @@ export function Proposals({
           </Button>
         </footer>
       ) : null}
-      <p className="border-t border-hairline px-3 py-2 text-[11.5px] text-muted">Nothing in the file changes until you accept. Each batch undoes on its own.</p>
+      {expanded && open.length ? <p className="border-t border-hairline px-3 py-1.5 text-[11.5px] text-muted">Nothing in the file changes until you accept. Each batch undoes on its own.</p> : null}
     </section>
   );
 }
