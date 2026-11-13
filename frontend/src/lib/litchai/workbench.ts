@@ -219,10 +219,15 @@ export const wbRunTool = (id: string, tool: string, args: Record<string, unknown
     json({ args }),
   );
 
-export const wbSheet = (id: string, wbId: string, sheet: string, r0: number, r1: number, c0 = 1, c1 = 60) =>
+/** With `version`: that saved version, read-only, without proposals (history preview). */
+export const wbSheet = (id: string, wbId: string, sheet: string, r0: number, r1: number, c0 = 1, c1 = 60, version?: number) =>
   call<WbSheetWindow>(
-    `/workbench/conversations/${enc(id)}/workbooks/${enc(wbId)}/sheets/${enc(sheet)}?r0=${r0}&r1=${r1}&c0=${c0}&c1=${c1}`,
+    `/workbench/conversations/${enc(id)}/workbooks/${enc(wbId)}/sheets/${enc(sheet)}?r0=${r0}&r1=${r1}&c0=${c0}&c1=${c1}${version ? `&version=${version}` : ""}`,
   );
+
+/** R4: bring back an earlier version as a new version (it can be undone). */
+export const wbRestore = (id: string, wbId: string, version: number, author: string) =>
+  call<{ batch: WbBatch; conversation: WbConversation }>(`/workbench/conversations/${enc(id)}/workbooks/${enc(wbId)}/restore`, json({ version, author }));
 
 export const wbChartPreview = (id: string, spec: Record<string, unknown>, workbookId?: string) =>
   call<Record<string, unknown>>(`/workbench/conversations/${enc(id)}/charts/preview`, json({ spec, workbook_id: workbookId ?? null }));

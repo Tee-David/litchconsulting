@@ -31,6 +31,7 @@ export function Grid({
   workbookId,
   sheet,
   version,
+  atVersion,
   highlights,
   focus,
   selection,
@@ -55,6 +56,8 @@ export function Grid({
   sheet: string;
   /** Bump to refetch (after accept / undo / a new proposal). */
   version: number;
+  /** R4 history preview: show this saved version, read-only, without proposals. */
+  atVersion?: number;
   highlights: Range[];
   focus: { r: number; c: number; nonce: number } | null;
   selection: Range | null;
@@ -108,7 +111,7 @@ export function Grid({
   // E2.6 fill handle: the cell the drag has reached, while dragging.
   const [fillTo, setFillTo] = useState<{ r: number; c: number } | null>(null);
   // The cache is dropped only for a new sheet; a new version refreshes in place (below).
-  const key = `${conversationId}|${workbookId}|${sheet}`;
+  const key = `${conversationId}|${workbookId}|${sheet}|${atVersion ?? "live"}`;
   const keyRef = useRef(key);
 
   const load = useCallback(
@@ -119,6 +122,7 @@ export function Grid({
       const r0 = b * BLOCK + 1;
       try {
         const qs = new URLSearchParams({ wb: workbookId, sheet, r0: String(r0), r1: String(r0 + BLOCK - 1), c0: "1", c1: String(MAX_COLS) });
+        if (atVersion) qs.set("version", String(atVersion));
         const res = await fetch(`/api/workbench/${conversationId}/cells?${qs}`, { cache: "no-store" });
         const body = (await res.json()) as WbSheetWindow & { error?: string };
         if (want !== keyRef.current) return;
@@ -136,7 +140,7 @@ export function Grid({
         loading.current.delete(b);
       }
     },
-    [conversationId, workbookId, sheet, onMeta],
+    [conversationId, workbookId, sheet, atVersion, onMeta],
   );
 
   // New sheet / version → drop the cache and read from the top.

@@ -17,6 +17,7 @@ import {
   wbRunTool,
   wbStart,
   wbUserEdits,
+  wbRestore,
   wbListByDocument,
   type WbBatch,
   type WbConversation,
@@ -214,6 +215,34 @@ export async function saveEditsAction(input: z.input<typeof editSchema>): Promis
       return { ok: false, error: "Not saved: the recompute found a formula error. Check the formula and try again." };
     }
     return { ok: true, message: d.edits.length === 1 ? "Saved." : `Saved ${d.edits.length} cells.`, batch: res.batch, conversation: res.conversation };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// --- version history (R4) -------------------------------------------------------------
+const restoreSchema = z.object({ conversationId: id, workbookId: z.string().min(1).max(120), version: z.number().int().min(1).max(100000) });
+
+/** Bring back an earlier version as a new version. It is in the history and can be undone. */
+export async function restoreVersionAction(input: z.input<typeof restoreSchema>): Promise<Res<{ batch: WbBatch; conversation: WbConversation }>> {
+  const parsed = restoreSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Choose a version to restore." };
+  const d = parsed.data;
+  const a = await guard(d.conversationId);
+  if (!a) return DENIED;
+  const u = await getSessionUser();
+  const author = (u?.name || u?.email || "a team member").slice(0, 80);
+  try {
+    const res = await wbRestore(d.conversationId, d.workbookId, d.version, author);
+    await touch(d.conversationId);
+    await recordAudit({
+      action: "workbench.restored",
+      entity: a.row.requestId ? "request" : "workbench",
+      entityId: a.row.requestId ?? d.conversationId,
+      meta: { conversation: d.conversationId, workbook: d.workbookId, version: d.version, batch: res.batch.id, status: res.batch.status },
+    });
+    if (res.batch.status === "blocked") return { ok: false, error: "Not restored: the recompute found a formula error in that version." };
+    return { ok: true, message: `Version ${d.version} restored as a new version. Undo brings back the one before.`, batch: res.batch, conversation: res.conversation };
   } catch (e) {
     return fail(e);
   }

@@ -33,7 +33,7 @@ import {
   X,
 } from "lucide-react";
 import type { WbBatch, WbCell, WbConversation, WbEvent, WbFirstLook, WbGate, WbUserEdit } from "@/lib/litchai/workbench";
-import { attachFilesAction, decideBatchAction, deliverAction, getConversationAction, runToolAction, saveEditsAction } from "@/lib/workbench/actions";
+import { attachFilesAction, decideBatchAction, deliverAction, getConversationAction, restoreVersionAction, runToolAction, saveEditsAction } from "@/lib/workbench/actions";
 import { useToast } from "@/components/admin/ui/toaster";
 import { Button, Segmented } from "@/components/kit";
 import { SageIcon } from "@/components/admin/sage-icon";
@@ -45,7 +45,7 @@ import { Proposals } from "./proposals";
 import { TurnView } from "./turn";
 import { WhyPopover } from "./why";
 import { uploadToWorkbench } from "@/lib/workbench/upload-client";
-import { AttachSheet, DeliverSheet, EditBatchSheet, HistorySheet, RangeSheet, type FileOption } from "./sheets";
+import { AttachSheet, DeliverSheet, EditBatchSheet, HistorySheet, RangeSheet, versionLabel, type FileOption } from "./sheets";
 import { colLetter, parseRef, rangeLabel, rangeRef, type Range } from "./refs";
 import { ChartCard, type ChartProposal } from "./chart-card";
 import { EngineSheet } from "./engine-sheet";
@@ -85,6 +85,9 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     [look],
   );
   const [gridVersion, setGridVersion] = useState(0);
+  // R4: a saved version shown read-only in the grid (null = the live workbook).
+  const [previewV, setPreviewV] = useState<number | null>(null);
+  const [restoring, setRestoring] = useState(false);
   const [live, setLive] = useState<Live | null>(null);
   const [running, setRunning] = useState(false);
   const abort = useRef<AbortController | null>(null);
@@ -360,7 +363,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const stepEdit = useCallback(
     async (dir: "undo" | "redo") => {
       const id = dir === "undo" ? undoId : redoStack[redoStack.length - 1];
-      if (!id) return;
+      if (!id || previewV) return;
       setSaveState("saving");
       // Redo = undo the undo: both are the engine's normal batch undo, each a new version.
       const res = await decideBatchAction({ conversationId: conv.id, batchId: id, action: "undo" });
@@ -374,7 +377,27 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
       if (dir === "undo") setRedoStack((st) => [...st, res.batch.id]);
       else setRedoStack((st) => st.slice(0, -1));
     },
-    [undoId, redoStack, conv.id, toast],
+    [undoId, redoStack, conv.id, toast, previewV],
+  );
+  useEffect(() => setPreviewV(null), [wbId]);
+  const restoreVersion = useCallback(
+    async (version: number) => {
+      if (!wbId) return;
+      setRestoring(true);
+      const res = await restoreVersionAction({ conversationId: conv.id, workbookId: wbId, version });
+      setRestoring(false);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setConv(res.conversation);
+      setPreviewV(null);
+      setRedoStack([]);
+      setSheetOpen(null);
+      setGridVersion((v) => v + 1);
+      toast.success(res.message ?? "Restored.");
+    },
+    [conv.id, wbId, toast],
   );
   // Ctrl+Z, Ctrl+Y and Ctrl+Shift+Z work anywhere while the workbench is open, even when
   // the focus is on the page itself (after a reload or a click on an empty area). Text
@@ -939,10 +962,29 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     </div>
   );
 
+  const pv = previewV ? activeRef?.versions.find((v) => v.n === previewV) : null;
+  const pvLabel = pv ? versionLabel(pv.batch_id ? batchById.get(pv.batch_id) : null) : "";
+  const previewBar = pv ? (
+    <div className="flex flex-wrap items-center gap-2 border-b border-hairline bg-warn-soft px-3 py-1.5 text-[13px]" role="status">
+      <History className="size-4 shrink-0 text-warn" aria-hidden />
+      <span className="min-w-0 flex-1 text-ink">
+        <span className="font-semibold">Version {pv.n}</span> · {pvLabel} ·{" "}
+        {new Date(pv.at).toLocaleString("en-NG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+        <span className="text-body"> · read-only preview</span>
+      </span>
+      <Button size="sm" variant="primary" onClick={() => void restoreVersion(pv.n)} disabled={restoring}>
+        {restoring ? <Loader2 className="size-3.5 animate-spin" /> : <History className="size-3.5" />} Restore this version
+      </Button>
+      <Button size="sm" variant="ghost" onClick={() => setPreviewV(null)} disabled={restoring}>
+        Back to current
+      </Button>
+    </div>
+  ) : null;
+
   const gridArea = (
     <div className="flex min-h-0 flex-1 flex-col">
-      {editBar}
-      {formulaBar}
+      {previewBar ?? editBar}
+      {previewBar ? null : formulaBar}
       {findBar}
       {legend}
       <div className={cn("min-h-0 flex-1", pdfOpen && hasPdf && "grid grid-rows-2 xl:grid-cols-2 xl:grid-rows-1")}>
@@ -964,6 +1006,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
               workbookId={wbId}
               sheet={sheet}
               version={gridVersion}
+              atVersion={previewV ?? undefined}
               highlights={highlights}
               focus={focus}
               selection={selection}
@@ -985,7 +1028,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
               onFind={setFindRes}
               onStats={setStats}
               onToggleFormulas={toggleFormulas}
-              editable
+              editable={!previewV}
               onCommit={commitEdits}
               onUndo={() => void stepEdit("undo")}
               onRedo={() => void stepEdit("redo")}
@@ -1423,6 +1466,13 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           onClose={() => setSheetOpen(null)}
           conversation={conv}
           workbookId={wbId}
+          previewing={previewV}
+          restoring={restoring}
+          onPreview={(v) => {
+            setPreviewV(v);
+            setSheetOpen(null);
+          }}
+          onRestore={(v) => void restoreVersion(v)}
           downloadHref={(v) => `/api/workbench/${conv.id}/download?wb=${encodeURIComponent(wbId)}&version=${v}&name=${encodeURIComponent(activeRef.name.replace(/\.\w+$/, ""))}`}
         />
       ) : null}

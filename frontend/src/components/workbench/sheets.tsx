@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Download, FileSpreadsheet, FileText, Loader2, Upload } from "lucide-react";
+import { Download, FileSpreadsheet, FileText, History, Loader2, Upload } from "lucide-react";
 import { WORKBENCH_UPLOAD_ACCEPT } from "@/lib/workbench/upload-client";
 import type { WbBatch, WbConversation, WbFirstLook, WbGate } from "@/lib/litchai/workbench";
 import { Button, Sheet } from "@/components/kit";
@@ -384,40 +384,81 @@ export function DeliverSheet({
 }
 
 // --- Versions -------------------------------------------------------------------------
+/** Who made a version and how: you (by name), Sage, an undo, or a restore. */
+export function versionLabel(b: WbBatch | null | undefined): string {
+  if (!b) return "As opened";
+  if (b.inverse_of) return `Undo: ${b.title.replace(/^Undo:\s*/, "")}`;
+  if (b.tool === "user_edit" || b.tool === "restore") return b.title;
+  return `Sage: ${b.title}`;
+}
+
 export function HistorySheet({
   open,
   onClose,
   conversation,
   workbookId,
   downloadHref,
+  previewing,
+  restoring,
+  onPreview,
+  onRestore,
 }: {
   open: boolean;
   onClose: () => void;
   conversation: WbConversation;
   workbookId: string;
   downloadHref: (version: number) => string;
+  /** The version shown read-only in the grid, if any. */
+  previewing: number | null;
+  restoring: boolean;
+  onPreview: (version: number) => void;
+  onRestore: (version: number) => void;
 }) {
   const ref = conversation.workbooks.find((w) => w.id === workbookId);
   const titles = new Map(conversation.batches.map((b) => [b.id, b]));
   const versions = [...(ref?.versions ?? [])].reverse();
+  const current = versions[0]?.n;
+  const act = "inline-flex min-h-8 items-center gap-1 rounded-ctl px-2 py-1 text-[12px] font-medium text-accent hover:bg-cloud disabled:cursor-not-allowed disabled:opacity-40";
   return (
-    <Sheet open={open} onClose={onClose} size="sm" title="Versions" description={ref ? `${ref.name}. Every accepted change saves a version; undo adds one too.` : undefined}>
+    <Sheet
+      open={open}
+      onClose={onClose}
+      size="sm"
+      title="Versions"
+      description={ref ? `${ref.name}. Every change saves a version. Preview any version, or restore it as a new version that you can undo.` : undefined}
+    >
       <ol className="space-y-1.5">
         {versions.map((v) => {
           const b = v.batch_id ? titles.get(v.batch_id) : null;
+          const isCurrent = v.n === current;
           return (
-            <li key={v.n} className="flex items-center gap-2 rounded-ctl border border-hairline px-2.5 py-2 text-[13px]">
-              <span className="w-8 shrink-0 font-mono text-[12px] text-muted">v{v.n}</span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-ink">{b ? (b.inverse_of ? `Undo: ${b.title.replace(/^Undo:\s*/, "")}` : b.title) : "As opened"}</span>
-                <span className="text-[11.5px] text-muted">
-                  {new Date(v.at).toLocaleString("en-NG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
-                  {v.gate ? ` · recompute ${v.gate.status === "passed" ? "passed" : v.gate.status === "unverified" ? "not run" : v.gate.status}` : ""}
+            <li key={v.n} className={cn("rounded-ctl border px-2.5 py-2 text-[13px]", previewing === v.n ? "border-accent" : "border-hairline")}>
+              <div className="flex items-start gap-2">
+                <span className="w-8 shrink-0 pt-px font-mono text-[12px] text-muted">v{v.n}</span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-ink" title={versionLabel(b)}>{versionLabel(b)}</span>
+                  <span className="text-[11.5px] text-muted">
+                    {new Date(v.at).toLocaleString("en-NG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                    {v.gate ? ` · recompute ${v.gate.status === "passed" ? "passed" : v.gate.status === "unverified" ? "not run" : v.gate.status}` : ""}
+                  </span>
                 </span>
-              </span>
-              <a href={downloadHref(v.n)} className="inline-flex items-center gap-1 rounded-ctl px-2 py-1 text-[12px] font-medium text-accent hover:bg-cloud" aria-label={`Download version ${v.n}`}>
-                <Download className="size-3.5" /> v{v.n}
-              </a>
+                {isCurrent ? <span className="shrink-0 rounded-full bg-good-soft px-2 py-0.5 text-[11px] font-semibold text-good">Current</span> : null}
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-0.5 pl-8">
+                {!isCurrent ? (
+                  <>
+                    <button type="button" className={act} onClick={() => onPreview(v.n)} aria-label={`Preview version ${v.n}`}>
+                      <FileSpreadsheet className="size-3.5" /> Preview
+                    </button>
+                    <button type="button" className={act} onClick={() => onRestore(v.n)} disabled={restoring} aria-label={`Restore version ${v.n}`}>
+                      {restoring ? <Loader2 className="size-3.5 animate-spin" /> : <History className="size-3.5" />} Restore
+                    </button>
+                  </>
+                ) : null}
+                <a href={downloadHref(v.n)} className={act} aria-label={`Download version ${v.n}`}>
+                  <Download className="size-3.5" /> Download
+                </a>
+              </div>
             </li>
           );
         })}
