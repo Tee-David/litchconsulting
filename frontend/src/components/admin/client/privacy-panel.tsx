@@ -41,7 +41,7 @@ export function PrivacyPanel({
 
   const due = erasureDueAt ? new Date(erasureDueAt) : null;
   const daysLeft = due ? Math.max(0, Math.ceil((due.getTime() - Date.now()) / 86_400_000)) : 0;
-  const dueLabel = due ? due.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "";
+  const dueLabel = due ? due.toLocaleDateString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "long", year: "numeric" }) : "";
 
   const cancelErasure = async () => {
     setCancelling(true);
@@ -92,7 +92,7 @@ export function PrivacyPanel({
           </label>
         )}
         <p className="mt-3 text-xs text-muted">
-          {setAt ? `Set ${new Date(setAt).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric" })}${setBy ? ` by ${setBy}` : ""}${reason ? `. Reason: ${reason}` : ""}. ` : "Never changed. "}
+          {setAt ? `Set ${new Date(setAt).toLocaleString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "short", year: "numeric" })}${setBy ? ` by ${setBy}` : ""}${reason ? `. Reason: ${reason}` : ""}. ` : "Never changed. "}
           Applies to Sage, the workbench and help-desk triage for this client.
         </p>
         {err ? <p className="mt-2 text-sm text-bad">{err}</p> : null}

@@ -8,6 +8,7 @@ import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/admin/ui/data-table";
 import type { LitchaiDocument } from "@/lib/litchai/client";
+import { formatDate } from "@/lib/format-date";
 
 const STATUS_STYLE: Record<string, string> = {
   received: "bg-surface text-body",
@@ -106,7 +107,7 @@ export function DocumentList({ documents }: { documents: LitchaiDocument[] }) {
         accessorKey: "created_at",
         header: "Uploaded",
         cell: ({ getValue }) => (
-          <span className="text-body">{new Date(getValue() as string).toLocaleDateString()}</span>
+          <span className="text-body">{formatDate(getValue() as string)}</span>
         ),
       },
     ],

@@ -96,7 +96,7 @@ export async function scheduleErasureAction(
     return {
       ok: true,
       dueAt: dueAt.toISOString(),
-      message: `Erasure scheduled for ${dueAt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}. You can cancel until then.`,
+      message: `Erasure scheduled for ${dueAt.toLocaleDateString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "long", year: "numeric" })}. You can cancel until then.`,
     };
   } catch (e) {
     return failure(e, "Could not schedule the erasure. Nothing was changed.");

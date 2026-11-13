@@ -28,7 +28,7 @@ const STEPS: Array<{ label: string; statuses: string[] }> = [
   { label: "Completed", statuses: ["completed"] },
 ];
 
-const date = (d: Date | string | null | undefined) => (d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "");
+const date = (d: Date | string | null | undefined) => (d ? new Date(d).toLocaleDateString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "short", year: "numeric" }) : "");
 
 export default async function AdminRequestPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; assign?: string }> }) {
   await requireArea("requestsAll", "/admin/requests");

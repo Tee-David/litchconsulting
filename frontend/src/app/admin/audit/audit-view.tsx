@@ -90,7 +90,7 @@ export function AuditView({ rows }: { rows: AuditItem[] }) {
         accessorKey: "createdAt",
         header: "When",
         meta: { label: "When", mobile: "meta" },
-        cell: ({ row }) => <span className="whitespace-nowrap text-body">{new Date(row.original.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>,
+        cell: ({ row }) => <span className="whitespace-nowrap text-body">{new Date(row.original.createdAt).toLocaleString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>,
       },
       { id: "actor", accessorFn: (r) => r.actorName ?? "System", header: "Who", meta: { label: "Who", mobile: "subtitle" }, cell: ({ row }) => <span className="font-medium text-ink">{row.original.actorName ?? "System"}</span> },
       { id: "action", accessorFn: (r) => phrase(r.action), header: "Action", meta: { label: "Action", mobile: "title", hideable: false }, cell: ({ row }) => <span className="text-ink">{phrase(row.original.action)}</span> },

@@ -135,7 +135,7 @@ export default async function LitchaiStudioPage({ searchParams }: { searchParams
                   <Link href={`/admin/analyses/w/${c.id}`} className="flex min-h-[52px] items-center gap-3 px-4 py-3 text-sm hover:bg-surface sm:px-5">
                     <Table2 className="size-4 shrink-0 text-good" aria-hidden />
                     <span className="min-w-0 flex-1 truncate font-medium text-ink">{c.title}</span>
-                    <span className="shrink-0 text-[12px] text-muted">{(c.updatedAt as Date).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span>
+                    <span className="shrink-0 text-[12px] text-muted">{(c.updatedAt as Date).toLocaleDateString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "short" })}</span>
                   </Link>
                 </li>
               ))}

@@ -22,7 +22,7 @@ const inputCls =
 const labelCls = "mb-1.5 block text-xs font-semibold uppercase tracking-wide text-body";
 
 function fmtDate(d = new Date()) {
-  return d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  return d.toLocaleDateString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "long", year: "numeric" });
 }
 
 /** Single-image cover dropzone — uploads straight to R2 (same helper the app's

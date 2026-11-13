@@ -40,7 +40,7 @@ export function TrashList({ items }: { items: TrashItem[] }) {
         accessorKey: "deletedAt",
         header: "Moved to Trash",
         meta: { label: "Moved to Trash", mobile: "meta" },
-        cell: ({ row }) => <span className="text-body">{new Date(row.original.deletedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>,
+        cell: ({ row }) => <span className="text-body">{new Date(row.original.deletedAt).toLocaleDateString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "short", year: "numeric" })}</span>,
       },
       {
         id: "movedBy",

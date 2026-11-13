@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 export type NoteItem = { id: string; category: string; title: string; body: string | null; link: string | null; read: boolean; createdAt: string };
 export type PrefRow = { category: string; label: string; hint: string; mode: "immediate" | "digest" | "off"; email: boolean; push: boolean };
 
-const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 
 export function NotificationList({ items, labels }: { items: NoteItem[]; labels: Record<string, string> }) {
   const router = useRouter();

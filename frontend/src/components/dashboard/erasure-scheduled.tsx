@@ -9,7 +9,7 @@ import { signOut } from "@/lib/auth-client";
  * (NDPA, 30-day hold). Nothing is removed until the date; the firm can cancel.
  */
 export function ErasureScheduled({ dueAt }: { dueAt: string }) {
-  const date = new Date(dueAt).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+  const date = new Date(dueAt).toLocaleDateString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "long", year: "numeric" });
   return (
     <main className="grid min-h-dvh place-items-center bg-cloud px-4 py-10">
       <div className="w-full max-w-md rounded-card border border-hairline bg-paper p-6 shadow-sm sm:p-8">

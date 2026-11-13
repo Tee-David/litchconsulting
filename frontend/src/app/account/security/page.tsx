@@ -41,6 +41,7 @@ export default async function AccountSecurityPage() {
       twoStep={{ enabled: u.twoFactorEnabled, required: twoStepRequired(role) }}
       alertsHref={alertsHref}
       onboardingClosed={Boolean(onboarding && !onboarding.visible && onboarding.done < onboarding.total)}
+      now={Date.now()}
     />
   );
 }

@@ -38,7 +38,7 @@ const FILTERS = [
 
 function fmtDate(d: Date | string | null) {
   if (!d) return "—";
-  return new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return new Date(d).toLocaleDateString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "short", year: "numeric" });
 }
 
 export function PostList({ posts, categories = [] }: { posts: PostRow[]; categories?: Category[] }) {

@@ -13,7 +13,7 @@ import type { BillingDoc } from "@/app/admin/_lib/billing-data";
 import { downloadCsv } from "@/components/admin/ui/csv";
 
 const UNPAID = ["sent", "viewed", "overdue", "partially_paid"];
-const fmtDate = (d: string | null) => (d ? new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "—");
+const fmtDate = (d: string | null) => (d ? new Date(d).toLocaleDateString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "short", year: "numeric" }) : "—");
 
 function kindLabel(d: BillingDoc) {
   if (d.kind === "quote") return "Quote";

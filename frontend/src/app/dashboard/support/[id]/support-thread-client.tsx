@@ -104,7 +104,8 @@ export function SupportThreadClient({ ticketId, messages, ticketStatus }: Suppor
                   </div>
 
                   <p className={`text-[10px] text-muted ${!isAdminSender && "text-right"}`}>
-                    {new Date(m.createdAt).toLocaleTimeString([], {
+                    {new Date(m.createdAt).toLocaleTimeString("en-GB", {
+                      timeZone: "Africa/Lagos",
                       hour: "2-digit",
                       minute: "2-digit",
                     })}

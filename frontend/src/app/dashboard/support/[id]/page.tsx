@@ -7,6 +7,7 @@ import { getClientTicket } from "@/lib/db/queries/tickets";
 import { Badge } from "@/components/admin/ui/badge";
 import { StatusChip } from "@/components/kit";
 import { SupportThreadClient } from "./support-thread-client";
+import { formatDate, formatDateTime } from "@/lib/format-date";
 
 export const dynamic = "force-dynamic";
 
@@ -102,14 +103,14 @@ export default async function ClientSupportTicketDetailPage({
                 <span className="text-muted">Date Opened</span>
                 <span className="font-semibold text-ink flex items-center gap-1.5">
                   <Calendar className="size-4 text-muted" />
-                  {new Date(ticket.createdAt).toLocaleDateString()}
+                  {formatDate(ticket.createdAt)}
                 </span>
               </div>
               <div className="flex justify-between items-center pb-2.5 border-b border-hairline">
                 <span className="text-muted">Last Activity</span>
                 <span className="font-semibold text-ink flex items-center gap-1.5">
                   <Clock className="size-4 text-muted" />
-                  {ticket.lastReplyAt ? new Date(ticket.lastReplyAt).toLocaleString() : new Date(ticket.createdAt).toLocaleString()}
+                  {formatDateTime(ticket.lastReplyAt ?? ticket.createdAt)}
                 </span>
               </div>
             </div>

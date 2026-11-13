@@ -44,7 +44,7 @@ export function RestoreTestCard({ last, enabled }: { last: LastRestore; enabled:
         <div className="min-w-0 flex-1">
           <h2 className="font-display text-[15px] font-semibold text-ink">
             {!last ? "Restore test never run" : last.pass ? "Restore test passed" : "Restore test failed"}
-            {last ? <span className="ml-2 text-sm font-normal text-muted">{new Date(last.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span> : null}
+            {last ? <span className="ml-2 text-sm font-normal text-muted">{new Date(last.at).toLocaleString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span> : null}
           </h2>
           <p className="text-sm text-body">
             {last?.error

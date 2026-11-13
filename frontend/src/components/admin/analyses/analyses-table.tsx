@@ -107,7 +107,7 @@ export function AnalysesTable({ rows }: { rows: AnalysisRow[] }) {
         accessorKey: "createdAt",
         header: "Added",
         meta: { label: "Added", mobile: "hidden" },
-        cell: ({ row }) => <span className="whitespace-nowrap text-body">{new Date(row.original.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>,
+        cell: ({ row }) => <span className="whitespace-nowrap text-body">{new Date(row.original.createdAt).toLocaleDateString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "short", year: "numeric" })}</span>,
       },
     ],
     [],

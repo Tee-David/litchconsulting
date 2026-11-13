@@ -15,7 +15,7 @@ import { downloadCsv } from "@/components/admin/ui/csv";
 import { cn } from "@/lib/utils";
 import { Select } from "@/components/ui/select";
 
-const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
+const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 const methodOf = (p: PaymentLine) =>
   p.hasProof
     ? "Bank transfer, with proof"

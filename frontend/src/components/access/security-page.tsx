@@ -20,9 +20,11 @@ import {
 } from "@/app/account/actions";
 import type { DeviceRow, SignInEvent } from "@/app/account/_lib";
 
-const when = (iso: string) => {
+// `now` comes from the server render, so the server HTML and the first browser
+// render show the same "5 min ago" (no hydration mismatch).
+const relTime = (iso: string, now: number) => {
   const d = new Date(iso);
-  const mins = Math.round((Date.now() - d.getTime()) / 60000);
+  const mins = Math.round((now - d.getTime()) / 60000);
   if (mins < 2) return "now";
   if (mins < 60) return `${mins} min ago`;
   if (mins < 60 * 24) return `${Math.round(mins / 60)} h ago`;
@@ -52,6 +54,7 @@ export function SecurityPage({
   twoStep,
   alertsHref,
   onboardingClosed,
+  now,
 }: {
   me: { name: string; email: string; image: string | null; roleLabel: string };
   devices: DeviceRow[];
@@ -60,7 +63,10 @@ export function SecurityPage({
   twoStep: { enabled: boolean; required: boolean };
   alertsHref: string;
   onboardingClosed: boolean;
+  /** Server time of the render, in ms. */
+  now: number;
 }) {
+  const when = (iso: string) => relTime(iso, now);
   const toast = useToast();
   const router = useRouter();
   const [pending, start] = useTransition();

@@ -24,7 +24,7 @@ import { cn } from "@/lib/utils";
 import { REQUEST_DOC_ACCEPT } from "@/lib/upload-types";
 
 const fmt = (iso: string | null | undefined) =>
-  iso ? new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+  iso ? new Date(iso).toLocaleString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
 const inputCls = "w-full rounded-ctl border border-line-strong bg-paper px-3 py-2 text-sm text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/20";
 
 /* ─────────────────────────── header: Ask client + Move to ─────────────────────────── */
@@ -207,7 +207,7 @@ export function AsksPanel({ requestId, clientName, items, closed }: { requestId:
                 <p className="font-medium text-ink">{it.title}</p>
                 <p className="text-sm text-body">
                   {it.status === "open"
-                    ? `Asked ${fmt(it.createdAt)}${it.dueAt ? ` · due ${new Date(it.dueAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}`
+                    ? `Asked ${fmt(it.createdAt)}${it.dueAt ? ` · due ${new Date(it.dueAt).toLocaleDateString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "short" })}` : ""}`
                     : it.status === "supplied"
                       ? `Supplied ${fmt(it.suppliedAt)}`
                       : `Received ${fmt(it.receivedAt)}`}
@@ -475,7 +475,7 @@ export function AssignCard({
               <div className="min-w-0 flex-1 leading-tight">
                 <p className="truncate text-sm font-medium text-ink">{a.name}</p>
                 <p className="text-xs text-muted">
-                  {a.role === "admin" ? "Admin" : "Staff"} · since {new Date(a.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}
+                  {a.role === "admin" ? "Admin" : "Staff"} · since {new Date(a.at).toLocaleDateString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "short" })}
                 </p>
               </div>
               <button

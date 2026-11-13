@@ -62,7 +62,7 @@ export default async function StaffFilesPage({ searchParams }: { searchParams: P
                   {threadsBy.get(rid)!.slice(0, 4).map((t) => (
                     <li key={t.id}>
                       <Link href={`/work/analyses/w/${t.id}`} className="inline-flex items-center gap-1.5 rounded-full border border-hairline px-2.5 py-1 text-[12.5px] text-ink hover:bg-cloud">
-                        Workbench · {(t.updatedAt as Date).toLocaleDateString("en-NG", { day: "numeric", month: "short" })}
+                        Workbench · {(t.updatedAt as Date).toLocaleDateString("en-NG", { timeZone: "Africa/Lagos", day: "numeric", month: "short" })}
                       </Link>
                     </li>
                   ))}

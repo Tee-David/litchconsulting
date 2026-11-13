@@ -13,7 +13,7 @@ import { downloadCsv } from "@/components/admin/ui/csv";
 
 const ago = (iso: string) => {
   const d = Math.round((Date.now() - new Date(iso).getTime()) / 86_400_000);
-  return d <= 0 ? "Today" : d === 1 ? "Yesterday" : d < 30 ? `${d} days ago` : new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return d <= 0 ? "Today" : d === 1 ? "Yesterday" : d < 30 ? `${d} days ago` : new Date(iso).toLocaleDateString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "short", year: "numeric" });
 };
 
 export function AiModeTag({ mode }: { mode: string }) {
