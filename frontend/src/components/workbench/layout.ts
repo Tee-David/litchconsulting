@@ -10,12 +10,15 @@ export type WorkbenchPrefs = {
   sageWidth: number;
   /** Grid zoom, one of ZOOM_STEPS. */
   zoom: number;
+  /** Keep the first row / first column in view while scrolling. */
+  freezeRow: boolean;
+  freezeCol: boolean;
 };
 
 export const ZOOM_STEPS = [0.5, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 2] as const;
 export const SAGE_MIN = 320;
 export const SAGE_MAX = 640;
-const DEFAULTS: WorkbenchPrefs = { layout: "split", sageWidth: 410, zoom: 1 };
+const DEFAULTS: WorkbenchPrefs = { layout: "split", sageWidth: 410, zoom: 1, freezeRow: false, freezeCol: false };
 const KEY = "litch.workbench.prefs";
 
 export function clampSage(w: number): number {
@@ -40,6 +43,8 @@ function read(): WorkbenchPrefs {
       layout: p.layout === "focus" ? "focus" : "split",
       sageWidth: clampSage(Number(p.sageWidth) || DEFAULTS.sageWidth),
       zoom: ZOOM_STEPS.includes(Number(p.zoom) as (typeof ZOOM_STEPS)[number]) ? Number(p.zoom) : 1,
+      freezeRow: p.freezeRow === true,
+      freezeCol: p.freezeCol === true,
     };
   } catch {
     return DEFAULTS;

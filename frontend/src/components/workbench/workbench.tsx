@@ -4,7 +4,10 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowUp,
+  ChevronDown,
+  ChevronUp,
   Cloud,
+  Eye,
   Cpu,
   Download,
   FileSpreadsheet,
@@ -18,6 +21,7 @@ import {
   Paperclip,
   Plus,
   Send,
+  Search,
   ShieldAlert,
   ShieldCheck,
   Square,
@@ -32,7 +36,7 @@ import { Button, Segmented } from "@/components/kit";
 import { SageIcon } from "@/components/admin/sage-icon";
 import { cn } from "@/lib/utils";
 import { FAILURE, engineLabel } from "@/lib/ai-words";
-import { Grid, display, type GridMeta } from "./grid";
+import { Grid, display, type GridMeta, type SelStats } from "./grid";
 import { FirstLookCard } from "./first-look";
 import { Proposals } from "./proposals";
 import { TurnView } from "./turn";
@@ -114,6 +118,28 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const [prefs, setPrefs] = useWorkbenchPrefs();
   const [full, setFull] = useState(false);
   const [focusSage, setFocusSage] = useState(false);
+  // Phase E1: show formulas, status bar, find, name box, view menu.
+  const [showFormulas, setShowFormulas] = useState(false);
+  const [stats, setStats] = useState<SelStats | null>(null);
+  const [findOpen, setFindOpen] = useState(false);
+  const [findQ, setFindQ] = useState("");
+  const [find, setFind] = useState<{ q: string; nonce: number; dir: 1 | -1 } | null>(null);
+  const [findRes, setFindRes] = useState<{ index: number; total: number; capped: boolean } | null>(null);
+  const [nameBox, setNameBox] = useState<string | null>(null);
+  const [viewMenu, setViewMenu] = useState(false);
+  const findInput = useRef<HTMLInputElement>(null);
+  const runFind = (dir: 1 | -1, q = findQ) => setFind({ q, nonce: Date.now(), dir });
+  const openFind = () => {
+    setFindOpen(true);
+    setTimeout(() => findInput.current?.select(), 0);
+  };
+  const toggleFormulas = useCallback(() => setShowFormulas((v) => !v), []);
+  useEffect(() => {
+    if (!viewMenu) return;
+    const close = () => setViewMenu(false);
+    window.addEventListener("mousedown", close);
+    return () => window.removeEventListener("mousedown", close);
+  }, [viewMenu]);
   const split = prefs.layout === "split";
   const zoomBy = useCallback((step: 1 | -1 | 0) => setPrefs({ zoom: stepZoom(prefs.zoom, step) }), [prefs.zoom, setPrefs]);
   const shell = useRef<HTMLDivElement>(null);
@@ -456,18 +482,151 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
 
   const formulaBar = (
     <div className="flex items-center gap-2 border-b border-hairline px-2 py-1.5 text-[12.5px]">
-      <span className="w-20 shrink-0 truncate rounded bg-cloud px-1.5 py-0.5 font-mono text-[11.5px] text-ink">
-        {activeCell ? `${colLetter(activeCell.c)}${activeCell.r}` : "—"}
-      </span>
+      <input
+        aria-label="Name box: type a cell or range and press Enter"
+        title="Type a cell or range (D14, B3:D8, Sheet!A1) and press Enter"
+        value={
+          nameBox ??
+          (selection && selection.sheet === sheet && (selection.r0 !== selection.r1 || selection.c0 !== selection.c1)
+            ? `${colLetter(selection.c0)}${selection.r0}:${colLetter(selection.c1)}${selection.r1}`
+            : activeCell
+              ? `${colLetter(activeCell.c)}${activeCell.r}`
+              : "")
+        }
+        placeholder="A1"
+        onFocus={(e) => e.currentTarget.select()}
+        onChange={(e) => setNameBox(e.target.value)}
+        onBlur={() => setNameBox(null)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && nameBox?.trim()) {
+            goTo(nameBox.trim());
+            setNameBox(null);
+            e.currentTarget.blur();
+          } else if (e.key === "Escape") {
+            setNameBox(null);
+            e.currentTarget.blur();
+          }
+        }}
+        className="w-24 shrink-0 rounded bg-cloud px-1.5 py-0.5 font-mono text-[11.5px] text-ink outline-none focus:bg-paper focus:ring-2 focus:ring-accent/30"
+      />
       <span className="font-serif italic text-muted" aria-hidden>fx</span>
       <span className="min-w-0 flex-1 cursor-text select-text truncate font-mono text-[12px] text-ink">
         {activeCell ? activeCell.cell?.f ?? display(activeCell.cell) : ""}
       </span>
+      <button type="button" onClick={openFind} className="rounded p-1 text-muted hover:bg-cloud hover:text-ink" aria-label="Find in sheet" title="Find in sheet (Ctrl+F)">
+        <Search className="size-4" />
+      </button>
+      <div className="relative">
+        <button
+          type="button"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={() => setViewMenu((o) => !o)}
+          aria-haspopup="menu"
+          aria-expanded={viewMenu}
+          className="rounded p-1 text-muted hover:bg-cloud hover:text-ink"
+          aria-label="View options"
+          title="View: freeze, show formulas"
+        >
+          <Eye className="size-4" />
+        </button>
+        {viewMenu ? (
+          <div role="menu" aria-label="View" onMouseDown={(e) => e.stopPropagation()} className="absolute right-0 top-full z-40 mt-1 w-64 rounded-ctl border border-hairline bg-paper p-1 text-[13px] shadow-lg">
+            {[
+              { label: "Freeze the first row", on: prefs.freezeRow, run: () => setPrefs({ freezeRow: !prefs.freezeRow }), keys: "" },
+              { label: "Freeze the first column", on: prefs.freezeCol, run: () => setPrefs({ freezeCol: !prefs.freezeCol }), keys: "" },
+              { label: "Show formulas", on: showFormulas, run: toggleFormulas, keys: "Ctrl+`" },
+            ].map((it) => (
+              <button
+                key={it.label}
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={it.on}
+                onClick={() => {
+                  it.run();
+                  setViewMenu(false);
+                }}
+                className="flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left text-ink hover:bg-cloud"
+              >
+                <span className={cn("grid size-4 place-items-center rounded-sm border", it.on ? "border-act bg-act text-act-ink" : "border-line-strong")} aria-hidden>
+                  {it.on ? "✓" : ""}
+                </span>
+                <span className="flex-1">{it.label}</span>
+                {it.keys ? <span className="text-[11.5px] text-muted">{it.keys}</span> : null}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
       <button type="button" onClick={() => setSheetOpen("range")} className="rounded p-1 text-muted hover:bg-cloud hover:text-ink" aria-label="Point Sage at a range" title="Point Sage at a range">
         <Target className="size-4" />
       </button>
     </div>
   );
+
+  const findBar = findOpen ? (
+    <div className="flex items-center gap-1.5 border-b border-hairline bg-surface px-2 py-1.5" role="search" aria-label="Find in sheet">
+      <Search className="size-3.5 shrink-0 text-muted" aria-hidden />
+      <input
+        ref={findInput}
+        value={findQ}
+        onChange={(e) => {
+          setFindQ(e.target.value);
+          setFindRes(null);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            runFind(e.shiftKey ? -1 : 1);
+          } else if (e.key === "Escape") {
+            setFindOpen(false);
+          }
+        }}
+        placeholder={`Find in ${sheet}`}
+        aria-label="Find"
+        className="h-7 min-w-0 flex-1 rounded-ctl border border-line-strong bg-paper px-2 text-[13px] text-ink outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+      />
+      <span className="w-24 shrink-0 text-right text-[12px] tabular-nums text-muted" aria-live="polite">
+        {findRes ? (findRes.total ? `${findRes.index} of ${findRes.total}${findRes.capped ? "+" : ""}` : "No matches") : ""}
+      </span>
+      <button type="button" onClick={() => runFind(-1)} disabled={!findQ.trim()} className="grid size-7 place-items-center rounded-ctl text-muted hover:bg-cloud hover:text-ink disabled:cursor-not-allowed disabled:opacity-40" aria-label="Previous match" title="Previous (Shift+Enter)">
+        <ChevronUp className="size-4" />
+      </button>
+      <button type="button" onClick={() => runFind(1)} disabled={!findQ.trim()} className="grid size-7 place-items-center rounded-ctl text-muted hover:bg-cloud hover:text-ink disabled:cursor-not-allowed disabled:opacity-40" aria-label="Next match" title="Next (Enter)">
+        <ChevronDown className="size-4" />
+      </button>
+      <button type="button" onClick={() => setFindOpen(false)} className="grid size-7 place-items-center rounded-ctl text-muted hover:bg-cloud hover:text-ink" aria-label="Close find" title="Close (Esc)">
+        <X className="size-4" />
+      </button>
+    </div>
+  ) : null;
+
+  const fmt = (n: number) => n.toLocaleString("en-NG", { maximumFractionDigits: 2 });
+  const copyFigure = (label: string, n: number) => {
+    void navigator.clipboard?.writeText(String(Math.round(n * 100) / 100)).then(() => toast.success(`${label} copied`)).catch(() => {});
+  };
+  const statusBar =
+    stats && (stats.count > 1 || stats.numbers > 0) ? (
+      <div className="ml-2 hidden shrink-0 items-center gap-0.5 text-[12px] text-body md:flex" aria-label="Selection figures">
+        {stats.numbers > 0 ? (
+          <>
+            {[
+              ["Sum", stats.sum],
+              ["Average", stats.avg],
+              ["Min", stats.min],
+              ["Max", stats.max],
+            ].map(([label, v]) =>
+              v === null ? null : (
+                <button key={label as string} type="button" onClick={() => copyFigure(label as string, v as number)} className="rounded px-1.5 py-0.5 tabular-nums hover:bg-cloud hover:text-ink" title={`Copy the ${(label as string).toLowerCase()}`}>
+                  <span className="text-muted">{label}</span> {fmt(v as number)}
+                </button>
+              ),
+            )}
+          </>
+        ) : null}
+        <span className="px-1.5 tabular-nums"><span className="text-muted">Count</span> {stats.count.toLocaleString("en-NG")}</span>
+        {stats.partial ? <span className="px-1 text-muted" title="Only the first 10,000 rows of the selection are counted">(first 10,000 rows)</span> : null}
+      </div>
+    ) : null;
 
   const legend = pendingHere.length ? (
     <div className="flex flex-wrap items-center gap-3 border-b border-hairline px-3 py-1 text-[11.5px] text-muted">
@@ -509,7 +668,9 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           </button>
         );
       })}
-      <div className="ml-auto flex shrink-0 items-center gap-0.5 pl-2" role="group" aria-label="Zoom">
+      <span className="ml-auto" />
+      {statusBar}
+      <div className="flex shrink-0 items-center gap-0.5 pl-2" role="group" aria-label="Zoom">
         <button type="button" onClick={() => zoomBy(-1)} disabled={prefs.zoom <= 0.5} className="grid size-7 place-items-center rounded-ctl text-muted hover:bg-cloud hover:text-ink disabled:cursor-not-allowed disabled:opacity-40" aria-label="Zoom out" title="Zoom out (Ctrl + minus)">
           <Minus className="size-3.5" />
         </button>
@@ -526,6 +687,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const gridArea = (
     <div className="flex min-h-0 flex-1 flex-col">
       {formulaBar}
+      {findBar}
       {legend}
       <div className={cn("min-h-0 flex-1", pdfOpen && hasPdf && "grid grid-rows-2 xl:grid-cols-2 xl:grid-rows-1")}>
         {pdfOpen && hasPdf ? (
@@ -561,6 +723,21 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
               onMeta={onMeta}
               zoom={prefs.zoom}
               onZoom={zoomBy}
+              showFormulas={showFormulas}
+              freeze={{ row: prefs.freezeRow, col: prefs.freezeCol }}
+              find={find}
+              onFind={setFindRes}
+              onStats={setStats}
+              onToggleFormulas={toggleFormulas}
+              onAsk={(r, mode) => {
+                setSelection(r);
+                setContext(r);
+                if (mode === "ask") {
+                  if (desktop && !split) setFocusSage(true);
+                  if (!desktop) setView("sage");
+                  setTimeout(() => composer.current?.focus(), 0);
+                }
+              }}
             />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
@@ -763,6 +940,12 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           ? "fixed inset-0 z-[45] h-dvh"
           : "h-[calc(100dvh-9rem)] min-h-[520px] rounded-card border border-hairline lg:h-[calc(100dvh-7.5rem)]",
       )}
+      onKeyDownCapture={(e) => {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+          e.preventDefault();
+          openFind();
+        }
+      }}
       role={full ? "dialog" : undefined}
       aria-modal={full || undefined}
       aria-label={full ? "Workbench, full screen" : undefined}

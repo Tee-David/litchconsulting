@@ -13,6 +13,10 @@ const BLOCK = 100;
 const MAX_COLS = 60;
 
 type Block = { cells: Map<string, WbCell> };
+/** Figures for the status bar, from the selected cells. */
+export type SelStats = { count: number; numbers: number; sum: number; avg: number | null; min: number | null; max: number | null; partial: boolean };
+/** Status bar and Find read at most this many 100-row blocks (10,000 rows). */
+const READ_CAP = 100;
 export type GridMeta = { maxRow: number; maxCol: number; sheets: string[] };
 
 /**
@@ -34,6 +38,13 @@ export function Grid({
   onMeta,
   zoom = 1,
   onZoom,
+  showFormulas = false,
+  freeze = { row: false, col: false },
+  find = null,
+  onFind,
+  onStats,
+  onAsk,
+  onToggleFormulas,
 }: {
   conversationId: string;
   workbookId: string;
@@ -50,6 +61,17 @@ export function Grid({
   zoom?: number;
   /** Ctrl/Cmd + wheel, pinch, or Ctrl/Cmd + "+", "-", "0" on the grid: +1 step, -1 step, or 0 = reset. */
   onZoom?: (step: 1 | -1 | 0) => void;
+  /** Cells show their formulas instead of their values (Ctrl+`). */
+  showFormulas?: boolean;
+  /** Keep the first row and/or the first column in view while scrolling. */
+  freeze?: { row: boolean; col: boolean };
+  /** Find in sheet. A new nonce moves to the next (dir 1) or previous (dir -1) match. */
+  find?: { q: string; nonce: number; dir: 1 | -1 } | null;
+  onFind?: (r: { index: number; total: number; capped: boolean }) => void;
+  onStats?: (s: SelStats | null) => void;
+  /** Right-click "Ask Sage" (ask) or "Point Sage" (point) for a range. */
+  onAsk?: (range: Range, mode: "ask" | "point") => void;
+  onToggleFormulas?: () => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const rowH = Math.round(ROW_H * zoom);
@@ -258,15 +280,129 @@ export function Grid({
   // offsets too, and must keep the view where it is, so the sizes are read through a ref.
   const geom = useRef({ left, rowH, headH, numW });
   geom.current = { left, rowH, headH, numW };
-  useEffect(() => {
+  const reveal = useCallback((r: number, c: number, smooth = true) => {
     const el = box.current;
-    if (!focus || !el) return;
+    if (!el) return;
     const g = geom.current;
-    const y = g.headH + (focus.r - 1) * g.rowH;
-    const x = g.left[focus.c - 1] ?? 0;
-    el.scrollTo({ top: Math.max(0, y - el.clientHeight / 3), left: Math.max(0, x - g.numW - 40), behavior: "smooth" });
+    const y = g.headH + (r - 1) * g.rowH;
+    const x = g.left[c - 1] ?? 0;
+    el.scrollTo({ top: Math.max(0, y - el.clientHeight / 3), left: Math.max(0, x - g.numW - 40), behavior: smooth ? "smooth" : "auto" });
+  }, []);
+  useEffect(() => {
+    if (!focus) return;
+    reveal(focus.r, focus.c);
     setActive({ r: focus.r, c: focus.c });
-  }, [focus]);
+  }, [focus, reveal]);
+
+  // Status bar figures for the selection. Loads the selected rows if they are not loaded yet.
+  useEffect(() => {
+    if (!onStats) return;
+    if (!selection || selection.sheet !== sheet || !meta) {
+      onStats(null);
+      return;
+    }
+    const lastSel = Math.min(selection.r1, Math.max(1, meta.maxRow));
+    const b0 = Math.floor((selection.r0 - 1) / BLOCK);
+    const bEnd = Math.floor((lastSel - 1) / BLOCK);
+    const b1 = Math.min(bEnd, b0 + READ_CAP - 1);
+    let partial = bEnd > b1;
+    let count = 0, n = 0, sum = 0, min = Infinity, max = -Infinity;
+    for (let b = b0; b <= b1; b++) {
+      const blk = blocks.get(b);
+      if (!blk) {
+        partial = true;
+        void load(b);
+        continue;
+      }
+      for (const cell of blk.cells.values()) {
+        if (cell.r < selection.r0 || cell.r > selection.r1 || cell.c < selection.c0 || cell.c > selection.c1) continue;
+        if (cell.v === null || cell.v === undefined || cell.v === "") continue;
+        count++;
+        if (typeof cell.v === "number") {
+          n++;
+          sum += cell.v;
+          if (cell.v < min) min = cell.v;
+          if (cell.v > max) max = cell.v;
+        }
+      }
+    }
+    onStats({ count, numbers: n, sum, avg: n ? sum / n : null, min: n ? min : null, max: n ? max : null, partial });
+  }, [selection, sheet, meta, blocks, load, onStats]);
+
+  // Find: once the rows are loaded, move to the next or previous match from the active cell.
+  const handledFind = useRef(0);
+  useEffect(() => {
+    if (!find || !meta || handledFind.current === find.nonce) return;
+    const q = find.q.trim().toLowerCase();
+    if (!q) {
+      handledFind.current = find.nonce;
+      onFind?.({ index: 0, total: 0, capped: false });
+      return;
+    }
+    const lastB = Math.floor((Math.max(1, meta.maxRow) - 1) / BLOCK);
+    const capB = Math.min(lastB, READ_CAP - 1);
+    let missing = false;
+    for (let b = 0; b <= capB; b++) {
+      if (!blocks.has(b)) {
+        missing = true;
+        void load(b);
+      }
+    }
+    if (missing) return; // runs again when the blocks arrive
+    handledFind.current = find.nonce;
+    const hits: { r: number; c: number }[] = [];
+    for (let b = 0; b <= capB; b++) {
+      for (const cell of blocks.get(b)!.cells.values()) {
+        const text = (showFormulas && cell.f ? cell.f : display(cell)).toLowerCase();
+        if (text.includes(q)) hits.push({ r: cell.r, c: cell.c });
+      }
+    }
+    hits.sort((a, b) => a.r - b.r || a.c - b.c);
+    if (!hits.length) {
+      onFind?.({ index: 0, total: 0, capped: lastB > capB });
+      return;
+    }
+    const from = active ?? { r: 0, c: 0 };
+    const after = (h: { r: number; c: number }) => h.r > from.r || (h.r === from.r && h.c > from.c);
+    const before = (h: { r: number; c: number }) => h.r < from.r || (h.r === from.r && h.c < from.c);
+    let i = find.dir === 1 ? hits.findIndex(after) : hits.map(before).lastIndexOf(true);
+    if (i < 0) i = find.dir === 1 ? 0 : hits.length - 1; // wrap round
+    const hit = hits[i];
+    setActive(hit);
+    onSelect({ sheet, r0: hit.r, r1: hit.r, c0: hit.c, c1: hit.c });
+    reveal(hit.r, hit.c);
+    onFind?.({ index: i + 1, total: hits.length, capped: lastB > capB });
+  }, [find, meta, blocks, load, showFormulas, active, sheet, onSelect, onFind, reveal]);
+
+  // Right-click menu.
+  const [menu, setMenu] = useState<{ x: number; y: number; range: Range } | null>(null);
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && close();
+    window.addEventListener("mousedown", close);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("resize", close);
+    return () => {
+      window.removeEventListener("mousedown", close);
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", close);
+    };
+  }, [menu]);
+  const onContext = (e: React.MouseEvent) => {
+    const cellEl = (e.target as HTMLElement).closest("[data-r]") as HTMLElement | null;
+    if (!cellEl) return;
+    e.preventDefault();
+    const r = Number(cellEl.dataset.r);
+    const c = Number(cellEl.dataset.c);
+    let range = selection && selection.sheet === sheet && inRange(selection, r, c) ? selection : null;
+    if (!range) {
+      range = { sheet, r0: r, r1: r, c0: c, c1: c };
+      setActive({ r, c });
+      onSelect(range);
+    }
+    setMenu({ x: Math.min(e.clientX, window.innerWidth - 248), y: Math.min(e.clientY, window.innerHeight - 300), range });
+  };
 
   const rangeFrom = (a: { r: number; c: number }, b: { r: number; c: number }): Range => ({
     sheet,
@@ -293,14 +429,15 @@ export function Grid({
   };
 
   /** Ctrl/Cmd+C: the selected range as tab-separated rows, as Excel and Sheets copy it. */
-  const copySelection = () => {
-    if (!selection || selection.sheet !== sheet) return;
+  const copySelection = (rawValues = false, range: Range | null = selection) => {
+    if (!range || range.sheet !== sheet) return;
+    const selection = range;
     const lines: string[] = [];
     for (let r = selection.r0; r <= selection.r1; r++) {
       const row: string[] = [];
       for (let c = selection.c0; c <= Math.min(selection.c1, maxCol); c++) {
         const cell = cellAt(r, c);
-        row.push(typeof cell?.v === "number" ? String(cell.v) : display(cell).replace(/[\t\n]/g, " "));
+        row.push(rawValues && cell?.v !== null && cell?.v !== undefined ? String(cell.v).replace(/[\t\n]/g, " ") : typeof cell?.v === "number" ? String(cell.v) : display(cell).replace(/[\t\n]/g, " "));
       }
       lines.push(row.join("\t"));
     }
@@ -319,12 +456,41 @@ export function Grid({
       onZoom(e.key === "0" ? 0 : e.key === "-" ? -1 : 1);
       return;
     }
+    if (mod && e.key.toLowerCase() === "a") {
+      e.preventDefault();
+      onSelect({ sheet, r0: 1, r1: Math.max(1, maxRow), c0: 1, c1: maxCol });
+      return;
+    }
+    if (mod && e.key === "`") {
+      e.preventDefault();
+      onToggleFormulas?.();
+      return;
+    }
+    if (e.key === " " && active && (e.shiftKey || mod)) {
+      // Shift+Space selects the row, Ctrl+Space the column, as in Excel.
+      e.preventDefault();
+      onSelect(e.shiftKey ? { sheet, r0: active.r, r1: active.r, c0: 1, c1: maxCol } : { sheet, r0: 1, r1: Math.max(1, maxRow), c0: active.c, c1: active.c });
+      return;
+    }
     if (e.key === " " && !e.repeat) {
       e.preventDefault();
       setSpace(true);
       return;
     }
     if (!active) return;
+    if (e.key === "Enter" || e.key === "Tab") {
+      // Enter moves down, Tab moves right; Shift goes back.
+      e.preventDefault();
+      const back = e.shiftKey ? -1 : 1;
+      const nx = e.key === "Enter"
+        ? { r: Math.min(Math.max(1, active.r + back), Math.max(1, maxRow)), c: active.c }
+        : { r: active.r, c: Math.min(Math.max(1, active.c + back), maxCol) };
+      setActive(nx);
+      onSelect(rangeFrom(nx, nx));
+      onCell(cellAt(nx.r, nx.c), nx, null);
+      reveal(nx.r, nx.c, false);
+      return;
+    }
     const pageRows = Math.max(1, Math.floor(((box.current?.clientHeight ?? 600) - headH) / rowH) - 1);
     const lastRow = Math.max(1, maxRow);
     const d: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1], PageUp: [-pageRows, 0], PageDown: [pageRows, 0] };
@@ -386,6 +552,7 @@ export function Grid({
       onKeyDown={onKey}
       onScroll={(e) => setView({ top: e.currentTarget.scrollTop, height: e.currentTarget.clientHeight })}
       onKeyUp={(e) => e.key === " " && setSpace(false)}
+      onContextMenu={onContext}
       onBlur={() => setSpace(false)}
       onMouseDown={(e) => {
         // Middle button or Space + drag on the headers or the empty area also pans.
@@ -402,7 +569,8 @@ export function Grid({
     >
       <div style={{ height: headH + maxRow * rowH, width: totalW }} className="relative">
         {/* Column letters */}
-        <div role="row" className="sticky top-0 z-20 flex" style={{ height: headH, width: totalW }}>
+        <div className="sticky top-0 z-20" style={{ width: totalW }}>
+        <div role="row" className="flex" style={{ height: headH, width: totalW }}>
           <div className="sticky left-0 z-30 border-b border-r border-hairline bg-cloud" style={{ width: numW }} />
           {widths.map((w, i) => (
             <div
@@ -412,9 +580,10 @@ export function Grid({
               title={`Select column ${colLetter(i + 1)}`}
               className={cn(
                 "cursor-col-select relative flex items-center justify-center border-b border-r border-hairline font-semibold transition-colors duration-150",
+                freeze.col && i === 0 && "sticky z-20",
                 colPicked(i + 1) ? "bg-diff-sel text-ink" : "bg-cloud text-muted hover:bg-surface hover:text-ink",
               )}
-              style={{ width: w, fontSize: 11 * zoom }}
+              style={{ width: w, fontSize: 11 * zoom, left: freeze.col && i === 0 ? numW : undefined }}
             >
               {colLetter(i + 1)}
               <span
@@ -432,11 +601,68 @@ export function Grid({
             </div>
           ))}
         </div>
-        {rows.map((r) => {
+        {freeze.row && maxRow > 1 ? renderRow(1, true) : null}
+        </div>
+        {rows.map((r) => renderRow(r, false))}
+      </div>
+      {menu ? (
+        <div
+          role="menu"
+          aria-label="Cell menu"
+          onMouseDown={(e) => e.stopPropagation()}
+          className="fixed z-50 w-60 rounded-ctl border border-hairline bg-paper p-1 text-[13px] text-ink shadow-lg"
+          style={{ left: menu.x, top: menu.y }}
+        >
+          {[
+            { label: "Copy", keys: "Ctrl+C", run: () => copySelection(false, menu.range) },
+            { label: "Copy values only", keys: "", run: () => copySelection(true, menu.range) },
+            null,
+            { label: "Select row", keys: "Shift+Space", run: () => onSelect({ sheet, r0: menu.range.r0, r1: menu.range.r1, c0: 1, c1: maxCol }) },
+            { label: "Select column", keys: "Ctrl+Space", run: () => onSelect({ sheet, r0: 1, r1: Math.max(1, maxRow), c0: menu.range.c0, c1: menu.range.c1 }) },
+            null,
+            ...(onAsk
+              ? [
+                  { label: "Ask Sage about this range", keys: "", run: () => onAsk(menu.range, "ask") },
+                  { label: "Point Sage at this range", keys: "", run: () => onAsk(menu.range, "point") },
+                ]
+              : []),
+          ].map((it, k) =>
+            it ? (
+              <button
+                key={k}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  it.run();
+                  setMenu(null);
+                  box.current?.focus({ preventScroll: true, focusVisible: false } as FocusOptions);
+                }}
+                className="flex w-full items-center justify-between rounded px-2.5 py-1.5 text-left hover:bg-cloud focus-visible:bg-cloud focus-visible:outline-none"
+              >
+                {it.label}
+                {it.keys ? <span className="text-[11.5px] text-muted">{it.keys}</span> : null}
+              </button>
+            ) : (
+              <hr key={k} className="my-1 border-hairline" />
+            ),
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+
+  function renderRow(r: number, frozen: boolean) {
           const loaded = blocks.has(Math.floor((r - 1) / BLOCK));
           const page = cellAt(r, 1)?.page ?? null;
           return (
-            <div key={r} role="row" aria-rowindex={r} className="absolute flex" style={{ top: headH + (r - 1) * rowH, height: rowH, width: totalW }}>
+            <div
+              key={frozen ? "frozen" : r}
+              role="row"
+              aria-rowindex={r}
+              aria-hidden={!frozen && freeze.row && r === 1 ? true : undefined}
+              className={cn(frozen ? "relative flex shadow-[0_1px_0_var(--color-line-strong)]" : "absolute flex")}
+              style={{ top: frozen ? undefined : headH + (r - 1) * rowH, height: rowH, width: totalW }}
+            >
               <div
                 role="rowheader"
                 onMouseDown={(e) => pickHeader("row", r, e)}
@@ -464,11 +690,15 @@ export function Grid({
                     role="gridcell"
                     aria-selected={Boolean(sel)}
                     aria-colindex={c}
+                    data-r={r}
+                    data-c={c}
                     onMouseDown={(e) => pick(r, c, e)}
                     onMouseEnter={() => drag.current && onSelect(rangeFrom(drag.current, { r, c }))}
                     onDoubleClick={(e) => onCell(cell, { r, c }, (e.currentTarget as HTMLElement).getBoundingClientRect())}
                     className={cn(
                       "relative cursor-cell truncate border-b border-r border-hairline px-2 text-ink",
+                      (frozen || (freeze.col && c === 1)) && "bg-paper",
+                      freeze.col && c === 1 && "sticky z-[5]",
                       num && "text-right tabular-nums",
                       r === 1 && !num && "font-semibold",
                       pend === "new" && "bg-diff-new shadow-[inset_3px_0_0_var(--color-diff-new-line)]",
@@ -478,19 +708,16 @@ export function Grid({
                       isActive && "outline outline-2 -outline-offset-2 outline-diff-sel-line",
                       cell?.f && !pend && "text-ink",
                     )}
-                    style={{ width: w, lineHeight: `${rowH - 1}px` }}
+                    style={{ width: w, lineHeight: `${rowH - 1}px`, left: freeze.col && c === 1 ? numW : undefined }}
                     title={cell?.f ?? undefined}
                   >
-                    {loaded ? display(cell) : <span className="inline-block h-2.5 w-2/3 animate-pulse rounded bg-cloud align-middle" />}
+                    {loaded ? (showFormulas && cell?.f ? cell.f : display(cell)) : <span className="inline-block h-2.5 w-2/3 bg-cloud align-middle" />}
                   </div>
                 );
               })}
             </div>
           );
-        })}
-      </div>
-    </div>
-  );
+  }
 }
 
 export function display(cell: WbCell | null): string {
