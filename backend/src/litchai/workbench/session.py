@@ -99,6 +99,10 @@ class Conversation:
     workbooks: list[WorkbookRef] = field(default_factory=list)
     batches: list[Batch] = field(default_factory=list)
     messages: list[dict[str, Any]] = field(default_factory=list)
+    # D1: earlier chats in this workbench ({id, title, at, messages}). The open chat is
+    # ``messages``; proposals and versions belong to the workbench, not to a chat.
+    threads: list[dict[str, Any]] = field(default_factory=list)
+    thread_id: str = field(default_factory=lambda: f"t-{uuid.uuid4().hex[:8]}")
     provider: str | None = None
     mask_state: dict[str, Any] = field(default_factory=dict)
     created_at: str = field(default_factory=_now)
@@ -132,12 +136,47 @@ class Conversation:
             "workbooks": [w.__dict__ for w in self.workbooks],
             "batches": [b.to_dict() for b in self.batches],
             "messages": self.messages,
+            "threads": self.threads,
+            "thread_id": self.thread_id,
         }
 
     def public(self) -> dict[str, Any]:
         s = self.state()
         s["pending"] = sum(1 for b in self.batches if b.status == "pending")
+        # The chat list, without the old messages (they load when a chat is opened).
+        s["threads"] = [{"id": t["id"], "title": t.get("title") or "Chat", "at": t.get("at"),
+                         "questions": sum(1 for m in t.get("messages", [])
+                                          if m.get("role") == "user")}
+                        for t in reversed(self.threads)]
         return s
+
+    def _archive_open(self) -> None:
+        if not self.messages:
+            return
+        first = next((m.get("content", "") for m in self.messages if m.get("role") == "user"), "")
+        title = " ".join(first.split())
+        title = title if len(title) <= 60 else title[:58].rstrip() + "…"
+        self.threads.append({"id": self.thread_id, "title": title or "Chat",
+                             "at": self.messages[-1].get("at") or _now(),
+                             "messages": self.messages})
+        self.messages = []
+
+    def new_thread(self) -> None:
+        """Start an empty chat; the open one is kept in the chat list."""
+        self._archive_open()
+        self.thread_id = f"t-{uuid.uuid4().hex[:8]}"
+
+    def open_thread(self, thread_id: str) -> None:
+        """Make an earlier chat the open one (the current one goes to the list)."""
+        if thread_id == self.thread_id:
+            return
+        found = next((t for t in self.threads if t["id"] == thread_id), None)
+        if found is None:
+            raise KeyError(thread_id)
+        self._archive_open()
+        self.threads = [t for t in self.threads if t["id"] != thread_id]
+        self.messages = list(found.get("messages", []))
+        self.thread_id = found["id"]
 
     @classmethod
     def from_state(cls, state: dict[str, Any], mask_state: dict[str, Any] | None = None
@@ -150,6 +189,9 @@ class Conversation:
         c.workbooks = [WorkbookRef(**w) for w in state.get("workbooks", [])]
         c.batches = [Batch.from_dict(b) for b in state.get("batches", [])]
         c.messages = list(state.get("messages", []))
+        c.threads = list(state.get("threads", []))
+        if state.get("thread_id"):
+            c.thread_id = state["thread_id"]
         c.mask_state = mask_state or {}
         return c
 

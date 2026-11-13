@@ -328,6 +328,26 @@ def register_workbench_routes(app: FastAPI) -> None:
                                  headers={"Cache-Control": "no-cache",
                                           "X-Accel-Buffering": "no"})
 
+    @app.post("/workbench/conversations/{conversation_id}/threads")
+    def new_thread(conversation_id: str) -> dict[str, Any]:
+        """New chat in this workbench; the open chat stays in the chat list."""
+        with _workbench() as wb:
+            conv = _get(wb, conversation_id)
+            conv.new_thread()
+            wb.store.save(conv)
+            return {"conversation": conv.public()}
+
+    @app.post("/workbench/conversations/{conversation_id}/threads/{thread_id}/open")
+    def open_thread(conversation_id: str, thread_id: str) -> dict[str, Any]:
+        with _workbench() as wb:
+            conv = _get(wb, conversation_id)
+            try:
+                conv.open_thread(thread_id)
+            except KeyError as exc:
+                raise HTTPException(404, "chat not found") from exc
+            wb.store.save(conv)
+            return {"conversation": conv.public()}
+
     @app.post("/workbench/conversations/{conversation_id}/messages/{index}/feedback")
     def message_feedback(conversation_id: str, index: int,
                          body: MessageFeedback) -> dict[str, Any]:
