@@ -499,6 +499,9 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         onBlur={() => setNameBox(null)}
         onKeyDown={(e) => {
           if (e.key === "Enter" && nameBox?.trim()) {
+            // Go there and select it, as the name box in Excel and Sheets does.
+            const target = parseRef(nameBox.trim(), sheet);
+            if (target) setSelection(target);
             goTo(nameBox.trim());
             setNameBox(null);
             e.currentTarget.blur();
