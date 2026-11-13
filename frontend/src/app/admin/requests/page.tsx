@@ -45,7 +45,7 @@ export default async function AdminRequestsPage({ searchParams }: { searchParams
             <ActLink href="/admin/services" variant="secondary">
               Service catalogue
             </ActLink>
-            <ActLink href="/request">
+            <ActLink href="/admin/requests/new">
               <Plus /> New request
             </ActLink>
           </>

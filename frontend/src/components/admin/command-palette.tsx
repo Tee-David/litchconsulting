@@ -27,7 +27,7 @@ type QuickAction = { label: string; href: string; icon: LucideIcon; keywords?: s
 const QUICK_ACTIONS: QuickAction[] = [
   { label: "New invoice", href: "/admin/billing/invoices/new", icon: FileText, keywords: "create bill" },
   { label: "New quote", href: "/admin/billing/quotes/new", icon: FileText, keywords: "create estimate" },
-  { label: "New request", href: "/request", icon: Inbox, keywords: "create service" },
+  { label: "New request", href: "/admin/requests/new", icon: Inbox, keywords: "create service" },
   { label: "New client", href: "/admin/clients", icon: UserPlus, keywords: "create add" },
   { label: "Ask Sage", href: "/admin/sage", icon: Sparkles, keywords: "ai assistant chat knowledge" },
   { label: "Go to Trash", href: "/admin/trash", icon: Trash2, keywords: "deleted" },
