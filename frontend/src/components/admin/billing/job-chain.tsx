@@ -26,6 +26,12 @@ function notIssued(d: BillingDoc): Step["state"] | null {
   return null;
 }
 
+/** Sentence case for a chip: "partially_paid" reads "Partially paid", "Not sent" stays. */
+function sentence(t: string): string {
+  const x = t.replace(/_/g, " ");
+  return x.charAt(0).toUpperCase() + x.slice(1);
+}
+
 function stepsFor(docs: BillingDoc[]): Step[] {
   const out: Step[] = [];
   const sorted = [...docs].sort((a, b) => a.issueDate.localeCompare(b.issueDate));
@@ -135,7 +141,7 @@ export function JobChain({ docs }: { docs: BillingDoc[] }) {
             >
               <span className="block font-mono text-xs text-muted">{s.code}</span>
               <span className="mt-0.5 block text-sm font-semibold text-ink">{s.label}</span>
-              <span className={cn("mt-1.5 inline-flex rounded-full px-2 py-0.5 text-xs font-medium capitalize", PILL[s.state])}>{s.status}</span>
+              <span className={cn("mt-1.5 inline-flex rounded-full px-2 py-0.5 text-xs font-medium", PILL[s.state])}>{sentence(s.status)}</span>
               <span className="mt-1.5 block text-xs tabular-nums text-body">{s.note}</span>
             </Link>
           </li>
