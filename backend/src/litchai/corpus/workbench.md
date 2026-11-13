@@ -76,7 +76,24 @@ decimals, or a plain number. Your own edits are saved at once as a new version n
 after you ("Edited by …"), recalculated by the engine, and Undo and Redo (Ctrl+Z,
 Ctrl+Y) step back and forward through them. Sage's changes are different: they stay
 proposals until someone accepts them. The sheet shows 100 empty rows and 3 empty
-columns past the data, so you can add data below or beside it.
+columns past the data, so you can add data below or beside it. Drag the small square at
+the corner of the selection (the fill handle) to copy cells or continue a series such
+as 1, 2, 3 or Jan, Feb, Mar; double-click it to fill down as far as the next column has
+data. Formulas move their cell references as they fill.
+
+## Saving, working offline and version history
+
+How saving works, what happens without internet, and how to see, preview or restore
+an earlier version of a workbook. Every edit saves at once; the toolbar says
+"Saving…", then "All changes saved". If the connection drops, your edits stay on this
+device ("Offline: N changes kept on this device") and are sent, in order, when the
+connection returns or when you open the workbench again; the browser asks before you
+leave while a save is still running. The Versions button lists every version of the
+workbook, newest first, with who made it (your name for your edits, "Sage: …" for an
+accepted proposal, "Undo: …" for an undo, "Restored version N by …" for a restore),
+when, and whether the recompute passed. Preview shows that version in the grid,
+read-only; Restore this version brings it back as a new version, so nothing is lost
+and Ctrl+Z undoes the restore. Any version can also be downloaded.
 
 ## Moving around the sheet
 
