@@ -699,7 +699,7 @@ export function SettingsView({
                   aria-label="Filter by role"
                   className="w-40"
                   options={[
-                    { value: "all", label: "All Roles" },
+                    { value: "all", label: "All roles" },
                     { value: "admin", label: "Administrators" },
                     { value: "client", label: "Clients" },
                   ]}
@@ -711,9 +711,9 @@ export function SettingsView({
                   aria-label="Filter by status"
                   className="w-40"
                   options={[
-                    { value: "all", label: "All Statuses" },
-                    { value: "active", label: "Active Only" },
-                    { value: "banned", label: "Banned Only" },
+                    { value: "all", label: "All statuses" },
+                    { value: "active", label: "Active only" },
+                    { value: "banned", label: "Banned only" },
                   ]}
                 />
               </div>
@@ -725,7 +725,7 @@ export function SettingsView({
               className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover keep-brand"
             >
               <UserPlus className="size-4" />
-              Add Administrator
+              Add administrator
             </button>
           </div>
 
@@ -735,7 +735,7 @@ export function SettingsView({
               <div className="mb-4 flex items-center justify-between">
                 <h3 className="font-display text-sm font-bold text-ink flex items-center gap-2">
                   <Shield className="size-4.5 text-brand" />
-                  Create Other Admin User
+                  Create another admin user
                 </h3>
                 <button
                   type="button"
@@ -791,7 +791,7 @@ export function SettingsView({
                     ) : (
                       <CheckCircle2 className="size-4" />
                     )}
-                    Save Administrator
+                    Save administrator
                   </button>
                 </div>
               </form>
@@ -829,7 +829,7 @@ export function SettingsView({
                   onClick={() => handleBulkToggleBan(true)}
                   className="rounded-lg border border-orange-200 bg-orange-50/50 px-3 py-1.5 text-xs font-semibold text-orange-700 hover:bg-orange-100/50 dark:border-orange-900/50 dark:bg-orange-950/20 dark:text-orange-400 cursor-pointer"
                 >
-                  Ban Selected
+                  Ban selected
                 </button>
 
                 <button
@@ -838,7 +838,7 @@ export function SettingsView({
                   onClick={() => handleBulkToggleBan(false)}
                   className="rounded-lg border border-green-200 bg-green-50/50 px-3 py-1.5 text-xs font-semibold text-green-700 hover:bg-green-100/50 dark:border-green-900/50 dark:bg-green-950/20 dark:text-green-400 cursor-pointer"
                 >
-                  Unban Selected
+                  Unban selected
                 </button>
 
                 <button
@@ -848,7 +848,7 @@ export function SettingsView({
                   className="inline-flex items-center gap-1 rounded-lg border border-red-200 bg-red-50/50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100/50 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-400 cursor-pointer"
                 >
                   <Trash2 className="size-3.5" />
-                  Delete Selected
+                  Delete selected
                 </button>
               </div>
             </div>
@@ -988,7 +988,7 @@ export function SettingsView({
                                   disabled={isPendingAction}
                                   onClick={() => handleDeleteUser(u.id, u.name)}
                                   className="inline-flex items-center justify-center rounded-lg border border-red-200 bg-red-50/50 p-1.5 text-red-600 transition-colors hover:bg-red-100/50 disabled:opacity-50 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-400 cursor-pointer"
-                                  title="Delete User"
+                                  title="Delete user"
                                 >
                                   <Trash2 className="size-3.5" />
                                 </button>

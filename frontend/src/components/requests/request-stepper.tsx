@@ -205,7 +205,7 @@ export function RequestStepper({
                   <p className="mt-1 text-sm text-body">{service.tagline}</p>
                 </div>
                 <span className="rounded-full bg-brand-tint px-4 py-1.5 text-sm font-bold text-brand">
-                  {isFixed ? `${formatMoney(Number(service.priceNgn))} + VAT` : "Get A Quote"}
+                  {isFixed ? `${formatMoney(Number(service.priceNgn))} + VAT` : "Get a quote"}
                 </span>
               </div>
               <p className="mt-4 text-sm leading-relaxed text-body">{service.overview}</p>

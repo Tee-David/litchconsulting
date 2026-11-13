@@ -587,7 +587,7 @@ export function HelpDeskView({
                   className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-red-200 bg-red-50/50 px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-100/50 dark:border-red-900/50 dark:bg-red-950/20 dark:text-red-400"
                 >
                   {busy === "bulk" ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
-                  Delete Selected
+                  Delete selected
                 </button>
               </div>
             </div>

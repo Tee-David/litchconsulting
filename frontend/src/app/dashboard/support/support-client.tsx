@@ -55,15 +55,15 @@ const CATEGORY_ICONS: Record<HelpCategoryIcon, LucideIcon> = {
 };
 
 const TICKET_CATEGORY_OPTIONS = [
-  { value: "general", label: "General Inquiry" },
-  { value: "billing", label: "Billing & Invoices" },
-  { value: "tax", label: "Tax & Audits" },
-  { value: "advisory", label: "Advisory & Modeling" },
-  { value: "technical", label: "Technical Support" },
+  { value: "general", label: "General question" },
+  { value: "billing", label: "Billing and invoices" },
+  { value: "tax", label: "Tax and audits" },
+  { value: "advisory", label: "Advisory and modelling" },
+  { value: "technical", label: "Technical support" },
 ];
 
 const STATUS_FILTER_OPTIONS = [
-  { value: "all", label: "All Statuses" },
+  { value: "all", label: "All statuses" },
   { value: "open", label: "Open" },
   { value: "pending", label: "Pending" },
   { value: "resolved", label: "Resolved" },
@@ -252,7 +252,7 @@ export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
                     </span>
                     <span className="font-display text-sm font-bold text-ink">{c.label}</span>
                     <span className="mt-1 text-xs leading-relaxed text-body">{c.description}</span>
-                    <span className="mt-3 text-[11px] font-semibold uppercase tracking-wider text-muted">
+                    <span className="mt-3 text-xs font-medium text-muted">
                       {counts[c.key] ?? 0} article{(counts[c.key] ?? 0) === 1 ? "" : "s"}
                     </span>
                   </button>
@@ -412,7 +412,7 @@ export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
                     <th className="px-5 py-3">Category</th>
                     <th className="px-5 py-3">Priority</th>
                     <th className="px-5 py-3">Status</th>
-                    <th className="px-5 py-3">Last Activity</th>
+                    <th className="px-5 py-3">Last activity</th>
                     <th className="px-5 py-3 text-center">Action</th>
                   </tr>
                 </thead>
@@ -536,7 +536,7 @@ export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
                   htmlFor="message"
                   className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted"
                 >
-                  Detailed Message
+                  Detailed message
                 </label>
                 <textarea
                   id="message"
@@ -564,7 +564,7 @@ export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
                   className="inline-flex items-center gap-1.5 rounded-xl bg-act px-4 py-2.5 text-sm font-semibold text-act-ink transition-colors hover:bg-act-hover disabled:opacity-50 keep-brand"
                 >
                   {isPending && <Loader2 className="size-4 animate-spin" />}
-                  Submit Ticket
+                  Submit ticket
                 </button>
               </div>
             </form>

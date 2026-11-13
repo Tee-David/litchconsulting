@@ -58,7 +58,7 @@ export function SettingsForm({ initialData }: SettingsFormProps) {
     <div className="max-w-2xl space-y-6">
     <div className="rounded-card border border-hairline bg-paper overflow-hidden">
       <div className="border-b border-hairline px-6 py-4">
-        <h3 className="font-display text-sm font-bold text-ink">Business & Profile Information</h3>
+        <h3 className="font-display text-sm font-bold text-ink">Business and profile information</h3>
         <p className="text-xs text-muted mt-1">
           Keep your billing details and primary contact info accurate to ensure correct invoice issuance.
         </p>
@@ -95,10 +95,10 @@ export function SettingsForm({ initialData }: SettingsFormProps) {
           </p>
         </div>
 
-        {/* Primary Contact Name */}
+        {/* Primary contact name */}
         <div>
           <label htmlFor="name" className="block text-xs font-semibold text-muted uppercase tracking-wider mb-1.5">
-            Primary Contact Name
+            Primary contact name
           </label>
           <input
             id="name"
@@ -145,10 +145,10 @@ export function SettingsForm({ initialData }: SettingsFormProps) {
           </div>
         </div>
 
-        {/* Phone Number */}
+        {/* Phone number */}
         <div>
           <label htmlFor="phone" className="block text-xs font-semibold text-muted uppercase tracking-wider mb-1.5">
-            Phone Number
+            Phone number
           </label>
           <input
             id="phone"
@@ -164,7 +164,7 @@ export function SettingsForm({ initialData }: SettingsFormProps) {
         {/* Billing Address */}
         <div>
           <label htmlFor="address" className="block text-xs font-semibold text-muted uppercase tracking-wider mb-1.5">
-            Official Billing Address
+            Official billing address
           </label>
           <textarea
             id="address"
@@ -184,7 +184,7 @@ export function SettingsForm({ initialData }: SettingsFormProps) {
             className="inline-flex items-center gap-1.5 rounded-xl bg-act px-5 py-2.5 text-sm font-semibold text-act-ink transition-colors hover:bg-act-hover disabled:opacity-50"
           >
             {isPending && <Loader2 className="size-4 animate-spin" />}
-            Save Changes
+            Save changes
           </button>
         </div>
       </form>

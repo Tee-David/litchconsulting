@@ -38,31 +38,31 @@ export type HelpArticle = {
 export const HELP_CATEGORIES: HelpCategory[] = [
   {
     key: "getting-started",
-    label: "Getting Started",
+    label: "Getting started",
     description: "New to the portal? Set up your account and find your way around.",
     icon: "rocket",
   },
   {
     key: "billing",
-    label: "Billing & Payments",
+    label: "Billing and payments",
     description: "Invoices, paying securely with Paystack, receipts and refunds.",
     icon: "receipt",
   },
   {
     key: "services",
-    label: "Services & Requests",
+    label: "Services and requests",
     description: "Request a service, get a quote and track engagement progress.",
     icon: "briefcase",
   },
   {
     key: "documents",
-    label: "Documents & Deliverables",
+    label: "Documents and deliverables",
     description: "Upload source files and download your finished reports safely.",
     icon: "folder",
   },
   {
     key: "account",
-    label: "Account & Security",
+    label: "Account and security",
     description: "Your profile, data privacy under the NDPA and reaching support.",
     icon: "shield",
   },

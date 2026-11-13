@@ -89,7 +89,7 @@ export default async function ClientSupportTicketDetailPage({
         <div className="space-y-6">
           {/* Metadata Card */}
           <div className="rounded-card border border-hairline bg-paper p-5">
-            <h3 className="mb-4 font-display text-sm font-bold text-ink">Ticket Information</h3>
+            <h3 className="mb-4 font-display text-sm font-bold text-ink">Ticket information</h3>
             <div className="space-y-4 text-sm">
               <div className="flex justify-between items-center pb-2.5 border-b border-hairline">
                 <span className="text-muted">Category</span>
@@ -100,14 +100,14 @@ export default async function ClientSupportTicketDetailPage({
                 <span className="font-semibold text-ink capitalize">{ticket.priority}</span>
               </div>
               <div className="flex justify-between items-center pb-2.5 border-b border-hairline">
-                <span className="text-muted">Date Opened</span>
+                <span className="text-muted">Date opened</span>
                 <span className="font-semibold text-ink flex items-center gap-1.5">
                   <Calendar className="size-4 text-muted" />
                   {formatDate(ticket.createdAt)}
                 </span>
               </div>
               <div className="flex justify-between items-center pb-2.5 border-b border-hairline">
-                <span className="text-muted">Last Activity</span>
+                <span className="text-muted">Last activity</span>
                 <span className="font-semibold text-ink flex items-center gap-1.5">
                   <Clock className="size-4 text-muted" />
                   {formatDateTime(ticket.lastReplyAt ?? ticket.createdAt)}
@@ -120,7 +120,7 @@ export default async function ClientSupportTicketDetailPage({
           <div className="rounded-card border border-hairline bg-paper p-5">
             <h3 className="mb-3 font-display text-sm font-bold text-ink flex items-center gap-2">
               <HelpCircle className="size-4 text-brand" />
-              Support Guidelines
+              Support guidelines
             </h3>
             <div className="text-xs text-body leading-relaxed space-y-2.5">
               <p>
