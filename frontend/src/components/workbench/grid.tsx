@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Loader2 } from "lucide-react";
 import type { WbCell, WbSheetWindow, WbUserEdit } from "@/lib/litchai/workbench";
-import { FUNCS, hint, parseTyped, stepDecimals, suggest } from "./formula-help";
+import { FUNCS, fillValues, hint, parseTyped, shiftFormula, stepDecimals, suggest } from "./formula-help";
 import { colLetter, type Range, inRange } from "./refs";
 import { cn } from "@/lib/utils";
 
@@ -107,6 +107,8 @@ export function Grid({
   const [optimistic, setOptimistic] = useState<Map<string, string>>(new Map());
   const [sug, setSug] = useState(0);
   const editInput = useRef<HTMLInputElement>(null);
+  // E2.6 fill handle: the cell the drag has reached, while dragging.
+  const [fillTo, setFillTo] = useState<{ r: number; c: number } | null>(null);
   const key = `${conversationId}|${workbookId}|${sheet}|${version}`;
   const keyRef = useRef(key);
 
@@ -512,6 +514,76 @@ export function Grid({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formatRequest]);
 
+  // ---- E2.6: fill handle ----------------------------------------------------------
+  const cellFromPoint = (x: number, y: number) => {
+    const el = box.current;
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    const gy = y - rect.top + el.scrollTop - headH;
+    const gx = x - rect.left + el.scrollLeft;
+    const r = Math.max(1, Math.floor(gy / rowH) + 1);
+    let c = 1;
+    while (c < left.length - 1 && gx >= left[c]) c++;
+    return { r, c };
+  };
+  const doFill = (sel: Range, to: { r: number; c: number }) => {
+    const down = to.r > sel.r1;
+    const items: { r: number; c: number; e: Omit<WbUserEdit, "sheet" | "cell">; shown: string }[] = [];
+    const lines = down ? sel.c1 - sel.c0 + 1 : sel.r1 - sel.r0 + 1;
+    const count = down ? to.r - sel.r1 : to.c - sel.c1;
+    for (let i = 0; i < lines; i++) {
+      const src = [] as { r: number; c: number; cell: WbCell | null }[];
+      if (down) for (let r = sel.r0; r <= sel.r1; r++) src.push({ r, c: sel.c0 + i, cell: cellAt(r, sel.c0 + i) });
+      else for (let c = sel.c0; c <= sel.c1; c++) src.push({ r: sel.r0 + i, c, cell: cellAt(sel.r0 + i, c) });
+      const hasFormula = src.some((x) => x.cell?.f);
+      const values = hasFormula ? null : fillValues(src.map((x) => (x.cell?.v ?? null) as string | number | boolean | null), count);
+      for (let k = 0; k < count && items.length < 5000; k++) {
+        const s0 = src[k % src.length];
+        const r = down ? sel.r1 + k + 1 : s0.r;
+        const c = down ? s0.c : sel.c1 + k + 1;
+        const nf = s0.cell?.nf && s0.cell.nf !== "General" ? s0.cell.nf : undefined;
+        if (s0.cell?.f) {
+          const f2 = shiftFormula(s0.cell.f, r - s0.r, c - s0.c);
+          items.push({ r, c, e: { formula: f2, number_format: nf }, shown: "…" });
+        } else {
+          const v = values ? values[k] : null;
+          if (v === null || v === undefined || v === "") items.push({ r, c, e: { clear: true }, shown: "" });
+          else items.push({ r, c, e: { value: v as string | number | boolean, number_format: nf }, shown: display({ ...(s0.cell as WbCell), v: v as string | number | boolean, f: null, pending: null }) });
+        }
+      }
+    }
+    if (!items.length) return;
+    onSelect({ sheet, r0: sel.r0, r1: down ? to.r : sel.r1, c0: sel.c0, c1: down ? sel.c1 : to.c });
+    void send(items);
+  };
+  const startFill = (e: React.MouseEvent) => {
+    if (!editable || !selection || selection.sheet !== sheet || e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const sel = selection;
+    let target: { r: number; c: number } | null = null;
+    const body = document.body.style;
+    const prev = body.cursor;
+    body.cursor = "crosshair";
+    const move = (ev: MouseEvent) => {
+      const p = cellFromPoint(ev.clientX, ev.clientY);
+      if (!p) return;
+      const dr = p.r - sel.r1;
+      const dc = p.c - sel.c1;
+      target = dr > 0 && dr >= dc ? { r: Math.min(p.r, maxRow), c: sel.c1 } : dc > 0 ? { r: sel.r1, c: Math.min(p.c, maxCol) } : null;
+      setFillTo(target);
+    };
+    const up = () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+      body.cursor = prev;
+      setFillTo(null);
+      if (target) doFill(sel, target);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  };
+
   // Right-click menu.
   const [menu, setMenu] = useState<{ x: number; y: number; range: Range } | null>(null);
   useEffect(() => {
@@ -779,6 +851,31 @@ export function Grid({
         </div>
         {rows.map((r) => renderRow(r, false))}
         {editing ? renderEditor(editing) : null}
+        {editable && selection && selection.sheet === sheet && !editing ? (
+          <>
+            {fillTo ? (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute z-20 border-2 border-dashed border-accent"
+                style={{
+                  left: left[selection.c0 - 1],
+                  top: headH + (selection.r0 - 1) * rowH,
+                  width: (left[Math.max(fillTo.c, selection.c1)] ?? left[left.length - 1]) - left[selection.c0 - 1],
+                  height: (Math.max(fillTo.r, selection.r1) - selection.r0 + 1) * rowH,
+                }}
+              />
+            ) : null}
+            <span
+              role="button"
+              tabIndex={-1}
+              aria-label="Fill handle: drag down or right to copy or continue a series"
+              title="Drag to fill"
+              onMouseDown={startFill}
+              className="absolute z-20 size-2 cursor-crosshair border border-paper bg-accent"
+              style={{ left: (left[selection.c1] ?? left[left.length - 1]) - 4, top: headH + selection.r1 * rowH - 4 }}
+            />
+          </>
+        ) : null}
       </div>
       {menu ? (
         <div

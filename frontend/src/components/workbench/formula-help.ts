@@ -156,3 +156,52 @@ export function stepDecimals(nf: string | null | undefined, step: 1 | -1): strin
   const i = base.lastIndexOf("0");
   return i < 0 ? `0${zeros}` : base.slice(0, i + 1) + zeros + base.slice(i + 1);
 }
+
+/**
+ * Shift the relative references in a formula by (dr, dc), as Excel does when a
+ * formula is filled or copied. $-anchored parts stay; text in quotes is left alone.
+ * A reference pushed above row 1 or left of column A becomes #REF!.
+ */
+export function shiftFormula(formula: string, dr: number, dc: number): string {
+  const colNum = (s: string) => s.toUpperCase().split("").reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
+  const colStr = (n: number) => {
+    let s = "";
+    while (n > 0) {
+      const m = (n - 1) % 26;
+      s = String.fromCharCode(65 + m) + s;
+      n = Math.floor((n - 1) / 26);
+    }
+    return s;
+  };
+  // Split on quoted strings so text such as "A1" is never shifted.
+  return formula
+    .split(/("(?:[^"]|"")*")/)
+    .map((part, i) =>
+      i % 2 === 1
+        ? part
+        : part.replace(/(\$?)([A-Za-z]{1,3})(\$?)(\d+)(?![\w(])/g, (m, cAbs: string, col: string, rAbs: string, row: string, offset: number, all: string) => {
+            // Skip function names such as LOG10( and names preceded by letters or dots.
+            const prev = offset > 0 ? all[offset - 1] : "";
+            if (/[A-Za-z0-9_.]/.test(prev)) return m;
+            const c = cAbs ? colNum(col) : colNum(col) + dc;
+            const r = rAbs ? Number(row) : Number(row) + dr;
+            if (c < 1 || r < 1) return "#REF!";
+            return `${cAbs}${colStr(c)}${rAbs}${r}`;
+          }),
+    )
+    .join("");
+}
+
+/** Values for a fill: a numeric series continues its step, anything else repeats. */
+export function fillValues<T>(source: T[], count: number): T[] {
+  const nums = source.every((v) => typeof v === "number") ? (source as unknown as number[]) : null;
+  if (nums && nums.length >= 2) {
+    const step = nums[1] - nums[0];
+    const series = nums.every((v, i) => i === 0 || Math.abs(v - nums[i - 1] - step) < 1e-9);
+    if (series) {
+      const last = nums[nums.length - 1];
+      return Array.from({ length: count }, (_, i) => Math.round((last + step * (i + 1)) * 1e10) / 1e10) as unknown as T[];
+    }
+  }
+  return Array.from({ length: count }, (_, i) => source[i % source.length]);
+}
