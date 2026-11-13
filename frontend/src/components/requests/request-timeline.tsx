@@ -16,6 +16,7 @@ import type { ServiceRequestEvent } from "@/lib/db/schema";
 import { Badge } from "@/components/admin/ui/badge";
 import { cn } from "@/lib/utils";
 import { formatDateTime } from "@/lib/format-date";
+import { requestEventTitle } from "@/lib/requests/event-title";
 
 /**
  * Vertical tracking history (order-tracking inspo): check node + dashed
@@ -28,6 +29,8 @@ const EVENT_ICONS: Record<string, typeof CheckCircle2> = {
   quote_sent: FileCheck2,
   payment_received: CreditCard,
   status_changed: CheckCircle2,
+  status: CheckCircle2,
+  ai_working_copy_saved: Sparkles,
   document_uploaded: FileUp,
   documents_complete: FileCheck2,
   deliverable_uploaded: PackageCheck,
@@ -46,60 +49,6 @@ const EVENT_ICONS: Record<string, typeof CheckCircle2> = {
 const NEGATIVE = new Set(["cancelled", "declined", "refunded"]);
 // Needs client action — amber, not the red of a terminal failure.
 const ATTENTION = new Set(["correction_requested"]);
-
-function eventTitle(ev: ServiceRequestEvent): string {
-  switch (ev.type) {
-    case "created":
-      return "Request submitted";
-    case "quote_sent":
-      return "Quote sent";
-    case "payment_received":
-      return "Payment received";
-    case "status_changed":
-      return `Moved to ${(ev.toStatus ?? "").replace(/_/g, " ")}`;
-    case "document_uploaded":
-      return "Document uploaded";
-    case "documents_complete":
-      return "All documents received";
-    case "deliverable_uploaded":
-      return "Deliverable ready";
-    case "note":
-      return ev.actorRole === "admin" ? "Note from your advisor" : "Note";
-    case "message":
-      return ev.actorRole === "admin"
-        ? "Message from your advisor"
-        : ev.actorRole === "client"
-          ? "Your message"
-          : "Message";
-    case "processing_update":
-      switch (ev.toStatus) {
-        case "under_review":
-          return "Documents under review";
-        case "processed":
-          return "Documents processed";
-        case "needs_attention":
-          return "Needs your attention";
-        default:
-          return "Update on your request";
-      }
-    case "correction_requested":
-      return "Correction requested";
-    case "ai_analysis_started":
-      return "AI analysis started";
-    case "ai_analysis_completed":
-      return "AI analysis completed";
-    case "invoice_linked":
-      return "Invoice linked";
-    case "cancelled":
-      return "Request cancelled";
-    case "declined":
-      return "Quote declined";
-    case "refunded":
-      return "Payment refunded";
-    default:
-      return ev.type.replace(/_/g, " ");
-  }
-}
 
 export function RequestTimeline({
   events,
@@ -143,7 +92,7 @@ export function RequestTimeline({
               </div>
               <div className="min-w-0 pb-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-sm font-semibold text-ink">{eventTitle(ev)}</p>
+                  <p className="text-sm font-semibold text-ink">{requestEventTitle(ev)}</p>
                   {ev.visibility === "internal" && <Badge tone="warning">Internal</Badge>}
                 </div>
                 <p className="text-xs text-muted">{formatDateTime(ev.createdAt)}</p>

@@ -11,6 +11,9 @@ import {
   consultation,
   payment,
 } from "@/lib/db/schema";
+import { formatMoney } from "@/lib/invoice/money";
+import { formatDateTime } from "@/lib/format-date";
+import { requestEventTitle } from "@/lib/requests/event-title";
 
 export type NotificationItem = {
   id: string;
@@ -57,6 +60,7 @@ export async function recentNotifications(limit = 20): Promise<NotificationItem[
         .select({
           id: serviceRequestEvent.id,
           type: serviceRequestEvent.type,
+          toStatus: serviceRequestEvent.toStatus,
           message: serviceRequestEvent.message,
           createdAt: serviceRequestEvent.createdAt,
           requestId: serviceRequest.id,
@@ -102,7 +106,7 @@ export async function recentNotifications(limit = 20): Promise<NotificationItem[
     items.push({
       id: `request-event-${e.id}`,
       type: "request",
-      title: `${e.requestNumber} — ${e.type.replace(/_/g, " ")}`,
+      title: `${e.requestNumber} — ${requestEventTitle(e, "firm")}`,
       description: e.message?.slice(0, 60) || e.serviceName,
       href: `/admin/requests/${e.requestId}`,
       at: (e.createdAt as Date).toISOString(),
@@ -115,7 +119,7 @@ export async function recentNotifications(limit = 20): Promise<NotificationItem[
       id: `consultation-${c.id}`,
       type: "consultation",
       title: `Consultation ${c.status}`,
-      description: `${c.name || c.email}${c.startsAt ? ` · ${(c.startsAt as Date).toLocaleString("en-NG", { timeZone: "Africa/Lagos" })}` : ""}`,
+      description: `${c.name || c.email}${c.startsAt ? ` · ${formatDateTime(c.startsAt as Date)}` : ""}`,
       href: "/admin/requests?tab=consultations",
       at: (c.createdAt as Date).toISOString(),
     });
@@ -215,6 +219,7 @@ export async function clientActivity(clientId: string, limit = 50): Promise<Noti
       .select({
         id: serviceRequestEvent.id,
         type: serviceRequestEvent.type,
+        toStatus: serviceRequestEvent.toStatus,
         message: serviceRequestEvent.message,
         visibility: serviceRequestEvent.visibility,
         actorName: serviceRequestEvent.actorName,
@@ -264,7 +269,7 @@ export async function clientActivity(clientId: string, limit = 50): Promise<Noti
     items.push({
       id: `req-event-${e.id}`,
       type: "request",
-      title: `${e.requestNumber} — ${e.type.replace(/_/g, " ")}${e.visibility === "internal" ? " (internal)" : ""}`,
+      title: `${e.requestNumber} — ${requestEventTitle(e, "firm")}${e.visibility === "internal" ? " (internal)" : ""}`,
       description: (e.message || e.serviceName).slice(0, 80),
       href: `/admin/requests/${e.requestId}`,
       at: (e.createdAt as Date).toISOString(),
@@ -277,7 +282,7 @@ export async function clientActivity(clientId: string, limit = 50): Promise<Noti
         id: `inv-paid-${inv.id}`,
         type: "invoice_paid",
         title: `${inv.number} paid`,
-        description: `${inv.currency} ${inv.total}`,
+        description: formatMoney(Number(inv.total), inv.currency),
         href: `${base}/${inv.id}`,
         at: (inv.paidAt as Date).toISOString(),
       });
@@ -287,7 +292,7 @@ export async function clientActivity(clientId: string, limit = 50): Promise<Noti
         id: `inv-sent-${inv.id}`,
         type: "invoice_sent",
         title: `${inv.number} sent`,
-        description: inv.projectTitle || `${inv.currency} ${inv.total}`,
+        description: inv.projectTitle || formatMoney(Number(inv.total), inv.currency),
         href: `${base}/${inv.id}`,
         at: (inv.sentAt as Date).toISOString(),
       });
@@ -300,7 +305,7 @@ export async function clientActivity(clientId: string, limit = 50): Promise<Noti
       id: `pay-${p.id}`,
       type: flagged ? "payment_flagged" : "payment",
       title: flagged ? `Payment flagged — ${p.status.replace(/_/g, " ")}` : "Payment received",
-      description: `${p.reference} · ${p.currency} ${p.amountSettled ?? p.amount}`,
+      description: `${p.reference} · ${formatMoney(Number(p.amountSettled ?? p.amount), p.currency)}`,
       href: `/admin/billing/invoices/${p.invoiceId}`,
       at: (p.updatedAt as Date).toISOString(),
     });
@@ -331,7 +336,7 @@ export async function clientActivity(clientId: string, limit = 50): Promise<Noti
       type: "consultation",
       title: `Consultation ${c.status}`,
       description: c.startsAt
-        ? (c.startsAt as Date).toLocaleString("en-NG", { timeZone: "Africa/Lagos" })
+        ? formatDateTime(c.startsAt as Date)
         : "unscheduled",
       href: "/admin/requests?tab=consultations",
       at: (c.createdAt as Date).toISOString(),
@@ -366,6 +371,7 @@ export async function recentClientNotifications(clientId: string, limit = 20): P
         .select({
           id: serviceRequestEvent.id,
           type: serviceRequestEvent.type,
+          toStatus: serviceRequestEvent.toStatus,
           message: serviceRequestEvent.message,
           actorRole: serviceRequestEvent.actorRole,
           createdAt: serviceRequestEvent.createdAt,
@@ -402,7 +408,7 @@ export async function recentClientNotifications(clientId: string, limit = 20): P
         id: `request-event-${e.id}`,
         type: "request",
         title: `${e.serviceName} update`,
-        description: e.message?.slice(0, 60) || `${e.requestNumber} — ${e.type.replace(/_/g, " ")}`,
+        description: e.message?.slice(0, 60) || `${e.requestNumber} — ${requestEventTitle(e)}`,
         href: `/dashboard/requests/${e.requestId}`,
         at: (e.createdAt as Date).toISOString(),
       });
