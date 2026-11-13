@@ -21,6 +21,7 @@ export function SheetTabs({
   info,
   active,
   isNew,
+  proposed,
   busy,
   onPick,
   onAction,
@@ -30,6 +31,8 @@ export function SheetTabs({
   info: Record<string, SheetInfo>;
   active: string;
   isNew: (name: string) => boolean;
+  /** Sheets that exist only in a proposal still waiting: no menu actions until accepted. */
+  proposed: Set<string>;
   busy: boolean;
   onPick: (name: string) => void;
   onAction: (sheet: string, action: SheetActionKind, extra?: { name?: string; index?: number; color?: string }) => Promise<boolean>;
@@ -73,7 +76,7 @@ export function SheetTabs({
         return (
           <span
             key={n}
-            draggable={!busy}
+            draggable={!busy && !proposed.has(n)}
             onDragStart={(e) => {
               dragRef.current = n;
               e.dataTransfer.setData("text/plain", n);
@@ -81,7 +84,7 @@ export function SheetTabs({
               e.dataTransfer.effectAllowed = "move";
             }}
             onDragOver={(e) => {
-              if (!dragRef.current || dragRef.current === n) return;
+              if (!dragRef.current || dragRef.current === n || proposed.has(n)) return;
               e.preventDefault();
               setOver(n);
             }}
@@ -111,7 +114,7 @@ export function SheetTabs({
               role="tab"
               aria-selected={on}
               onClick={() => onPick(n)}
-              onDoubleClick={() => setRenaming(n)}
+              onDoubleClick={() => (proposed.has(n) ? undefined : setRenaming(n))}
               className={cn("inline-flex min-h-8 items-center gap-1.5 py-1 pl-2.5 pr-1 text-[12.5px]", on ? "font-semibold text-ink" : "text-body")}
               title="Click to open. Double-click to rename. Drag to move."
             >
@@ -145,6 +148,12 @@ export function SheetTabs({
                 className="fixed z-[81] w-60 rounded-xl border border-hairline bg-paper p-1 shadow-lg"
                 style={{ left: Math.max(8, Math.min(menu.x, window.innerWidth - 248)), bottom: Math.max(8, window.innerHeight - menu.y + 6) }}
               >
+                {proposed.has(menu.sheet) ? (
+                  <p className="px-2.5 py-2 text-[12.5px] text-body">
+                    Sage proposed this sheet. Accept or reject it under Proposed changes; then you can rename, move or delete it.
+                  </p>
+                ) : (
+                <>
                 <button type="button" role="menuitem" className={item} onClick={() => { setMenu(null); setRenaming(menu.sheet); }}>
                   <Pencil className="size-4 text-muted" /> Rename
                 </button>
@@ -186,6 +195,8 @@ export function SheetTabs({
                 <button type="button" role="menuitem" className={cn(item, "text-bad")} disabled={visible.length < 2} onClick={() => void run(menu.sheet, "delete")}>
                   <Trash2 className="size-4" /> Delete
                 </button>
+                </>
+                )}
               </div>
             </>,
             document.body,

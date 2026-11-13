@@ -391,6 +391,11 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     [undoId, redoStack, conv.id, toast, previewV],
   );
   useEffect(() => setPreviewV(null), [wbId]);
+  // Sheets that only exist in a proposal still waiting (shown as tabs, not in the file yet).
+  const proposedSheets = useMemo(
+    () => new Set(conv.batches.filter((b) => b.status === "pending").flatMap((b) => b.ops.filter((o) => o.op === "create_sheet" && o.workbook_id === wbId).map((o) => o.sheet ?? ""))),
+    [conv.batches, wbId],
+  );
   // S2: a sheet tab action, saved at once; the toast's Undo is the normal undo.
   const sheetAction = useCallback(
     async (name: string, action: SheetActionKind, extra: { name?: string; index?: number; color?: string } = {}) => {
@@ -973,6 +978,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         info={infoBy[wbId] ?? {}}
         active={sheet}
         isNew={(n) => (baseSheets[wbId] ? !baseSheets[wbId].has(n) : false)}
+        proposed={proposedSheets}
         busy={sheetBusy || Boolean(previewV)}
         onPick={(n) => setSheetBy((p) => ({ ...p, [wbId]: n }))}
         onAction={sheetAction}
