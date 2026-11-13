@@ -750,11 +750,26 @@ function MobileCard<T>({
             <Checkbox label="Select row" checked={row.getIsSelected()} onChange={onSelect} />
           </div>
         ) : null}
-        <button
-          type="button"
-          disabled={!clickable}
-          onClick={() => onOpen(row.original)}
-          className="min-w-0 flex-1 text-left disabled:cursor-default"
+        {/* A div, not a <button>: cells may hold links, buttons or pickers, and an
+            interactive element inside a <button> is invalid HTML (the browser then
+            moves parts of the list out of the page). */}
+        <div
+          role={clickable ? "button" : undefined}
+          tabIndex={clickable ? 0 : undefined}
+          onClick={(e) => {
+            if (!clickable) return;
+            // A click on a control inside the card is that control's, not the row's.
+            const hit = (e.target as HTMLElement).closest("a,button,input,select,textarea,[role=listbox],[role=option]");
+            if (hit && hit !== e.currentTarget) return;
+            onOpen(row.original);
+          }}
+          onKeyDown={(e) => {
+            if (clickable && e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+              e.preventDefault();
+              onOpen(row.original);
+            }
+          }}
+          className={cn("min-w-0 flex-1 rounded-ctl text-left outline-none focus-visible:ring-2 focus-visible:ring-accent/40", clickable && "cursor-pointer")}
         >
           {renderCard ? (
             renderCard(row.original)
@@ -793,7 +808,7 @@ function MobileCard<T>({
               ) : null}
             </>
           )}
-        </button>
+        </div>
       </div>
     </li>
   );
