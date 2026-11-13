@@ -3,6 +3,7 @@ import { Plus } from "lucide-react";
 import { requireArea } from "@/lib/server-user";
 import { buildAdminAttention } from "@/lib/attention/admin";
 import { formatMoney } from "@/lib/invoice/money";
+import { countInvoices } from "@/lib/invoice/late";
 import { AttentionList } from "@/components/kit";
 import { AreaTrend, GroupedBars } from "@/components/charts";
 import { ActLink, Kpi, PageHead, Panel } from "@/components/admin/ui/surface";
@@ -108,7 +109,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
         <Kpi
           label="Owed to us"
           value={short(d.owedTotal)}
-          note={d.lateCount ? `${formatMoney(d.lateTotal)} late · ${d.owedCount} invoices` : `${d.owedCount} invoices, none late`}
+          note={d.lateCount ? `${formatMoney(d.lateTotal)} late · ${countInvoices(d.owedCount)}` : `${countInvoices(d.owedCount)}, none late`}
           noteTone={d.lateCount ? "bad" : "muted"}
           href="/admin/billing?view=unpaid"
           trend={d.money.map((m) => m.billed)}

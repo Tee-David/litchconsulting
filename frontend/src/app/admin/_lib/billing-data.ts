@@ -3,6 +3,7 @@ import { and, desc, eq, isNotNull, isNull, like, ne, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { client, emailOutbox, invoice, payment, serviceRequest } from "@/lib/db/schema";
 import { num } from "@/lib/invoice/money";
+import { isLateInvoice, lagosToday, outstanding } from "@/lib/invoice/late";
 import { proofPending } from "@/lib/attention/admin";
 
 export type BillingDoc = {
@@ -22,16 +23,16 @@ export type BillingDoc = {
   total: number;
   paid: number;
   balance: number;
+  /** Late by the shared definition in lib/invoice/late.ts (part-paid past due counts). */
+  late: boolean;
   currency: string;
   title: string | null;
   /** The receipt email for this invoice (outbox row `receipt:<id>`), or null when none was queued. */
   receipt: "queued" | "sent" | "failed" | "skipped" | null;
 };
 
-const UNPAID = ["sent", "viewed", "overdue", "partially_paid"];
-
 export async function listBillingDocs(): Promise<BillingDoc[]> {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = lagosToday();
   const rows = await db
     .select({
       inv: invoice,
@@ -53,7 +54,7 @@ export async function listBillingDocs(): Promise<BillingDoc[]> {
   return rows.map(({ inv, reqId, reqNumber }) => {
     const total = num(inv.total);
     const paid = num(inv.amountPaid);
-    const late = inv.kind === "invoice" && UNPAID.includes(inv.status) && inv.dueDate && inv.dueDate < today;
+    const late = isLateInvoice(inv, today);
     return {
       id: inv.id,
       number: inv.number,
@@ -69,7 +70,8 @@ export async function listBillingDocs(): Promise<BillingDoc[]> {
       dueDate: inv.dueDate,
       total,
       paid,
-      balance: inv.kind === "invoice" && !["void", "draft"].includes(inv.status) ? Math.max(0, total - paid) : 0,
+      balance: inv.kind === "invoice" && !["void", "draft"].includes(inv.status) ? outstanding(total, paid) : 0,
+      late,
       currency: inv.currency,
       title: inv.projectTitle,
       receipt: receiptOf.get(inv.id) ?? null,

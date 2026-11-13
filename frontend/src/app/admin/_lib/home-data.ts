@@ -3,6 +3,7 @@ import { and, eq, gte, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
 import { invoice, payment, requestAssignment, serviceOffering, serviceRequest, user } from "@/lib/db/schema";
 import { num } from "@/lib/invoice/money";
+import { OPEN_INVOICE_STATUSES, isLateInvoice, lagosToday, outstanding } from "@/lib/invoice/late";
 import { statusDef } from "@/components/kit/status-chip";
 import { TERMINAL_STATUSES } from "@/lib/requests/status";
 
@@ -10,7 +11,7 @@ export type HomePeriod = "week" | "month" | "year";
 export const isHomePeriod = (p: unknown): p is HomePeriod => p === "week" || p === "month" || p === "year";
 
 const D = 86_400_000;
-const OPEN_INVOICE = ["sent", "viewed", "overdue", "partially_paid"];
+const OPEN_INVOICE = [...OPEN_INVOICE_STATUSES];
 
 type Bucket = { key: string; label: string; start: number; end: number };
 
@@ -54,7 +55,7 @@ export async function homeData(period: HomePeriod) {
   const from = new Date(bs[0].start);
   const span = bs[bs.length - 1].end - bs[0].start;
   const prevFrom = new Date(bs[0].start - span);
-  const today = now.toISOString().slice(0, 10);
+  const today = lagosToday(now);
 
   const [paid, billed, owed, openReqs, delivered, offerings, opened, team] = await Promise.all([
     db
@@ -66,7 +67,7 @@ export async function homeData(period: HomePeriod) {
       .from(invoice)
       .where(and(isNull(invoice.deletedAt), eq(invoice.kind, "invoice"), sql`${invoice.status} NOT IN ('draft','void')`, gte(invoice.issueDate, from.toISOString().slice(0, 10)))),
     db
-      .select({ total: invoice.total, paid: invoice.amountPaid, due: invoice.dueDate })
+      .select({ total: invoice.total, paid: invoice.amountPaid, due: invoice.dueDate, status: invoice.status })
       .from(invoice)
       .where(and(isNull(invoice.deletedAt), eq(invoice.kind, "invoice"), inArray(invoice.status, OPEN_INVOICE))),
     db
@@ -96,9 +97,10 @@ export async function homeData(period: HomePeriod) {
   const collected = paid.filter((p) => paidAt(p) >= from.getTime()).reduce((s, p) => s + amt(p), 0);
   const collectedPrev = paid.filter((p) => paidAt(p) < from.getTime()).reduce((s, p) => s + amt(p), 0);
 
-  const owedTotal = owed.reduce((s, i) => s + (num(i.total) - num(i.paid)), 0);
-  const late = owed.filter((i) => i.due && i.due < today);
-  const lateTotal = late.reduce((s, i) => s + (num(i.total) - num(i.paid)), 0);
+  const owedTotal = owed.reduce((s, i) => s + outstanding(num(i.total), num(i.paid)), 0);
+  // Shared definition of late (lib/invoice/late.ts): part-paid past due counts; the balance is summed.
+  const late = owed.filter((i) => isLateInvoice({ status: i.status, dueDate: i.due }, today));
+  const lateTotal = late.reduce((s, i) => s + outstanding(num(i.total), num(i.paid)), 0);
 
   const counts = openReqs.map((r) => ({ status: r.status, n: Number(r.n) }));
   const openTotal = counts.reduce((s, r) => s + r.n, 0);

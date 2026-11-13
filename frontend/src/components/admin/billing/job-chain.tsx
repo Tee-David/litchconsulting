@@ -52,8 +52,8 @@ function stepsFor(docs: BillingDoc[]): Step[] {
       out.push({
         code: d.number,
         label: `Deposit ${d.depositPercent}%`,
-        state: held ?? (depositPaid ? "done" : d.status === "overdue" ? "bad" : "open"),
-        status: held ? d.status : depositPaid ? "Paid" : d.status === "overdue" ? "Late" : "Due",
+        state: held ?? (depositPaid ? "done" : d.late ? "bad" : "open"),
+        status: held ? d.status : depositPaid ? "Paid" : d.late ? "Late" : "Due",
         note: formatMoney(deposit, d.currency),
         href,
       });
@@ -70,7 +70,7 @@ function stepsFor(docs: BillingDoc[]): Step[] {
       out.push({
         code: d.number,
         label: d.role === "balance" ? "Balance" : "Invoice",
-        state: paid ? "done" : d.status === "overdue" ? "bad" : d.status === "draft" ? "draft" : "open",
+        state: paid ? "done" : d.late ? "bad" : d.status === "draft" ? "draft" : "open",
         status: paid ? "Paid" : d.status === "partially_paid" ? "Part paid" : d.status.replace(/_/g, " "),
         note: formatMoney(d.total, d.currency),
         href,

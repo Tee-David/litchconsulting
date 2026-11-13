@@ -1,6 +1,7 @@
 import { Plus, Wallet } from "lucide-react";
 import { requireArea } from "@/lib/server-user";
 import { formatMoney } from "@/lib/invoice/money";
+import { countInvoices } from "@/lib/invoice/late";
 import { ActLink, Kpi, PageHead } from "@/components/admin/ui/surface";
 import { BillingTabs } from "@/components/admin/billing/billing-tabs";
 import { BillingTable } from "@/components/admin/billing/billing-table";
@@ -21,7 +22,8 @@ export default async function BillingPage() {
 
   const quotes = docs.filter((d) => d.kind === "quote" && d.status === "sent");
   const unpaid = docs.filter((d) => d.kind === "invoice" && ["sent", "viewed", "overdue", "partially_paid"].includes(d.status));
-  const late = unpaid.filter((d) => d.status === "overdue");
+  // Shared definition of late (lib/invoice/late.ts): part-paid past due counts; balances are summed.
+  const late = unpaid.filter((d) => d.late);
   const part = docs.filter((d) => d.status === "partially_paid");
   const sum = (xs: typeof docs, f: (d: (typeof docs)[number]) => number) => xs.reduce((s, d) => s + f(d), 0);
 
@@ -47,7 +49,7 @@ export default async function BillingPage() {
       <BillingTabs active="docs" toConfirm={toConfirm} />
       <div data-tour="invoice-stats" className="mb-5 grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-4">
         <Kpi label="Quotes waiting" value={short(sum(quotes, (d) => d.total))} note={`${quotes.length} sent, not yet answered`} href="/admin/billing?view=quotes" />
-        <Kpi label="Unpaid invoices" value={short(sum(unpaid, (d) => d.balance))} note={`${unpaid.length} invoices`} href="/admin/billing?view=unpaid" />
+        <Kpi label="Unpaid invoices" value={short(sum(unpaid, (d) => d.balance))} note={countInvoices(unpaid.length)} href="/admin/billing?view=unpaid" />
         <Kpi
           label="Late"
           value={short(sum(late, (d) => d.balance))}
@@ -55,7 +57,7 @@ export default async function BillingPage() {
           noteTone={late.length ? "bad" : "good"}
           href="/admin/billing?view=late"
         />
-        <Kpi label="Part paid, balance due" value={short(sum(part, (d) => d.balance))} note={`${part.length} invoices`} href="/admin/billing?view=part" />
+        <Kpi label="Part paid, balance due" value={short(sum(part, (d) => d.balance))} note={countInvoices(part.length)} href="/admin/billing?view=part" />
       </div>
       <JobChain docs={docs} />
       <BillingTable docs={docs} />

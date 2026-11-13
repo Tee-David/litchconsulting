@@ -98,7 +98,7 @@ export function BillingTable({ docs }: { docs: BillingDoc[] }) {
       { id: "quotes", label: "Quotes", predicate: (d) => d.kind === "quote" && !["void"].includes(d.status) },
       { id: "invoices", label: "Invoices", predicate: (d) => d.kind === "invoice" },
       { id: "unpaid", label: "Unpaid", predicate: (d) => d.kind === "invoice" && UNPAID.includes(d.status) },
-      { id: "late", label: "Late", predicate: (d) => d.kind === "invoice" && d.status === "overdue" },
+      { id: "late", label: "Late", predicate: (d) => d.late },
       { id: "part", label: "Part paid", predicate: (d) => d.status === "partially_paid" },
       { id: "paid", label: "Paid and receipts", predicate: (d) => d.kind === "invoice" && d.status === "paid" },
       { id: "drafts", label: "Drafts", predicate: (d) => d.status === "draft" },
