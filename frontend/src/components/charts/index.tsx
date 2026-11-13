@@ -173,7 +173,7 @@ export function AreaTrend({
             </defs>
           ) : null}
           <CartesianGrid vertical={false} stroke={GRID} />
-          <XAxis dataKey="label" tickLine={false} axisLine={false} tick={AXIS} minTickGap={16} />
+          <XAxis dataKey="label" tickLine={false} axisLine={false} tick={AXIS} minTickGap={16} padding={{ left: 8, right: 20 }} />
           <YAxis
             tickLine={false}
             axisLine={false}
