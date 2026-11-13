@@ -24,6 +24,10 @@ export default async function BackupsPage() {
     .sort((a, b) => (b.lastModified || "").localeCompare(a.lastModified || ""))
     .slice(0, 20)
     .map((o) => ({ key: o.key, size: o.size, lastModified: o.lastModified }));
+  // The nightly job runs at 03:30 UTC. Over 36 hours since the newest copy
+  // means at least one nightly run did not happen.
+  const newestAt = backups[0]?.lastModified ?? null;
+  const stale = newestAt ? Date.now() - new Date(newestAt).getTime() > 36 * 60 * 60 * 1000 : false;
   const meta = (lastTest?.meta ?? {}) as { pass?: boolean; seconds?: number; error?: string; failed?: string[] };
   const last: LastRestore = lastTest
     ? { at: lastTest.createdAt.toISOString(), pass: Boolean(meta.pass), seconds: meta.seconds, error: meta.error, failed: meta.failed }
@@ -31,7 +35,7 @@ export default async function BackupsPage() {
 
   return (
     <div className="space-y-5">
-      <BackupsCard backups={backups} configured={r2PrivateConfigured} />
+      <BackupsCard backups={backups} configured={r2PrivateConfigured} staleSince={stale ? newestAt : null} />
       <RestoreTestCard last={last} enabled={r2PrivateConfigured && backups.length > 0} />
       <section className="rounded-card border border-hairline bg-paper p-4 text-sm text-body sm:p-5">
         <h2 className="mb-1 font-display text-[15px] font-semibold text-ink">Analysis server (LitchAI) backups</h2>

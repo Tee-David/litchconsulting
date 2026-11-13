@@ -19,9 +19,12 @@ function humanSize(bytes: number): string {
 export function BackupsCard({
   backups,
   configured,
+  staleSince = null,
 }: {
   backups: BackupItem[];
   configured: boolean;
+  /** Time of the newest backup when it is more than 36 hours old; otherwise null. */
+  staleSince?: string | null;
 }) {
   const router = useRouter();
   const toast = useToast();
@@ -70,6 +73,19 @@ export function BackupsCard({
           Back up now
         </button>
       </div>
+
+      {configured && staleSince ? (
+        <div
+          role="alert"
+          className="mb-4 flex items-start gap-2 rounded-lg bg-amber-500/10 px-3.5 py-3 text-sm text-amber-700 dark:text-amber-400"
+        >
+          <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+          <span>
+            The newest backup is from {formatDateTime(staleSince)}, more than 36 hours ago. The
+            nightly backup did not run. Run one now, then check the scheduled jobs in Vercel.
+          </span>
+        </div>
+      ) : null}
 
       {!configured ? (
         <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 px-3.5 py-3 text-sm text-amber-600 dark:text-amber-400">
