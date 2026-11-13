@@ -276,6 +276,9 @@ class Workbench:
                         out[op.workbook_id].generated.add(op.sheet)
                     elif op.op == "delete_sheet":
                         out[op.workbook_id].generated.discard(op.sheet)
+                    elif op.op == "rename_sheet" and op.sheet in out[op.workbook_id].generated:
+                        out[op.workbook_id].generated.discard(op.sheet)
+                        out[op.workbook_id].generated.add(str((op.meta or {}).get("to")))
         if with_pending:
             for b in conv.batches:
                 if b.status != "pending":

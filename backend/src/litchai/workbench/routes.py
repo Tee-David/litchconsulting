@@ -89,6 +89,15 @@ class UserEdits(BaseModel):
     edits: list[dict[str, Any]] = Field(min_length=1, max_length=5000)
 
 
+class SheetAction(BaseModel):
+    """S2: the sheet tab menu. Saved at once as a version named after the person."""
+    action: Literal["rename", "move", "copy", "delete", "color", "hide", "unhide"]
+    name: str | None = Field(None, max_length=31)
+    index: int | None = Field(None, ge=0, le=500)
+    color: str | None = Field(None, pattern=r"^[0-9A-Fa-f]{6}$|^$")
+    author: str = Field(default="you", min_length=1, max_length=80)
+
+
 class RestoreVersion(BaseModel):
     """R4: bring back an earlier version as a new version (undoable)."""
     version: int = Field(ge=1)
@@ -473,6 +482,74 @@ def register_workbench_routes(app: FastAPI) -> None:
     def undo_batch(conversation_id: str, batch_id: str) -> dict[str, Any]:
         return _decide(conversation_id, batch_id, "undo")
 
+    @app.post("/workbench/conversations/{conversation_id}/workbooks/{workbook_id}/sheets/{sheet}/action")
+    def sheet_action(conversation_id: str, workbook_id: str, sheet: str,
+                     body: SheetAction) -> dict[str, Any]:
+        from litchai.workbench.ops import Operation, new_batch, sheet_snapshot, unique_sheet_name
+
+        author = " ".join(body.author.split())[:80] or "you"
+        with _workbench() as wb:
+            conv = _get(wb, conversation_id)
+            model = wb.models(conv, with_pending=False).get(workbook_id)
+            if model is None:
+                raise HTTPException(404, "workbook not found")
+            if sheet not in model.sheets:
+                raise HTTPException(404, f"there is no sheet {sheet!r}")
+            names = list(model.sheets)
+            sh = model.sheets[sheet]
+            a = body.action
+
+            def clean(n: str | None) -> str:
+                if not (n or "").strip():
+                    raise HTTPException(422, "a sheet needs a name")
+                return unique_sheet_name(type(model)(id="", name=""), (n or "").strip())
+
+            if a == "rename":
+                to = clean(body.name)
+                if to.lower() != sheet.lower() and to.lower() in {x.lower() for x in names}:
+                    raise HTTPException(409, f"a sheet named {to!r} already exists")
+                op = Operation("rename_sheet", workbook_id, sheet=sheet, meta={"to": to})
+                title = f"Renamed {sheet} to {to}"
+            elif a == "move":
+                to_i = max(0, min(body.index if body.index is not None else 0, len(names) - 1))
+                op = Operation("move_sheet", workbook_id, sheet=sheet,
+                               meta={"from": names.index(sheet), "to": to_i})
+                title = f"Moved {sheet}"
+            elif a == "copy":
+                to = unique_sheet_name(model, clean(body.name or f"{sheet} (copy)"))
+                op = Operation("copy_sheet", workbook_id, sheet=sheet, meta={"to": to})
+                title = f"Duplicated {sheet} as {to}"
+            elif a == "delete":
+                if sum(1 for s in model.sheets.values() if not s.hidden) <= 1 and not sh.hidden:
+                    raise HTTPException(409, "a workbook keeps at least one visible sheet")
+                op = Operation("delete_sheet", workbook_id, sheet=sheet,
+                               meta=sheet_snapshot(model, sheet, names.index(sheet)))
+                title = f"Deleted {sheet}"
+            elif a == "color":
+                op = Operation("sheet_props", workbook_id, sheet=sheet,
+                               meta={"color": (body.color or "").upper() or None,
+                                     "old_color": sh.color})
+                title = f"Changed the tab colour of {sheet}"
+            else:
+                hide = a == "hide"
+                if hide and sum(1 for s in model.sheets.values() if not s.hidden) <= 1:
+                    raise HTTPException(409, "a workbook keeps at least one visible sheet")
+                op = Operation("sheet_props", workbook_id, sheet=sheet,
+                               meta={"hidden": hide, "old_hidden": sh.hidden})
+                title = f"{'Hid' if hide else 'Showed'} {sheet}"
+            op.tool, op.reason = "sheet_op", f"{title} ({author})"
+            batch = new_batch(f"{title} by {author}", "sheet", "sheet_op", [op])
+            wb.add_batch(conv, batch)
+            try:
+                done = wb.accept(conv, batch.id)
+            except WorkbenchError as exc:
+                raise HTTPException(409, str(exc)) from exc
+            if done.status != "accepted":
+                errs = (done.gate or {}).get("errors") or ["the change could not be applied"]
+                raise HTTPException(409, "; ".join(map(str, errs))[:300])
+            wb.store.save(conv)
+            return {"batch": done.to_dict(), "conversation": conv.public()}
+
     @app.post("/workbench/conversations/{conversation_id}/workbooks/{workbook_id}/restore")
     def restore_version(conversation_id: str, workbook_id: str,
                         body: RestoreVersion) -> dict[str, Any]:
@@ -578,7 +655,9 @@ def register_workbench_routes(app: FastAPI) -> None:
                               "pending": pending.get((sh.name, ref)),
                               "page": sh.source_pages.get(r)})
             return {"sheet": sh.name, "max_row": sh.max_row, "max_col": sh.max_col,
-                    "sheets": list(models[workbook_id].sheets), "cells": cells}
+                    "sheets": list(models[workbook_id].sheets), "cells": cells,
+                    "sheet_info": [{"name": s.name, "color": s.color, "hidden": s.hidden}
+                                   for s in models[workbook_id].sheets.values()]}
 
     @app.post("/workbench/conversations/{conversation_id}/charts/preview")
     def chart_preview(conversation_id: str, body: ChartPreview) -> dict[str, Any]:

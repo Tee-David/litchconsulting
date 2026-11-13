@@ -28,7 +28,9 @@ from openpyxl import load_workbook
 from litchai.workbench.model import Cell, Sheet, Workbook, a1, parse_a1
 
 OP_KINDS = ("set_cell", "create_sheet", "delete_sheet", "create_workbook", "add_chart",
-            "remove_chart")
+            "remove_chart", "rename_sheet", "move_sheet", "sheet_props", "copy_sheet",
+            "restore_sheet")
+SHEET_OPS = ("rename_sheet", "move_sheet", "sheet_props", "copy_sheet", "restore_sheet")
 
 
 @dataclass
@@ -48,6 +50,9 @@ class Operation:
     preview_value: Any = None                               # Python-computed result
     chart: dict[str, Any] | None = None
     kind: str | None = None                                  # 'new' | 'changed' (diff colour)
+    # Sheet operations: {"to": name} rename/copy, {"from": i, "to": j} move,
+    # {"color", "hidden", "old_color", "old_hidden"} props, {"index", "cells"} restore.
+    meta: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -224,6 +229,11 @@ def overlay(model: Workbook, ops: list[Operation]) -> None:
             model.sheets[op.sheet] = Sheet(op.sheet, proposed=True)
         elif op.op == "delete_sheet" and op.sheet:
             model.sheets.pop(op.sheet, None)
+        elif op.op == "rename_sheet" and op.sheet in model.sheets:
+            to = str((op.meta or {}).get("to") or op.sheet)
+            sh = model.sheets.pop(op.sheet)
+            sh.name = to
+            model.sheets[to] = sh
         elif op.op == "set_cell" and op.sheet and op.cell:
             sheet = model.sheets.setdefault(op.sheet, Sheet(op.sheet))
             r, c = parse_a1(op.cell)
@@ -291,6 +301,8 @@ def apply_ops(xlsx: bytes, ops: list[Operation], *, check_conflicts: bool = True
             if op.sheet not in wb.sheetnames:
                 wb.create_sheet(op.sheet)
             insert_chart(wb[op.sheet], op.chart or {})
+        elif op.op in SHEET_OPS:
+            conflicts.extend(_apply_sheet_op(wb, op))
         elif op.op == "remove_chart":
             if op.sheet in wb.sheetnames:
                 ws = wb[op.sheet]
@@ -301,6 +313,88 @@ def apply_ops(xlsx: bytes, ops: list[Operation], *, check_conflicts: bool = True
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+def _quoted(name: str) -> str:
+    import re
+
+    return f"'{name}'" if re.search(r"[^A-Za-z0-9_]", name) else name
+
+
+def _rename_refs(wb: Any, old: str, new: str) -> None:
+    """Formulas that point at a renamed sheet follow it, as in Excel."""
+    import re
+
+    pat = re.compile(r"(?:'" + re.escape(old.replace("'", "''")) + r"'|(?<![\w'.])"
+                     + re.escape(old) + r")!")
+    repl = _quoted(new).replace("\\", "\\\\") + "!"
+    for ws in wb.worksheets:
+        for row in ws.iter_rows():
+            for c in row:
+                if isinstance(c.value, str) and c.value.startswith("=") and old in c.value:
+                    c.value = pat.sub(repl, c.value)
+
+
+def _apply_sheet_op(wb: Any, op: Operation) -> list[str]:
+    m = op.meta or {}
+    name = op.sheet or ""
+    if op.op == "restore_sheet":
+        if name in wb.sheetnames:
+            return [f"sheet {name!r} already exists"]
+        ws = wb.create_sheet(name, index=int(m.get("index", len(wb.sheetnames))))
+        from datetime import datetime
+
+        for r, c, v, nf in m.get("cells", []):
+            if isinstance(v, dict) and "date" in v:
+                v = datetime.fromisoformat(v["date"])
+            cell = ws.cell(row=r, column=c, value=v)
+            if nf:
+                cell.number_format = nf
+        if m.get("color"):
+            ws.sheet_properties.tabColor = m["color"]
+        if m.get("hidden"):
+            ws.sheet_state = "hidden"
+        return []
+    if name not in wb.sheetnames:
+        return [f"there is no sheet {name!r}"]
+    ws = wb[name]
+    if op.op == "rename_sheet":
+        to = str(m.get("to") or "")
+        if to in wb.sheetnames and to.lower() != name.lower():
+            return [f"a sheet named {to!r} already exists"]
+        ws.title = to
+        _rename_refs(wb, name, to)
+    elif op.op == "move_sheet":
+        to = max(0, min(int(m.get("to", 0)), len(wb.sheetnames) - 1))
+        wb.move_sheet(ws, offset=to - wb.sheetnames.index(name))
+    elif op.op == "copy_sheet":
+        to = str(m.get("to") or "")
+        if to in wb.sheetnames:
+            return [f"a sheet named {to!r} already exists"]
+        cp = wb.copy_worksheet(ws)
+        cp.title = to
+        wb.move_sheet(cp, offset=wb.sheetnames.index(name) + 1 - wb.sheetnames.index(to))
+    elif op.op == "sheet_props":
+        if "color" in m:
+            ws.sheet_properties.tabColor = m["color"] or None
+        if "hidden" in m:
+            if m["hidden"] and sum(1 for w in wb.worksheets if w.sheet_state == "visible") <= 1:
+                return ["a workbook keeps at least one visible sheet"]
+            ws.sheet_state = "hidden" if m["hidden"] else "visible"
+    return []
+
+
+def sheet_snapshot(model: Workbook, name: str, index: int) -> dict[str, Any]:
+    """What a deleted sheet needs to come back on undo (values, formulas, formats)."""
+    sh = model.sheets[name]
+    cells = []
+    for (r, c), cell in sorted(sh.cells.items()):
+        v = cell.formula or cell.value
+        if hasattr(v, "isoformat"):
+            v = {"date": v.isoformat()}  # kept as a date, not text, for the undo
+        cells.append([r, c, v, cell.number_format if cell.number_format != "General" else None])
+    return {"index": index, "cells": cells,
+            "color": sh.color, "hidden": sh.hidden}
 
 
 def _chart_title(chart: Any) -> str | None:
@@ -326,6 +420,33 @@ def inverse_ops(ops: list[Operation]) -> list[Operation]:
         elif op.op == "add_chart":
             inv.append(Operation("remove_chart", op.workbook_id, sheet=op.sheet,
                                  chart=op.chart, reason=f"undo: {op.reason}", tool=op.tool))
+        elif op.op == "rename_sheet":
+            inv.append(Operation("rename_sheet", op.workbook_id, sheet=(op.meta or {}).get("to"),
+                                 meta={"to": op.sheet}, reason=f"undo: {op.reason}",
+                                 tool=op.tool))
+        elif op.op == "move_sheet":
+            m = op.meta or {}
+            inv.append(Operation("move_sheet", op.workbook_id, sheet=op.sheet,
+                                 meta={"from": m.get("to"), "to": m.get("from")},
+                                 reason=f"undo: {op.reason}", tool=op.tool))
+        elif op.op == "sheet_props":
+            m = op.meta or {}
+            back: dict[str, Any] = {}
+            if "color" in m:
+                back["color"], back["old_color"] = m.get("old_color"), m.get("color")
+            if "hidden" in m:
+                back["hidden"], back["old_hidden"] = m.get("old_hidden"), m.get("hidden")
+            inv.append(Operation("sheet_props", op.workbook_id, sheet=op.sheet, meta=back,
+                                 reason=f"undo: {op.reason}", tool=op.tool))
+        elif op.op == "copy_sheet":
+            inv.append(Operation("delete_sheet", op.workbook_id, sheet=(op.meta or {}).get("to"),
+                                 reason=f"undo: {op.reason}", tool=op.tool))
+        elif op.op == "delete_sheet" and op.meta and "cells" in op.meta:
+            inv.append(Operation("restore_sheet", op.workbook_id, sheet=op.sheet, meta=op.meta,
+                                 reason=f"undo: {op.reason}", tool=op.tool))
+        elif op.op == "restore_sheet":
+            inv.append(Operation("delete_sheet", op.workbook_id, sheet=op.sheet, meta=op.meta,
+                                 reason=f"undo: {op.reason}", tool=op.tool))
     # Cells on a sheet that the undo deletes don't need restoring.
     deleted = {o.sheet for o in inv if o.op == "delete_sheet"}
     return [o for o in inv if not (o.op in ("set_cell", "remove_chart") and o.sheet in deleted)]

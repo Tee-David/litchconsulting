@@ -88,6 +88,8 @@ class Sheet:
     source_pages: dict[int, int] = field(default_factory=dict)  # row -> PDF page
     # True while the sheet exists only in a pending proposal (not in the file yet).
     proposed: bool = False
+    color: str | None = None     # tab colour, "RRGGBB"
+    hidden: bool = False
 
     @property
     def max_row(self) -> int:
@@ -155,6 +157,10 @@ def load_xlsx(data: bytes, *, wb_id: str, name: str, document_id: int | None = N
     for ws in formulas.worksheets:
         vs = values[ws.title]
         sheet = Sheet(ws.title)
+        tab = getattr(ws.sheet_properties, "tabColor", None)
+        rgb = getattr(tab, "rgb", None) if tab is not None else None
+        sheet.color = rgb[-6:] if isinstance(rgb, str) and len(rgb) >= 6 else None
+        sheet.hidden = ws.sheet_state != "visible"
         for row in ws.iter_rows():
             for c in row:
                 if c.value is None:
