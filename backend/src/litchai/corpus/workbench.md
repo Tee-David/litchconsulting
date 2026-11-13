@@ -58,6 +58,38 @@ change makes a new version of the workbook, and any earlier version can be
 downloaded. A proposal that overwrites existing source values is marked risky so it
 gets a closer look.
 
+## Editing cells yourself
+
+Admins, and staff on requests assigned to them, can edit the sheet directly, like in
+Excel or Google Sheets. Select a cell and type, or press F2 or double-click to change
+what is there; Enter saves and moves down, Tab saves and moves right, Esc cancels. You
+can also edit in the formula bar. A value starting with = is a formula; while you type,
+a list of functions (SUM, SUMIF, VLOOKUP, XLOOKUP, INDEX, MATCH, IF and many more)
+appears with the arguments each one needs, and Tab inserts the one you pick. 1,250.50,
+₦1,000 and 15% are read as numbers. Delete clears the selected cells, Ctrl+V pastes
+rows and columns copied from Excel or Sheets, and Ctrl+X cuts. The toolbar sets the
+number format of the selection: Naira, percent, thousands separator, more or fewer
+decimals, or a plain number. Your own edits are saved at once as a new version named
+after you ("Edited by …"), recalculated by the engine, and Undo and Redo (Ctrl+Z,
+Ctrl+Y) step back and forward through them. Sage's changes are different: they stay
+proposals until someone accepts them. The sheet shows 100 empty rows and 3 empty
+columns past the data, so you can add data below or beside it.
+
+## Moving around the sheet
+
+Zoom from 50% to 200% with the buttons at the bottom right, Ctrl and the mouse wheel,
+or Ctrl and plus or minus; Ctrl+0 goes back to 100%. Pan with the scroll wheel (Shift
+for sideways), a trackpad, or by holding Space (or the middle mouse button) and
+dragging. Click a column letter or row number to select the whole column or row, and
+drag the right edge of a column letter to resize it (double-click resets it). The
+status bar shows the Sum, Average, Min, Max and Count of the selection. Ctrl+F finds
+text in the sheet, the name box goes to a cell or range such as D14 or B3:D8, and the
+View menu freezes the first row or column and shows formulas instead of values
+(Ctrl+`). Right-click a cell to copy, copy values only, select its row or column, or
+ask Sage about the range. The layout can be Split (sheet and Sage side by side, with
+a divider you can drag), Focus (the sheet fills the editor and Sage opens inside it
+with Ctrl+J) or Full screen; your choice is kept.
+
 ## Privacy in the workbench
 
 The workbench follows the client's AI mode. For a client on cloud (masked), only
