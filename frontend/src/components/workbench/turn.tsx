@@ -33,6 +33,7 @@ export const TOOL_LABEL: Record<string, string> = {
   categorise_rows: "Categorise rows",
   build_statement: "Build a statement",
   pivot: "Pivot table",
+  write_cells: "Write cells",
   add_formula_column: "Add a formula column",
   add_chart: "Propose a chart",
   reconcile: "Reconcile bank to ledger",

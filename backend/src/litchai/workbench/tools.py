@@ -122,6 +122,20 @@ class TaxArgs(_Args):
     new_sheet_name: str | None = None
 
 
+class CellWrite(_Args):
+    cell: str = Field(description="A1 reference, e.g. C22")
+    value: str | float | int | bool | None = None
+    formula: str | None = Field(None, description="e.g. =SUM(C2:C20); wins over value")
+    number_format: str | None = Field(None, description='e.g. "#,##0.00"')
+
+
+class WriteCellsArgs(_Args):
+    sheet: str | None = None
+    workbook_id: str | None = None
+    cells: list[CellWrite] = Field(min_length=1, max_length=400)
+    reason: str = Field("", max_length=200, description="why, shown on each cell")
+
+
 class SheetArgs(_Args):
     name: str
     workbook_id: str | None = None
@@ -352,6 +366,50 @@ def _chart(ctx: ToolContext, a: ChartArgs) -> ToolOutput:
                       summary=f"Chart '{clean['title']}' proposed.")
 
 
+def _write_cells(ctx: ToolContext, a: WriteCellsArgs) -> ToolOutput:
+    """Values or formulas into named cells, as one proposal. Every formula is checked
+    (known functions, balanced brackets) and previewed, so the model can read back what
+    each formula gives before it answers."""
+    from litchai.workbench.formula import FormulaError, check_user_formula
+    from litchai.workbench.model import parse_a1, qualify
+
+    wb = ctx.workbook(a.workbook_id)
+    try:
+        sh = wb.sheet(a.sheet)
+    except KeyError as exc:
+        raise ToolError(str(exc)) from exc
+    b = OpBuilder(wb, "write_cells")
+    reason = a.reason or "written by Sage"
+    refs: list[str] = []
+    for w in a.cells:
+        ref = w.cell.replace("$", "").strip().upper()
+        try:
+            parse_a1(ref)
+        except Exception as exc:  # noqa: BLE001 - any parse failure is the model's input
+            raise ToolError(f"{w.cell!r} is not a cell reference") from exc
+        if w.formula:
+            f = w.formula.strip()
+            f = f if f.startswith("=") else "=" + f
+            try:
+                check_user_formula(f)
+            except FormulaError as exc:
+                raise ToolError(f"{ref}: {exc}") from exc
+            b.set(sh.name, ref, formula=f, number_format=w.number_format, reason=reason)
+        else:
+            v = w.value
+            b.set(sh.name, ref, value=v[:32000] if isinstance(v, str) else v,
+                  number_format=w.number_format, reason=reason)
+        refs.append(ref)
+    n = len(refs)
+    batch = finish_batch(ctx, b, f"Write {n} cell{'s' if n != 1 else ''} on {sh.name}",
+                         f"{qualify(sh.name, refs[0])}{' …' if n > 1 else ''} · {n} cells")
+    previews = [{"cell": op.cell, "formula": op.new_formula, "result": op.preview_value}
+                for op in batch.ops if op.op == "set_cell" and op.new_formula][:30]
+    return ToolOutput(data={"sheet": sh.name, "cells": n, "formula_results": previews},
+                      batch=batch, citations=[qualify(sh.name, r) for r in refs][:20],
+                      summary=f"Proposed {n} cell{'s' if n != 1 else ''} on {sh.name}.")
+
+
 def _kw(a: BaseModel) -> dict[str, Any]:
     return a.model_dump()
 
@@ -383,6 +441,14 @@ TOOLS: tuple[WorkbenchTool, ...] = (
                   "SUMIFS/COUNTIFS formula table on a new sheet.", PivotArgs,
                   lambda c, a: builders.pivot(c, **_kw(a)),
                   ("totals by category", "pivot by month", "summary by vendor")),
+    WorkbenchTool("write_cells", "write",
+                  "Write values or formulas into specific cells: a totals row, a "
+                  "difference cell, labels, a value next to each row, a small table. "
+                  "Use it for anything that is not one formula repeated down a whole "
+                  "column. Returns each formula's result so you can check it.",
+                  WriteCellsArgs, _write_cells,
+                  ("add a totals row below the columns", "put the difference in D23",
+                   "write the account type next to each account", "add a label in A22")),
     WorkbenchTool("add_formula_column", "write",
                   "Add a computed column: difference, sum, ratio, percent_of_total, "
                   "running_total, vat_from_gross, wht, flag_over, or a validated custom "

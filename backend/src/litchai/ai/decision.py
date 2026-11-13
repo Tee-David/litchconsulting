@@ -59,7 +59,9 @@ _TOOL_KEYWORDS: dict[str, tuple[str, ...]] = {
                         "statement of", "cash flow", "cashflow", "financial statement"),
     "pivot": ("pivot", "by category", "by vendor", "by month", "breakdown", "summary table",
               "group"),
-    "add_formula_column": ("column", "formula", "compute each", "per row", "net", "running"),
+    "add_formula_column": ("compute each", "per row", "net", "running", "for each row"),
+    "write_cells": ("total", "below", "beside", "next to", "label", "write", "put ", "cell",
+                    "row", "formula", "column", "difference", "add a", "fill in"),
     "add_chart": ("chart", "graph", "plot", "visual"),
     "reconcile": ("reconcil", "bank vs", "bank to ledger", "agree", "match"),
     "flag_anomalies": ("anomal", "unusual", "duplicate", "outlier", "suspicious", "check",
@@ -184,7 +186,8 @@ class HeuristicDecisionLayer:
             if name not in chosen and s > 0:
                 chosen.append(name)
         # Fill with the general-purpose tools so the model is never starved.
-        for name in ("flag_anomalies", "build_statement", "categorise_rows", "add_chart",
+        for name in ("write_cells", "flag_anomalies", "build_statement", "categorise_rows",
+                     "add_chart",
                      "reconcile", "pivot", "tax_compute", "add_formula_column"):
             if len(chosen) >= k:
                 break
