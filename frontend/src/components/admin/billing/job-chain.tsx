@@ -13,6 +13,19 @@ const PILL: Record<Step["state"], string> = {
   bad: "bg-bad-soft text-bad",
 };
 
+/** Settled means money came in: never a draft or void invoice, whatever its balance shows. */
+function isSettled(d: BillingDoc): boolean {
+  if (d.kind !== "invoice" || ["draft", "void"].includes(d.status)) return false;
+  return d.status === "paid" || (d.total > 0 && d.paid >= d.total - 0.005);
+}
+
+/** A draft or void invoice keeps its own state on every step. */
+function notIssued(d: BillingDoc): Step["state"] | null {
+  if (d.status === "draft") return "draft";
+  if (d.status === "void") return "bad";
+  return null;
+}
+
 function stepsFor(docs: BillingDoc[]): Step[] {
   const out: Step[] = [];
   const sorted = [...docs].sort((a, b) => a.issueDate.localeCompare(b.issueDate));
@@ -30,28 +43,30 @@ function stepsFor(docs: BillingDoc[]): Step[] {
       });
       continue;
     }
+    const held = notIssued(d);
     if (d.depositPercent) {
       // Same-invoice deposit model: one invoice, deposit first, balance on delivery.
       const deposit = Math.round(d.total * d.depositPercent) / 100;
-      const depositPaid = d.paid >= deposit - 0.005;
+      const depositPaid = !held && d.paid >= deposit - 0.005;
+      const settled = isSettled(d);
       out.push({
         code: d.number,
         label: `Deposit ${d.depositPercent}%`,
-        state: depositPaid ? "done" : d.status === "overdue" ? "bad" : "open",
-        status: depositPaid ? "Paid" : d.status === "overdue" ? "Late" : "Due",
+        state: held ?? (depositPaid ? "done" : d.status === "overdue" ? "bad" : "open"),
+        status: held ? d.status : depositPaid ? "Paid" : d.status === "overdue" ? "Late" : "Due",
         note: formatMoney(deposit, d.currency),
         href,
       });
       out.push({
         code: d.number,
         label: `Balance ${100 - d.depositPercent}%`,
-        state: d.balance <= 0.005 ? "done" : "draft",
-        status: d.balance <= 0.005 ? "Paid" : "On delivery",
+        state: held ?? (settled ? "done" : "draft"),
+        status: held ? d.status : settled ? "Paid" : "On delivery",
         note: formatMoney(Math.max(0, d.total - deposit), d.currency),
         href,
       });
     } else {
-      const paid = d.status === "paid" || d.balance <= 0.005;
+      const paid = isSettled(d);
       out.push({
         code: d.number,
         label: d.role === "balance" ? "Balance" : "Invoice",
@@ -62,10 +77,22 @@ function stepsFor(docs: BillingDoc[]): Step[] {
       });
     }
   }
-  const settled = sorted.filter((d) => d.kind === "invoice" && (d.status === "paid" || d.balance <= 0.005));
-  if (settled.length) {
-    const last = settled[settled.length - 1];
-    out.push({ code: last.number, label: "Receipt", state: "done", status: "Sent", note: "Issued when paid", href: `/admin/billing/invoices/${last.id}` });
+  // The receipt step shows the real receipt email state of the last settled invoice.
+  const settled = sorted.filter(isSettled);
+  const last = settled[settled.length - 1];
+  if (last) {
+    const r = last.receipt;
+    out.push({
+      code: last.number,
+      label: "Receipt",
+      state: r === "sent" ? "done" : r === "failed" ? "bad" : r === "queued" ? "open" : "draft",
+      status: r === "sent" ? "Sent" : r === "failed" ? "Failed" : r === "queued" ? "Sending" : "Not sent",
+      note: r === "sent" ? "Emailed to the client" : "Download it from the invoice",
+      href: `/admin/billing/invoices/${last.id}`,
+    });
+  } else {
+    const open = sorted.filter((d) => d.kind === "invoice" && !notIssued(d)).pop();
+    if (open) out.push({ code: open.number, label: "Receipt", state: "draft", status: "Not yet", note: "Sent when paid", href: `/admin/billing/invoices/${open.id}` });
   }
   return out;
 }
@@ -80,13 +107,15 @@ export function JobChain({ docs }: { docs: BillingDoc[] }) {
     if (!d.requestId) continue;
     byRequest.set(d.requestId, [...(byRequest.get(d.requestId) ?? []), d]);
   }
-  const pick = [...byRequest.values()]
+  // The fullest, most recent job whose chain has at least two steps.
+  const chosen = [...byRequest.values()]
     .sort((a, b) => b.length - a.length || Math.max(...b.map((d) => +new Date(d.issueDate))) - Math.max(...a.map((d) => +new Date(d.issueDate))))
-    .find((group) => group.some((d) => d.kind === "invoice"));
-  if (!pick) return null;
-  const steps = stepsFor(pick);
-  if (steps.length < 2) return null;
-  const head = pick[0];
+    .filter((group) => group.some((d) => d.kind === "invoice"))
+    .map((group) => ({ group, steps: stepsFor(group) }))
+    .find((c) => c.steps.length >= 2);
+  if (!chosen) return null;
+  const { steps } = chosen;
+  const head = chosen.group[0];
 
   return (
     <section aria-label="How one job is billed" className="mb-5 rounded-card border border-hairline bg-paper p-4 sm:p-5">

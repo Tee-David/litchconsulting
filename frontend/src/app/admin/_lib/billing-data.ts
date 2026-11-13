@@ -1,7 +1,7 @@
 import "server-only";
-import { and, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull, like, ne, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { client, invoice, payment, serviceRequest } from "@/lib/db/schema";
+import { client, emailOutbox, invoice, payment, serviceRequest } from "@/lib/db/schema";
 import { num } from "@/lib/invoice/money";
 import { proofPending } from "@/lib/attention/admin";
 
@@ -24,6 +24,8 @@ export type BillingDoc = {
   balance: number;
   currency: string;
   title: string | null;
+  /** The receipt email for this invoice (outbox row `receipt:<id>`), or null when none was queued. */
+  receipt: "queued" | "sent" | "failed" | "skipped" | null;
 };
 
 const UNPAID = ["sent", "viewed", "overdue", "partially_paid"];
@@ -41,6 +43,13 @@ export async function listBillingDocs(): Promise<BillingDoc[]> {
     .where(isNull(invoice.deletedAt))
     .orderBy(desc(invoice.createdAt))
     .limit(2000);
+  // Receipt emails are sent through the outbox with dedupe key `receipt:<invoice id>`
+  // (lib/payments/apply.ts), so the outbox row is the real receipt state.
+  const receiptRows = await db
+    .select({ key: emailOutbox.dedupeKey, status: emailOutbox.status })
+    .from(emailOutbox)
+    .where(like(emailOutbox.dedupeKey, "receipt:%"));
+  const receiptOf = new Map(receiptRows.map((r) => [r.key.slice("receipt:".length), r.status as BillingDoc["receipt"]]));
   return rows.map(({ inv, reqId, reqNumber }) => {
     const total = num(inv.total);
     const paid = num(inv.amountPaid);
@@ -63,6 +72,7 @@ export async function listBillingDocs(): Promise<BillingDoc[]> {
       balance: inv.kind === "invoice" && !["void", "draft"].includes(inv.status) ? Math.max(0, total - paid) : 0,
       currency: inv.currency,
       title: inv.projectTitle,
+      receipt: receiptOf.get(inv.id) ?? null,
     } satisfies BillingDoc;
   });
 }
