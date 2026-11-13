@@ -18,7 +18,7 @@ import os
 import time
 from collections.abc import Callable, Iterator
 from contextlib import asynccontextmanager, contextmanager
-from typing import Any, ContextManager
+from typing import Any, ContextManager, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel
@@ -118,6 +118,10 @@ class AssistantChatRequest(BaseModel):
     # The client's AI mode: True keeps every model call on the VM.
     local_only: bool = False
     conversation_id: str | None = None
+    # Who is asking. Staff: assigned requests only, no money, no writes (CLAUDE.md).
+    role: Literal["admin", "staff"] = "admin"
+    request_ids: list[str] | None = None
+    workbench_ids: list[str] | None = None
 
 
 class CreateEngagementRequest(BaseModel):
@@ -761,7 +765,9 @@ def create_app(
             embedder = _get_embedder()
             router = _get_router(embedder)
         except Exception as exc:  # noqa: BLE001 — embedder down: say so in words
-            return asdict(busy_result(failure_reason(exc)))
+            from dataclasses import replace
+
+            return asdict(replace(busy_result(failure_reason(exc)), scope_applied=True))
         model_router = _sage_router(local_only=body.local_only)
         # Reuse the harness cache + ai_calls telemetry when we're on Postgres.
         conn = getattr(repo, "conn", None)
@@ -792,6 +798,8 @@ def create_app(
             # Cloud answers take seconds; the private model needs longer, but the
             # web relay gives up at 120 s, so stop before that.
             timeout=100.0 if body.local_only else 30.0,
+            role=body.role,
+            workbench_ids=body.workbench_ids if body.role == "staff" else None,
         )
         return asdict(result)
 

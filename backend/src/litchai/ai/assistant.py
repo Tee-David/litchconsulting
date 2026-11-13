@@ -621,9 +621,10 @@ def execute_read(
     context: list[RetrievedChunk],
     client_id: str | None,
     engine_status: Any = None,
+    workbench_ids: list[str] | None = None,
 ) -> ToolResult:
     if tool.name == "workbench_status":
-        return ToolResult(tool.name, "read", workbench_status(repo, client_id))
+        return ToolResult(tool.name, "read", workbench_status(repo, client_id, workbench_ids))
 
     if tool.name == "ai_engine_status":
         if engine_status is None:
@@ -686,15 +687,22 @@ def execute_read(
     })
 
 
-def workbench_status(repo: Repository, client_id: str | None) -> dict[str, Any]:
-    """Recent workbench conversations with their pending proposals (VM Postgres)."""
+def workbench_status(repo: Repository, client_id: str | None,
+                     only_ids: list[str] | None = None) -> dict[str, Any]:
+    """Recent workbench conversations with their pending proposals (VM Postgres).
+    ``only_ids``: staff see only the conversations of requests assigned to them."""
     conn = getattr(repo, "conn", None)
     if conn is None:
         return {"error": "Workbench history is only kept on the analysis server."}
     from litchai.workbench.session import PgConversationStore
 
     rows = []
-    for c in PgConversationStore(conn).list(client_id, 20):
+    allowed = set(only_ids) if only_ids is not None else None
+    for c in PgConversationStore(conn).list(client_id, 20 if allowed is None else 500):
+        if allowed is not None and c.id not in allowed:
+            continue
+        if len(rows) >= 20:
+            break
         pending = [b for b in c.batches if b.status == "pending"]
         rows.append({
             "conversation_id": c.id, "title": c.title, "client_id": c.client_id,
@@ -904,6 +912,19 @@ class ChatResult:
     error: str | None = None
     # Which engine wrote the words: {"provider", "model", "kind", "masked"} or None.
     engine: dict[str, Any] | None = None
+    # The caller's role was applied (staff: assigned requests only, no money, no writes).
+    scope_applied: bool = False
+
+
+# Staff use Sage for their own work only (CLAUDE.md: assigned requests, never money).
+# request_work data comes from the website already filtered to their requests, without
+# money fields; workbench_status is filtered to their conversations here.
+STAFF_TOOLS = frozenset({"search_knowledge", "general_chat", "request_work", "workbench_status"})
+STAFF_REFUSAL = ("Only an admin can see that. I can tell you where your assigned requests "
+                 "stand, what is waiting on you in the workbench, and answer questions about "
+                 "Litch's services and Nigerian tax rules.")
+STAFF_NO_WRITES = ("Only an admin can do that. I can tell you where your assigned requests "
+                   "stand, or draft the wording for you to send yourself.")
 
 
 # Plain words for a failed model call, each with a next step (U6).
@@ -968,8 +989,13 @@ def answer_chat(
     local_only: bool = False,
     conversation_id: str | None = None,
     timeout: float | None = None,
+    role: str = "admin",
+    workbench_ids: list[str] | None = None,
 ) -> ChatResult:
-    """``app_tools``: the caller can resolve app-side reads (two-pass contract).
+    """``role``: "admin" sees the firm; "staff" gets STAFF_TOOLS only, no writes, and
+    no client-scoped context (``workbench_ids`` limits the workbench read).
+
+    ``app_tools``: the caller can resolve app-side reads (two-pass contract).
     ``app_data``: ``{"tool": name, "data": {...}}`` from that read (the second pass).
 
     ``model_router`` (a :class:`~litchai.ai.router.ProviderRouter`): when set, the
@@ -978,18 +1004,22 @@ def answer_chat(
     ``provider`` is used as before. A model failure never raises: the result holds a
     plain-word message and ``error``."""
     try:
-        return _answer_chat(
+        out = _answer_chat(
             message, repo=repo, embedder=embedder, provider=provider, router=router,
             history=history, scope=scope, client_id=client_id, chat_provider=chat_provider,
             cache=cache, telemetry=telemetry, app_tools=app_tools, app_data=app_data,
             engine_status=engine_status, model_router=model_router, local_only=local_only,
-            conversation_id=conversation_id, timeout=timeout,
+            conversation_id=conversation_id, timeout=timeout, role=role,
+            workbench_ids=workbench_ids,
         )
     except Exception as exc:  # noqa: BLE001 — Sage answers in words, never with a 500
         from litchai.ai.router import failure_reason
 
         log.warning("sage turn failed: %s: %s", type(exc).__name__, str(exc)[:200])
-        return busy_result(failure_reason(exc))
+        out = busy_result(failure_reason(exc))
+    from dataclasses import replace
+
+    return replace(out, scope_applied=True)
 
 
 def _answer_chat(
@@ -1012,7 +1042,13 @@ def _answer_chat(
     local_only: bool,
     conversation_id: str | None,
     timeout: float | None,
+    role: str = "admin",
+    workbench_ids: list[str] | None = None,
 ) -> ChatResult:
+    staff = role == "staff"
+    if staff:
+        # Never a client-wide view for staff, whatever the caller asked for.
+        scope, client_id = "firm", None
     bound = None
     if model_router is not None:
         from litchai.ai.privacy import Masker
@@ -1036,6 +1072,12 @@ def _answer_chat(
     decision = route_message(
         message, router, provider=provider, history=history, cache=cache, telemetry=telemetry
     )
+    if staff and (decision.tool.kind == "write" or decision.tool.name not in STAFF_TOOLS):
+        return ChatResult(
+            answer=STAFF_NO_WRITES if decision.tool.kind == "write" else STAFF_REFUSAL,
+            citations=[], tool=decision.tool.name, routed_by=decision.method,
+            can_answer=False,
+        )
 
     # general_chat: off-corpus small talk / reasoning. Skip retrieval and the
     # READ/proposal paths entirely and answer via the chat provider. If none is
@@ -1085,7 +1127,7 @@ def _answer_chat(
         tool_result = execute_read(
             decision.tool, decision.slots, message,
             repo=repo, embedder=embedder, context=context, client_id=read_client,
-            engine_status=engine_status,
+            engine_status=engine_status, workbench_ids=workbench_ids if staff else None,
         )
     out = generate_answer(
         message, context, tool_result, history, provider=provider,
