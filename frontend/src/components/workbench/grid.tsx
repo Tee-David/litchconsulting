@@ -569,6 +569,27 @@ export function Grid({
     onSelect({ sheet, r0: sel.r0, r1: down ? to.r : sel.r1, c0: sel.c0, c1: down ? sel.c1 : to.c });
     void send(items);
   };
+  // Double-click the handle: fill down as far as the next column has data (left first,
+  // then right), the same rule as Excel.
+  const fillToEnd = (e: React.MouseEvent) => {
+    if (!editable || !selection || selection.sheet !== sheet) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const sel = selection;
+    const filled = (r: number, c: number) => {
+      const v = c >= 1 ? cellAt(r, c)?.v : null;
+      return v !== null && v !== undefined && v !== "";
+    };
+    let end = sel.r1;
+    for (const adj of [sel.c0 - 1, sel.c1 + 1]) {
+      if (!filled(sel.r1, adj) && !filled(sel.r1 + 1, adj)) continue;
+      let r = sel.r1;
+      while (r < dataRow && filled(r + 1, adj)) r++;
+      end = r;
+      break;
+    }
+    if (end > sel.r1) doFill(sel, { r: end, c: sel.c1 });
+  };
   const startFill = (e: React.MouseEvent) => {
     if (!editable || !selection || selection.sheet !== sheet || e.button !== 0) return;
     e.preventDefault();
@@ -875,9 +896,10 @@ export function Grid({
             <span
               role="button"
               tabIndex={-1}
-              aria-label="Fill handle: drag down or right to copy or continue a series"
-              title="Drag to fill"
+              aria-label="Fill handle: drag down or right to copy or continue a series; double-click to fill down to the end of the data"
+              title="Drag to fill, double-click to fill down"
               onMouseDown={startFill}
+              onDoubleClick={fillToEnd}
               className="absolute z-20 size-2 cursor-crosshair border border-paper bg-accent"
               style={{ left: (left[selection.c1] ?? left[left.length - 1]) - 4, top: headH + selection.r1 * rowH - 4 }}
             />
