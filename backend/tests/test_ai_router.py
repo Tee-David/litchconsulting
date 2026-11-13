@@ -130,8 +130,7 @@ def test_classify_http_error():
     assert classify_http_error(401, "").reason == "auth"
 
 
-GROQ = ["groq", "groq:gpt-oss-20b", "groq:qwen3.8-27b", "groq:llama-3.3-70b-versatile",
-        "groq:llama-3.1-8b-instant"]
+GROQ = ["groq", "groq:gpt-oss-20b", "groq:qwen3.8-27b"]
 
 
 def test_default_specs_from_env_and_legacy_chat():
@@ -167,11 +166,12 @@ def test_groq_models_each_have_their_own_settings():
     by = {s.name: s for s in default_specs({"GROQ_API_KEY": "g"})}
     assert by["groq"].model == "openai/gpt-oss-120b"
     assert by["groq"].params["_strict_schema"] and by["groq:qwen3.8-27b"].params["_strict_schema"]
-    llama = by["groq:llama-3.3-70b-versatile"]
-    assert not llama.params["_strict_schema"] and "reasoning_effort" not in llama.params
     assert all(by[n].api_key == "g" and by[n].zero_retention for n in GROQ)
     picked = default_specs({"GROQ_API_KEY": "g", "LITCHAI_GROQ_MODELS": "a/m1,m2"})
     assert [s.name for s in picked][:2] == ["groq", "groq:m2"]
+    other = next(s for s in picked if s.name == "groq:m2")
+    # A model outside the strict-schema list gets the tolerant parser, not strict mode.
+    assert not other.params["_strict_schema"] and "reasoning_effort" not in other.params
 
 
 def test_429_headers_set_the_wait_and_only_that_model_rests():

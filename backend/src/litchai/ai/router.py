@@ -96,10 +96,11 @@ def _int_env(name: str) -> int | None:
 _KNOWN_HOSTS = {"groq": "groq.com", "cerebras": "cerebras.ai", "sambanova": "sambanova.ai"}
 
 # Groq's free quota is per model per day (console.groq.com/docs/rate-limits and
-# /docs/models, checked 2026-11-06), so the chain rotates through Groq models before
+# /docs/models, checked 2026-11-13), so the chain rotates through Groq models before
 # it leaves Groq. LITCHAI_GROQ_MODELS (comma-separated) replaces this list.
-GROQ_MODELS = ("openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b",
-               "llama-3.3-70b-versatile", "llama-3.1-8b-instant")
+# llama-3.3-70b-versatile and llama-3.1-8b-instant were retired by Groq (model_not_found
+# on 2026-11-13); a dead model costs time on every fallback, inside Vercel's 60 s limit.
+GROQ_MODELS = ("openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b")
 # Models with strict json_schema on Groq (docs/structured-outputs); the others get
 # the prompt's JSON and the tolerant parser with its repair retry.
 GROQ_STRICT_MODELS = frozenset({"openai/gpt-oss-120b", "openai/gpt-oss-20b",
@@ -759,6 +760,9 @@ class ProviderRouter:
             self.quota.mark_exhausted(spec.name, until)
         elif exc.reason == "rate_limit":
             self._cooldown[spec.name] = time.monotonic() + min(exc.retry_after or 20.0, 120.0)
+        elif "model_not_found" in (exc.detail or "") or "does not exist" in (exc.detail or ""):
+            # A retired model: skip it until tomorrow instead of trying it on every call.
+            self.quota.mark_exhausted(spec.name, _next_utc_midnight())
         elif exc.reason in ("auth", "http_5xx", "timeout"):
             self._health[spec.name] = (time.monotonic(), False, exc.reason)
 
@@ -790,7 +794,7 @@ class ProviderRouter:
             return False, "no key"
         try:
             self.transport(spec, [{"role": "user", "content": "ok"}], None,
-                           {"max_tokens": 1, "timeout": 15.0})
+                           {"max_tokens": 1, "timeout": 30.0 if spec.kind == "local" else 15.0})
             result = (True, "")
         except ProviderError as exc:
             if exc.reason == "quota":
