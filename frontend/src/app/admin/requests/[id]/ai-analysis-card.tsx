@@ -71,7 +71,7 @@ export function AiAnalysisCard({
     setBusyId(doc.id);
     const res = await relayRequestDocumentAction(requestId, doc.id);
     setBusyId(null);
-    if (!res.ok) return toast.error(res.error || "Relay failed");
+    if (!res.ok) return toast.error(res.error || "Could not send the file to Sage.");
     toast.success(`${doc.fileName} sent for analysis`);
     router.refresh(); // pull the new litchai id/status so the poller picks it up
   }
@@ -112,11 +112,11 @@ export function AiAnalysisCard({
             <Sparkles className="size-4.5" />
           </span>
           <div>
-            <h3 className="font-display text-sm font-bold text-ink">LitchAI analysis</h3>
+            <h3 className="font-display text-sm font-bold text-ink">Sage analysis</h3>
             <p className="text-xs text-muted">
               {anyInFlight
-                ? "Working — watching the pipeline live…"
-                : "Blind-relay encrypted — plaintext never persists outside the VM."}
+                ? "Sage is reading the files. This updates by itself."
+                : "Files go to Sage encrypted. Only our own analysis server can read them."}
             </p>
           </div>
         </div>

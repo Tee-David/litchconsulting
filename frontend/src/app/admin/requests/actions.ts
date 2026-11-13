@@ -354,7 +354,7 @@ export async function relayRequestDocumentAction(
   documentId: string
 ): Promise<ActionResult & { litchaiDocumentId?: string }> {
   if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
-  if (!process.env.LITCHAI_API_URL) return { ok: false, error: "LitchAI isn't configured yet." };
+  if (!process.env.LITCHAI_API_URL) return { ok: false, error: "Sage is not set up yet. Connect the analysis server in Settings, Integrations." };
 
   const req = await loadRequest(requestId);
   if (!req) return { ok: false, error: "Not found" };
@@ -419,7 +419,7 @@ export async function syncRequestAiStatusAction(
   requestId: string
 ): Promise<ActionResult & { statuses?: Record<string, string>; reasons?: Record<string, string> }> {
   if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
-  if (!process.env.LITCHAI_API_URL) return { ok: false, error: "LitchAI isn't configured yet." };
+  if (!process.env.LITCHAI_API_URL) return { ok: false, error: "Sage is not set up yet. Connect the analysis server in Settings, Integrations." };
 
   const docs = await db
     .select()
@@ -467,7 +467,7 @@ export async function publishVerifiedDeliverableAction(
   documentId: string
 ): Promise<ActionResult> {
   if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
-  if (!process.env.LITCHAI_API_URL) return { ok: false, error: "LitchAI isn't configured yet." };
+  if (!process.env.LITCHAI_API_URL) return { ok: false, error: "Sage is not set up yet. Connect the analysis server in Settings, Integrations." };
 
   const req = await loadRequest(requestId);
   if (!req) return { ok: false, error: "Not found" };
