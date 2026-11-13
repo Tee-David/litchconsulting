@@ -33,7 +33,8 @@ import {
   X,
 } from "lucide-react";
 import type { WbBatch, WbCell, WbConversation, WbEvent, WbFirstLook, WbGate, WbUserEdit } from "@/lib/litchai/workbench";
-import { attachFilesAction, decideBatchAction, deliverAction, getConversationAction, restoreVersionAction, runToolAction, saveEditsAction } from "@/lib/workbench/actions";
+import { attachFilesAction, decideBatchAction, deliverAction, getConversationAction, restoreVersionAction, runToolAction, saveEditsAction, sheetActionAction } from "@/lib/workbench/actions";
+import { SheetTabs, type SheetActionKind, type SheetInfo } from "./sheet-tabs";
 import { useToast } from "@/components/admin/ui/toaster";
 import { Button, Segmented } from "@/components/kit";
 import { SageIcon } from "@/components/admin/sage-icon";
@@ -85,6 +86,9 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     [look],
   );
   const [gridVersion, setGridVersion] = useState(0);
+  // S2: tab colour and hidden state per sheet, from the grid's last read.
+  const [infoBy, setInfoBy] = useState<Record<string, Record<string, SheetInfo>>>({});
+  const [sheetBusy, setSheetBusy] = useState(false);
   // R4: a saved version shown read-only in the grid (null = the live workbook).
   const [previewV, setPreviewV] = useState<number | null>(null);
   const [restoring, setRestoring] = useState(false);
@@ -380,6 +384,29 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     [undoId, redoStack, conv.id, toast, previewV],
   );
   useEffect(() => setPreviewV(null), [wbId]);
+  // S2: a sheet tab action, saved at once; the toast's Undo is the normal undo.
+  const sheetAction = useCallback(
+    async (name: string, action: SheetActionKind, extra: { name?: string; index?: number; color?: string } = {}) => {
+      if (!wbId) return false;
+      setSheetBusy(true);
+      const res = await sheetActionAction({ conversationId: conv.id, workbookId: wbId, sheet: name, action, ...extra });
+      setSheetBusy(false);
+      if (!res.ok) {
+        toast.error(res.error);
+        return false;
+      }
+      setConv(res.conversation);
+      setRedoStack([]);
+      const others = (sheetsBy[wbId] ?? []).filter((n) => n !== name && !infoBy[wbId]?.[n]?.hidden);
+      if (action === "rename" && sheet === name) setSheetBy((p) => ({ ...p, [wbId]: res.name }));
+      if (action === "copy") setSheetBy((p) => ({ ...p, [wbId]: res.name }));
+      if ((action === "delete" || action === "hide") && sheet === name && others[0]) setSheetBy((p) => ({ ...p, [wbId]: others[0] }));
+      setGridVersion((v) => v + 1);
+      toast.action(action === "delete" ? `Deleted ${name}.` : (res.message ?? "Done."), { label: "Undo", onAction: () => void stepRef.current("undo") });
+      return true;
+    },
+    [conv.id, wbId, sheet, sheetsBy, infoBy, toast],
+  );
   const restoreVersion = useCallback(
     async (version: number) => {
       if (!wbId) return;
@@ -428,7 +455,13 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   }, [conv.id]);
 
   const onMeta = useCallback(
-    (m: GridMeta) => setSheetsBy((prev) => (prev[wbId]?.join("|") === m.sheets.join("|") ? prev : { ...prev, [wbId]: m.sheets })),
+    (m: GridMeta) => {
+      setSheetsBy((prev) => (prev[wbId]?.join("|") === m.sheets.join("|") ? prev : { ...prev, [wbId]: m.sheets }));
+      if (m.info) {
+        const next = Object.fromEntries(m.info.map((i) => [i.name, i]));
+        setInfoBy((prev) => (JSON.stringify(prev[wbId]) === JSON.stringify(next) ? prev : { ...prev, [wbId]: next }));
+      }
+    },
     [wbId],
   );
 
@@ -926,26 +959,15 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           className="mr-1 max-w-[180px] shrink-0"
         />
       ) : null}
-      {sheets.map((n) => {
-        const isNew = baseSheets[wbId] ? !baseSheets[wbId].has(n) : false;
-        const on = n === sheet;
-        return (
-          <button
-            key={n}
-            type="button"
-            role="tab"
-            aria-selected={on}
-            onClick={() => setSheetBy((p) => ({ ...p, [wbId]: n }))}
-            className={cn(
-              "inline-flex shrink-0 items-center gap-1.5 rounded-ctl px-2.5 py-1 text-[12.5px]",
-              on ? "bg-paper font-semibold text-ink shadow-sm" : "text-body hover:bg-cloud",
-            )}
-          >
-            {isNew ? <i className="size-1.5 rounded-full bg-diff-new-line" aria-label="New" /> : null}
-            {n}
-          </button>
-        );
-      })}
+      <SheetTabs
+        sheets={sheets}
+        info={infoBy[wbId] ?? {}}
+        active={sheet}
+        isNew={(n) => (baseSheets[wbId] ? !baseSheets[wbId].has(n) : false)}
+        busy={sheetBusy || Boolean(previewV)}
+        onPick={(n) => setSheetBy((p) => ({ ...p, [wbId]: n }))}
+        onAction={sheetAction}
+      />
       <span className="ml-auto" />
       {statusBar}
       <div className="flex shrink-0 items-center gap-0.5 pl-2" role="group" aria-label="Zoom">

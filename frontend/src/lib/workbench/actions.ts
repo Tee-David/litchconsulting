@@ -18,6 +18,7 @@ import {
   wbStart,
   wbUserEdits,
   wbRestore,
+  wbSheetAction,
   wbListByDocument,
   type WbBatch,
   type WbConversation,
@@ -215,6 +216,54 @@ export async function saveEditsAction(input: z.input<typeof editSchema>): Promis
       return { ok: false, error: "Not saved: the recompute found a formula error. Check the formula and try again." };
     }
     return { ok: true, message: d.edits.length === 1 ? "Saved." : `Saved ${d.edits.length} cells.`, batch: res.batch, conversation: res.conversation };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// --- sheet tabs (S2) ------------------------------------------------------------------
+const sheetActionSchema = z.object({
+  conversationId: id,
+  workbookId: z.string().min(1).max(120),
+  sheet: z.string().min(1).max(120),
+  action: z.enum(["rename", "move", "copy", "delete", "color", "hide", "unhide"]),
+  name: z.string().trim().min(1).max(31).optional(),
+  index: z.number().int().min(0).max(500).optional(),
+  color: z.string().regex(/^([0-9A-Fa-f]{6})?$/).optional(),
+});
+const SHEET_DONE: Record<string, string> = {
+  rename: "Renamed.",
+  move: "Moved.",
+  copy: "Duplicated.",
+  delete: "Deleted.",
+  color: "Tab colour changed.",
+  hide: "Hidden.",
+  unhide: "Shown.",
+};
+
+/** Rename, move, duplicate, colour, hide or delete a sheet. Saved as a version; Undo reverses it. */
+export async function sheetActionAction(
+  input: z.input<typeof sheetActionSchema>,
+): Promise<Res<{ batch: WbBatch; conversation: WbConversation; name: string }>> {
+  const parsed = sheetActionSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "That sheet change is not valid." };
+  const d = parsed.data;
+  const a = await guard(d.conversationId);
+  if (!a) return DENIED;
+  const u = await getSessionUser();
+  const author = (u?.name || u?.email || "a team member").slice(0, 80);
+  try {
+    const res = await wbSheetAction(d.conversationId, d.workbookId, d.sheet, { action: d.action, name: d.name, index: d.index, color: d.color, author });
+    await touch(d.conversationId);
+    await recordAudit({
+      action: "workbench.sheet_" + d.action,
+      entity: a.row.requestId ? "request" : "workbench",
+      entityId: a.row.requestId ?? d.conversationId,
+      meta: { conversation: d.conversationId, workbook: d.workbookId, sheet: d.sheet, batch: res.batch.id },
+    });
+    const op = res.batch.ops[0] as { meta?: { to?: string } } | undefined;
+    const name = d.action === "rename" || d.action === "copy" ? (op?.meta?.to ?? d.sheet) : d.sheet;
+    return { ok: true, message: SHEET_DONE[d.action], batch: res.batch, conversation: res.conversation, name };
   } catch (e) {
     return fail(e);
   }

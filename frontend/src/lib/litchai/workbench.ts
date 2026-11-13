@@ -131,7 +131,14 @@ export type WbCell = {
     old_formula: string | null;
   } | null;
 };
-export type WbSheetWindow = { sheet: string; max_row: number; max_col: number; sheets: string[]; cells: WbCell[] };
+export type WbSheetWindow = {
+  sheet: string;
+  max_row: number;
+  max_col: number;
+  sheets: string[];
+  cells: WbCell[];
+  sheet_info?: { name: string; color: string | null; hidden: boolean }[];
+};
 
 export type WbProvider = {
   name: string;
@@ -223,6 +230,18 @@ export const wbRunTool = (id: string, tool: string, args: Record<string, unknown
 export const wbSheet = (id: string, wbId: string, sheet: string, r0: number, r1: number, c0 = 1, c1 = 60, version?: number) =>
   call<WbSheetWindow>(
     `/workbench/conversations/${enc(id)}/workbooks/${enc(wbId)}/sheets/${enc(sheet)}?r0=${r0}&r1=${r1}&c0=${c0}&c1=${c1}${version ? `&version=${version}` : ""}`,
+  );
+
+/** S2: a sheet tab action (rename, move, copy, delete, colour, hide, unhide), saved at once. */
+export const wbSheetAction = (
+  id: string,
+  wbId: string,
+  sheet: string,
+  body: { action: string; name?: string; index?: number; color?: string; author: string },
+) =>
+  call<{ batch: WbBatch; conversation: WbConversation }>(
+    `/workbench/conversations/${enc(id)}/workbooks/${enc(wbId)}/sheets/${enc(sheet)}/action`,
+    json(body),
   );
 
 /** R4: bring back an earlier version as a new version (it can be undone). */

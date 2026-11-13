@@ -18,7 +18,7 @@ type Block = { cells: Map<string, WbCell> };
 export type SelStats = { count: number; numbers: number; sum: number; avg: number | null; min: number | null; max: number | null; partial: boolean };
 /** Status bar and Find read at most this many 100-row blocks (10,000 rows). */
 const READ_CAP = 100;
-export type GridMeta = { maxRow: number; maxCol: number; sheets: string[] };
+export type GridMeta = { maxRow: number; maxCol: number; sheets: string[]; info?: { name: string; color: string | null; hidden: boolean }[] };
 
 /**
  * A virtualised read view of one sheet, fed in 100-row blocks by the
@@ -130,7 +130,7 @@ export function Grid({
         const cells = new Map<string, WbCell>();
         for (const c of body.cells) cells.set(`${c.r}:${c.c}`, c);
         setBlocks((prev) => new Map(prev).set(b, { cells }));
-        const m = { maxRow: Math.max(1, body.max_row), maxCol: Math.max(1, Math.min(MAX_COLS, body.max_col)), sheets: body.sheets };
+        const m = { maxRow: Math.max(1, body.max_row), maxCol: Math.max(1, Math.min(MAX_COLS, body.max_col)), sheets: body.sheets, info: body.sheet_info };
         setMeta(m);
         onMeta?.(m);
         setError(null);
