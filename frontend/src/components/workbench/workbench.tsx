@@ -967,7 +967,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const previewBar = pv ? (
     <div className="flex flex-wrap items-center gap-2 border-b border-hairline bg-warn-soft px-3 py-1.5 text-[13px]" role="status">
       <History className="size-4 shrink-0 text-warn" aria-hidden />
-      <span className="min-w-0 flex-1 text-ink">
+      <span className="min-w-0 flex-[1_1_14rem] text-ink">
         <span className="font-semibold">Version {pv.n}</span> · {pvLabel} ·{" "}
         {new Date(pv.at).toLocaleString("en-NG", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
         <span className="text-body"> · read-only preview</span>
