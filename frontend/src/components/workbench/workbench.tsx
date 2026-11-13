@@ -195,6 +195,43 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   };
 
   const sheet = sheetBy[wbId] ?? sheetsBy[wbId]?.[0] ?? "Sheet1";
+
+  // Resume where you were: the file, the sheet and the selected range, per workbench,
+  // kept on this device. Restored once on open; saved as you move.
+  const placeKey = `litch.wb.place.${conv.id}`;
+  const restored = useRef(false);
+  useEffect(() => {
+    if (restored.current) return;
+    restored.current = true;
+    try {
+      const raw = window.localStorage.getItem(placeKey);
+      if (!raw) return;
+      const pl = JSON.parse(raw) as { wbId?: string; sheet?: string; sel?: Range | null };
+      if (pl.wbId && conv.workbooks.some((w) => w.id === pl.wbId)) {
+        setWbId(pl.wbId);
+        if (pl.sheet) setSheetBy((p) => ({ ...p, [pl.wbId as string]: pl.sheet as string }));
+        if (pl.sel && pl.sel.sheet === pl.sheet) {
+          setSelection(pl.sel);
+          setFocus({ r: pl.sel.r0, c: pl.sel.c0, nonce: Date.now() });
+        }
+      }
+    } catch {
+      /* private mode or a bad value: start at the top */
+    }
+    // Once, on open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    if (!restored.current || !wbId) return;
+    const t = window.setTimeout(() => {
+      try {
+        window.localStorage.setItem(placeKey, JSON.stringify({ wbId, sheet, sel: selection && selection.sheet === sheet ? selection : null }));
+      } catch {
+        /* the place is a convenience only */
+      }
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, [placeKey, wbId, sheet, selection]);
   const activeRef = conv.workbooks.find((w) => w.id === wbId) ?? null;
   const pending = conv.batches.filter((b) => b.status === "pending");
   const pendingHere = pending.filter((b) => b.ops.some((o) => o.workbook_id === wbId));
