@@ -90,3 +90,13 @@ def test_trial_balance_fast_path_only_for_questions():
     assert not _tb_question("Add Total Credit column on Trial balance")
     assert not _tb_question("Sort the trial balance by account code")
     assert not _tb_question("Highlight the rows on the trial balance where the balance is negative")
+
+
+def test_fallback_plan_never_answers_an_edit_with_statements():
+    from litchai.workbench.engine import _plan_for
+
+    plan = _plan_for(True)
+    assert plan("Add formulas below the debit and credit columns for the totals") == []
+    assert plan("Add a column called Account Type and classify each account") == [
+        ("categorise_rows", {})]
+    assert plan("What is the profit before tax?")[0][0] == "trial_balance_statements"

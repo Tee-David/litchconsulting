@@ -602,6 +602,14 @@ def _degraded(user: str, execute: Callable[[str, dict[str, Any], int], Observati
     """No model at all: the decision layer picks a deterministic plan and the
     pipeline runs it. The answer is the tools' own summaries."""
     plan = plan_fn(user)
+    if not plan:
+        # Nothing the pipeline can do faithfully without a model: change nothing.
+        yield {"type": "final", "answer": (
+            "The AI models are busy or sent steps I could not use, so I changed nothing. "
+            "Try again in a minute, or ask in a shorter step."),
+            "citations": [], "proposals": proposals, "degraded": True,
+            "attribution": {"pipeline": [], "model": None, "decision": "heuristic"}}
+        return
     yield {"type": "plan", "steps": [f"{t}" for t, _ in plan], "layer": "decision"}
     summaries, used = [], []
     for i, (name, args) in enumerate(plan, start=1):

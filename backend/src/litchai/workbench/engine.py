@@ -461,6 +461,12 @@ def _plan_for(has_tb: bool) -> Any:
     steps: on a trial balance, its statements (and CIT when asked); else the
     decision layer's keyword plan."""
     def plan(message: str) -> list[tuple[str, dict[str, Any]]]:
+        # An edit request is never answered with unrelated statements or tax: only a
+        # step that does what was asked, or nothing (the person is told to try again).
+        if _TB_EDIT_JOB.search(message):
+            if re.search(r"\b(classif|categor|account type)", message, re.IGNORECASE):
+                return [("categorise_rows", {})]
+            return []
         if has_tb and _tb_question(message):
             steps: list[tuple[str, dict[str, Any]]] = [("trial_balance_statements", {})]
             if _TB_TAX.search(message):
