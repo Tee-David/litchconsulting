@@ -52,8 +52,8 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   const onTimePct = d.deliveredCount ? Math.round((d.onTime / d.deliveredCount) * 100) : null;
   const stageMax = Math.max(1, ...d.stages.map((s) => s.n));
   const moneySeries = [
-    { key: "billed", label: "Billed" },
-    { key: "collected", label: "Collected" },
+    { key: "billed", label: "Billed to date" },
+    { key: "collected", label: "Collected to date" },
   ];
   const flowSeries = [
     { key: "opened", label: "Opened" },
@@ -138,7 +138,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
             title="How much have we billed and collected?"
             sub={
               <>
-                {`Running total, ${P.chart}`}
+                {P.chart}
                 <ChartKey series={moneySeries} className="ml-3 align-middle" />
               </>
             }

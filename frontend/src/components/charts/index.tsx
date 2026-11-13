@@ -163,7 +163,7 @@ export function AreaTrend({
     <div className={CHART_TEXT}>
       {legend ? <ChartKey series={series} className="mb-2" /> : null}
       <ResponsiveContainer width="100%" height={height}>
-        <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+        <AreaChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }}>
           {fade ? (
             <defs>
               <linearGradient id={`grad-${series[0].key}`} x1="0" y1="0" x2="0" y2="1">
@@ -229,7 +229,7 @@ export function GroupedBars({
     <div className={CHART_TEXT}>
       {legend ? <ChartKey series={series} className="mb-2" /> : null}
       <ResponsiveContainer width="100%" height={height}>
-        <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barGap={3} barCategoryGap="28%">
+        <BarChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 0 }} barGap={3} barCategoryGap="28%">
           <CartesianGrid vertical={false} stroke={GRID} />
           <XAxis dataKey="label" tickLine={false} axisLine={false} tick={AXIS} minTickGap={8} />
           <YAxis
