@@ -37,6 +37,8 @@ export function SheetTabs({
   const [menu, setMenu] = useState<{ sheet: string; x: number; y: number } | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [drag, setDrag] = useState<string | null>(null);
+  // The dragged tab, readable at once in dragover (state lags one render behind).
+  const dragRef = useRef<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const visible = sheets.filter((n) => !info[n]?.hidden);
   const hidden = sheets.filter((n) => info[n]?.hidden);
@@ -73,23 +75,27 @@ export function SheetTabs({
             key={n}
             draggable={!busy}
             onDragStart={(e) => {
+              dragRef.current = n;
+              e.dataTransfer.setData("text/plain", n);
               setDrag(n);
               e.dataTransfer.effectAllowed = "move";
             }}
             onDragOver={(e) => {
-              if (!drag || drag === n) return;
+              if (!dragRef.current || dragRef.current === n) return;
               e.preventDefault();
               setOver(n);
             }}
             onDragLeave={() => setOver((o) => (o === n ? null : o))}
             onDrop={(e) => {
               e.preventDefault();
-              const from = drag;
+              const from = dragRef.current;
+              dragRef.current = null;
               setDrag(null);
               setOver(null);
               if (from && from !== n) void onAction(from, "move", { index: idx(n) });
             }}
             onDragEnd={() => {
+              dragRef.current = null;
               setDrag(null);
               setOver(null);
             }}
