@@ -149,8 +149,11 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
       document.body.style.cursor = "";
+      document.body.style.userSelect = "";
     };
+    // While dragging, the whole page shows the resize cursor and no text gets selected.
     document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
   };
@@ -457,7 +460,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         {activeCell ? `${colLetter(activeCell.c)}${activeCell.r}` : "—"}
       </span>
       <span className="font-serif italic text-muted" aria-hidden>fx</span>
-      <span className="min-w-0 flex-1 truncate font-mono text-[12px] text-ink">
+      <span className="min-w-0 flex-1 cursor-text select-text truncate font-mono text-[12px] text-ink">
         {activeCell ? activeCell.cell?.f ?? display(activeCell.cell) : ""}
       </span>
       <button type="button" onClick={() => setSheetOpen("range")} className="rounded p-1 text-muted hover:bg-cloud hover:text-ink" aria-label="Point Sage at a range" title="Point Sage at a range">
@@ -507,13 +510,13 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         );
       })}
       <div className="ml-auto flex shrink-0 items-center gap-0.5 pl-2" role="group" aria-label="Zoom">
-        <button type="button" onClick={() => zoomBy(-1)} disabled={prefs.zoom <= 0.5} className="grid size-7 place-items-center rounded-ctl text-muted hover:bg-cloud hover:text-ink disabled:opacity-40" aria-label="Zoom out" title="Zoom out (Ctrl + minus)">
+        <button type="button" onClick={() => zoomBy(-1)} disabled={prefs.zoom <= 0.5} className="grid size-7 place-items-center rounded-ctl text-muted hover:bg-cloud hover:text-ink disabled:cursor-not-allowed disabled:opacity-40" aria-label="Zoom out" title="Zoom out (Ctrl + minus)">
           <Minus className="size-3.5" />
         </button>
         <button type="button" onClick={() => zoomBy(0)} className="min-w-[3.25rem] rounded-ctl px-1.5 py-1 text-center text-[12px] tabular-nums text-body hover:bg-cloud hover:text-ink" title="Back to 100 % (Ctrl + 0)" aria-label={`Zoom ${Math.round(prefs.zoom * 100)} %, reset to 100 %`}>
           {Math.round(prefs.zoom * 100)} %
         </button>
-        <button type="button" onClick={() => zoomBy(1)} disabled={prefs.zoom >= 2} className="grid size-7 place-items-center rounded-ctl text-muted hover:bg-cloud hover:text-ink disabled:opacity-40" aria-label="Zoom in" title="Zoom in (Ctrl + plus)">
+        <button type="button" onClick={() => zoomBy(1)} disabled={prefs.zoom >= 2} className="grid size-7 place-items-center rounded-ctl text-muted hover:bg-cloud hover:text-ink disabled:cursor-not-allowed disabled:opacity-40" aria-label="Zoom in" title="Zoom in (Ctrl + plus)">
           <Plus className="size-3.5" />
         </button>
       </div>
@@ -739,7 +742,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
               <Square className="size-3.5" />
             </button>
           ) : (
-            <button type="submit" disabled={!text.trim()} className="grid size-10 shrink-0 place-items-center rounded-ctl bg-act text-act-ink hover:bg-act-hover disabled:opacity-40" aria-label="Send">
+            <button type="submit" disabled={!text.trim()} className="grid size-10 shrink-0 place-items-center rounded-ctl bg-act text-act-ink hover:bg-act-hover disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send">
               <ArrowUp className="size-4" />
             </button>
           )}

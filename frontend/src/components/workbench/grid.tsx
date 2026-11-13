@@ -62,6 +62,8 @@ export function Grid({
   const loading = useRef(new Set<number>());
   const drag = useRef<{ r: number; c: number } | null>(null);
   const [active, setActive] = useState<{ r: number; c: number } | null>(null);
+  /** Widths the person set by dragging a column edge, in px at 100 %. Cleared with the sheet. */
+  const [colW, setColW] = useState<Record<number, number>>({});
   const key = `${conversationId}|${workbookId}|${sheet}|${version}`;
   const keyRef = useRef(key);
 
@@ -100,6 +102,7 @@ export function Grid({
     setBlocks(new Map());
     setError(null);
     setMeta(null);
+    setColW({});
     void load(0);
   }, [key, load]);
 
@@ -140,10 +143,50 @@ export function Grid({
         const v = b0?.cells.get(`${r}:${c}`)?.v;
         if (v !== null && v !== undefined) n = Math.max(n, String(typeof v === "number" ? v.toLocaleString("en-NG", { maximumFractionDigits: 2 }) : v).length);
       }
-      w.push(Math.round(Math.max(72, Math.min(300, n * 7.4 + 22)) * zoom));
+      w.push(Math.round((colW[c] ?? Math.max(72, Math.min(300, n * 7.4 + 22))) * zoom));
     }
     return w;
-  }, [blocks, maxCol, maxRow, zoom]);
+  }, [blocks, maxCol, maxRow, zoom, colW]);
+
+  // Drag the right edge of a column letter to resize it, as in Excel. Double-click resets it.
+  const startColResize = (c: number, e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const x0 = e.clientX;
+    const w0 = (widths[c - 1] ?? 72) / zoom;
+    const body = document.body.style;
+    const prev = { cursor: body.cursor, select: body.userSelect };
+    body.cursor = "col-resize";
+    body.userSelect = "none";
+    const move = (ev: MouseEvent) => setColW((m) => ({ ...m, [c]: Math.round(Math.max(36, Math.min(900, w0 + (ev.clientX - x0) / zoom))) }));
+    const up = () => {
+      body.cursor = prev.cursor;
+      body.userSelect = prev.select;
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", up);
+    };
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", up);
+  };
+
+  // Click a column letter or a row number to select the whole column or row; Shift extends.
+  const pickHeader = (kind: "col" | "row", n: number, e: React.MouseEvent) => {
+    if (startPan(e)) return;
+    if (e.button !== 0) return;
+    e.preventDefault();
+    box.current?.focus({ preventScroll: true, focusVisible: false } as FocusOptions);
+    const lastRow = Math.max(1, maxRow);
+    const from = e.shiftKey && selection && selection.sheet === sheet ? selection : null;
+    const range: Range =
+      kind === "col"
+        ? { sheet, r0: 1, r1: lastRow, c0: from ? Math.min(from.c0, n) : n, c1: from ? Math.max(from.c1, n) : n }
+        : { sheet, r0: from ? Math.min(from.r0, n) : n, r1: from ? Math.max(from.r1, n) : n, c0: 1, c1: maxCol };
+    if (!from) setActive(kind === "col" ? { r: 1, c: n } : { r: n, c: 1 });
+    onSelect(range);
+  };
+  const colPicked = (c: number) => Boolean(selection && selection.sheet === sheet && c >= selection.c0 && c <= selection.c1);
+  const rowPicked = (r: number) => Boolean(selection && selection.sheet === sheet && r >= selection.r0 && r <= selection.r1);
 
   // Keep the same part of the sheet in view when the zoom changes.
   const lastZoom = useRef(zoom);
@@ -239,7 +282,8 @@ export function Grid({
     // A drag selects cells, not the text inside them. preventDefault stops the
     // browser's own text selection, so focus is moved to the grid by hand.
     e.preventDefault();
-    box.current?.focus({ preventScroll: true });
+    // focusVisible: false — a mouse click must not draw the keyboard focus ring around the sheet.
+    box.current?.focus({ preventScroll: true, focusVisible: false } as FocusOptions);
     const anchor = e.shiftKey && active ? active : { r, c };
     if (!e.shiftKey) setActive({ r, c });
     drag.current = anchor;
@@ -364,10 +408,27 @@ export function Grid({
             <div
               key={i}
               role="columnheader"
-              className="flex items-center justify-center border-b border-r border-hairline bg-cloud font-semibold text-muted"
+              onMouseDown={(e) => pickHeader("col", i + 1, e)}
+              title={`Select column ${colLetter(i + 1)}`}
+              className={cn(
+                "cursor-col-select relative flex items-center justify-center border-b border-r border-hairline font-semibold transition-colors duration-150",
+                colPicked(i + 1) ? "bg-diff-sel text-ink" : "bg-cloud text-muted hover:bg-surface hover:text-ink",
+              )}
               style={{ width: w, fontSize: 11 * zoom }}
             >
               {colLetter(i + 1)}
+              <span
+                role="separator"
+                aria-orientation="vertical"
+                aria-label={`Resize column ${colLetter(i + 1)}`}
+                title="Drag to resize. Double-click to reset."
+                onMouseDown={(e) => startColResize(i + 1, e)}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  setColW(({ [i + 1]: _drop, ...rest }) => rest);
+                }}
+                className="absolute -right-1 top-0 z-10 h-full w-2 cursor-col-resize hover:bg-accent/30"
+              />
             </div>
           ))}
         </div>
@@ -378,7 +439,11 @@ export function Grid({
             <div key={r} role="row" aria-rowindex={r} className="absolute flex" style={{ top: headH + (r - 1) * rowH, height: rowH, width: totalW }}>
               <div
                 role="rowheader"
-                className="sticky left-0 z-10 flex items-center justify-end gap-1 border-b border-r border-hairline bg-cloud pr-2 tabular-nums text-muted"
+                onMouseDown={(e) => pickHeader("row", r, e)}
+                className={cn(
+                  "cursor-row-select sticky left-0 z-10 flex items-center justify-end gap-1 border-b border-r border-hairline pr-2 tabular-nums transition-colors duration-150",
+                  rowPicked(r) ? "bg-diff-sel text-ink" : "bg-cloud text-muted hover:bg-surface hover:text-ink",
+                )}
                 style={{ width: numW, fontSize: 11 * zoom }}
                 title={page ? `From page ${page} of the PDF` : undefined}
               >
