@@ -160,6 +160,11 @@ export function Grid({
   });
 
   const pick = (r: number, c: number, e: React.MouseEvent) => {
+    if (e.button !== 0) return;
+    // A drag selects cells, not the text inside them. preventDefault stops the
+    // browser's own text selection, so focus is moved to the grid by hand.
+    e.preventDefault();
+    box.current?.focus({ preventScroll: true });
     const anchor = e.shiftKey && active ? active : { r, c };
     if (!e.shiftKey) setActive({ r, c });
     drag.current = anchor;
@@ -168,7 +173,27 @@ export function Grid({
     onCell(cellAt(r, c), { r, c }, rect);
   };
 
+  /** Ctrl/Cmd+C: the selected range as tab-separated rows, as Excel and Sheets copy it. */
+  const copySelection = () => {
+    if (!selection || selection.sheet !== sheet) return;
+    const lines: string[] = [];
+    for (let r = selection.r0; r <= selection.r1; r++) {
+      const row: string[] = [];
+      for (let c = selection.c0; c <= Math.min(selection.c1, maxCol); c++) {
+        const cell = cellAt(r, c);
+        row.push(typeof cell?.v === "number" ? String(cell.v) : display(cell).replace(/[\t\n]/g, " "));
+      }
+      lines.push(row.join("\t"));
+    }
+    void navigator.clipboard?.writeText(lines.join("\n")).catch(() => {});
+  };
+
   const onKey = (e: React.KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "c") {
+      e.preventDefault();
+      copySelection();
+      return;
+    }
     if (!active) return;
     const d: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
     const step = d[e.key];
@@ -222,7 +247,7 @@ export function Grid({
       onScroll={(e) => setView({ top: e.currentTarget.scrollTop, height: e.currentTarget.clientHeight })}
       onMouseUp={() => (drag.current = null)}
       onMouseLeave={() => (drag.current = null)}
-      className="relative h-full overflow-auto overscroll-contain bg-paper font-sans text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
+      className="relative h-full select-none overflow-auto overscroll-contain bg-paper font-sans text-[12.5px] outline-none focus-visible:ring-2 focus-visible:ring-accent/30"
     >
       <div style={{ height: HEAD_H + maxRow * ROW_H, width: totalW }} className="relative">
         {/* Column letters */}
