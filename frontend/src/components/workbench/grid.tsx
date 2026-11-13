@@ -151,8 +151,12 @@ export function Grid({
     void load(0);
   }, [key, load]);
 
-  const maxRow = meta?.maxRow ?? 0;
-  const maxCol = Math.max(meta?.maxCol ?? 0, 6);
+  // The data extent, and the view extent. Like Excel, the view goes 100 rows and
+  // 3 columns past the data, so a person can type below or beside it.
+  const dataRow = Math.max(1, meta?.maxRow ?? 1);
+  const dataCol = Math.max(1, meta?.maxCol ?? 1);
+  const maxRow = meta ? dataRow + 100 : 0;
+  const maxCol = Math.min(MAX_COLS, Math.max(dataCol + 3, 6));
   const first = Math.max(1, Math.floor((view.top - headH) / rowH) - 10);
   const last = Math.min(maxRow, Math.ceil((view.top + view.height) / rowH) + 10);
 
@@ -221,12 +225,12 @@ export function Grid({
     if (e.button !== 0) return;
     e.preventDefault();
     box.current?.focus({ preventScroll: true, focusVisible: false } as FocusOptions);
-    const lastRow = Math.max(1, maxRow);
+    const lastRow = dataRow;
     const from = e.shiftKey && selection && selection.sheet === sheet ? selection : null;
     const range: Range =
       kind === "col"
         ? { sheet, r0: 1, r1: lastRow, c0: from ? Math.min(from.c0, n) : n, c1: from ? Math.max(from.c1, n) : n }
-        : { sheet, r0: from ? Math.min(from.r0, n) : n, r1: from ? Math.max(from.r1, n) : n, c0: 1, c1: maxCol };
+        : { sheet, r0: from ? Math.min(from.r0, n) : n, r1: from ? Math.max(from.r1, n) : n, c0: 1, c1: dataCol };
     if (!from) setActive(kind === "col" ? { r: 1, c: n } : { r: n, c: 1 });
     onSelect(range);
   };
@@ -628,7 +632,7 @@ export function Grid({
     }
     if (mod && e.key.toLowerCase() === "a") {
       e.preventDefault();
-      onSelect({ sheet, r0: 1, r1: Math.max(1, maxRow), c0: 1, c1: maxCol });
+      onSelect({ sheet, r0: 1, r1: dataRow, c0: 1, c1: dataCol });
       return;
     }
     if (mod && e.key === "`") {
@@ -639,7 +643,7 @@ export function Grid({
     if (e.key === " " && active && (e.shiftKey || mod)) {
       // Shift+Space selects the row, Ctrl+Space the column, as in Excel.
       e.preventDefault();
-      onSelect(e.shiftKey ? { sheet, r0: active.r, r1: active.r, c0: 1, c1: maxCol } : { sheet, r0: 1, r1: Math.max(1, maxRow), c0: active.c, c1: active.c });
+      onSelect(e.shiftKey ? { sheet, r0: active.r, r1: active.r, c0: 1, c1: dataCol } : { sheet, r0: 1, r1: dataRow, c0: active.c, c1: active.c });
       return;
     }
     if (e.key === " " && !e.repeat) {
@@ -666,11 +670,11 @@ export function Grid({
     const d: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1], PageUp: [-pageRows, 0], PageDown: [pageRows, 0] };
     let target: { r: number; c: number } | null = null;
     if (e.key === "Home") target = mod ? { r: 1, c: 1 } : { r: active.r, c: 1 };
-    else if (e.key === "End" && mod) target = { r: lastRow, c: maxCol };
+    else if (e.key === "End" && mod) target = { r: dataRow, c: dataCol };
     else if (mod && e.key in d && !e.key.startsWith("Page")) {
       // Ctrl/Cmd + arrow: to the edge of the sheet, as in Excel.
       const s = d[e.key];
-      target = { r: s[0] < 0 ? 1 : s[0] > 0 ? lastRow : active.r, c: s[1] < 0 ? 1 : s[1] > 0 ? maxCol : active.c };
+      target = { r: s[0] < 0 ? 1 : s[0] > 0 ? dataRow : active.r, c: s[1] < 0 ? 1 : s[1] > 0 ? dataCol : active.c };
     }
     const step = d[e.key];
     if (!step && !target) return;
@@ -788,8 +792,8 @@ export function Grid({
             { label: "Copy", keys: "Ctrl+C", run: () => copySelection(false, menu.range) },
             { label: "Copy values only", keys: "", run: () => copySelection(true, menu.range) },
             null,
-            { label: "Select row", keys: "Shift+Space", run: () => onSelect({ sheet, r0: menu.range.r0, r1: menu.range.r1, c0: 1, c1: maxCol }) },
-            { label: "Select column", keys: "Ctrl+Space", run: () => onSelect({ sheet, r0: 1, r1: Math.max(1, maxRow), c0: menu.range.c0, c1: menu.range.c1 }) },
+            { label: "Select row", keys: "Shift+Space", run: () => onSelect({ sheet, r0: menu.range.r0, r1: menu.range.r1, c0: 1, c1: dataCol }) },
+            { label: "Select column", keys: "Ctrl+Space", run: () => onSelect({ sheet, r0: 1, r1: dataRow, c0: menu.range.c0, c1: menu.range.c1 }) },
             null,
             ...(onAsk
               ? [
