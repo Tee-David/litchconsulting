@@ -16,6 +16,7 @@ import {
   wbProviders,
   wbRunTool,
   wbStart,
+  wbUserEdits,
   type WbBatch,
   type WbConversation,
   type WbFirstLook,
@@ -166,6 +167,52 @@ export async function decideBatchAction(input: z.infer<typeof decideSchema>): Pr
         : d.action === "undo" ? "Undone. The change was reversed as a new version."
         : "Rejected. Nothing changed in the file.";
     return { ok: true, message: msg, batch: res.batch, conversation: res.conversation };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// --- a person's own edits (E2) -------------------------------------------------------
+const editSchema = z.object({
+  conversationId: id,
+  workbookId: z.string().min(1).max(120),
+  edits: z
+    .array(
+      z.object({
+        sheet: z.string().min(1).max(120),
+        cell: z.string().regex(/^\$?[A-Za-z]{1,3}\$?\d{1,7}$/),
+        value: z.union([z.string().max(32000), z.number().finite(), z.boolean(), z.null()]).optional(),
+        formula: z.string().max(8000).optional(),
+        clear: z.boolean().optional(),
+        number_format: z.string().max(64).optional(),
+      }),
+    )
+    .min(1)
+    .max(5000),
+});
+
+/** Typed values, formulas, formats and clears. Admin, or staff assigned to the request. */
+export async function saveEditsAction(input: z.input<typeof editSchema>): Promise<Res<{ batch: WbBatch; conversation: WbConversation }>> {
+  const parsed = editSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "That edit is not valid." };
+  const d = parsed.data;
+  const a = await guard(d.conversationId);
+  if (!a) return DENIED;
+  const u = await getSessionUser();
+  const author = (u?.name || u?.email || "a team member").slice(0, 80);
+  try {
+    const res = await wbUserEdits(d.conversationId, d.workbookId, author, d.edits);
+    await touch(d.conversationId);
+    await recordAudit({
+      action: "workbench.edited",
+      entity: a.row.requestId ? "request" : "workbench",
+      entityId: a.row.requestId ?? d.conversationId,
+      meta: { conversation: d.conversationId, batch: res.batch.id, cells: d.edits.length, status: res.batch.status, gate: res.batch.gate?.status ?? null },
+    });
+    if (res.batch.status === "blocked") {
+      return { ok: false, error: "Not saved: the recompute found a formula error. Check the formula and try again." };
+    }
+    return { ok: true, message: d.edits.length === 1 ? "Saved." : `Saved ${d.edits.length} cells.`, batch: res.batch, conversation: res.conversation };
   } catch (e) {
     return fail(e);
   }

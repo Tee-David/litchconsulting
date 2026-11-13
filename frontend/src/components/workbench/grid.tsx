@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Loader2 } from "lucide-react";
-import type { WbCell, WbSheetWindow } from "@/lib/litchai/workbench";
+import type { WbCell, WbSheetWindow, WbUserEdit } from "@/lib/litchai/workbench";
+import { FUNCS, hint, parseTyped, stepDecimals, suggest } from "./formula-help";
 import { colLetter, type Range, inRange } from "./refs";
 import { cn } from "@/lib/utils";
 
@@ -45,6 +46,11 @@ export function Grid({
   onStats,
   onAsk,
   onToggleFormulas,
+  editable = false,
+  onCommit,
+  onUndo,
+  onRedo,
+  formatRequest = null,
 }: {
   conversationId: string;
   workbookId: string;
@@ -72,6 +78,14 @@ export function Grid({
   /** Right-click "Ask Sage" (ask) or "Point Sage" (point) for a range. */
   onAsk?: (range: Range, mode: "ask" | "point") => void;
   onToggleFormulas?: () => void;
+  /** E2: a person may type in cells. Saving is the parent's job (onCommit). */
+  editable?: boolean;
+  /** Save edits; resolve true when saved. The grid shows the typed text until then. */
+  onCommit?: (edits: WbUserEdit[]) => Promise<boolean>;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  /** Number format for the selection, from the toolbar. A new nonce applies it. */
+  formatRequest?: { kind: "currency" | "percent" | "thousands" | "plain" | "dec+" | "dec-"; nonce: number } | null;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const rowH = Math.round(ROW_H * zoom);
@@ -86,6 +100,13 @@ export function Grid({
   const [active, setActive] = useState<{ r: number; c: number } | null>(null);
   /** Widths the person set by dragging a column edge, in px at 100 %. Cleared with the sheet. */
   const [colW, setColW] = useState<Record<number, number>>({});
+  // E2 editing: the open cell editor, and typed text shown until the new version loads.
+  const [editing, setEditing] = useState<{ r: number; c: number; text: string } | null>(null);
+  const editingRef = useRef<{ r: number; c: number; text: string } | null>(null);
+  editingRef.current = editing;
+  const [optimistic, setOptimistic] = useState<Map<string, string>>(new Map());
+  const [sug, setSug] = useState(0);
+  const editInput = useRef<HTMLInputElement>(null);
   const key = `${conversationId}|${workbookId}|${sheet}|${version}`;
   const keyRef = useRef(key);
 
@@ -125,6 +146,8 @@ export function Grid({
     setError(null);
     setMeta(null);
     setColW({});
+    setOptimistic(new Map());
+    setEditing(null);
     void load(0);
   }, [key, load]);
 
@@ -374,6 +397,117 @@ export function Grid({
     onFind?.({ index: i + 1, total: hits.length, capped: lastB > capB });
   }, [find, meta, blocks, load, showFormulas, active, sheet, onSelect, onFind, reveal]);
 
+  // ---- E2: editing -------------------------------------------------------------
+  const rawOf = (cell: WbCell | null) => cell?.f ?? (cell?.v === null || cell?.v === undefined ? "" : String(cell.v));
+  const send = async (items: { r: number; c: number; e: Omit<WbUserEdit, "sheet" | "cell">; shown: string }[]) => {
+    if (!onCommit || !items.length) return;
+    setOptimistic((m) => {
+      const n = new Map(m);
+      for (const it of items) n.set(`${it.r}:${it.c}`, it.shown);
+      return n;
+    });
+    const ok = await onCommit(items.map((it) => ({ sheet, cell: `${colLetter(it.c)}${it.r}`, ...it.e })));
+    if (!ok) {
+      setOptimistic((m) => {
+        const n = new Map(m);
+        for (const it of items) n.delete(`${it.r}:${it.c}`);
+        return n;
+      });
+    }
+  };
+  const startEdit = (r: number, c: number, text?: string) => {
+    if (!editable) return;
+    setSug(0);
+    setEditing({ r, c, text: text ?? rawOf(cellAt(r, c)) });
+  };
+  useEffect(() => {
+    if (!editing) return;
+    const el = editInput.current;
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    el.setSelectionRange(el.value.length, el.value.length);
+    // Only when a new cell opens, not on every key.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editing?.r, editing?.c]);
+  const finishEdit = (save: boolean, move: [number, number] | null) => {
+    const ed = editingRef.current;
+    if (!ed) return;
+    editingRef.current = null;
+    setEditing(null);
+    if (save && ed.text !== rawOf(cellAt(ed.r, ed.c))) {
+      void send([{ r: ed.r, c: ed.c, e: parseTyped(ed.text), shown: ed.text.trim().startsWith("=") ? "…" : ed.text }]);
+    }
+    const lastRow = Math.max(1, maxRow);
+    const nx = move ? { r: Math.min(Math.max(1, ed.r + move[0]), lastRow + 1), c: Math.min(Math.max(1, ed.c + move[1]), maxCol) } : { r: ed.r, c: ed.c };
+    setActive(nx);
+    onSelect(rangeFrom(nx, nx));
+    onCell(cellAt(nx.r, nx.c), nx, null);
+    box.current?.focus({ preventScroll: true, focusVisible: false } as FocusOptions);
+  };
+  /** Non-empty loaded cells in the selection (capped at the engine's 5,000). */
+  const selectedCells = () => {
+    const out: WbCell[] = [];
+    if (!selection || selection.sheet !== sheet) return out;
+    for (const blk of blocks.values()) {
+      for (const cell of blk.cells.values()) {
+        if (!inRange(selection, cell.r, cell.c)) continue;
+        if ((cell.v === null || cell.v === undefined || cell.v === "") && !cell.f) continue;
+        out.push(cell);
+        if (out.length >= 5000) return out;
+      }
+    }
+    return out;
+  };
+  const clearSelection = () => {
+    if (!editable) return;
+    void send(selectedCells().map((cell) => ({ r: cell.r, c: cell.c, e: { clear: true }, shown: "" })));
+  };
+  const pasteAt = async () => {
+    if (!editable || !active) return;
+    let text = "";
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      return;
+    }
+    const lines = text.replace(/\r\n?/g, "\n").replace(/\n$/, "").split("\n");
+    const items: { r: number; c: number; e: Omit<WbUserEdit, "sheet" | "cell">; shown: string }[] = [];
+    lines.forEach((line, i) =>
+      line.split("\t").forEach((v, j) => {
+        if (items.length < 5000) items.push({ r: active.r + i, c: active.c + j, e: parseTyped(v), shown: v });
+      }),
+    );
+    if (items.length) {
+      const last = items[items.length - 1];
+      onSelect({ sheet, r0: active.r, r1: last.r, c0: active.c, c1: Math.max(...items.map((x) => x.c)) });
+    }
+    await send(items);
+  };
+  const handledFormat = useRef(0);
+  useEffect(() => {
+    if (!formatRequest || handledFormat.current === formatRequest.nonce) return;
+    handledFormat.current = formatRequest.nonce;
+    const nfFor = (cell: WbCell) => {
+      switch (formatRequest.kind) {
+        case "currency": return '"₦"#,##0.00';
+        case "percent": return "0.00%";
+        case "thousands": return "#,##0.00";
+        case "plain": return "General";
+        case "dec+": return stepDecimals(cell.nf, 1);
+        default: return stepDecimals(cell.nf, -1);
+      }
+    };
+    const items = selectedCells()
+      .filter((cell) => typeof cell.v === "number" || cell.f)
+      .map((cell) => {
+        const nf = nfFor(cell);
+        return { r: cell.r, c: cell.c, e: { number_format: nf }, shown: display({ ...cell, nf }) };
+      });
+    void send(items);
+    // Runs once per request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formatRequest]);
+
   // Right-click menu.
   const [menu, setMenu] = useState<{ x: number; y: number; range: Range } | null>(null);
   useEffect(() => {
@@ -446,6 +580,42 @@ export function Grid({
 
   const onKey = (e: React.KeyboardEvent) => {
     const mod = e.ctrlKey || e.metaKey;
+    if (editable) {
+      const k = e.key.toLowerCase();
+      if (mod && (k === "z" || k === "y")) {
+        e.preventDefault();
+        if (k === "y" || e.shiftKey) onRedo?.();
+        else onUndo?.();
+        return;
+      }
+      if (mod && k === "v") {
+        e.preventDefault();
+        void pasteAt();
+        return;
+      }
+      if (mod && k === "x") {
+        e.preventDefault();
+        copySelection();
+        clearSelection();
+        return;
+      }
+      if (!mod && (e.key === "Delete" || e.key === "Backspace")) {
+        e.preventDefault();
+        clearSelection();
+        return;
+      }
+      if (active && e.key === "F2") {
+        e.preventDefault();
+        startEdit(active.r, active.c);
+        return;
+      }
+      if (active && !mod && !e.altKey && e.key.length === 1 && e.key !== " ") {
+        // Typing on a cell starts editing it with that character, as in Excel.
+        e.preventDefault();
+        startEdit(active.r, active.c, e.key);
+        return;
+      }
+    }
     if (mod && e.key.toLowerCase() === "c") {
       e.preventDefault();
       copySelection();
@@ -604,6 +774,7 @@ export function Grid({
         {freeze.row && maxRow > 1 ? renderRow(1, true) : null}
         </div>
         {rows.map((r) => renderRow(r, false))}
+        {editing ? renderEditor(editing) : null}
       </div>
       {menu ? (
         <div
@@ -651,6 +822,78 @@ export function Grid({
     </div>
   );
 
+  function renderEditor(ed: { r: number; c: number; text: string }) {
+    const x = left[ed.c - 1] ?? numW;
+    const w = Math.max(widths[ed.c - 1] ?? 120, 200);
+    const y = headH + (ed.r - 1) * rowH;
+    const sg = suggest(ed.text);
+    const hn = sg.names.length ? null : hint(ed.text);
+    const pick = (name: string) => {
+      setEditing({ ...ed, text: ed.text.slice(0, ed.text.length - sg.word.length) + name + "(" });
+      setSug(0);
+      editInput.current?.focus();
+    };
+    return (
+      <div className="absolute z-30" style={{ left: x, top: y, width: w }}>
+        <input
+          ref={editInput}
+          value={ed.text}
+          spellCheck={false}
+          aria-label={`Edit ${colLetter(ed.c)}${ed.r}`}
+          onChange={(e) => {
+            setEditing({ ...ed, text: e.target.value });
+            setSug(0);
+          }}
+          onBlur={() => editingRef.current && finishEdit(true, null)}
+          onMouseDown={(e) => e.stopPropagation()}
+          onKeyDown={(e) => {
+            e.stopPropagation();
+            if (sg.names.length && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+              e.preventDefault();
+              setSug((i) => (i + (e.key === "ArrowDown" ? 1 : -1) + sg.names.length) % sg.names.length);
+            } else if (sg.names.length && e.key === "Tab") {
+              e.preventDefault();
+              pick(sg.names[sug] ?? sg.names[0]);
+            } else if (e.key === "Enter") {
+              e.preventDefault();
+              finishEdit(true, [e.shiftKey ? -1 : 1, 0]);
+            } else if (e.key === "Tab") {
+              e.preventDefault();
+              finishEdit(true, [0, e.shiftKey ? -1 : 1]);
+            } else if (e.key === "Escape") {
+              e.preventDefault();
+              finishEdit(false, null);
+            }
+          }}
+          className="w-full cursor-text select-text border-2 border-accent bg-paper px-2 text-ink shadow-md outline-none"
+          style={{ height: rowH, fontSize: 12.5 * zoom }}
+        />
+        {sg.names.length ? (
+          <ul role="listbox" aria-label="Functions" className="mt-0.5 w-72 rounded-ctl border border-hairline bg-paper p-1 text-[12.5px] shadow-lg">
+            {sg.names.map((n, i) => (
+              <li key={n} role="option" aria-selected={i === sug}>
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    pick(n);
+                  }}
+                  className={cn("flex w-full flex-col items-start rounded px-2 py-1 text-left", i === sug ? "bg-cloud" : "hover:bg-cloud")}
+                >
+                  <span className="font-mono font-semibold text-ink">{n}</span>
+                  <span className="truncate font-mono text-[11px] text-muted">{FUNCS[n]}</span>
+                </button>
+              </li>
+            ))}
+            <li className="px-2 pt-1 text-[11px] text-muted">Tab to insert</li>
+          </ul>
+        ) : hn ? (
+          <div className="mt-0.5 inline-block rounded-ctl border border-hairline bg-paper px-2 py-1 font-mono text-[11.5px] text-body shadow-md">{hn}</div>
+        ) : null}
+      </div>
+    );
+  }
+
   function renderRow(r: number, frozen: boolean) {
           const loaded = blocks.has(Math.floor((r - 1) / BLOCK));
           const page = cellAt(r, 1)?.page ?? null;
@@ -694,7 +937,7 @@ export function Grid({
                     data-c={c}
                     onMouseDown={(e) => pick(r, c, e)}
                     onMouseEnter={() => drag.current && onSelect(rangeFrom(drag.current, { r, c }))}
-                    onDoubleClick={(e) => onCell(cell, { r, c }, (e.currentTarget as HTMLElement).getBoundingClientRect())}
+                    onDoubleClick={(e) => (editable ? startEdit(r, c) : onCell(cell, { r, c }, (e.currentTarget as HTMLElement).getBoundingClientRect()))}
                     className={cn(
                       "relative cursor-cell truncate border-b border-r border-hairline px-2 text-ink",
                       (frozen || (freeze.col && c === 1)) && "bg-paper",
@@ -711,7 +954,13 @@ export function Grid({
                     style={{ width: w, lineHeight: `${rowH - 1}px`, left: freeze.col && c === 1 ? numW : undefined }}
                     title={cell?.f ?? undefined}
                   >
-                    {loaded ? (showFormulas && cell?.f ? cell.f : display(cell)) : <span className="inline-block h-2.5 w-2/3 bg-cloud align-middle" />}
+                    {optimistic.has(`${r}:${c}`) ? (
+                      <span className="text-muted">{optimistic.get(`${r}:${c}`)}</span>
+                    ) : loaded ? (
+                      showFormulas && cell?.f ? cell.f : display(cell)
+                    ) : (
+                      <span className="inline-block h-2.5 w-2/3 bg-cloud align-middle" />
+                    )}
                   </div>
                 );
               })}
@@ -724,10 +973,15 @@ export function display(cell: WbCell | null): string {
   if (!cell || cell.v === null || cell.v === undefined) return cell?.f ? "" : "";
   const v = cell.v;
   if (typeof v === "number") {
-    const pct = cell.nf?.includes("%");
-    if (pct) return `${(v * 100).toLocaleString("en-NG", { maximumFractionDigits: 1 })}%`;
-    const dp = cell.nf && /0\.0+/.test(cell.nf) ? 2 : Number.isInteger(v) ? 0 : 2;
-    return v.toLocaleString("en-NG", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+    const nf = cell.nf && cell.nf !== "General" ? cell.nf : "";
+    const m = /\.(0+)/.exec(nf);
+    if (nf.includes("%")) {
+      const pdp = m ? m[1].length : 0;
+      return `${(v * 100).toLocaleString("en-NG", { minimumFractionDigits: pdp, maximumFractionDigits: pdp })}%`;
+    }
+    const dp = nf ? (m ? m[1].length : 0) : Number.isInteger(v) ? 0 : 2;
+    const out = v.toLocaleString("en-NG", { minimumFractionDigits: dp, maximumFractionDigits: dp });
+    return nf.includes("₦") ? `₦${out}` : out;
   }
   if (typeof v === "boolean") return v ? "TRUE" : "FALSE";
   const s = String(v);

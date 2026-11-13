@@ -19,7 +19,9 @@ import {
   Minimize2,
   Minus,
   Paperclip,
+  Percent,
   Plus,
+  Redo2,
   Send,
   Search,
   ShieldAlert,
@@ -27,16 +29,17 @@ import {
   Square,
   Table2,
   Target,
+  Undo2,
   X,
 } from "lucide-react";
-import type { WbBatch, WbCell, WbConversation, WbEvent, WbFirstLook, WbGate } from "@/lib/litchai/workbench";
-import { attachFilesAction, decideBatchAction, deliverAction, getConversationAction, runToolAction } from "@/lib/workbench/actions";
+import type { WbBatch, WbCell, WbConversation, WbEvent, WbFirstLook, WbGate, WbUserEdit } from "@/lib/litchai/workbench";
+import { attachFilesAction, decideBatchAction, deliverAction, getConversationAction, runToolAction, saveEditsAction } from "@/lib/workbench/actions";
 import { useToast } from "@/components/admin/ui/toaster";
 import { Button, Segmented } from "@/components/kit";
 import { SageIcon } from "@/components/admin/sage-icon";
 import { cn } from "@/lib/utils";
 import { FAILURE, engineLabel } from "@/lib/ai-words";
-import { Grid, display, type GridMeta, type SelStats } from "./grid";
+import { Grid, type GridMeta, type SelStats } from "./grid";
 import { FirstLookCard } from "./first-look";
 import { Proposals } from "./proposals";
 import { TurnView } from "./turn";
@@ -49,6 +52,7 @@ import { EngineSheet } from "./engine-sheet";
 import { useVoice } from "./voice";
 import { Select } from "@/components/ui/select";
 import { SAGE_MAX, SAGE_MIN, clampSage, stepZoom, useWorkbenchPrefs } from "./layout";
+import { parseTyped } from "./formula-help";
 
 type Live = { message: string; selection: string | null; events: WbEvent[] };
 
@@ -134,6 +138,13 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     setTimeout(() => findInput.current?.select(), 0);
   };
   const toggleFormulas = useCallback(() => setShowFormulas((v) => !v), []);
+  // E2: a person's own edits. Each save is a named version; undo and redo walk them.
+  const [undoStack, setUndoStack] = useState<string[]>([]);
+  const [redoStack, setRedoStack] = useState<string[]>([]);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [formatRequest, setFormatRequest] = useState<{ kind: "currency" | "percent" | "thousands" | "plain" | "dec+" | "dec-"; nonce: number } | null>(null);
+  const [fxText, setFxText] = useState<string | null>(null);
+  const formatSel = (kind: "currency" | "percent" | "thousands" | "plain" | "dec+" | "dec-") => setFormatRequest({ kind, nonce: Date.now() });
   useEffect(() => {
     if (!viewMenu) return;
     const close = () => setViewMenu(false);
@@ -192,6 +203,52 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const local = conv.ai_mode === "local_only";
   const hasPdf = Boolean(activeRef?.origin === "line_items" && activeRef.document_id && pdfDocs.includes(activeRef.document_id));
   const batchById = useMemo(() => new Map(conv.batches.map((b) => [b.id, b])), [conv.batches]);
+
+  const commitEdits = useCallback(
+    async (edits: WbUserEdit[]) => {
+      if (!wbId || !edits.length) return false;
+      setSaveState("saving");
+      const res = await saveEditsAction({ conversationId: conv.id, workbookId: wbId, edits });
+      if (!res.ok) {
+        setSaveState("idle");
+        toast.error(res.error);
+        return false;
+      }
+      setConv(res.conversation);
+      setGridVersion((v) => v + 1);
+      setUndoStack((st) => [...st, res.batch.id].slice(-50));
+      setRedoStack([]);
+      setSaveState("saved");
+      if (edits.length > 1) toast.success(res.message ?? "Saved.");
+      return true;
+    },
+    [conv.id, wbId, toast],
+  );
+  const stepEdit = useCallback(
+    async (dir: "undo" | "redo") => {
+      const from = dir === "undo" ? undoStack : redoStack;
+      const id = from[from.length - 1];
+      if (!id) return;
+      setSaveState("saving");
+      // Redo = undo the undo: both are the engine's normal batch undo, each a new version.
+      const res = await decideBatchAction({ conversationId: conv.id, batchId: id, action: "undo" });
+      setSaveState("idle");
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setConv(res.conversation);
+      setGridVersion((v) => v + 1);
+      if (dir === "undo") {
+        setUndoStack((st) => st.slice(0, -1));
+        setRedoStack((st) => [...st, res.batch.id]);
+      } else {
+        setRedoStack((st) => st.slice(0, -1));
+        setUndoStack((st) => [...st, res.batch.id]);
+      }
+    },
+    [undoStack, redoStack, conv.id, toast],
+  );
 
   const refresh = useCallback(async () => {
     const res = await getConversationAction(conv.id);
@@ -480,6 +537,30 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     </div>
   );
 
+  const tb = "grid size-8 place-items-center rounded-ctl text-body hover:bg-cloud hover:text-ink disabled:cursor-not-allowed disabled:opacity-40";
+  const editBar = wbId ? (
+    <div className="flex flex-wrap items-center gap-0.5 border-b border-hairline px-1.5 py-1" role="toolbar" aria-label="Edit">
+      <button type="button" className={tb} onClick={() => void stepEdit("undo")} disabled={!undoStack.length || saveState === "saving"} aria-label="Undo" title="Undo your last edit (Ctrl+Z)">
+        <Undo2 className="size-4" />
+      </button>
+      <button type="button" className={tb} onClick={() => void stepEdit("redo")} disabled={!redoStack.length || saveState === "saving"} aria-label="Redo" title="Redo (Ctrl+Y)">
+        <Redo2 className="size-4" />
+      </button>
+      <span className="mx-1 h-5 w-px bg-hairline" aria-hidden />
+      <button type="button" className={cn(tb, "w-auto px-2 text-[13px] font-semibold")} onClick={() => formatSel("currency")} disabled={!selection} aria-label="Naira format" title="Naira: ₦1,234.00">₦</button>
+      <button type="button" className={tb} onClick={() => formatSel("percent")} disabled={!selection} aria-label="Percent format" title="Percent: 12.50%">
+        <Percent className="size-4" />
+      </button>
+      <button type="button" className={cn(tb, "w-auto px-2 text-[12px] font-semibold")} onClick={() => formatSel("thousands")} disabled={!selection} aria-label="Thousands separator" title="Thousands: 1,234.00">0,0</button>
+      <button type="button" className={cn(tb, "w-auto px-1.5 font-mono text-[11.5px]")} onClick={() => formatSel("dec-")} disabled={!selection} aria-label="Fewer decimal places" title="Fewer decimals">.0←</button>
+      <button type="button" className={cn(tb, "w-auto px-1.5 font-mono text-[11.5px]")} onClick={() => formatSel("dec+")} disabled={!selection} aria-label="More decimal places" title="More decimals">.00→</button>
+      <button type="button" className={cn(tb, "w-auto px-2 text-[12px]")} onClick={() => formatSel("plain")} disabled={!selection} aria-label="Plain number format" title="Plain number">123</button>
+      <span className="ml-auto pr-1.5 text-[12px] text-muted" aria-live="polite">
+        {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved as a new version" : "Type in a cell to edit. Sage's changes stay proposals."}
+      </span>
+    </div>
+  ) : null;
+
   const formulaBar = (
     <div className="flex items-center gap-2 border-b border-hairline px-2 py-1.5 text-[12.5px]">
       <input
@@ -513,9 +594,28 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         className="w-24 shrink-0 rounded bg-cloud px-1.5 py-0.5 font-mono text-[11.5px] text-ink outline-none focus:bg-paper focus:ring-2 focus:ring-accent/30"
       />
       <span className="font-serif italic text-muted" aria-hidden>fx</span>
-      <span className="min-w-0 flex-1 cursor-text select-text truncate font-mono text-[12px] text-ink">
-        {activeCell ? activeCell.cell?.f ?? display(activeCell.cell) : ""}
-      </span>
+      <input
+        aria-label={activeCell ? `Contents of ${colLetter(activeCell.c)}${activeCell.r}` : "Cell contents"}
+        disabled={!activeCell}
+        value={fxText ?? (activeCell ? activeCell.cell?.f ?? (activeCell.cell?.v === null || activeCell.cell?.v === undefined ? "" : String(activeCell.cell.v)) : "")}
+        onFocus={(e) => setFxText(e.currentTarget.value)}
+        onChange={(e) => setFxText(e.target.value)}
+        onBlur={() => setFxText(null)}
+        onKeyDown={(e) => {
+          if (!activeCell) return;
+          if (e.key === "Enter" && fxText !== null) {
+            e.preventDefault();
+            void commitEdits([{ sheet, cell: `${colLetter(activeCell.c)}${activeCell.r}`, ...parseTyped(fxText) }]);
+            setFxText(null);
+            e.currentTarget.blur();
+          } else if (e.key === "Escape") {
+            setFxText(null);
+            e.currentTarget.blur();
+          }
+        }}
+        spellCheck={false}
+        className="min-w-0 flex-1 cursor-text truncate rounded bg-transparent px-1 py-0.5 font-mono text-[12px] text-ink outline-none focus:bg-paper focus:ring-2 focus:ring-accent/30 disabled:cursor-default"
+      />
       <button type="button" onClick={openFind} className="rounded p-1 text-muted hover:bg-cloud hover:text-ink" aria-label="Find in sheet" title="Find in sheet (Ctrl+F)">
         <Search className="size-4" />
       </button>
@@ -689,6 +789,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
 
   const gridArea = (
     <div className="flex min-h-0 flex-1 flex-col">
+      {editBar}
       {formulaBar}
       {findBar}
       {legend}
@@ -732,6 +833,11 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
               onFind={setFindRes}
               onStats={setStats}
               onToggleFormulas={toggleFormulas}
+              editable
+              onCommit={commitEdits}
+              onUndo={() => void stepEdit("undo")}
+              onRedo={() => void stepEdit("redo")}
+              formatRequest={formatRequest}
               onAsk={(r, mode) => {
                 setSelection(r);
                 setContext(r);

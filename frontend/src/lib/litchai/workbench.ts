@@ -204,6 +204,11 @@ export const wbDecide = (id: string, batchId: string, action: "accept" | "reject
     json(action === "accept" ? { edits: edits ?? null } : {}),
   );
 
+/** A person's own edits (E2): saved at once as a version named after them. */
+export type WbUserEdit = { sheet: string; cell: string; value?: string | number | boolean | null; formula?: string; clear?: boolean; number_format?: string };
+export const wbUserEdits = (id: string, workbookId: string, author: string, edits: WbUserEdit[]) =>
+  call<{ batch: WbBatch; conversation: WbConversation }>(`/workbench/conversations/${enc(id)}/edits`, json({ workbook_id: workbookId, author, edits }));
+
 export const wbRunTool = (id: string, tool: string, args: Record<string, unknown>) =>
   call<{ data: Record<string, unknown>; summary: string; citations: string[]; batch: WbBatch | null; chart_preview?: Record<string, unknown> | null }>(
     `/workbench/conversations/${enc(id)}/tools/${enc(tool)}`,
