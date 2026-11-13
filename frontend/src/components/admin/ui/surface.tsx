@@ -68,42 +68,19 @@ export function Panel({
   );
 }
 
-/** Tiny trend line for a KPI card (inline SVG, tokens only, no chart library). */
-function Sparkline({ points, tone = "info" }: { points: number[]; tone?: "good" | "bad" | "warn" | "info" }) {
-  if (points.length < 2 || points.every((p) => p === 0)) return null;
-  const w = 120;
-  const h = 28;
-  const max = Math.max(...points);
-  const min = Math.min(...points);
-  const span = max - min || 1;
-  const xy = points.map((p, i) => [(i / (points.length - 1)) * w, h - 2 - ((p - min) / span) * (h - 4)] as const);
-  const line = xy.map(([x, y], i) => `${i ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
-  const color = tone === "good" ? "text-good" : tone === "bad" ? "text-bad" : tone === "warn" ? "text-warn" : "text-accent";
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className={cn("mt-3 h-7 w-full", color)} aria-hidden>
-      <path d={`${line} L${w},${h} L0,${h} Z`} fill="currentColor" opacity="0.1" />
-      <path d={line} fill="none" stroke="currentColor" strokeWidth="1.5" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
+/** KPI tile: label, figure and a short note. No sparkline: KPI cards stay figures only (owner decision). */
 export function Kpi({
   label,
   value,
   note,
   noteTone,
   href,
-  trend,
-  trendTone,
 }: {
   label: string;
   value: string;
   note?: ReactNode;
   noteTone?: "good" | "bad" | "warn" | "muted";
   href?: string;
-  /** Optional series for a small trend line under the figure. */
-  trend?: number[];
-  trendTone?: "good" | "bad" | "warn" | "info";
 }) {
   const body = (
     <>
@@ -119,7 +96,6 @@ export function Kpi({
           {note}
         </p>
       ) : null}
-      {trend ? <Sparkline points={trend} tone={trendTone} /> : null}
     </>
   );
   const cls = "block min-w-0 rounded-card border border-hairline bg-paper p-4 sm:p-5";

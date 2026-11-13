@@ -40,6 +40,22 @@ function resolveFormat(format: ValueFormat = "number"): (v: number) => string {
   return (v) => v.toLocaleString("en-NG");
 }
 
+/** Short axis ticks: ₦5m, ₦250k, 1.2k, 40%. Full values stay in the tooltip. */
+function resolveTick(format: ValueFormat = "number"): (v: number) => string {
+  const compact = (v: number) => {
+    const a = Math.abs(v);
+    const sign = v < 0 ? "-" : "";
+    const trim = (x: number) => (x >= 10 ? Math.round(x).toString() : x.toFixed(1).replace(/\.0$/, ""));
+    if (a >= 1e9) return `${sign}${trim(a / 1e9)}bn`;
+    if (a >= 1e6) return `${sign}${trim(a / 1e6)}m`;
+    if (a >= 1e3) return `${sign}${trim(a / 1e3)}k`;
+    return `${sign}${Math.round(a)}`;
+  };
+  if (format === "money") return (v) => `₦${compact(v)}`;
+  if (format === "percent") return (v) => `${Math.round(v)}%`;
+  return compact;
+}
+
 type TipEntry = { name?: string; value?: number | string; color?: string };
 type TipProps = {
   active?: boolean;
@@ -100,7 +116,7 @@ export function AreaTrend({
         </defs>
         <CartesianGrid vertical={false} stroke={GRID} strokeDasharray="3 3" />
         <XAxis dataKey="label" tickLine={false} axisLine={false} tick={AXIS} />
-        <YAxis tickLine={false} axisLine={false} tick={AXIS} width={44} />
+        <YAxis tickLine={false} axisLine={false} tick={AXIS} width={52} tickFormatter={resolveTick(format)} />
         <Tooltip content={<ChartTooltip format={format} />} cursor={{ stroke: GRID }} />
         {series.length > 1 && <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />}
         {series.map((s, i) => {
@@ -141,7 +157,7 @@ export function GroupedBars({
       <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barGap={2}>
         <CartesianGrid vertical={false} stroke={GRID} strokeDasharray="3 3" />
         <XAxis dataKey="label" tickLine={false} axisLine={false} tick={AXIS} />
-        <YAxis tickLine={false} axisLine={false} tick={AXIS} width={44} />
+        <YAxis tickLine={false} axisLine={false} tick={AXIS} width={52} tickFormatter={resolveTick(format)} />
         <Tooltip content={<ChartTooltip format={format} />} cursor={{ fill: "var(--color-surface)" }} />
         {series.length > 1 && <Legend iconType="circle" wrapperStyle={{ fontSize: 12 }} />}
         {series.map((s, i) => (
