@@ -36,7 +36,6 @@ export default async function SageQualityPage({ searchParams }: { searchParams: 
   const q = await sageQuality(days);
   const total = q.good + q.bad;
   const rate = total ? Math.round((q.good / total) * 100) : null;
-  const bad = q.votes.filter((v) => v.vote === "bad");
 
   return (
     <div className="space-y-5">
@@ -126,7 +125,6 @@ export default async function SageQualityPage({ searchParams }: { searchParams: 
               ))}
             </ul>
           </Panel>
-          {bad.length ? null : <p className="text-sm text-muted">No answer was rated Bad in this period.</p>}
         </>
       )}
     </div>
