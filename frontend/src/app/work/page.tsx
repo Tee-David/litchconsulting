@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { CalendarClock, Inbox, Sparkles } from "lucide-react";
+import { CalendarClock, Inbox } from "lucide-react";
+import { SageIcon } from "@/components/admin/sage-icon";
 import { AttentionList, EmptyState, StatusChip } from "@/components/kit";
 import { PageHead, Panel, linkBtn } from "@/components/dashboard/ui";
 import { requireArea } from "@/lib/server-user";
@@ -85,7 +86,7 @@ export default async function StaffHome() {
       {open.length ? (
         <section aria-label="Ask Sage about your requests" className="rounded-card border border-hairline bg-paper p-4 sm:p-5">
           <p className="flex items-center gap-2 text-sm font-semibold text-ink">
-            <Sparkles className="size-4 text-accent" aria-hidden /> Ask Sage about your requests
+            <SageIcon className="size-4 text-accent" /> Ask Sage about your requests
           </p>
           <p className="mt-1 text-sm text-body">Sage works on the requests assigned to you only. Open one in the workbench and ask.</p>
           <div className="mt-3 flex flex-wrap gap-2">

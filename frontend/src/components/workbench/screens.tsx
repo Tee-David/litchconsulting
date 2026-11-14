@@ -1,7 +1,8 @@
 import "server-only";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { FileSpreadsheet, FolderOpen, LayoutTemplate, Lock, PlugZap, ShieldCheck, Sparkles, Table2, Upload } from "lucide-react";
+import { FileSpreadsheet, FolderOpen, LayoutTemplate, Lock, PlugZap, ShieldCheck, Table2, Upload } from "lucide-react";
+import { SageIcon } from "@/components/admin/sage-icon";
 import { EmptyState } from "@/components/kit";
 import { wbFirstLook, wbGet, type WbConversation, type WbFirstLook } from "@/lib/litchai/workbench";
 import { conversationsFor, PDF_TYPE, requestContext, requestFiles, workbenchAccess } from "@/lib/workbench/server";
@@ -151,7 +152,7 @@ export async function StartScreen({ requestId, base, isAdmin }: { requestId: str
         {/* Sage side: what it can do, before a file is open. */}
         <aside aria-label="Sage" className="flex flex-col border-t border-hairline bg-cloud/50 lg:border-l lg:border-t-0">
           <div className="flex items-center gap-2 border-b border-hairline px-4 py-3">
-            <Sparkles className="size-4 text-accent" aria-hidden />
+            <span className="keep-brand grid size-[22px] shrink-0 place-items-center rounded-[7px] bg-brand text-white"><SageIcon className="size-3.5" /></span>
             <p className="text-sm font-semibold text-ink">Sage <span className="font-normal text-muted">· one thread for this file</span></p>
           </div>
           <div className="flex-1 space-y-3 p-4">

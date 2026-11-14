@@ -14,22 +14,22 @@ import {
   FileText,
   Inbox,
   UserPlus,
-  Sparkles,
   CornerDownLeft,
   type LucideIcon,
 } from "lucide-react";
 import { NAV_ITEMS, type NavItem } from "@/components/admin/nav";
 import { commandSearch, type CommandHit } from "@/app/admin/command-actions";
+import { SageIcon } from "@/components/admin/sage-icon";
 import { cn } from "@/lib/utils";
 
-type QuickAction = { label: string; href: string; icon: LucideIcon; keywords?: string };
+type QuickAction = { label: string; href: string; icon: LucideIcon | typeof SageIcon; keywords?: string };
 
 const QUICK_ACTIONS: QuickAction[] = [
   { label: "New invoice", href: "/admin/billing/invoices/new", icon: FileText, keywords: "create bill" },
   { label: "New quote", href: "/admin/billing/quotes/new", icon: FileText, keywords: "create estimate" },
   { label: "New request", href: "/admin/requests/new", icon: Inbox, keywords: "create service" },
   { label: "New client", href: "/admin/clients", icon: UserPlus, keywords: "create add" },
-  { label: "Ask Sage", href: "/admin/sage", icon: Sparkles, keywords: "ai assistant chat knowledge" },
+  { label: "Ask Sage", href: "/admin/sage", icon: SageIcon, keywords: "ai assistant chat knowledge" },
   { label: "Go to Trash", href: "/admin/trash", icon: Trash2, keywords: "deleted" },
   { label: "Go to Audit log", href: "/admin/audit", icon: ScrollText, keywords: "history log" },
 ];
