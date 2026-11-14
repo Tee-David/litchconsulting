@@ -394,6 +394,10 @@ export function Grid({
     if (!focus) return;
     reveal(focus.r, focus.c);
     setActive({ r: focus.r, c: focus.c });
+    // A6: tell the workbench, so the name box and formula bar show the cited cell.
+    onCell(cellAt(focus.r, focus.c), { r: focus.r, c: focus.c }, null);
+    // Only when a new focus arrives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus, reveal]);
 
   // Status bar figures for the selection. Loads the selected rows if they are not loaded yet.
