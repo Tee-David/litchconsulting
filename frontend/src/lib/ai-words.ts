@@ -63,7 +63,7 @@ export function slotLabel(slot: string | null | undefined): string {
   return model ? `${p} (${modelName(model)})` : p;
 }
 
-export type FailureKind = "quota" | "timeout" | "unavailable" | "invalid" | "unreadable" | "stopped" | "dropped";
+export type FailureKind = "quota" | "timeout" | "unavailable" | "invalid" | "unreadable" | "stopped" | "dropped" | "offline";
 
 export const FAILURE: Record<FailureKind, { title: string; next: string }> = {
   quota: {
@@ -93,6 +93,10 @@ export const FAILURE: Record<FailureKind, { title: string; next: string }> = {
   dropped: {
     title: "The connection dropped.",
     next: "Check your connection, then try again.",
+  },
+  offline: {
+    title: "You are offline. Sage needs the network.",
+    next: "Your question is kept on this device and sends by itself when the connection is back.",
   },
 };
 

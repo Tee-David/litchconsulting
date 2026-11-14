@@ -128,6 +128,18 @@ export const ACTIVITIES: Activity[] = [
     where: "notification, notification_pref, email_outbox, push_subscription",
   },
   {
+    id: "device-copy",
+    name: "Offline copy of open workbenches (on the staff member's device)",
+    purpose: "Let firm staff read an open workbench and keep their edits when the connection drops.",
+    subjects: "Clients whose workbenches staff open",
+    categories: ["Spreadsheet cells of the open workbench", "Edits not yet sent", "A Sage question not yet sent"],
+    basis: "contract",
+    processors: [],
+    retention: "Until sign-out (saved pages and sheet data are deleted), or until the edits and question are sent.",
+    enforcement: "Automatic: sign-out deletes the saved copies; sent edits leave the device queue.",
+    where: "Browser cache storage (litch-*) and local storage (litch.wb.*) on the device",
+  },
+  {
     id: "audit",
     name: "Security and audit log",
     purpose: "Record consequential actions and sign-ins to protect clients and the firm.",

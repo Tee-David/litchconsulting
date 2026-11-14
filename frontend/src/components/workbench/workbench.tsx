@@ -643,12 +643,29 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     [refresh],
   );
 
+  // R6: a Sage question asked offline waits on this device.
+  const sageQKey = `litch.wb.sageq.${conv.id}`;
+  const [waitingQ, setWaitingQ] = useState<string | null>(null);
   const send = useCallback(
     async (message: string, opts: { replaceLast?: boolean; raw?: boolean } = {}) => {
       const files = opts.raw ? [] : atts.filter((a) => a.status === "ready").map((a) => a.name);
       const typed = message.trim() || (files.length ? "Read the files I added." : "");
       if (!typed || running) return;
       const msg = opts.raw ? typed : composeQuestion(typed, quote, files);
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        // R6: Sage needs the network. Keep the question and send it when it is back.
+        try {
+          window.localStorage.setItem(sageQKey, msg);
+        } catch {
+          /* blocked storage: it stays in the box instead */
+          return;
+        }
+        setWaitingQ(msg);
+        setText("");
+        setQuote(null);
+        toast.toast("You are offline. Sage needs the network. Your question is kept and sends when you are back online.", "info");
+        return;
+      }
       const shown = opts.raw ? splitQuestion(msg) : { quote, text: typed, files };
       // A new question always brings the thread back to the newest message.
       setAtBottom(true);
@@ -716,8 +733,36 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         if (ok) setLive(null);
       }
     },
-    [conv.id, context, selection, running, onEvent, refresh, atts, quote],
+    [conv.id, context, selection, running, onEvent, refresh, atts, quote, sageQKey, toast],
   );
+  // R6: back online (or reopened online): send the question that waited, once.
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  useEffect(() => {
+    const flush = () => {
+      let q: string | null = null;
+      try {
+        q = window.localStorage.getItem(sageQKey);
+      } catch {
+        q = null;
+      }
+      if (!q) return;
+      if (!navigator.onLine) {
+        setWaitingQ(q);
+        return;
+      }
+      try {
+        window.localStorage.removeItem(sageQKey);
+      } catch {
+        /* ignore */
+      }
+      setWaitingQ(null);
+      void sendRef.current(q, { raw: true });
+    };
+    flush();
+    window.addEventListener("online", flush);
+    return () => window.removeEventListener("online", flush);
+  }, [sageQKey]);
 
   const retry = useCallback(() => {
     const lastUser = [...conv.messages].reverse().find((m) => m.role === "user");
@@ -1646,6 +1691,28 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         </p>
       ) : null}
       {voice.error ? <p className="border-t border-hairline bg-paper px-3 pt-2 text-[11.5px] text-bad">{voice.error}</p> : null}
+      {waitingQ ? (
+        <div className="mx-3 mb-2 flex items-start gap-2 rounded-ctl border border-hairline bg-warn-soft px-3 py-2 text-[12.5px] text-ink" role="status">
+          <span className="min-w-0 flex-1">
+            Waiting for the network: &ldquo;{splitQuestion(waitingQ).text.slice(0, 80)}{splitQuestion(waitingQ).text.length > 80 ? "…" : ""}&rdquo;. It sends by itself when you are back online.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                window.localStorage.removeItem(sageQKey);
+              } catch {
+                /* ignore */
+              }
+              setText(splitQuestion(waitingQ).text);
+              setWaitingQ(null);
+            }}
+            className="shrink-0 font-medium text-accent hover:underline dark:text-info"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : null}
       <PromptBox
         value={voice.listening && voice.transcript ? `${text.trim() ? `${text.trimEnd()} ` : ""}${voice.transcript}` : text}
         readOnly={voice.listening}

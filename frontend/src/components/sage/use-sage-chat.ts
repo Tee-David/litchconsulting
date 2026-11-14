@@ -57,6 +57,8 @@ export function useSageChat({ role, basePath, syncUrl = false, enabled = true }:
   const [historyLoading, setHistoryLoading] = useState(true);
   const [historyError, setHistoryError] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  // R6: a question asked while offline waits here and sends when the network is back.
+  const pendingKey = `litch.sage.pending.${role}`;
 
   const refreshHistory = useCallback(async (q: string) => {
     try {
@@ -150,6 +152,20 @@ export function useSageChat({ role, basePath, syncUrl = false, enabled = true }:
     async (text: string) => {
       const q = text.trim();
       if (!q || loading) return false;
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        try {
+          window.localStorage.setItem(pendingKey, q);
+        } catch {
+          /* blocked storage: the question stays on screen only */
+        }
+        const now = shortWhen(new Date());
+        setTurns((prev) => [
+          ...prev,
+          { id: uid(), role: "user", content: q, at: now },
+          { id: `offline-${uid()}`, role: "assistant", content: "", at: now, failure: "offline" },
+        ]);
+        return true;
+      }
       if (scope === "client" && !clientId) {
         toast.error("Pick a client first, or set the scope to the firm.");
         return false;
@@ -229,7 +245,7 @@ export function useSageChat({ role, basePath, syncUrl = false, enabled = true }:
         setLoading(false);
       }
     },
-    [clientId, conversationId, loading, query, refreshHistory, role, scope, setActive, toast, turns],
+    [clientId, conversationId, loading, query, refreshHistory, role, scope, setActive, toast, turns, pendingKey],
   );
 
   const stop = useCallback(() => abortRef.current?.abort(), []);
@@ -318,6 +334,31 @@ export function useSageChat({ role, basePath, syncUrl = false, enabled = true }:
     const last = [...turns].reverse().find((t) => t.role === "user");
     if (last && !loading) void send(last.content);
   }, [turns, loading, send]);
+
+  // R6: back online: send the question that waited, once.
+  const sendRef = useRef(send);
+  sendRef.current = send;
+  useEffect(() => {
+    const flush = () => {
+      let q: string | null = null;
+      try {
+        q = window.localStorage.getItem(pendingKey);
+        if (q) window.localStorage.removeItem(pendingKey);
+      } catch {
+        q = null;
+      }
+      if (!q) return;
+      // Drop the waiting notice and its question; send() adds them again, live.
+      setTurns((prev) => {
+        const i = prev.findIndex((t) => t.failure === "offline");
+        return i > 0 ? [...prev.slice(0, i - 1), ...prev.slice(i + 1)] : prev;
+      });
+      void sendRef.current(q);
+    };
+    if (navigator.onLine) flush();
+    window.addEventListener("online", flush);
+    return () => window.removeEventListener("online", flush);
+  }, [pendingKey]);
 
   return {
     turns,
