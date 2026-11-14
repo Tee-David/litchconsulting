@@ -18,11 +18,11 @@
 
 Litch Consulting delivers financial reporting, modelling, taxation, forensic accounting, data
 analytics and advisory. This repository holds **two separately deployed applications**: the
-web platform — a marketing site, a client portal, a staff workspace and an admin dashboard with
-an invoicing engine — and **LitchAI**, a deterministic Python pipeline that compiles client
+web platform, a marketing site, a client portal, a staff workspace and an admin dashboard with
+an invoicing engine, and **LitchAI**, a deterministic Python pipeline that compiles client
 financial documents into formula-driven Excel deliverables.
 
-- **Live:** https://www.litchconsulting.com (Vercel, auto-deploys `main`)
+- **Live:** https://www.litchconsulting.com (Vercel, deployed from `main` by a GitHub Actions workflow)
 - **Repo:** https://github.com/Tee-David/litchconsulting (`main`)
 
 ---
@@ -39,9 +39,9 @@ compiler and AI engine that only the web app reaches, on its own machine.
 | What it is | Marketing site + client portal + staff workspace + admin + invoicing | Document → Excel compiler, workbench engine, Sage |
 | Stack | Next.js 16, React 19, TypeScript | Python 3.12, FastAPI, openpyxl, DuckDB |
 | Data | CockroachDB via Drizzle | Its own Postgres (pgvector + pg_trgm) |
-| Deploys to | **Vercel** (push to `main`) | **Its own OCI VM** — never Vercel |
+| Deploys to | **Vercel** (push to `main`) | **Its own OCI VM**, never Vercel |
 | Reached at | `www.litchconsulting.com` | `ai.litchconsulting.com`, via Cloudflare Tunnel |
-| Runs without the other? | Yes — LitchAI features degrade gracefully | Yes — it is a standalone service |
+| Runs without the other? | Yes, LitchAI features degrade gracefully | Yes, it is a standalone service |
 
 ```
                     +-----------------------------------+
@@ -76,7 +76,7 @@ compiler and AI engine that only the web app reaches, on its own machine.
                     +-------------------------------------------+
 ```
 
-The VM binds the API to **loopback only** — the Cloudflare Tunnel is the sole ingress, so no
+The VM binds the API to **loopback only**, the Cloudflare Tunnel is the sole ingress, so no
 inbound ports are open. The frontend authenticates machine-to-machine with a Cloudflare Access
 **service token**; there is no interactive login on that path.
 
@@ -93,7 +93,7 @@ inbound ports are open. The frontend authenticates machine-to-machine with a Clo
 | Tables | @tanstack/react-table (headless) + hand-rolled UI |
 | Invoices/PDF | @react-pdf/renderer (Noto Sans for the ₦ glyph) |
 | Email | nodemailer over Truehost SMTP |
-| Storage | Cloudflare R2 — public bucket for assets, private bucket for client documents |
+| Storage | Cloudflare R2, public bucket for assets, private bucket for client documents |
 | Payments | Paystack (redirect flow) |
 | Booking | Cal.com embed |
 | LitchAI | Python 3.12, FastAPI, openpyxl, Procrastinate, pgvector, DuckDB |
@@ -135,12 +135,12 @@ retrieval store is `knowledge_chunk` (pgvector HNSW + pg_trgm, fused with recipr
 
 **Deterministic document compilation**
 LitchAI turns client financial documents into formula-driven `.xlsx` deliverables. The core rule:
-**no generative step ever touches a formula** — compilers are hand-written Python, and a
+**no generative step ever touches a formula**, compilers are hand-written Python, and a
 headless-LibreOffice recompute plus golden fixtures gate every file before human review.
 
 **Guided tours**
 A cross-page tour engine (react-joyride) with route matching, target waiting, an animated
-launcher, and confetti on completion — reduced-motion aware throughout.
+launcher, and confetti on completion, reduced-motion aware throughout.
 
 **Operational safety nets**
 Soft delete with a `/admin/trash` restore surface, an append-only audit log at `/admin/audit`,
@@ -154,14 +154,14 @@ retries, NDPA erasure with a 30-day hold, a cookie notice and a data-processing 
 
 ```
 litchconsulting/
-├── frontend/                 The Next.js web platform — deploys to Vercel
+├── frontend/                 The Next.js web platform, deploys to Vercel
 │   ├── src/app/              Routes: marketing, (auth), invite, account, admin, work, dashboard, api, i/[token]
 │   ├── src/components/       kit/, ui/, layout/, sections/, admin/, dashboard/, access/, auth/, tour/
 │   ├── src/lib/              access, auth, server-user, two-step, invitations, email-templates, db, invoice, litchai
 │   ├── scripts/              apply-schema, seed-users, vercel-sync-env, inspect-db
 │   ├── certs/                CockroachDB cluster CA cert
 │   └── README.md             → setup, env, schema workflow, gotchas
-├── backend/                  LitchAI — deploys to its own OCI VM
+├── backend/                  LitchAI, deploys to its own OCI VM
 │   ├── src/litchai/          compilers/, categorize/, ai/ (router, harness), workbench/, db/, ops/, review/
 │   ├── tests/                golden-fixture suite (needs LibreOffice)
 │   ├── deploy/               systemd units (api, worker, llama, backup, heartbeat), bootstrap, runbook
@@ -173,7 +173,7 @@ litchconsulting/
 
 ## Quick start
 
-The two applications are independent — you can run the web platform without LitchAI.
+The two applications are independent, you can run the web platform without LitchAI.
 
 ### Web platform
 
@@ -184,7 +184,7 @@ npm run dev                  # http://localhost:3000
 ```
 
 Local dev reads `frontend/.env.local`; secrets come from Doppler (`litch-consulting`) or the
-gitignored repo-root `.env`. **`BETTER_AUTH_URL` must be `http://localhost:3000` locally** — an
+gitignored repo-root `.env`. **`BETTER_AUTH_URL` must be `http://localhost:3000` locally**, an
 `https://…` value makes Better Auth issue Secure cookies that the browser drops on plain-HTTP
 localhost, so logins silently fail. See [`frontend/README.md`](frontend/README.md).
 
@@ -194,7 +194,7 @@ localhost, so logins silently fail. See [`frontend/README.md`](frontend/README.m
 cd backend
 python3 -m venv .venv
 .venv/bin/pip install -e ".[dev]"
-.venv/bin/pytest             # golden-fixture suite — requires LibreOffice (`soffice`) on PATH
+.venv/bin/pytest             # golden-fixture suite, requires LibreOffice (`soffice`) on PATH
 .venv/bin/ruff check src tests
 ```
 
@@ -206,15 +206,15 @@ See [`backend/README.md`](backend/README.md).
 
 | App | Platform | Trigger |
 | --- | --- | --- |
-| `frontend/` | Vercel | Push to `main` (Vercel's git integration) |
-| `backend/` | Oracle Cloud VM, `/srv/projects/litchconsulting` | systemd units (`litchai-api`, `litchai-worker`, `litchai-llama`, timers) — **never Vercel** |
+| `frontend/` | Vercel | Push to `main`: `.github/workflows/vercel-deploy.yml` deploys through the Vercel API (the Hobby plan blocks Git deploys from a private repo); `ci.yml` runs the checks |
+| `backend/` | Oracle Cloud VM *WDC Projects*, `/srv/projects/litchconsulting` | systemd units (`litchai-api`, `litchai-worker`, `litchai-llama`, timers), **never Vercel** |
 
 Env vars are managed in **Doppler** (`litch-consulting`) and synced to Vercel with
-`scripts/vercel-sync-env.mjs`. Don't sync `BETTER_AUTH_URL` — Better Auth infers the URL from the
+`scripts/vercel-sync-env.mjs`. Don't sync `BETTER_AUTH_URL`, Better Auth infers the URL from the
 request host in production.
 
 Because the web app and the live site share one CockroachDB cluster, **schema changes take effect
-immediately once applied** — no redeploy needed. Apply them with `scripts/apply-schema.ts`, never
+immediately once applied**, no redeploy needed. Apply them with `scripts/apply-schema.ts`, never
 `drizzle-kit push` (it hangs on CockroachDB introspection).
 
 Five Vercel cron jobs are declared in `frontend/vercel.json`, each guarded by `CRON_SECRET`:
@@ -233,7 +233,7 @@ lint errors and unit tests; backend ruff error gate and pytest with LibreOffice)
 
 ---
 
-## Tax rates — one source of truth
+## Tax rates, one source of truth
 
 `frontend/src/lib/tax/nigeria-tax-config.json` is the **single versioned source** of Nigerian tax
 rates (NTA 2025: PAYE bands, VAT, WHT, CIT + Development Levy, pension/NHF). The site calculators
