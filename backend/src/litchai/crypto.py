@@ -148,6 +148,20 @@ def build_decryptor() -> Callable[[bytes], bytes]:
     return lambda envelope: decrypt(envelope, private_pem)
 
 
+def build_encryptor() -> Callable[[bytes], bytes]:
+    """The engine's own encryptor (for files it makes, e.g. unpacked from an archive):
+    the public key is derived from ``LITCHAI_PRIVATE_KEY_PATH``; identity when unset."""
+    path = os.environ.get("LITCHAI_PRIVATE_KEY_PATH")
+    if not path:
+        return lambda data: data
+    from cryptography.hazmat.primitives import serialization  # noqa: PLC0415
+    from cryptography.hazmat.primitives.serialization import load_pem_private_key  # noqa: PLC0415
+
+    public_pem = load_pem_private_key(Path(path).read_bytes(), password=None).public_key().public_bytes(
+        serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo)
+    return lambda plain: encrypt(plain, public_pem)
+
+
 def _genkey_cli() -> None:
     """``python -m litchai.crypto`` — generate the keypair on the VM.
 

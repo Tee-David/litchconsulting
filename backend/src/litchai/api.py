@@ -351,6 +351,12 @@ def create_app(
         if len(ciphertext) > MAX_UPLOAD_BYTES:
             raise HTTPException(413, "upload exceeds size limit")
 
+        return await _store_document(repo, client_id, filename, mime, ciphertext,
+                                     engagement_id=engagement_id, account_label=account_label)
+
+    async def _store_document(repo: Repository, client_id: str, filename: str, mime: str,
+                              ciphertext: bytes, *, engagement_id: int | None = None,
+                              account_label: str | None = None) -> dict[str, Any]:
         # source_hash fingerprints the *ciphertext* — the same value the Vercel
         # blind relay logged; identical bytes for a client are a duplicate.
         source_hash = hashlib.sha256(ciphertext).hexdigest()
@@ -374,6 +380,48 @@ def create_app(
         )
         await ingest_task.defer_async(document_id=doc.id)
         return {"document_id": doc.id, "status": doc.status, "duplicate": False}
+
+    @app.post("/archives/unpack", status_code=201)
+    async def unpack_archive(
+        request: Request,
+        client_id: str,
+        filename: str,
+        repo: Repository = Depends(get_repo),
+    ) -> dict[str, Any]:
+        """A ZIP, RAR or 7z archive (blind-relay ciphertext), with an optional password in
+        the ``X-Archive-Password`` header (never stored or logged). Each readable file
+        inside becomes a document, analysed like any upload. 401 = password needed or
+        wrong; 422 = nothing readable or damaged."""
+        from litchai.archives import ArchiveError, unpack
+        from litchai.crypto import build_encryptor
+
+        ciphertext = await request.body()
+        if not ciphertext:
+            raise HTTPException(400, "empty upload")
+        if len(ciphertext) > MAX_UPLOAD_BYTES:
+            raise HTTPException(413, "upload exceeds size limit")
+        try:
+            plain = app.state.decryptor(ciphertext)
+        except Exception as exc:  # noqa: BLE001 - a bad envelope is the caller's error
+            raise HTTPException(400, "the archive could not be decrypted") from exc
+        password = request.headers.get("x-archive-password") or None
+        import asyncio
+
+        try:
+            res = await asyncio.to_thread(unpack, plain, password)
+        except ArchiveError as exc:
+            status = 401 if exc.code in ("password_needed", "wrong_password") else (
+                503 if exc.code == "no_tool" else 422)
+            raise HTTPException(status, {"code": exc.code, "message": str(exc)}) from exc
+        finally:
+            password = None
+        encrypt = build_encryptor()
+        docs = []
+        for name, mime, data in res.files:
+            out = await _store_document(repo, client_id, name, mime, encrypt(data))
+            docs.append({"filename": name, **out})
+        return {"archive": filename, "encrypted": res.encrypted, "documents": docs,
+                "skipped": [{"name": n, "reason": r} for n, r in res.skipped]}
 
     @app.post("/documents/{document_id}/retry", status_code=202)
     async def retry_document(document_id: int, repo: Repository = Depends(get_repo)) -> dict[str, Any]:
