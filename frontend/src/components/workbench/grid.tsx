@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, Loader2 } from "lucide-react";
-import type { WbCell, WbSheetWindow, WbUserEdit } from "@/lib/litchai/workbench";
+import type { WbCell, WbSheetWindow, WbStyle, WbUserEdit } from "@/lib/litchai/workbench";
 import { FUNCS, fillValues, hint, parseTyped, shiftFormula, stepDecimals, suggest } from "./formula-help";
 import { colLetter, type Range, inRange } from "./refs";
 import { cn } from "@/lib/utils";
@@ -22,7 +22,9 @@ let internalClip: Clip | null = null;
 export type SelStats = { count: number; numbers: number; sum: number; avg: number | null; min: number | null; max: number | null; partial: boolean };
 /** Status bar and Find read at most this many 100-row blocks (10,000 rows). */
 const READ_CAP = 100;
-export type GridMeta = { maxRow: number; maxCol: number; sheets: string[]; info?: { name: string; color: string | null; hidden: boolean }[] };
+export type GridMeta = { maxRow: number; maxCol: number; sheets: string[]; info?: { name: string; color: string | null; hidden: boolean }[]; merged?: string[] };
+/** S5: a formatting request from the toolbar. A new nonce applies it to the selection. */
+export type StyleRequest = { nonce: number; style?: WbStyle; toggle?: "b" | "i" | "u" | "wrap"; border?: "all" | "outline" | "top" | "bottom" | "none" };
 
 /**
  * A virtualised read view of one sheet, fed in 100-row blocks by the
@@ -55,6 +57,8 @@ export function Grid({
   onCommit,
   onStructure,
   formatRequest = null,
+  styleRequest = null,
+  onMerge,
 }: {
   conversationId: string;
   workbookId: string;
@@ -94,6 +98,9 @@ export function Grid({
   onStructure?: (action: "insert_rows" | "delete_rows" | "insert_cols" | "delete_cols", at: number, count: number) => void;
   /** Number format for the selection, from the toolbar. A new nonce applies it. */
   formatRequest?: { kind: "currency" | "percent" | "thousands" | "plain" | "dec+" | "dec-"; nonce: number } | null;
+  styleRequest?: StyleRequest | null;
+  /** S5: merge or unmerge a range such as "A1:D1" (saved as a version). */
+  onMerge?: (action: "merge" | "unmerge", range: string) => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const rowH = Math.round(ROW_H * zoom);
@@ -139,7 +146,7 @@ export function Grid({
         const cells = new Map<string, WbCell>();
         for (const c of body.cells) cells.set(`${c.r}:${c.c}`, c);
         setBlocks((prev) => new Map(prev).set(b, { cells }));
-        const m = { maxRow: Math.max(1, body.max_row), maxCol: Math.max(1, Math.min(MAX_COLS, body.max_col)), sheets: body.sheets, info: body.sheet_info };
+        const m = { maxRow: Math.max(1, body.max_row), maxCol: Math.max(1, Math.min(MAX_COLS, body.max_col)), sheets: body.sheets, info: body.sheet_info, merged: body.merged ?? [] };
         setMeta(m);
         onMeta?.(m);
         setError(null);
@@ -610,6 +617,56 @@ export function Grid({
     // Runs once per request.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formatRequest]);
+
+  // ---- S5: formatting ----------------------------------------------------------------
+  const handledStyle = useRef(0);
+  useEffect(() => {
+    if (!styleRequest || handledStyle.current === styleRequest.nonce) return;
+    handledStyle.current = styleRequest.nonce;
+    if (!editable || !selection || selection.sheet !== sheet) return;
+    const g = selection;
+    const r1 = Math.min(g.r1, g.r0 + 1999);
+    const c1 = Math.min(g.c1, maxCol);
+    const cur = cellAt(active?.r ?? g.r0, active?.c ?? g.c0)?.s ?? {};
+    const items: { r: number; c: number; e: Omit<WbUserEdit, "sheet" | "cell">; shown: string }[] = [];
+    for (let r = g.r0; r <= r1; r++) {
+      for (let c = g.c0; c <= c1; c++) {
+        let st: WbStyle = { ...(styleRequest.style ?? {}) };
+        if (styleRequest.toggle) st[styleRequest.toggle] = !cur[styleRequest.toggle];
+        const bd = styleRequest.border;
+        if (bd === "all") st = { bt: true, bb: true, bl: true, br: true };
+        else if (bd === "none") st = { bt: false, bb: false, bl: false, br: false };
+        else if (bd === "top") st = r === g.r0 ? { bt: true } : {};
+        else if (bd === "bottom") st = r === r1 ? { bb: true } : {};
+        else if (bd === "outline") {
+          st = {};
+          if (r === g.r0) st.bt = true;
+          if (r === r1) st.bb = true;
+          if (c === g.c0) st.bl = true;
+          if (c === c1) st.br = true;
+        }
+        if (!Object.keys(st).length) continue;
+        const cell = cellAt(r, c);
+        items.push({ r, c, e: { style: st }, shown: cell ? display(cell) : "" });
+        if (items.length >= 5000) break;
+      }
+    }
+    void send(items);
+    // Runs once per request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [styleRequest]);
+  /** Merged ranges on this sheet: the top-left cell spans the columns of its first row. */
+  const merges = useMemo(() => {
+    const out: { r0: number; c0: number; r1: number; c1: number; ref: string }[] = [];
+    for (const ref of meta?.merged ?? []) {
+      const m = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(ref);
+      if (!m) continue;
+      const col = (x: string) => x.split("").reduce((n, ch) => n * 26 + ch.charCodeAt(0) - 64, 0);
+      out.push({ r0: Number(m[2]), c0: col(m[1]), r1: Number(m[4]), c1: col(m[3]), ref });
+    }
+    return out;
+  }, [meta?.merged]);
+  const mergeAt = (r: number, c: number) => merges.find((m) => r >= m.r0 && r <= m.r1 && c >= m.c0 && c <= m.c1) ?? null;
 
   // ---- S4: sort a range by one column ------------------------------------------------
   /** A first row of text over a column of numbers (or row 1 of the sheet) is a header and stays on top. */
@@ -1116,6 +1173,16 @@ export function Grid({
                 ]
               : []),
             ...(filter ? [{ label: "Show all rows (clear the filter)", keys: "", run: () => setFilter(null) }, null] : []),
+            ...(editable && onMerge
+              ? (() => {
+                  const g = menu.range;
+                  const inside = mergeAt(menu.at.r, menu.at.c);
+                  if (inside) return [{ label: `Unmerge ${inside.ref}`, keys: "", run: () => onMerge("unmerge", inside.ref) }, null];
+                  if (g.r0 === g.r1 && g.c0 === g.c1) return [];
+                  const ref = `${colLetter(g.c0)}${g.r0}:${colLetter(g.c1)}${g.r1}`;
+                  return [{ label: `Merge ${ref}`, keys: "", run: () => onMerge("merge", ref) }, null];
+                })()
+              : []),
             ...(onAsk
               ? [
                   { label: "Ask Sage about this range", keys: "", run: () => onAsk(menu.range, "ask") },
@@ -1252,6 +1319,27 @@ export function Grid({
                 const isActive = active?.r === r && active?.c === c;
                 const pend = cell?.pending?.kind;
                 const num = typeof cell?.v === "number";
+                const st = cell?.s ?? null;
+                const mg = merges.length ? mergeAt(r, c) : null;
+                // A merged range: the top-left cell is as wide as the range; the rest of its first row is drawn by it.
+                if (mg && r === mg.r0 && c > mg.c0) return null;
+                const span = mg && r === mg.r0 && c === mg.c0 ? widths.slice(c - 1, mg.c1).reduce((n, x) => n + x, 0) : w;
+                const plain = !sel && !pend;
+                const edge = "#8A93A8";
+                const borders = st && plain ? [st.bt && `inset 0 1px 0 ${edge}`, st.bb && `inset 0 -1px 0 ${edge}`, st.bl && `inset 1px 0 0 ${edge}`, st.br && `inset -1px 0 0 ${edge}`].filter(Boolean).join(", ") : "";
+                const look: React.CSSProperties = st
+                  ? {
+                      fontWeight: st.b ? 700 : undefined,
+                      fontStyle: st.i ? "italic" : undefined,
+                      textDecoration: st.u ? "underline" : undefined,
+                      color: st.fc ? `#${st.fc}` : st.bg && plain ? "#0a0e1a" : undefined,
+                      backgroundColor: st.bg && plain ? `#${st.bg}` : undefined,
+                      textAlign: st.ha ?? undefined,
+                      whiteSpace: st.wrap ? "normal" : undefined,
+                      lineHeight: st.wrap ? 1.15 : undefined,
+                      boxShadow: borders || undefined,
+                    }
+                  : {};
                 return (
                   <div
                     key={c}
@@ -1276,7 +1364,7 @@ export function Grid({
                       isActive && "outline outline-2 -outline-offset-2 outline-diff-sel-line",
                       cell?.f && !pend && "text-ink",
                     )}
-                    style={{ width: w, lineHeight: `${rowH - 1}px`, left: freeze.col && c === 1 ? numW : undefined }}
+                    style={{ width: span, lineHeight: `${rowH - 1}px`, left: freeze.col && c === 1 ? numW : undefined, ...look, ...(mg && r !== mg.r0 ? { borderTopColor: "transparent" } : {}) }}
                     title={cell?.f ?? undefined}
                   >
                     {optimistic.has(`${r}:${c}`) ? (

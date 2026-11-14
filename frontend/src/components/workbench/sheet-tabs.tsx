@@ -6,7 +6,7 @@ import { ArrowLeft, ArrowRight, ChevronUp, Copy, Eye, EyeOff, Palette, Pencil, T
 import { cn } from "@/lib/utils";
 
 export type SheetInfo = { name: string; color: string | null; hidden: boolean };
-export type SheetActionKind = "rename" | "move" | "copy" | "delete" | "color" | "hide" | "unhide" | "insert_rows" | "delete_rows" | "insert_cols" | "delete_cols";
+export type SheetActionKind = "rename" | "move" | "copy" | "delete" | "color" | "hide" | "unhide" | "insert_rows" | "delete_rows" | "insert_cols" | "delete_cols" | "merge" | "unmerge";
 
 /** Tab colours: the semantic and brand hues from the Litch tokens, plus "none". */
 const COLORS = ["2540C4", "1F9D5C", "C98500", "B42318", "4A5263"];

@@ -28,7 +28,8 @@ import {
 } from "lucide-react";
 import type { WbBatch, WbCell, WbConversation, WbEvent, WbFirstLook, WbGate, WbUserEdit } from "@/lib/litchai/workbench";
 import { attachDocumentAction, attachFilesAction, decideBatchAction, deliverAction, feedbackAction, getConversationAction, newThreadAction, openThreadAction, restoreVersionAction, runToolAction, saveEditsAction, sheetActionAction } from "@/lib/workbench/actions";
-import { Check, ChevronDown as Chev, Ellipsis, FolderOpen, Pencil, SquarePen } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, Baseline, Bold, Check, ChevronDown as Chev, Ellipsis, FolderOpen, Grid2x2, Italic, PaintBucket, Pencil, SquarePen, TableCellsMerge, Underline, WrapText } from "lucide-react";
+import type { StyleRequest } from "./grid";
 import { MessageActions } from "@/components/sage-ui/message-actions";
 import { ThreadPicker } from "@/components/sage-ui/thread-picker";
 import { PromptBox, type Attachment } from "@/components/sage-ui/prompt-box";
@@ -78,6 +79,15 @@ function composeQuestion(text: string, quote: string | null, files: string[]): s
   return (q + text.trim() + f).slice(0, 8000);
 }
 let attSeq = 0;
+/** S5 palettes. Fixed colours: they are written into the client's file. */
+const FONT_COLOURS: [string | null, string][] = [
+  [null, "Automatic"], ["0A0E1A", "Black"], ["0A196D", "Litch navy"], ["2540C4", "Blue"], ["11734A", "Green"], ["B42318", "Red"],
+  ["975400", "Amber"], ["6B7386", "Grey"], ["5B21B6", "Purple"], ["0E7490", "Teal"], ["9D174D", "Pink"], ["FFFFFF", "White"],
+];
+const FILL_COLOURS: [string | null, string][] = [
+  [null, "No fill"], ["EEF1FB", "Light navy"], ["DFE4F7", "Navy tint"], ["E3F4EB", "Light green"], ["FDF0D8", "Light amber"], ["FDE7E5", "Light red"],
+  ["F5F6FA", "Light grey"], ["DBEAFE", "Light blue"], ["FEF9C3", "Light yellow"], ["0A196D", "Litch navy"], ["11734A", "Green"], ["B42318", "Red"],
+];
 
 export type WorkbenchProps = {
   initial: WbConversation;
@@ -185,6 +195,10 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const [formatRequest, setFormatRequest] = useState<{ kind: "currency" | "percent" | "thousands" | "plain" | "dec+" | "dec-"; nonce: number } | null>(null);
   const [fxText, setFxText] = useState<string | null>(null);
   const formatSel = (kind: "currency" | "percent" | "thousands" | "plain" | "dec+" | "dec-") => setFormatRequest({ kind, nonce: Date.now() });
+  // S5: bold, colours, alignment, borders for the selection.
+  const [styleRequest, setStyleRequest] = useState<StyleRequest | null>(null);
+  const styleSel = (r: Omit<StyleRequest, "nonce">) => setStyleRequest({ ...r, nonce: Date.now() });
+  const [styleMenu, setStyleMenu] = useState<null | "fc" | "bg" | "border">(null);
   useEffect(() => {
     if (!viewMenu) return;
     const close = () => setViewMenu(false);
@@ -430,7 +444,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   );
   // S2: a sheet tab action, saved at once; the toast's Undo is the normal undo.
   const sheetAction = useCallback(
-    async (name: string, action: SheetActionKind, extra: { name?: string; index?: number; color?: string; at?: number; count?: number } = {}) => {
+    async (name: string, action: SheetActionKind, extra: { name?: string; index?: number; color?: string; at?: number; count?: number; range?: string } = {}) => {
       if (!wbId) return false;
       setSheetBusy(true);
       const res = await sheetActionAction({ conversationId: conv.id, workbookId: wbId, sheet: name, action, ...extra });
@@ -965,6 +979,57 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           </>
         ) : null}
       </div>
+      <span className="mx-1 h-5 w-px bg-hairline" aria-hidden />
+      <button type="button" className={tb} onClick={() => styleSel({ toggle: "b" })} disabled={!selection} aria-label="Bold" title="Bold"><Bold className="size-4" /></button>
+      <button type="button" className={tb} onClick={() => styleSel({ toggle: "i" })} disabled={!selection} aria-label="Italic" title="Italic"><Italic className="size-4" /></button>
+      <button type="button" className={tb} onClick={() => styleSel({ toggle: "u" })} disabled={!selection} aria-label="Underline" title="Underline"><Underline className="size-4" /></button>
+      {(["fc", "bg"] as const).map((k) => (
+        <div key={k} className="relative">
+          <button type="button" className={tb} onClick={() => setStyleMenu((m) => (m === k ? null : k))} disabled={!selection} aria-expanded={styleMenu === k} aria-haspopup="menu" aria-label={k === "fc" ? "Text colour" : "Fill colour"} title={k === "fc" ? "Text colour" : "Fill colour"}>
+            {k === "fc" ? <Baseline className="size-4" /> : <PaintBucket className="size-4" />}
+          </button>
+          {styleMenu === k ? (
+            <>
+              <div className="fixed inset-0 z-40" onMouseDown={() => setStyleMenu(null)} aria-hidden />
+              <div role="menu" aria-label={k === "fc" ? "Text colour" : "Fill colour"} className="absolute left-0 top-full z-50 mt-1 grid w-48 grid-cols-6 gap-1 rounded-xl border border-hairline bg-paper p-2 shadow-lg">
+                {(k === "fc" ? FONT_COLOURS : FILL_COLOURS).map(([hex, name]) => (
+                  <button key={name} type="button" role="menuitem" aria-label={name} title={name} onClick={() => { styleSel({ style: { [k]: hex } }); setStyleMenu(null); }}
+                    className="size-6 rounded-md border border-hairline" style={{ background: hex ? `#${hex}` : "transparent" }}>
+                    {hex ? null : <span className="text-[10px] text-muted">×</span>}
+                  </button>
+                ))}
+              </div>
+            </>
+          ) : null}
+        </div>
+      ))}
+      <button type="button" className={tb} onClick={() => styleSel({ style: { ha: "left" } })} disabled={!selection} aria-label="Align left" title="Align left"><AlignLeft className="size-4" /></button>
+      <button type="button" className={tb} onClick={() => styleSel({ style: { ha: "center" } })} disabled={!selection} aria-label="Align centre" title="Align centre"><AlignCenter className="size-4" /></button>
+      <button type="button" className={tb} onClick={() => styleSel({ style: { ha: "right" } })} disabled={!selection} aria-label="Align right" title="Align right"><AlignRight className="size-4" /></button>
+      <button type="button" className={tb} onClick={() => styleSel({ toggle: "wrap" })} disabled={!selection} aria-label="Wrap text" title="Wrap text"><WrapText className="size-4" /></button>
+      <div className="relative">
+        <button type="button" className={tb} onClick={() => setStyleMenu((m) => (m === "border" ? null : "border"))} disabled={!selection} aria-expanded={styleMenu === "border"} aria-haspopup="menu" aria-label="Borders" title="Borders"><Grid2x2 className="size-4" /></button>
+        {styleMenu === "border" ? (
+          <>
+            <div className="fixed inset-0 z-40" onMouseDown={() => setStyleMenu(null)} aria-hidden />
+            <div role="menu" aria-label="Borders" className="absolute left-0 top-full z-50 mt-1 w-48 rounded-xl border border-hairline bg-paper p-1 shadow-lg" onClick={() => setStyleMenu(null)}>
+              {([["all", "All borders"], ["outline", "Outside border"], ["top", "Top border"], ["bottom", "Bottom border"], ["none", "No borders"]] as const).map(([mode, label]) => (
+                <button key={mode} type="button" role="menuitem" className={menuItem} onClick={() => styleSel({ border: mode })}>{label}</button>
+              ))}
+            </div>
+          </>
+        ) : null}
+      </div>
+      <button
+        type="button"
+        className={tb}
+        disabled={!selection || (selection.r0 === selection.r1 && selection.c0 === selection.c1)}
+        onClick={() => selection && void sheetAction(sheet, "merge", { range: `${colLetter(selection.c0)}${selection.r0}:${colLetter(selection.c1)}${selection.r1}` })}
+        aria-label="Merge cells"
+        title="Merge the selected cells (right-click a merged cell to unmerge)"
+      >
+        <TableCellsMerge className="size-4" />
+      </button>
       <span className="ml-auto hidden pr-1.5 text-[12px] text-muted md:inline">{selection ? "" : "Type in a cell to edit. Sage's changes stay proposals."}</span>
     </div>
   ) : null;
@@ -1257,6 +1322,8 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
               onRedo={() => void stepEdit("redo")}
               onStructure={(action, at, count) => void sheetAction(sheet, action, { at, count })}
               formatRequest={formatRequest}
+              styleRequest={styleRequest}
+              onMerge={(action, range) => void sheetAction(sheet, action, { range })}
               onAsk={(r, mode) => {
                 setSelection(r);
                 setContext(r);

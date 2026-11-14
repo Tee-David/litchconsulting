@@ -270,13 +270,15 @@ const sheetActionSchema = z.object({
   conversationId: id,
   workbookId: z.string().min(1).max(120),
   sheet: z.string().min(1).max(120),
-  action: z.enum(["rename", "move", "copy", "delete", "color", "hide", "unhide", "insert_rows", "delete_rows", "insert_cols", "delete_cols"]),
+  action: z.enum(["rename", "move", "copy", "delete", "color", "hide", "unhide", "insert_rows", "delete_rows", "insert_cols", "delete_cols", "merge", "unmerge"]),
   name: z.string().trim().min(1).max(31).optional(),
   index: z.number().int().min(0).max(500).optional(),
   color: z.string().regex(/^([0-9A-Fa-f]{6})?$/).optional(),
   // S3: first row / column (1-based) and how many.
   at: z.number().int().min(1).max(1_048_576).optional(),
   count: z.number().int().min(1).max(1000).optional(),
+  // S5: a range such as "A1:D1" to merge or unmerge.
+  range: z.string().regex(/^[A-Za-z]{1,3}[0-9]{1,7}:[A-Za-z]{1,3}[0-9]{1,7}$/).optional(),
 });
 const SHEET_DONE: Record<string, string> = {
   rename: "Renamed.",
@@ -290,6 +292,8 @@ const SHEET_DONE: Record<string, string> = {
   delete_rows: "Rows deleted.",
   insert_cols: "Columns inserted.",
   delete_cols: "Columns deleted.",
+  merge: "Cells merged.",
+  unmerge: "Cells unmerged.",
 };
 
 /** Rename, move, duplicate, colour, hide or delete a sheet. Saved as a version; Undo reverses it. */
@@ -304,7 +308,7 @@ export async function sheetActionAction(
   const u = await getSessionUser();
   const author = (u?.name || u?.email || "a team member").slice(0, 80);
   try {
-    const res = await wbSheetAction(d.conversationId, d.workbookId, d.sheet, { action: d.action, name: d.name, index: d.index, color: d.color, at: d.at, count: d.count, author });
+    const res = await wbSheetAction(d.conversationId, d.workbookId, d.sheet, { action: d.action, name: d.name, index: d.index, color: d.color, at: d.at, count: d.count, range: d.range, author });
     await touch(d.conversationId);
     await recordAudit({
       action: "workbench.sheet_" + d.action,

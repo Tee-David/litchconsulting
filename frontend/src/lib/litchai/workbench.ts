@@ -122,6 +122,20 @@ export type WbFirstLook = {
 
 export type WbConversion = { workbook_id: string; filename: string; format: string; converted: boolean; notes: string[] };
 
+/** S5: cell formatting (see backend workbench/styles.py). */
+export type WbStyle = {
+  b?: boolean;
+  i?: boolean;
+  u?: boolean;
+  fc?: string | null;
+  bg?: string | null;
+  ha?: "left" | "center" | "right" | null;
+  wrap?: boolean;
+  bt?: boolean;
+  bb?: boolean;
+  bl?: boolean;
+  br?: boolean;
+};
 export type WbCell = {
   ref: string;
   r: number;
@@ -129,6 +143,7 @@ export type WbCell = {
   v: string | number | boolean | null;
   f: string | null;
   nf: string | null;
+  s?: WbStyle | null;
   page: number | null;
   pending: {
     batch_id: string;
@@ -147,6 +162,7 @@ export type WbSheetWindow = {
   sheets: string[];
   cells: WbCell[];
   sheet_info?: { name: string; color: string | null; hidden: boolean }[];
+  merged?: string[];
 };
 
 export type WbProvider = {
@@ -225,7 +241,7 @@ export const wbListByDocument = (documentId: number) =>
   call<{ conversations: { id: string; updated_at?: string }[] }>(`/workbench/conversations?document_id=${documentId}&limit=20`);
 
 /** A person's own edits (E2): saved at once as a version named after them. */
-export type WbUserEdit = { sheet: string; cell: string; value?: string | number | boolean | null; formula?: string; clear?: boolean; number_format?: string };
+export type WbUserEdit = { sheet: string; cell: string; value?: string | number | boolean | null; formula?: string; clear?: boolean; number_format?: string; style?: WbStyle };
 export const wbUserEdits = (id: string, workbookId: string, author: string, edits: WbUserEdit[]) =>
   call<{ batch: WbBatch; conversation: WbConversation }>(`/workbench/conversations/${enc(id)}/edits`, json({ workbook_id: workbookId, author, edits }));
 
@@ -246,7 +262,7 @@ export const wbSheetAction = (
   id: string,
   wbId: string,
   sheet: string,
-  body: { action: string; name?: string; index?: number; color?: string; at?: number; count?: number; author: string },
+  body: { action: string; name?: string; index?: number; color?: string; at?: number; count?: number; range?: string; author: string },
 ) =>
   call<{ batch: WbBatch; conversation: WbConversation }>(
     `/workbench/conversations/${enc(id)}/workbooks/${enc(wbId)}/sheets/${enc(sheet)}/action`,
