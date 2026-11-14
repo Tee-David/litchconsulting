@@ -574,6 +574,8 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
       const rr = { ...r, sheet: exact, r1: Math.min(r.r1, r.r0 + 5000) };
       setHighlights((h) => [rr, ...h.filter((x) => x.sheet !== exact || rangeRef(x) !== rangeRef(rr))].slice(0, 12));
       setFocus({ r: r.r0, c: r.c0, nonce: Date.now() });
+      // A6: the cited range becomes the selection, so the name box shows where Sage pointed.
+      setSelection(rr);
       setView("sheet");
     },
     [sheet, sheetsBy, wbId],
