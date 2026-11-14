@@ -36,6 +36,10 @@ _HEADER_HINTS: dict[str, tuple[str, ...]] = {
     "balance": ("balance", "running balance", "closing balance"),
 }
 
+# Trial balances and schedules name the label column "Account". Used only when no
+# description word is in the row, so an "Account No" column never beats "Narration".
+_DESCRIPTION_FALLBACK = ("account", "accounts", "account name", "account title", "item", "line item")
+
 _OPENING_LABELS = ("opening balance", "balance brought forward", "b/f", "bal b/f", "bbf")
 _CLOSING_LABELS = ("closing balance", "balance carried forward", "c/f", "bal c/f", "bcf")
 
@@ -123,6 +127,11 @@ def _detect_header(rows_raw: list[tuple]) -> tuple[int | None, dict[str, int]]:
                     continue
                 if any(cell == h or cell.startswith(h) for h in hints):
                     roles[role] = c_idx
+        if "description" not in roles:
+            for c_idx, value in enumerate(raw):
+                if isinstance(value, str) and value.strip().lower() in _DESCRIPTION_FALLBACK:
+                    roles["description"] = c_idx
+                    break
         has_money = "amount" in roles or "debit" in roles or "credit" in roles
         if "description" in roles and has_money:
             return idx, roles

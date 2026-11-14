@@ -151,3 +151,14 @@ def test_statement_overlap_detected_per_account():
     assert (overlaps[0].a, overlaps[0].b) == (1, 2)
     assert overlaps[0].start == date(2026, 3, 1)
     assert overlaps[0].end == date(2026, 3, 31)
+
+
+def test_header_account_column_is_the_description_fallback():
+    from litchai.extraction.excel import _detect_header
+
+    # A trial balance (as OCR reads a screenshot): "Account" is the label column.
+    tb = [("0", "1", "2"), ("Account", "Debit", "Credit"), ("Cash at bank", "1,250,000", "0")]
+    assert _detect_header(tb) == (1, {"debit": 1, "credit": 2, "description": 0})
+    # A bank statement: "Narration" wins over an earlier "Account No" column.
+    bank = [("Account No", "Narration", "Debit", "Credit")]
+    assert _detect_header(bank)[1]["description"] == 1
