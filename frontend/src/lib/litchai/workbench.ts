@@ -95,6 +95,8 @@ export type WbConversation = {
   workbooks: WbWorkbookRef[];
   batches: WbBatch[];
   messages: WbMessage[];
+  /** A7: standing instructions for this workbench. */
+  instructions?: string;
   pending: number;
   /** D1: earlier chats in this workbench (the open chat is `messages`). */
   threads?: WbThread[];
@@ -281,6 +283,9 @@ export const wbProviders = (probe = false) =>
 
 /** The agent turn as the backend's SSE stream (piped to the browser as is). */
 /** D1: a new chat, or open an earlier one. */
+/** A7: save the standing instructions (empty clears them). */
+export const wbSetInstructions = (id: string, text: string) =>
+  call<{ conversation: WbConversation }>(`/workbench/conversations/${enc(id)}/instructions`, { ...json({ text }), method: "PUT" });
 export const wbNewThread = (id: string) => call<{ conversation: WbConversation }>(`/workbench/conversations/${enc(id)}/threads`, { method: "POST" });
 export const wbOpenThread = (id: string, threadId: string) =>
   call<{ conversation: WbConversation }>(`/workbench/conversations/${enc(id)}/threads/${enc(threadId)}/open`, { method: "POST" });

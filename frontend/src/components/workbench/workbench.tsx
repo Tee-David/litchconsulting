@@ -28,7 +28,8 @@ import {
 } from "lucide-react";
 import type { WbBatch, WbCell, WbConversation, WbEvent, WbFirstLook, WbGate, WbUserEdit } from "@/lib/litchai/workbench";
 import { attachDocumentAction, attachFilesAction, decideBatchAction, deliverAction, feedbackAction, getConversationAction, newThreadAction, openThreadAction, restoreVersionAction, runToolAction, saveEditsAction, sheetActionAction } from "@/lib/workbench/actions";
-import { AlignCenter, AlignLeft, AlignRight, Baseline, Bold, Check, ChevronDown as Chev, Ellipsis, FolderOpen, Grid2x2, Italic, PaintBucket, Pencil, SquarePen, TableCellsMerge, Underline, WrapText } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, Baseline, Bold, Check, ChevronDown as Chev, Ellipsis, FolderOpen, Grid2x2, Italic, NotebookPen, PaintBucket, Pencil, SquarePen, TableCellsMerge, Underline, WrapText } from "lucide-react";
+import { setInstructionsAction } from "@/lib/workbench/actions";
 import type { StyleRequest } from "./grid";
 import { MessageActions } from "@/components/sage-ui/message-actions";
 import { ThreadPicker } from "@/components/sage-ui/thread-picker";
@@ -37,7 +38,7 @@ import { AskSelection } from "@/components/sage-ui/ask-selection";
 import { WORKBENCH_UPLOAD_ACCEPT } from "@/lib/workbench/upload-client";
 import { SheetTabs, type SheetActionKind, type SheetInfo } from "./sheet-tabs";
 import { useToast } from "@/components/admin/ui/toaster";
-import { Button, Segmented } from "@/components/kit";
+import { Button, Segmented, Sheet } from "@/components/kit";
 import { SageIcon } from "@/components/admin/sage-icon";
 import { cn } from "@/lib/utils";
 import { FAILURE, engineLabel } from "@/lib/ai-words";
@@ -199,6 +200,10 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const [styleRequest, setStyleRequest] = useState<StyleRequest | null>(null);
   const styleSel = (r: Omit<StyleRequest, "nonce">) => setStyleRequest({ ...r, nonce: Date.now() });
   const [styleMenu, setStyleMenu] = useState<null | "fc" | "bg" | "border">(null);
+  // A7: standing instructions for this workbench.
+  const [instrOpen, setInstrOpen] = useState(false);
+  const [instrText, setInstrText] = useState("");
+  const [instrBusy, setInstrBusy] = useState(false);
   useEffect(() => {
     if (!viewMenu) return;
     const close = () => setViewMenu(false);
@@ -1477,6 +1482,19 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           onPick={(id) => void switchThread(id)}
           disabled={running || threadBusy}
         />
+        <button
+          type="button"
+          onClick={() => {
+            setInstrText(conv.instructions ?? "");
+            setInstrOpen(true);
+          }}
+          className={cn("relative grid size-9 shrink-0 place-items-center rounded-ctl hover:bg-surface hover:text-ink", conv.instructions?.trim() ? "text-accent" : "text-body")}
+          aria-label={conv.instructions?.trim() ? "Instructions for this workbench (on)" : "Instructions for this workbench"}
+          title="Instructions Sage follows in every answer here"
+        >
+          <NotebookPen className="size-4" />
+          {conv.instructions?.trim() ? <span aria-hidden className="absolute right-1.5 top-1.5 size-1.5 rounded-full bg-accent" /> : null}
+        </button>
         <button type="button" onClick={() => void switchThread(null)} disabled={running || threadBusy || conv.messages.length === 0} className="grid size-9 shrink-0 place-items-center rounded-ctl text-body hover:bg-surface hover:text-ink disabled:opacity-40" aria-label="New chat" title="New chat">
           <SquarePen className="size-4" />
         </button>
@@ -1873,6 +1891,55 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           downloadHref={(v) => `/api/workbench/${conv.id}/download?wb=${encodeURIComponent(wbId)}&version=${v}&name=${encodeURIComponent(activeRef.name.replace(/\.\w+$/, ""))}`}
         />
       ) : null}
+      <Sheet
+        open={instrOpen}
+        onClose={() => setInstrOpen(false)}
+        dismissible={!instrBusy}
+        size="sm"
+        title="Instructions for this workbench"
+        description="Sage follows these in every answer in this workbench, until you change them."
+        footer={
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setInstrOpen(false)} disabled={instrBusy}>Cancel</Button>
+            <Button
+              disabled={instrBusy || instrText.length > 1500}
+              onClick={async () => {
+                setInstrBusy(true);
+                const res = await setInstructionsAction(conv.id, instrText);
+                setInstrBusy(false);
+                if (!res.ok) {
+                  toast.error(res.error);
+                  return;
+                }
+                setConv(res.conversation);
+                setInstrOpen(false);
+                toast.success(res.message ?? "Saved.");
+              }}
+            >
+              {instrBusy ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        }
+      >
+        <label htmlFor="wb-instructions" className="text-[13px] font-medium text-ink">Instructions</label>
+        <textarea
+          id="wb-instructions"
+          value={instrText}
+          onChange={(e) => setInstrText(e.target.value)}
+          rows={7}
+          maxLength={1500}
+          placeholder={"For example:\nUse IFRS for SMEs names for accounts.\nShow amounts in ₦ thousands.\nThe year end is 31 December 2025."}
+          className="mt-1.5 w-full resize-y rounded-ctl border border-hairline bg-cloud px-3 py-2 text-[14px] text-ink outline-none focus:border-accent"
+        />
+        <p className="mt-1 text-right text-[12px] tabular-nums text-muted">{instrText.length} / 1,500</p>
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {["Use IFRS for SMEs names for accounts.", "Show amounts in ₦ thousands.", "Explain each step in plain English.", "Never overwrite the client's figures; add new columns."].map((t) => (
+            <button key={t} type="button" onClick={() => setInstrText((x) => (x.trim() ? `${x.trim()}\n${t}` : t))} className="min-h-8 rounded-full border border-hairline px-3 text-[12.5px] text-body hover:border-line-strong hover:text-ink">
+              {t}
+            </button>
+          ))}
+        </div>
+      </Sheet>
       <EngineSheet
         open={sheetOpen === "engine"}
         onClose={() => setSheetOpen(null)}

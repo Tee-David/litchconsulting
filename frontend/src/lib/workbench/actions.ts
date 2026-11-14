@@ -20,6 +20,7 @@ import {
   wbRestore,
   wbSheetAction,
   wbNewThread,
+  wbSetInstructions,
   wbOpenThread,
   wbFeedback,
   wbListByDocument,
@@ -123,6 +124,20 @@ export async function getConversationAction(conversationId: string): Promise<Res
   if (!(await guard(conversationId))) return DENIED;
   try {
     return { ok: true, conversation: (await wbGet(conversationId)).conversation };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// --- standing instructions (A7) ------------------------------------------------------
+export async function setInstructionsAction(conversationId: string, text: string): Promise<Res<{ conversation: WbConversation }>> {
+  if (!(await guard(conversationId))) return DENIED;
+  const t = z.string().max(1500).safeParse(text);
+  if (!t.success) return { ok: false, error: "Keep the instructions under 1,500 characters." };
+  try {
+    const res = await wbSetInstructions(conversationId, t.data);
+    await touch(conversationId);
+    return { ok: true, message: t.data.trim() ? "Instructions saved. Sage uses them in every answer." : "Instructions cleared.", conversation: res.conversation };
   } catch (e) {
     return fail(e);
   }
