@@ -45,6 +45,10 @@ def test_replace_last_keeps_branches_and_feedback(tmp_path):
         fb = r.json()["conversation"]["messages"][3]["feedback"]
         assert fb["vote"] == "bad" and fb["note"] == "wrong sheet" and fb["by"] == "Tee-David"
         assert "tools" in fb and "layer" in fb and "model" in fb
+        # H1: the vote is in the weekly report, with its question and note.
+        rep = c.get("/workbench/feedback?days=7").json()["votes"]
+        hit = next(v for v in rep if v["conversation_id"] == cid)
+        assert hit["vote"] == "bad" and hit["note"] == "wrong sheet" and hit["question"] == "second question, edited"
         r = c.post(url, json={"vote": None})
         assert "feedback" not in r.json()["conversation"]["messages"][3]
         # Only Sage answers take a vote.

@@ -16,7 +16,7 @@ import json
 import os
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
 from fastapi import FastAPI, HTTPException, Response
@@ -400,6 +400,36 @@ def register_workbench_routes(app: FastAPI) -> None:
                 }
             wb.store.save(conv)
             return {"conversation": conv.public()}
+
+    @app.get("/workbench/feedback")
+    def feedback_votes(days: int = 7, limit: int = 300) -> dict[str, Any]:
+        """H1: the Good / Bad votes on workbench answers in the last ``days`` days, with
+        the question, the note and what produced the answer (route, tools, model)."""
+        days = max(1, min(days, 90))
+        since = (datetime.now(UTC) - timedelta(days=days)).isoformat(timespec="seconds")
+        out: list[dict[str, Any]] = []
+        with _workbench() as wb:
+            for conv in wb.store.list(limit=500):
+                if (conv.updated_at or "") < since:
+                    continue
+                chats = [conv.messages, *[t.get("messages", []) for t in conv.threads]]
+                for msgs in chats:
+                    for i, m in enumerate(msgs):
+                        fb = m.get("feedback") if m.get("role") == "assistant" else None
+                        if not fb or (fb.get("at") or "") < since:
+                            continue
+                        q = next((x.get("content", "") for x in reversed(msgs[:i])
+                                  if x.get("role") == "user"), "")
+                        out.append({
+                            "conversation_id": conv.id, "title": conv.title, "at": fb.get("at"),
+                            "vote": fb.get("vote"), "note": fb.get("note") or "", "by": fb.get("by"),
+                            "question": " ".join(q.split())[:300],
+                            "answer": " ".join((m.get("content") or "").split())[:300],
+                            "tools": fb.get("tools") or [], "layer": fb.get("layer"),
+                            "model": fb.get("model"), "provider": fb.get("provider"),
+                        })
+        out.sort(key=lambda x: x.get("at") or "", reverse=True)
+        return {"days": days, "votes": out[:limit]}
 
     @app.post("/workbench/conversations/{conversation_id}/tools/{tool}")
     def run_tool_direct(conversation_id: str, tool: str, body: RunTool) -> dict[str, Any]:
