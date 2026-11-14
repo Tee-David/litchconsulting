@@ -110,6 +110,32 @@ ask Sage about the range. The layout can be Split (sheet and Sage side by side, 
 a divider you can drag), Focus (the sheet fills the editor and Sage opens inside it
 with Ctrl+J) or Full screen; your choice is kept.
 
+## Rows, columns, sorting, filtering and formatting
+
+Right-click a cell to insert rows above or below, insert columns left or right, or
+delete the selected rows or columns. Formulas on every sheet follow the change, as in
+Excel. If a formula still points at the rows or columns you delete, the workbench
+refuses and names those cells, so nothing turns into #REF!; change those formulas first.
+Each change is a version, and Ctrl+Z undoes it.
+
+To sort, select the rows (with their header), right-click a cell in the column to sort
+by, and choose Sort A to Z or Sort Z to A. A header row stays on top, numbers come
+before text, blanks go last, and formulas move with their row. To filter, right-click a
+cell and choose "Show only rows where ... is ...": the other rows are hidden from view
+only (nothing in the file changes), and a bar at the top shows how many rows are shown,
+with Show all rows to clear it.
+
+Copy and paste inside the workbench keeps formulas and number formats: a copied formula
+moves with the paste, like =A2*2 becoming =A3*2 one row down. Cut and paste moves the
+formula unchanged. Text pasted from another program arrives as values.
+
+The toolbar formats the selected cells: bold, italic, underline, text colour, fill
+colour, align left, centre or right, wrap text, and borders (all, outside, top, bottom
+or none). Select two or more cells and use Merge to merge them; right-click a merged
+cell to unmerge it. Formatting is saved in the Excel file, is a version, and can be
+undone. Sage can also format cells when you ask, for example "make the header row bold
+with a light fill and a bottom border"; it proposes the change for you to accept.
+
 ## Privacy in the workbench
 
 The workbench follows the client's AI mode. For a client on cloud (masked), only
