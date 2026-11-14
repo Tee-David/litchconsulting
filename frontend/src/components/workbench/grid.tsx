@@ -14,6 +14,10 @@ const BLOCK = 100;
 const MAX_COLS = 60;
 
 type Block = { cells: Map<string, WbCell> };
+/** S6: what this tab copied last, so a paste inside the workbench keeps formulas and
+ *  formats. Used only when the system clipboard still holds the same text. */
+type Clip = { text: string; cut: boolean; r0: number; c0: number; cells: { dr: number; dc: number; v: WbCell["v"] | null; f: string | null; nf: string | null }[] };
+let internalClip: Clip | null = null;
 /** Figures for the status bar, from the selected cells. */
 export type SelStats = { count: number; numbers: number; sum: number; avg: number | null; min: number | null; max: number | null; partial: boolean };
 /** Status bar and Find read at most this many 100-row blocks (10,000 rows). */
@@ -496,8 +500,27 @@ export function Grid({
     } catch {
       return;
     }
-    const lines = text.replace(/\r\n?/g, "\n").replace(/\n$/, "").split("\n");
     const items: { r: number; c: number; e: Omit<WbUserEdit, "sheet" | "cell">; shown: string }[] = [];
+    const clip = internalClip;
+    if (clip && clip.text === text.replace(/\r\n?/g, "\n").replace(/\n$/, "")) {
+      // From this workbench: formulas move with the paste (a cut keeps them as they were).
+      for (const x of clip.cells) {
+        const r = active.r + x.dr;
+        const c = active.c + x.dc;
+        const nf = x.nf ?? undefined;
+        if (x.f) items.push({ r, c, e: { formula: clip.cut ? x.f : shiftFormula(x.f, r - (clip.r0 + x.dr), c - (clip.c0 + x.dc)), number_format: nf }, shown: "…" });
+        else if (x.v === null || x.v === undefined || x.v === "") items.push({ r, c, e: { clear: true }, shown: "" });
+        else items.push({ r, c, e: { value: x.v as string | number | boolean, number_format: nf }, shown: String(x.v) });
+      }
+      if (clip.cut) internalClip = null;
+      if (items.length) {
+        const last = items[items.length - 1];
+        onSelect({ sheet, r0: active.r, r1: last.r, c0: active.c, c1: Math.max(...items.map((x) => x.c)) });
+      }
+      await send(items);
+      return;
+    }
+    const lines = text.replace(/\r\n?/g, "\n").replace(/\n$/, "").split("\n");
     lines.forEach((line, i) =>
       line.split("\t").forEach((v, j) => {
         if (items.length < 5000) items.push({ r: active.r + i, c: active.c + j, e: parseTyped(v), shown: v });
@@ -680,19 +703,23 @@ export function Grid({
   };
 
   /** Ctrl/Cmd+C: the selected range as tab-separated rows, as Excel and Sheets copy it. */
-  const copySelection = (rawValues = false, range: Range | null = selection) => {
+  const copySelection = (rawValues = false, range: Range | null = selection, cut = false) => {
     if (!range || range.sheet !== sheet) return;
     const selection = range;
     const lines: string[] = [];
+    const cells: Clip["cells"] = [];
     for (let r = selection.r0; r <= selection.r1; r++) {
       const row: string[] = [];
       for (let c = selection.c0; c <= Math.min(selection.c1, maxCol); c++) {
         const cell = cellAt(r, c);
+        cells.push({ dr: r - selection.r0, dc: c - selection.c0, v: cell?.v ?? null, f: rawValues ? null : (cell?.f ?? null), nf: cell?.nf && cell.nf !== "General" ? cell.nf : null });
         row.push(rawValues && cell?.v !== null && cell?.v !== undefined ? String(cell.v).replace(/[\t\n]/g, " ") : typeof cell?.v === "number" ? String(cell.v) : display(cell).replace(/[\t\n]/g, " "));
       }
       lines.push(row.join("\t"));
     }
-    void navigator.clipboard?.writeText(lines.join("\n")).catch(() => {});
+    const text = lines.join("\n");
+    internalClip = cells.length <= 5000 ? { text, cut, r0: selection.r0, c0: selection.c0, cells } : null;
+    void navigator.clipboard?.writeText(text).catch(() => {});
   };
 
   const onKey = (e: React.KeyboardEvent) => {
@@ -706,7 +733,7 @@ export function Grid({
       }
       if (mod && k === "x") {
         e.preventDefault();
-        copySelection();
+        copySelection(false, selection, true);
         clearSelection();
         return;
       }
