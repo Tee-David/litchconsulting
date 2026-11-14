@@ -29,6 +29,9 @@ Reply with ONE JSON object only: a tool call
 {{"thought": "...", "plan": ["..."], "action": "tool", "tool": "query_sql", "args": {{"sql": "SELECT ..."}}}}
 or the answer {{"thought": "...", "action": "final", "answer": "...", "citations": ["Ledger!E2"]}}.
 "plan" only on the first reply. If the schema has "args_json", put the args there as a JSON string.
+When you need two or three READ tools that do not depend on each other (for example profile two
+sheets, or two SQL totals), add them as "parallel": [{{"tool": "...", "args_json": "{{...}}"}}] next to
+the first read call; they run at the same time. Never put a write tool in "parallel".
 
 Tools:
 {tool_menu}

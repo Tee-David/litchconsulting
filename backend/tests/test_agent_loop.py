@@ -272,3 +272,39 @@ def test_parse_turn_tolerates_prose_extra_objects_and_raw_newlines():
     turn, err = parse_turn('{"action":"final","answer":"line1\nline2"}', set())
     assert err is None and "line2" in turn.answer
     assert parse_turn("no json at all", set())[0] is None
+
+
+def test_independent_reads_run_in_parallel():
+    """H3: a step may add read calls in "parallel"; all are announced, then run at once."""
+    import threading
+    import time
+
+    other = AgentTool("echo2", "Echo 2", {"type": "object", "properties": {"x": {"type": "string"}}})
+    seen: list[str] = []
+    started = threading.Barrier(2, timeout=5)
+
+    def slow(name, args, step):
+        started.wait()                      # both calls must be running at the same time
+        time.sleep(0.05)
+        seen.append(name)
+        return Observation(ok=True, text=json.dumps({"n": name}), summary=name, citations=[])
+
+    router, _ = _router({"groq": [
+        {"action": "tool", "tool": "echo", "args": {"x": "1"},
+         "parallel": [{"tool": "echo2", "args_json": "{\"x\": \"2\"}"}]},
+        {"action": "final", "answer": "Both read."},
+    ]})
+    events = list(run_agent_loop(system="S {tool_menu}", user="go", tools=[ECHO, other],
+                                 execute=slow, router=router, conversation_id="p1"))
+    kinds = [e["type"] for e in events if e["type"] in ("tool_call", "tool_result")]
+    assert kinds == ["tool_call", "tool_call", "tool_result", "tool_result"]
+    assert sorted(seen) == ["echo", "echo2"] and events[-1]["answer"] == "Both read."
+
+
+def test_a_write_tool_is_never_run_in_parallel():
+    write = AgentTool("make", "Write", {"type": "object"}, kind="write")
+    turn, err = parse_turn(json.dumps({"action": "tool", "tool": "echo", "args": {},
+                                       "parallel": [{"tool": "make", "args": {}}]}),
+                           {"echo", "make"}, None, {"echo"})
+    assert turn is None and "read tools" in err
+    assert write.kind == "write"
