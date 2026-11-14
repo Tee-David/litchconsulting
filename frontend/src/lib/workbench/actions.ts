@@ -232,6 +232,24 @@ const editSchema = z.object({
         formula: z.string().max(8000).optional(),
         clear: z.boolean().optional(),
         number_format: z.string().max(64).optional(),
+        // S5 formatting; the engine checks the same rules.
+        style: z
+          .object({
+            b: z.boolean(),
+            i: z.boolean(),
+            u: z.boolean(),
+            fc: z.string().regex(/^[0-9A-Fa-f]{6}$/).nullable(),
+            bg: z.string().regex(/^[0-9A-Fa-f]{6}$/).nullable(),
+            ha: z.enum(["left", "center", "right"]).nullable(),
+            wrap: z.boolean(),
+            bt: z.boolean(),
+            bb: z.boolean(),
+            bl: z.boolean(),
+            br: z.boolean(),
+          })
+          .partial()
+          .strict()
+          .optional(),
       }),
     )
     .min(1)
