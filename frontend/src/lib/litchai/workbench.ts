@@ -246,7 +246,7 @@ export const wbSheetAction = (
   id: string,
   wbId: string,
   sheet: string,
-  body: { action: string; name?: string; index?: number; color?: string; author: string },
+  body: { action: string; name?: string; index?: number; color?: string; at?: number; count?: number; author: string },
 ) =>
   call<{ batch: WbBatch; conversation: WbConversation }>(
     `/workbench/conversations/${enc(id)}/workbooks/${enc(wbId)}/sheets/${enc(sheet)}/action`,

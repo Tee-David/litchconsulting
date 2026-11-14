@@ -430,7 +430,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   );
   // S2: a sheet tab action, saved at once; the toast's Undo is the normal undo.
   const sheetAction = useCallback(
-    async (name: string, action: SheetActionKind, extra: { name?: string; index?: number; color?: string } = {}) => {
+    async (name: string, action: SheetActionKind, extra: { name?: string; index?: number; color?: string; at?: number; count?: number } = {}) => {
       if (!wbId) return false;
       setSheetBusy(true);
       const res = await sheetActionAction({ conversationId: conv.id, workbookId: wbId, sheet: name, action, ...extra });
@@ -1255,6 +1255,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
               onCommit={commitEdits}
               onUndo={() => void stepEdit("undo")}
               onRedo={() => void stepEdit("redo")}
+              onStructure={(action, at, count) => void sheetAction(sheet, action, { at, count })}
               formatRequest={formatRequest}
               onAsk={(r, mode) => {
                 setSelection(r);

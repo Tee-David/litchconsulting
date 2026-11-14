@@ -49,6 +49,7 @@ export function Grid({
   onToggleFormulas,
   editable = false,
   onCommit,
+  onStructure,
   formatRequest = null,
 }: {
   conversationId: string;
@@ -85,6 +86,8 @@ export function Grid({
   onCommit?: (edits: WbUserEdit[]) => Promise<boolean>;
   onUndo?: () => void;
   onRedo?: () => void;
+  /** S3: insert or delete whole rows / columns (saved as a version; formulas follow). */
+  onStructure?: (action: "insert_rows" | "delete_rows" | "insert_cols" | "delete_cols", at: number, count: number) => void;
   /** Number format for the selection, from the toolbar. A new nonce applies it. */
   formatRequest?: { kind: "currency" | "percent" | "thousands" | "plain" | "dec+" | "dec-"; nonce: number } | null;
 }) {
@@ -649,7 +652,7 @@ export function Grid({
       setActive({ r, c });
       onSelect(range);
     }
-    setMenu({ x: Math.min(e.clientX, window.innerWidth - 248), y: Math.min(e.clientY, window.innerHeight - 300), range });
+    setMenu({ x: Math.min(e.clientX, window.innerWidth - 248), y: Math.max(8, Math.min(e.clientY, window.innerHeight - 560)), range });
   };
 
   const rangeFrom = (a: { r: number; c: number }, b: { r: number; c: number }): Range => ({
@@ -915,7 +918,7 @@ export function Grid({
           role="menu"
           aria-label="Cell menu"
           onMouseDown={(e) => e.stopPropagation()}
-          className="fixed z-50 w-60 rounded-ctl border border-hairline bg-paper p-1 text-[13px] text-ink shadow-lg"
+          className="fixed z-50 max-h-[calc(100vh-16px)] w-60 overflow-y-auto rounded-ctl border border-hairline bg-paper p-1 text-[13px] text-ink shadow-lg"
           style={{ left: menu.x, top: menu.y }}
         >
           {[
@@ -925,6 +928,25 @@ export function Grid({
             { label: "Select row", keys: "Shift+Space", run: () => onSelect({ sheet, r0: menu.range.r0, r1: menu.range.r1, c0: 1, c1: dataCol }) },
             { label: "Select column", keys: "Ctrl+Space", run: () => onSelect({ sheet, r0: 1, r1: dataRow, c0: menu.range.c0, c1: menu.range.c1 }) },
             null,
+            ...(editable && onStructure
+              ? (() => {
+                  const g = menu.range;
+                  const nr = g.r1 - g.r0 + 1;
+                  const nc = g.c1 - g.c0 + 1;
+                  const rows = nr === 1 ? `row ${g.r0}` : `rows ${g.r0}–${g.r1}`;
+                  const cols = nc === 1 ? `column ${colLetter(g.c0)}` : `columns ${colLetter(g.c0)}–${colLetter(g.c1)}`;
+                  return [
+                    { label: `Insert ${nr === 1 ? "a row" : `${nr} rows`} above`, keys: "", run: () => onStructure("insert_rows", g.r0, nr) },
+                    { label: `Insert ${nr === 1 ? "a row" : `${nr} rows`} below`, keys: "", run: () => onStructure("insert_rows", g.r1 + 1, nr) },
+                    { label: `Delete ${rows}`, keys: "", run: () => onStructure("delete_rows", g.r0, nr) },
+                    null,
+                    { label: `Insert ${nc === 1 ? "a column" : `${nc} columns`} left`, keys: "", run: () => onStructure("insert_cols", g.c0, nc) },
+                    { label: `Insert ${nc === 1 ? "a column" : `${nc} columns`} right`, keys: "", run: () => onStructure("insert_cols", g.c1 + 1, nc) },
+                    { label: `Delete ${cols}`, keys: "", run: () => onStructure("delete_cols", g.c0, nc) },
+                    null,
+                  ];
+                })()
+              : []),
             ...(onAsk
               ? [
                   { label: "Ask Sage about this range", keys: "", run: () => onAsk(menu.range, "ask") },
