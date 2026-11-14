@@ -252,3 +252,18 @@ def test_knowledge_reindex_endpoint():
         resp = client.post("/knowledge/reindex")
         assert resp.status_code == 200
         assert resp.json()["upserted"] > 0
+
+
+def test_a_read_tool_that_cannot_answer_gets_one_retry():
+    """H2: the first tool could not answer, so Sage tries once more (next-best tool or
+    the knowledge base) and says so in routed_by."""
+    repo, emb, router = _seeded()
+    replies = iter([{"answer": "I cannot tell from this.", "can_answer": False},
+                    {"answer": "Here is the answer.", "can_answer": True}])
+    provider = FakeProvider(responder=lambda p: json.dumps(next(replies)))
+    result = A.answer_chat(
+        "list the documents we have analysed", repo=repo, embedder=emb, provider=provider,
+        router=router,
+    )
+    assert result.can_answer is True and result.answer == "Here is the answer."
+    assert result.routed_by.endswith("+retry") and result.tool != "list_analyses"

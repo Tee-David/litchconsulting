@@ -579,6 +579,19 @@ def _read_instead(message: str, router: SemanticRouter | None) -> tuple[Tool, fl
     return DEFAULT_TOOL, None
 
 
+def _retry_tool(message: str, router: SemanticRouter, first: Tool, *, staff: bool) -> Tool | None:
+    """H2: the tool to try when the first one could not answer: the next-best read
+    tool if it scored within 0.05 of the first, else the knowledge base."""
+    scores = router.score(message)
+    ranked = [(t, sc) for t, sc in scores if t.kind == "read" and t.name != first.name
+              and t.name != "general_chat" and t.source != "app" and (not staff or t.name in STAFF_TOOLS)]
+    top = next((sc for t, sc in scores if t.name == first.name), None)
+    if ranked and top is not None and top - ranked[0][1] <= 0.05:
+        return ranked[0][0]
+    kb = TOOLS_BY_NAME.get("search_knowledge")
+    return kb if kb is not None and kb.name != first.name else None
+
+
 def route_message(
     message: str,
     router: SemanticRouter,
@@ -1141,18 +1154,46 @@ def _answer_chat(
         tool_result = (ToolResult(decision.tool.name, "read", dict(supplied.get("data") or {}))
                        if supplied is not None else None)
     else:
-        tool_result = execute_read(
-            decision.tool, decision.slots, message,
-            repo=repo, embedder=embedder, context=context, client_id=read_client,
-            engine_status=engine_status, workbench_ids=workbench_ids if staff else None,
-        )
+        try:
+            tool_result = execute_read(
+                decision.tool, decision.slots, message,
+                repo=repo, embedder=embedder, context=context, client_id=read_client,
+                engine_status=engine_status, workbench_ids=workbench_ids if staff else None,
+            )
+        except Exception:  # noqa: BLE001 - a failing read tool gets one retry below
+            tool_result = None
+            failed = True
+        else:
+            failed = False
     out = generate_answer(
         message, context, tool_result, history, provider=provider,
         tool_name=decision.tool.name, cache=cache, telemetry=telemetry,
     )
+    used_tool, routed_by = decision.tool, decision.method
+    # H2: the first tool failed or gave nothing to answer with. Try once more: the
+    # next-best read tool when it is close, else the knowledge base.
+    if decision.tool.source != "app" and (failed or not out.can_answer) and \
+            decision.tool.name != "search_knowledge":
+        alt = _retry_tool(message, router, decision.tool, staff=staff)
+        if alt is not None:
+            try:
+                alt_result = execute_read(
+                    alt, extract_slots(message, alt), message,
+                    repo=repo, embedder=embedder, context=context, client_id=read_client,
+                    engine_status=engine_status, workbench_ids=workbench_ids if staff else None,
+                )
+            except Exception:  # noqa: BLE001
+                alt_result = None
+            alt_out = generate_answer(
+                message, context, alt_result, history, provider=provider,
+                tool_name=alt.name, cache=cache, telemetry=telemetry,
+            )
+            if alt_out.can_answer:
+                out, tool_result, used_tool = alt_out, alt_result, alt
+                routed_by = f"{decision.method}+retry"
     citations = _dedupe([c.citation for c in context]) if out.can_answer and context else []
     return ChatResult(
-        answer=out.answer, citations=citations, tool=decision.tool.name, routed_by=decision.method,
+        answer=out.answer, citations=citations, tool=used_tool.name, routed_by=routed_by,
         can_answer=out.can_answer, tool_result=tool_result.data if tool_result else None,
         engine=engine(),
     )
