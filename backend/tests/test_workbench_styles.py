@@ -71,3 +71,24 @@ def test_format_cells_merge_and_undo(tmp_path):
         assert c.post(base, json={"action": "unmerge", "range": "A1:C1"}).status_code == 409
         assert c.post(f"/workbench/conversations/{cid}/edits", json={"workbook_id": wid, "edits": [
             {"sheet": "Bank", "cell": "A1", "style": {"bg": "red"}}]}).status_code == 422
+
+
+def test_style_aliases_and_borders():
+    assert clean({"bold": True, "fill": "dbeafe", "border": "bottom", "align": "centre"}) == {
+        "b": True, "bg": "DBEAFE", "bt": False, "bb": True, "bl": False, "br": False, "ha": "center"}
+    assert clean({"border": True})["bl"] is True
+
+
+def test_write_cells_never_empties_a_cell_by_accident(tmp_path):
+    app, _, doc, _ = _setup(tmp_path)
+    with queue.replace_connector(testing.InMemoryConnector()), _client(app) as c:
+        cid = c.post("/workbench/conversations", json={"document_ids": [doc.id]}
+                     ).json()["conversation"]["id"]
+        base = f"/workbench/conversations/{cid}/tools/write_cells"
+        bad = c.post(base, json={"args": {"sheet": "Bank", "cells": [{"cell": "A1"}]}})
+        assert bad.status_code == 422 and "nothing to write" in bad.json()["detail"]
+        ok = c.post(base, json={"args": {"sheet": "Bank", "cells": [
+            {"cell": "A1", "style": {"bold": True, "fill": "DBEAFE", "border": "bottom"}}]}})
+        assert ok.status_code == 200, ok.text
+        op = ok.json()["batch"]["ops"][0]
+        assert op["style"]["b"] is True and op["style"]["bg"] == "DBEAFE" and op["new_value"] == op["old_value"]

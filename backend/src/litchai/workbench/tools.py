@@ -132,6 +132,7 @@ class CellWrite(_Args):
                           '"RRGGBB", "bg": fill colour "RRGGBB", "ha": "left"|"center"|"right", '
                           '"wrap": wrap text, "bt"/"bb"/"bl"/"br": thin border top/bottom/left/right}. '
                           'Without value or formula, only the format changes.')
+    clear: bool = Field(False, description="true empties the cell; never empty a cell any other way")
 
 
 class WriteCellsArgs(_Args):
@@ -402,7 +403,12 @@ def _write_cells(ctx: ToolContext, a: WriteCellsArgs) -> ToolOutput:
             st = clean_style(w.style)
         except StyleError as exc:
             raise ToolError(f"{ref}: {exc}") from exc
-        if st and w.formula is None and w.value is None:
+        if w.formula is None and w.value is None and not w.clear and not st and not w.number_format:
+            # Never empty a cell by accident (a model that meant to format it).
+            raise ToolError(f"{ref}: nothing to write. Give a value, a formula, a style "
+                            "(formatting, for example {\"b\": true, \"bg\": \"DBEAFE\", \"bb\": true}) "
+                            "or clear=true.")
+        if (st or w.number_format) and w.formula is None and w.value is None and not w.clear:
             # Format only: keep what is in the cell.
             r_, c_ = parse_a1(ref)
             cur = sh.get(r_, c_)
@@ -469,11 +475,15 @@ TOOLS: tuple[WorkbenchTool, ...] = (
     WorkbenchTool("write_cells", "write",
                   "Write values or formulas into specific cells: a totals row, a "
                   "difference cell, labels, a value next to each row, a small table. "
+                  "Also FORMATS cells: give each cell a style (bold, italic, text or fill "
+                  "colour, alignment, wrap, borders) with no value to change only the format. "
                   "Use it for anything that is not one formula repeated down a whole "
                   "column. Returns each formula's result so you can check it.",
                   WriteCellsArgs, _write_cells,
                   ("add a totals row below the columns", "put the difference in D23",
-                   "write the account type next to each account", "add a label in A22")),
+                   "write the account type next to each account", "add a label in A22",
+                   "make the header row bold with a light fill", "add a bottom border under the totals",
+                   "highlight the total rows in light blue", "format the sheet professionally")),
     WorkbenchTool("add_formula_column", "write",
                   "Add a computed column: difference, sum, ratio, percent_of_total, "
                   "running_total, vat_from_gross, wht, flag_over, or a validated custom "
