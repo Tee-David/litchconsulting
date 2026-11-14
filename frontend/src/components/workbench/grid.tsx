@@ -748,7 +748,7 @@ export function Grid({
   };
 
   // Right-click menu.
-  const [menu, setMenu] = useState<{ x: number; y: number; range: Range } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; range: Range; at: { r: number; c: number } } | null>(null);
   useEffect(() => {
     if (!menu) return;
     const close = () => setMenu(null);
@@ -774,7 +774,7 @@ export function Grid({
       setActive({ r, c });
       onSelect(range);
     }
-    setMenu({ x: Math.min(e.clientX, window.innerWidth - 248), y: Math.max(8, Math.min(e.clientY, window.innerHeight - 560)), range });
+    setMenu({ x: Math.min(e.clientX, window.innerWidth - 248), y: Math.max(8, Math.min(e.clientY, window.innerHeight - 560)), range, at: { r, c } });
   };
 
   const rangeFrom = (a: { r: number; c: number }, b: { r: number; c: number }): Range => ({
@@ -1089,7 +1089,7 @@ export function Grid({
                     null,
                     ...(nr > 1
                       ? (() => {
-                          const col = active && active.c >= g.c0 && active.c <= g.c1 ? active.c : g.c0;
+                          const col = menu.at.c >= g.c0 && menu.at.c <= g.c1 ? menu.at.c : g.c0;
                           return [
                             { label: `Sort A to Z by column ${colLetter(col)}`, keys: "", run: () => sortRange(g, col, 1) },
                             { label: `Sort Z to A by column ${colLetter(col)}`, keys: "", run: () => sortRange(g, col, -1) },
