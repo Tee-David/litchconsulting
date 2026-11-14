@@ -113,6 +113,8 @@ export function Grid({
   const editingRef = useRef<{ r: number; c: number; text: string } | null>(null);
   editingRef.current = editing;
   const [optimistic, setOptimistic] = useState<Map<string, string>>(new Map());
+  // What was typed or pasted, kept until the saved version loads, so a quick copy sees it.
+  const pendingRaw = useRef<Map<string, Omit<WbUserEdit, "sheet" | "cell">>>(new Map());
   const [sug, setSug] = useState(0);
   const editInput = useRef<HTMLInputElement>(null);
   // E2.6 fill handle: the cell the drag has reached, while dragging.
@@ -431,6 +433,7 @@ export function Grid({
   const rawOf = (cell: WbCell | null) => cell?.f ?? (cell?.v === null || cell?.v === undefined ? "" : String(cell.v));
   const send = async (items: { r: number; c: number; e: Omit<WbUserEdit, "sheet" | "cell">; shown: string }[]) => {
     if (!onCommit || !items.length) return;
+    for (const it of items) pendingRaw.current.set(`${it.r}:${it.c}`, it.e);
     setOptimistic((m) => {
       const n = new Map(m);
       for (const it of items) n.set(`${it.r}:${it.c}`, it.shown);
@@ -567,6 +570,51 @@ export function Grid({
     // Runs once per request.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formatRequest]);
+
+  // ---- S4: sort a range by one column ------------------------------------------------
+  /** A first row of text over a column of numbers (or row 1 of the sheet) is a header and stays on top. */
+  const hasHeader = (g: Range, col: number) => {
+    if (g.r1 <= g.r0) return false;
+    const top = cellAt(g.r0, col)?.v;
+    const next = cellAt(g.r0 + 1, col)?.v;
+    return typeof top === "string" && top !== "" && (typeof next !== "string" || g.r0 === 1);
+  };
+  const sortRange = (g: Range, col: number, dir: 1 | -1) => {
+    if (!editable) return;
+    const head = hasHeader(g, col) ? 1 : 0;
+    const r0 = g.r0 + head;
+    if (g.r1 - r0 < 1) return;
+    const rows: { from: number; key: string | number | boolean | null; cells: (WbCell | null)[] }[] = [];
+    for (let r = r0; r <= g.r1; r++) {
+      const cells: (WbCell | null)[] = [];
+      for (let c = g.c0; c <= g.c1; c++) cells.push(cellAt(r, c));
+      rows.push({ from: r, key: (cellAt(r, col)?.v ?? null) as string | number | boolean | null, cells });
+    }
+    // Numbers before text, as in Excel; blanks always last; ties keep their order.
+    const rank = (v: unknown) => (v === null || v === "" ? 2 : typeof v === "number" ? 0 : 1);
+    const sorted = [...rows].sort((a, b) => {
+      const ra = rank(a.key);
+      const rb = rank(b.key);
+      if (ra !== rb || ra === 2) return ra - rb;
+      const cmp = typeof a.key === "number" && typeof b.key === "number" ? a.key - b.key : String(a.key).localeCompare(String(b.key), "en", { numeric: true, sensitivity: "base" });
+      return cmp * dir;
+    });
+    if (sorted.every((x, i) => x.from === rows[i].from)) return;
+    const items: { r: number; c: number; e: Omit<WbUserEdit, "sheet" | "cell">; shown: string }[] = [];
+    sorted.forEach((row, i) => {
+      const r = r0 + i;
+      if (row.from === r) return;
+      row.cells.forEach((cell, k) => {
+        const c = g.c0 + k;
+        const nf = cell?.nf && cell.nf !== "General" ? cell.nf : undefined;
+        if (cell?.f) items.push({ r, c, e: { formula: shiftFormula(cell.f, r - row.from, 0), number_format: nf }, shown: "…" });
+        else if (cell?.v === null || cell?.v === undefined || cell?.v === "") items.push({ r, c, e: { clear: true }, shown: "" });
+        else items.push({ r, c, e: { value: cell.v as string | number | boolean, number_format: nf }, shown: display(cell) });
+      });
+    });
+    if (items.length > 5000) return;
+    void send(items);
+  };
 
   // ---- E2.6: fill handle ----------------------------------------------------------
   const cellFromPoint = (x: number, y: number) => {
@@ -722,7 +770,10 @@ export function Grid({
     for (let r = selection.r0; r <= selection.r1; r++) {
       const row: string[] = [];
       for (let c = selection.c0; c <= Math.min(selection.c1, maxCol); c++) {
-        const cell = cellAt(r, c);
+        const raw = optimistic.has(`${r}:${c}`) ? pendingRaw.current.get(`${r}:${c}`) : undefined;
+        const cell: WbCell | null = raw
+          ? ({ ...(cellAt(r, c) ?? { r, c, ref: "", pending: null, page: null }), v: raw.clear ? null : (raw.value ?? null), f: raw.formula ?? null, nf: raw.number_format ?? cellAt(r, c)?.nf ?? null } as WbCell)
+          : cellAt(r, c);
         cells.push({ dr: r - selection.r0, dc: c - selection.c0, v: cell?.v ?? null, f: rawValues ? null : (cell?.f ?? null), nf: cell?.nf && cell.nf !== "General" ? cell.nf : null });
         row.push(rawValues && cell?.v !== null && cell?.v !== undefined ? String(cell.v).replace(/[\t\n]/g, " ") : typeof cell?.v === "number" ? String(cell.v) : display(cell).replace(/[\t\n]/g, " "));
       }
@@ -982,6 +1033,16 @@ export function Grid({
                     { label: `Insert ${nc === 1 ? "a column" : `${nc} columns`} right`, keys: "", run: () => onStructure("insert_cols", g.c1 + 1, nc) },
                     { label: `Delete ${cols}`, keys: "", run: () => onStructure("delete_cols", g.c0, nc) },
                     null,
+                    ...(nr > 1
+                      ? (() => {
+                          const col = active && active.c >= g.c0 && active.c <= g.c1 ? active.c : g.c0;
+                          return [
+                            { label: `Sort A to Z by column ${colLetter(col)}`, keys: "", run: () => sortRange(g, col, 1) },
+                            { label: `Sort Z to A by column ${colLetter(col)}`, keys: "", run: () => sortRange(g, col, -1) },
+                            null,
+                          ];
+                        })()
+                      : []),
                   ];
                 })()
               : []),
