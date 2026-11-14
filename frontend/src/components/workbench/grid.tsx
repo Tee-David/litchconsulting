@@ -498,8 +498,11 @@ export function Grid({
     try {
       text = await navigator.clipboard.readText();
     } catch {
-      return;
+      // No readable text (blocked, or empty): fall back to what this grid copied last.
+      if (!internalClip) return;
+      text = internalClip.text;
     }
+    if (!text && internalClip) text = internalClip.text;
     const items: { r: number; c: number; e: Omit<WbUserEdit, "sheet" | "cell">; shown: string }[] = [];
     const clip = internalClip;
     if (clip && clip.text === text.replace(/\r\n?/g, "\n").replace(/\n$/, "")) {
