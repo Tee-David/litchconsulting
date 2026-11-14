@@ -104,6 +104,11 @@ class SheetAction(BaseModel):
     author: str = Field(default="you", min_length=1, max_length=80)
 
 
+class Instructions(BaseModel):
+    """A7: standing instructions for a workbench (empty clears them)."""
+    text: str = Field("", max_length=1500)
+
+
 class RestoreVersion(BaseModel):
     """R4: bring back an earlier version as a new version (undoable)."""
     version: int = Field(ge=1)
@@ -644,6 +649,14 @@ def register_workbench_routes(app: FastAPI) -> None:
                 raise HTTPException(409, "; ".join(map(str, errs))[:300])
             wb.store.save(conv)
             return {"batch": done.to_dict(), "conversation": conv.public()}
+
+    @app.put("/workbench/conversations/{conversation_id}/instructions")
+    def set_instructions(conversation_id: str, body: Instructions) -> dict[str, Any]:
+        with _workbench() as wb:
+            conv = _get(wb, conversation_id)
+            conv.instructions = "\n".join(line.rstrip() for line in body.text.strip().splitlines())[:1500]
+            wb.store.save(conv)
+            return {"conversation": conv.public()}
 
     @app.post("/workbench/conversations/{conversation_id}/workbooks/{workbook_id}/restore")
     def restore_version(conversation_id: str, workbook_id: str,

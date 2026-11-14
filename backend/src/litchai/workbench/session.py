@@ -108,6 +108,8 @@ class Conversation:
     created_at: str = field(default_factory=_now)
     updated_at: str = field(default_factory=_now)
     new_seq: int = 0
+    # A7: standing instructions for this workbench, used in every answer.
+    instructions: str = ""
 
     @property
     def local_only(self) -> bool:
@@ -133,6 +135,7 @@ class Conversation:
             "period_label": self.period_label, "provider": self.provider,
             "created_at": self.created_at, "updated_at": self.updated_at,
             "new_seq": self.new_seq,
+            "instructions": self.instructions,
             "workbooks": [w.__dict__ for w in self.workbooks],
             "batches": [b.to_dict() for b in self.batches],
             "messages": self.messages,
@@ -183,7 +186,7 @@ class Conversation:
                    ) -> Conversation:
         c = cls(id=state["id"])
         for k in ("client_id", "ai_mode", "title", "client_name", "period_label", "provider",
-                  "created_at", "updated_at", "new_seq"):
+                  "created_at", "updated_at", "new_seq", "instructions"):
             if k in state:
                 setattr(c, k, state[k])
         c.workbooks = [WorkbookRef(**w) for w in state.get("workbooks", [])]

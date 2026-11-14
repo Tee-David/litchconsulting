@@ -167,6 +167,50 @@ def pop_last_turn(conv: Conversation) -> list[dict[str, Any]]:
     return [*older, {"user": plain, "assistant": answer}]
 
 
+# A6: words that point at what the person selected.
+_DEICTIC = re.compile(
+    r"\b(this|these|that|those|selected|selection|highlighted|here|this range|these cells|"
+    r"the range|these rows|this column|this row|this table)\b", re.I)
+
+
+def selection_matters(message: str, selection: str | None) -> bool:
+    """A selection counts only when the question points at it ("sum these", "explain
+    this"). Otherwise it is just where the cursor is, and is ignored."""
+    return bool(selection) and bool(_DEICTIC.search(message or ""))
+
+
+def selection_preview(ctx: ToolContext, selection: str, *, max_rows: int = 15,
+                      max_cols: int = 8) -> str:
+    """The selected cells as a small table with references, for the model."""
+    sheet_name, rng = split_qualified(selection)
+    try:
+        r0, c0, r1, c1 = parse_range(rng)
+    except Exception:  # noqa: BLE001 - a bad hint is only skipped
+        return ""
+    for wb in ctx.workbooks.values():
+        sh = next((s for n, s in wb.sheets.items()
+                   if sheet_name is None or n.lower() == sheet_name.lower()), None)
+        if sh is None:
+            continue
+        from litchai.workbench.model import a1
+
+        lines = []
+        for r in range(r0, min(r1, r0 + max_rows - 1) + 1):
+            row = []
+            for c in range(c0, min(c1, c0 + max_cols - 1) + 1):
+                cell = sh.get(r, c)
+                v = "" if cell is None else (cell.formula or cell.display)
+                row.append(f"{a1(r, c)}={'' if v is None else str(v)[:40]}")
+            lines.append(" | ".join(row))
+        more = []
+        if r1 - r0 + 1 > max_rows:
+            more.append(f"{r1 - r0 + 1 - max_rows} more rows")
+        if c1 - c0 + 1 > max_cols:
+            more.append(f"{c1 - c0 + 1 - max_cols} more columns")
+        return "\n".join(lines) + (f"\n({', '.join(more)} not shown)" if more else "")
+    return ""
+
+
 def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
              selection: str | None = None, max_steps: int = 8,
              replace_last: bool = False) -> Iterator[dict[str, Any]]:
@@ -223,8 +267,9 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
             return str(exc)
         return None
 
-    fast = _fast_path(message, route, ctx, execute) if not selection else None
-    if fast is None and has_tb and not selection:
+    pointed = selection_matters(message, selection)
+    fast = _fast_path(message, route, ctx, execute) if not pointed else None
+    if fast is None and has_tb and not pointed:
         fast = _tb_fast_path(message, ctx, execute)
     if fast is not None:
         for ev in fast:
@@ -240,7 +285,18 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
                              sql_catalog=catalog_text(ctx) or "(none)",
                              pending="\n".join(pending) or "(none)", max_steps=max_steps,
                              tool_menu="{tool_menu}")
-    user = message if not selection else f"{message}\n(Selection hint: {selection})"
+    user = message
+    if pointed and selection:
+        preview = selection_preview(ctx, selection)
+        user += (f"\n(The person selected {selection}. \"This\", \"these\" or \"selected\" means "
+                 f"exactly that range. Its cells:\n{preview})" if preview else
+                 f"\n(The person selected {selection}. \"This\" or \"these\" means that range.)")
+    elif selection:
+        user += f"\n(The cursor is on {selection}. Use it only if the question needs it.)"
+    if conv.instructions.strip():
+        # A7: standing instructions from the firm for this workbench.
+        system += ("\n\nStanding instructions for this workbench (follow them in every answer "
+                   "unless the person says otherwise in this message):\n" + conv.instructions.strip())
     hints = routing_hints(message)
     if has_tb:
         hints = [("This workbook has a trial balance: use trial_balance_statements for "
