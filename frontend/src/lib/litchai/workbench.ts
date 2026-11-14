@@ -283,6 +283,9 @@ export const wbProviders = (probe = false) =>
 
 /** The agent turn as the backend's SSE stream (piped to the browser as is). */
 /** D1: a new chat, or open an earlier one. */
+/** H1: Good / Bad votes on workbench answers in the last days. */
+export type WbVote = { conversation_id: string; title: string; at: string; vote: "good" | "bad"; note: string; by: string | null; question: string; answer: string; tools: string[]; layer: string | null; model: string | null; provider: string | null };
+export const wbFeedbackReport = (days = 7) => call<{ days: number; votes: WbVote[] }>(`/workbench/feedback?days=${days}`);
 /** A7: save the standing instructions (empty clears them). */
 export const wbSetInstructions = (id: string, text: string) =>
   call<{ conversation: WbConversation }>(`/workbench/conversations/${enc(id)}/instructions`, { ...json({ text }), method: "PUT" });

@@ -30,6 +30,7 @@ const QUICK_ACTIONS: QuickAction[] = [
   { label: "New request", href: "/admin/requests/new", icon: Inbox, keywords: "create service" },
   { label: "New client", href: "/admin/clients", icon: UserPlus, keywords: "create add" },
   { label: "Ask Sage", href: "/admin/sage", icon: SageIcon, keywords: "ai assistant chat knowledge" },
+  { label: "Sage answer quality", href: "/admin/sage/quality", icon: SageIcon, keywords: "votes good bad feedback routing report" },
   { label: "Go to Trash", href: "/admin/trash", icon: Trash2, keywords: "deleted" },
   { label: "Go to Audit log", href: "/admin/audit", icon: ScrollText, keywords: "history log" },
 ];

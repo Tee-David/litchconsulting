@@ -8,6 +8,47 @@ import { ACTIVE_STATUSES, STATUS_LABELS, type RequestStatus } from "@/lib/reques
 import { formatMoney, num } from "@/lib/invoice/money";
 
 export const dynamic = "force-dynamic";
+
+/** Send admins a short summary of the week's Good / Bad votes on Sage answers. */
+async function sageWeekly(base: string) {
+  const { sageQuality } = await import("@/lib/sage/quality");
+  const { user } = await import("@/lib/db/schema");
+  const q = await sageQuality(7);
+  if (!q.votes.length) return { sent: 0, votes: 0 };
+  const admins = await db.select({ email: user.email, name: user.name }).from(user).where(and(eq(user.role, "admin"), eq(user.banned, false)));
+  const worst = q.votes.filter((v) => v.vote === "bad").slice(0, 5);
+  const week = new Date().toISOString().slice(0, 10);
+  let sent = 0;
+  for (const a of admins) {
+    try {
+      await sendTemplate(
+        "notice",
+        {
+          subject: `Sage this week: ${q.good} good, ${q.bad} bad`,
+          heading: "How Sage's answers were rated this week",
+          name: a.name,
+          paragraphs: [
+            `People rated **${q.good + q.bad}** answers: **${q.good}** good and **${q.bad}** bad.`,
+            ...(worst.length
+              ? ["The bad ones, newest first:", worst.map((v) => `**${v.question.slice(0, 90) || "(no question)"}**${v.note ? ` · “${v.note.slice(0, 120)}”` : ""} · ${v.source}, ${v.route}, ${v.tool}`).join("\n")]
+              : ["No answer was rated bad."]),
+          ],
+          rows: [
+            ...q.badBy.route.slice(0, 3).map(([k, n]) => ({ label: `Bad via route: ${k}`, value: String(n) })),
+            ...q.badBy.model.slice(0, 3).map(([k, n]) => ({ label: `Bad from model: ${k}`, value: String(n) })),
+          ],
+          cta: { label: "Open the full report", href: `${base}/admin/sage/quality` },
+          why: "You got this because you are an admin at Litch Consulting and Sage answers were rated this week.",
+        },
+        { to: a.email, dedupeKey: `sage-weekly:${week}:${a.email}` },
+      );
+      sent++;
+    } catch {
+      /* one failed send must not stop the others; the outbox retries */
+    }
+  }
+  return { sent, votes: q.votes.length };
+}
 export const maxDuration = 60;
 
 function baseUrl() {
@@ -104,5 +145,7 @@ export async function GET(req: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, ...summary });
+  // H1: the week's Sage votes to every admin, only when there are any.
+  const quality = await sageWeekly(base).catch(() => null);
+  return NextResponse.json({ ok: true, ...summary, sageQuality: quality });
 }
