@@ -49,6 +49,11 @@ def fix_workbook_properties(wb: Workbook) -> None:
 def save_workbook_deterministic(wb: Workbook, path: Path | str) -> None:
     """Save with fixed zip-entry timestamps so identical content produces
     identical bytes (openpyxl stamps entries with the wall clock)."""
+    import datetime as _dt
+
+    # The creation date is pinned here; "modified" is pinned in the copy below.
+    fixed = _dt.datetime(2000, 1, 1)
+    wb.properties.created = fixed
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
@@ -58,7 +63,14 @@ def save_workbook_deterministic(wb: Workbook, path: Path | str) -> None:
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = item.external_attr
             info.create_system = 3  # pin (varies by platform default)
-            dst.writestr(info, src.read(item.filename))
+            data = src.read(item.filename)
+            if item.filename == "docProps/core.xml":
+                # openpyxl stamps "modified" with the save time; pin it.
+                import re as _re
+
+                data = _re.sub(rb"(<dcterms:modified[^>]*>)[^<]*(</dcterms:modified>)",
+                               rb"\g<1>2000-01-01T00:00:00Z\g<2>", data)
+            dst.writestr(info, data)
 
 
 def write_text(ws: Worksheet, ref: str, text: str, *, font: Font | None = None) -> None:
