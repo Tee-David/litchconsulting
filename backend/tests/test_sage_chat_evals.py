@@ -18,7 +18,7 @@ from litchai.embeddings import FakeEmbedder
 
 TASKS = json.loads((Path(A.__file__).resolve().parents[1] / "evals" / "sage_chat_tasks.json")
                    .read_text(encoding="utf-8"))["tasks"]
-FLOOR = 0.0  # set from the first measured run, below
+FLOOR = 0.70  # measured 2026-11-14: 23/32 with the fake embedder (32/32 with the real one)
 
 
 def _route_all():
