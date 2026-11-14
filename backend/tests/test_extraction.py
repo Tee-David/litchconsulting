@@ -162,3 +162,16 @@ def test_header_account_column_is_the_description_fallback():
     # A bank statement: "Narration" wins over an earlier "Account No" column.
     bank = [("Account No", "Narration", "Debit", "Credit")]
     assert _detect_header(bank)[1]["description"] == 1
+
+
+def test_row_date_reads_date_cells_and_text():
+    from datetime import date, datetime
+
+    from litchai.extraction.excel import _row_date
+
+    roles = {"date": 0}
+    assert _row_date(("06-Jan-2025", "x"), roles) == date(2025, 1, 6)
+    assert _row_date((datetime(2025, 3, 3, 0, 0), "x"), roles) == date(2025, 3, 3)
+    assert _row_date(("2025-12-31",), roles) == date(2025, 12, 31)
+    assert _row_date(("not a date",), roles) is None
+    assert _row_date(("06-Jan-2025",), {}) is None

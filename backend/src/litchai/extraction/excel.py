@@ -90,6 +90,7 @@ class ExcelEngine:
                     balance=balance,
                     sheet_ref=f"{sheet.title}!{get_column_letter(desc_col + 1)}{r_offset}",
                     row_ref=r_offset,
+                    txn_date=_row_date(raw, roles),
                     flags=tuple(row_flags),
                 )
             )
@@ -113,6 +114,28 @@ def _pick_sheet(wb) -> object:
     if best is None:
         raise ExtractionError("empty workbook")
     return best
+
+
+def _row_date(raw: tuple, roles: dict[str, int]):
+    """The row's date from the date column (a date cell, or text such as 06-Jan-2025)."""
+    from datetime import date as _date
+    from datetime import datetime as _dt
+
+    col = roles.get("date")
+    if col is None or col >= len(raw) or raw[col] in (None, ""):
+        return None
+    v = raw[col]
+    if isinstance(v, _dt):
+        return v.date()
+    if isinstance(v, _date):
+        return v
+    s = str(v).strip()
+    for fmt in ("%Y-%m-%d", "%d-%b-%Y", "%d/%m/%Y", "%d-%m-%Y", "%d %b %Y", "%d %B %Y", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return _dt.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    return None
 
 
 def _detect_header(rows_raw: list[tuple]) -> tuple[int | None, dict[str, int]]:

@@ -22,7 +22,7 @@ from litchai.extraction.base import (
     ExtractionResult,
     register_engine,
 )
-from litchai.extraction.excel import _classify, _detect_header, _row_amount
+from litchai.extraction.excel import _classify, _detect_header, _row_amount, _row_date
 
 
 def _docling_convert(data: bytes, *, force_ocr: bool, page_range: tuple[int, int] | None):
@@ -114,6 +114,7 @@ class _DoclingEngine:
                     amount=amount if isinstance(amount, Decimal) else Decimal(str(amount)),
                     balance=bal,
                     page_ref=page,
+                    txn_date=_row_date(raw, roles),
                     flags=tuple(flags),
                 )
             )
