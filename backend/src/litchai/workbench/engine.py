@@ -169,7 +169,7 @@ def pop_last_turn(conv: Conversation) -> list[dict[str, Any]]:
 
 # A6: words that point at what the person selected.
 _DEICTIC = re.compile(
-    r"\b(this|these|that|those|selected|selection|highlighted|here|this range|these cells|"
+    r"\b(this|these|those|selected|selection|highlighted|this range|these cells|"
     r"the range|these rows|this column|this row|this table)\b", re.I)
 
 
