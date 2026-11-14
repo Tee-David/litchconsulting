@@ -185,6 +185,12 @@ def test_pdf_documents_open_from_line_items(tmp_path):
         other = repo.create_document("c2", "x.pdf", "application/pdf", "ef" * 32, 10)
         assert c.post("/workbench/conversations", json={
             "client_id": "c1", "document_ids": [other.id]}).status_code == 409
+        # Read to the end with no table rows: 422 with a reason, so the browser stops waiting.
+        shot = repo.create_document("c1", "shot.png", "image/png", "ab" * 32, 10)
+        for s in ("scanning", "extracting", "extracted"):
+            repo.transition_document(shot.id, s)
+        r = c.post("/workbench/conversations", json={"document_ids": [shot.id]})
+        assert r.status_code == 422 and "No table rows" in r.json()["detail"]
 
 
 def test_review_pack_cache_follows_engagement_version():

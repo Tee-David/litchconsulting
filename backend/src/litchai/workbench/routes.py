@@ -186,8 +186,18 @@ def register_workbench_routes(app: FastAPI) -> None:
         else:
             items = repo.get_line_items(doc.id)
             if not items:
-                raise HTTPException(409, f"document {document_id} has no extracted rows yet "
-                                    f"(status {doc.status})")
+                status = str(getattr(doc.status, "value", doc.status))
+                # Still being scanned or read: the browser asks again (409 = wait).
+                if status in ("received", "scanning", "extracting"):
+                    raise HTTPException(409, f"document {document_id} has no extracted rows yet "
+                                        f"(status {status})")
+                # Reading ended without rows: say so, so the browser stops waiting.
+                if status == "rejected":
+                    raise HTTPException(422, f"{name} did not pass the virus and format check")
+                if status == "extraction_failed":
+                    raise HTTPException(422, f"{name} could not be read. Try a clearer image or a PDF")
+                raise HTTPException(422, f"No table rows were found in {name}. Add a screenshot of "
+                                    "a table, or type the figures in your question")
             model = from_line_items(items, wb_id=f"doc-{doc.id}", name=name, document_id=doc.id)
             wb.attach_model(conv, model)
 
