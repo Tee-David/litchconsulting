@@ -482,7 +482,7 @@ def register_workbench_routes(app: FastAPI) -> None:
         author = " ".join(body.author.split())[:80] or "you"
         with _workbench() as wb:
             conv = _get(wb, conversation_id)
-            model = wb.models(conv, with_pending=False).get(body.workbook_id)
+            model = wb.models(conv, with_pending=False, only={body.workbook_id}).get(body.workbook_id)
             if model is None:
                 raise HTTPException(404, "workbook not found")
             ob = OpBuilder(model, "user_edit")
@@ -615,7 +615,7 @@ def register_workbench_routes(app: FastAPI) -> None:
         author = " ".join(body.author.split())[:80] or "you"
         with _workbench() as wb:
             conv = _get(wb, conversation_id)
-            model = wb.models(conv, with_pending=False).get(workbook_id)
+            model = wb.models(conv, with_pending=False, only={workbook_id}).get(workbook_id)
             if model is None:
                 raise HTTPException(404, "workbook not found")
             if sheet not in model.sheets:
@@ -802,7 +802,7 @@ def register_workbench_routes(app: FastAPI) -> None:
                 except (KeyError, WorkbenchError) as exc:
                     raise HTTPException(404, str(exc)) from exc
             else:
-                models = wb.models(conv)
+                models = wb.models(conv, only={workbook_id})
             if workbook_id not in models:
                 raise HTTPException(404, "workbook not found")
             try:

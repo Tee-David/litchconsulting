@@ -132,3 +132,26 @@ def test_offline_edits_that_clash_are_refused_with_both_values(tmp_path):
         assert c.post(url, json={"workbook_id": wid, "edits": [ok], "check_conflicts": True}).status_code == 200
         # Keep mine: send again without the check.
         assert c.post(url, json={"workbook_id": wid, "edits": [offline]}).status_code == 200
+
+
+def test_public_view_keeps_ops_only_for_open_and_recent_batches(tmp_path):
+    """A long-lived workbench stays small: old decided batches keep counts, not ops."""
+    from procrastinate import testing
+    from test_workbench_api import _client, _setup
+
+    from litchai.queue import queue
+
+    app, _, doc, _ = _setup(tmp_path)
+    with queue.replace_connector(testing.InMemoryConnector()), _client(app) as c:
+        cid = c.post("/workbench/conversations", json={"document_ids": [doc.id]}
+                     ).json()["conversation"]["id"]
+        url = f"/workbench/conversations/{cid}/edits"
+        for i in range(14):
+            r = c.post(url, json={"workbook_id": f"doc-{doc.id}", "edits": [
+                {"sheet": "Bank", "cell": "J1", "value": i + 1}]})
+            assert r.status_code == 200
+        batches = r.json()["conversation"]["batches"]
+        trimmed = [b for b in batches if b.get("ops_trimmed")]
+        assert len(trimmed) == len(batches) - 10
+        assert all(b["counts"]["changed_cells"] + b["counts"]["new_cells"] == 1 for b in trimmed)
+        assert all(b["ops"] for b in batches[-10:])

@@ -12,7 +12,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import pickle
+import threading
 import uuid
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -145,6 +148,15 @@ class Conversation:
 
     def public(self) -> dict[str, Any]:
         s = self.state()
+        # The page needs every operation of pending and blocked batches, and of the
+        # newest decided ones (Show decided, jump, undo labels). Older decided batches
+        # keep their title, status and counts only: a long-lived workbench stays small.
+        decided = [i for i, b in enumerate(self.batches) if b.status not in ("pending", "blocked")]
+        keep = set(decided[-10:])
+        for i in decided:
+            if i not in keep:
+                s["batches"][i]["ops"] = []
+                s["batches"][i]["ops_trimmed"] = True
         s["pending"] = sum(1 for b in self.batches if b.status == "pending")
         # The chat list, without the old messages (they load when a chat is opened).
         s["threads"] = [{"id": t["id"], "title": t.get("title") or "Chat", "at": t.get("at"),
@@ -265,6 +277,42 @@ class PgConversationStore:
         return [Conversation.from_state(r["state"], r["mask_state"]) for r in rows]
 
 
+# --- parsed workbooks, cached by file content ------------------------------------------
+# Parsing a large xlsx takes seconds (openpyxl reads it twice). The same file content
+# always gives the same model, so the parsed model is kept (pickled) per content hash and
+# every caller gets its own copy (callers overlay proposals on it).
+_MODEL_CACHE: OrderedDict[tuple[Any, ...], bytes] = OrderedDict()
+_MODEL_CACHE_BYTES = 0
+_MODEL_CACHE_MAX = 300 * 1024 * 1024
+_MODEL_LOCK = threading.Lock()
+
+
+def _cached_model(blobs: Any, ref: Any) -> Workbook:
+    global _MODEL_CACHE_BYTES
+    key = (ref.current_sha, ref.id, ref.name, ref.document_id)
+    with _MODEL_LOCK:
+        hit = _MODEL_CACHE.get(key)
+        if hit is not None:
+            _MODEL_CACHE.move_to_end(key)
+    if hit is not None:
+        return pickle.loads(hit)
+    model = load_xlsx(blobs.get(ref.current_sha), wb_id=ref.id, name=ref.name,
+                      document_id=ref.document_id)
+    try:
+        data = pickle.dumps(model, protocol=pickle.HIGHEST_PROTOCOL)
+    except Exception:  # noqa: BLE001 - an unpicklable model is simply not cached
+        return model
+    if len(data) <= _MODEL_CACHE_MAX // 3:
+        with _MODEL_LOCK:
+            if key not in _MODEL_CACHE:
+                _MODEL_CACHE[key] = data
+                _MODEL_CACHE_BYTES += len(data)
+            while _MODEL_CACHE_BYTES > _MODEL_CACHE_MAX and _MODEL_CACHE:
+                _, old = _MODEL_CACHE.popitem(last=False)
+                _MODEL_CACHE_BYTES -= len(old)
+    return pickle.loads(data)
+
+
 # --- the service ---------------------------------------------------------------------
 class WorkbenchError(ValueError):
     pass
@@ -305,11 +353,14 @@ class Workbench:
                                  origin=model.origin, document_id=model.document_id)
 
     # -- context ------------------------------------------------------------------
-    def models(self, conv: Conversation, *, with_pending: bool = True) -> dict[str, Workbook]:
+    def models(self, conv: Conversation, *, with_pending: bool = True,
+               only: set[str] | None = None) -> dict[str, Workbook]:
+        """The workbooks as models. ``only`` loads just those (a sheet read needs one)."""
         out: dict[str, Workbook] = {}
         for ref in conv.workbooks:
-            out[ref.id] = load_xlsx(self.blobs.get(ref.current_sha), wb_id=ref.id, name=ref.name,
-                                    document_id=ref.document_id)
+            if only is not None and ref.id not in only:
+                continue
+            out[ref.id] = _cached_model(self.blobs, ref)
             out[ref.id].origin = ref.origin
         # Sheets Sage made and you accepted (and did not undo): these may be rebuilt.
         for b in conv.batches:
@@ -329,7 +380,8 @@ class Workbench:
                 if b.status != "pending":
                     continue
                 for op in b.ops:
-                    if op.op == "create_workbook" and op.workbook_id not in out:
+                    if op.op == "create_workbook" and op.workbook_id not in out and (
+                            only is None or op.workbook_id in only):
                         out[op.workbook_id] = new_workbook(op.workbook_id,
                                                            str(op.new_value or op.workbook_id))
                 for wid in {op.workbook_id for op in b.ops}:
