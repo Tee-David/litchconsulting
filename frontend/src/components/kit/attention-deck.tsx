@@ -321,7 +321,7 @@ export function AttentionDeck({
                       const c = cardRef.current?.getBoundingClientRect();
                       // Above when there is room; else beside the button (wide cards); else under the tools.
                       const h = SNOOZE.length * 44 + 16;
-                      setMenuAt(!b || !c || b.top - c.top >= h ? "above" : b.left - c.left >= 240 && b.bottom - c.top >= h ? "side" : "below");
+                      setMenuAt(!b || !c || b.top - c.top >= h ? "above" : b.left - c.left >= 240 && b.bottom - c.top >= h - 12 ? "side" : "below");
                       setMenu((m) => !m);
                     }}
                   >
