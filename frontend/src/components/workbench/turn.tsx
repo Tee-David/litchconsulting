@@ -25,6 +25,7 @@ const REASON: Record<string, string> = {
   auth: "rejected our key",
   invalid: "sent steps Sage could not use",
   unhealthy: "is not answering",
+  slow: "is slow right now",
 };
 
 export const TOOL_LABEL: Record<string, string> = {
@@ -152,8 +153,10 @@ function receipt(events: WbEvent[]): string {
     const p = PROVIDER_LABEL[att.model.split(":")[0]] ?? "";
     bits.push(m && p && !m.startsWith(p) ? `${m} on ${p}` : m || p);
   } else bits.push(fastPath ? "no model needed" : "no model reachable");
-  const switched = fallbacks.filter((f) => f.from !== "all").length;
-  if (switched) bits.push(`${switched} provider switch${switched === 1 ? "" : "es"}`);
+  const switches = fallbacks.filter((f) => f.from !== "all");
+  // H4: name the switch, not only count it.
+  if (switches.length === 1) bits.push(`switched from ${slotLabel(s(switches[0].from))} (${(REASON[s(switches[0].reason)] ?? "failed").replace(/^is /, "")})`);
+  else if (switches.length > 1) bits.push(`${switches.length} provider switches, first from ${slotLabel(s(switches[0].from))}`);
   return bits.join(" · ");
 }
 

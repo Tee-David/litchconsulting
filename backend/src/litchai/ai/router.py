@@ -56,8 +56,12 @@ Message = dict[str, str]  # {"role": "system"|"user"|"assistant", "content": str
 
 FALLBACK_REASONS = (
     "timeout", "quota", "rate_limit", "http_5xx", "auth", "error", "invalid_output",
-    "local_only", "unhealthy",
+    "local_only", "unhealthy", "slow",
 )
+# H4: a cloud answer slower than this parks the provider for SLOW_PAUSE seconds,
+# so the next call goes to a faster one first.
+SLOW_MS = 40_000
+SLOW_PAUSE = 300.0
 
 
 # --- provider specs ---------------------------------------------------------
@@ -594,6 +598,8 @@ class ProviderRouter:
         self._health: dict[str, tuple[float, bool, str]] = {}
         # Per-minute 429s: that model rests until Groq's reset; the next model is used.
         self._cooldown: dict[str, float] = {}
+        self._slow: dict[str, float] = {}           # H4: provider -> skip until (monotonic)
+        self._probe_thread: threading.Thread | None = None
         self._lock = threading.Lock()
 
     # -- Provider protocol shim -------------------------------------------------
@@ -633,6 +639,9 @@ class ProviderRouter:
         cool = self._cooldown.get(spec.name)
         if cool and time.monotonic() < cool:
             return False, "rate_limit"
+        slow = self._slow.get(spec.name)
+        if slow and time.monotonic() < slow:
+            return False, "slow"
         return True, ""
 
     def pick(self, conversation_id: str | None, *, local_only: bool = False) -> ProviderSpec | None:
@@ -753,6 +762,8 @@ class ProviderRouter:
             tokens = (resp.input_tokens or 0) + (resp.output_tokens or 0)
             self.quota.record(spec.name, tokens)
             self._health[spec.name] = (time.monotonic(), True, "")
+            if cloud and (resp.latency_ms or 0) > SLOW_MS:
+                self._slow[spec.name] = time.monotonic() + SLOW_PAUSE
             self._log(conversation_id, task, spec, p_hash, cloud, local_only, resp, "ok", prev)
             if conversation_id:
                 self.pin(conversation_id, spec.name)
@@ -818,6 +829,39 @@ class ProviderRouter:
         self._health[spec.name] = (time.monotonic(), result[0], result[1])
         return result
 
+    def probe_stale(self, max_age: float) -> list[str]:
+        """H4: probe each configured cloud provider whose health is older than
+        ``max_age`` (real calls refresh it, so a busy provider is not probed)."""
+        done = []
+        now = time.monotonic()
+        for spec in self.specs:
+            if not spec.configured or spec.kind != "cloud":
+                continue
+            if self.quota.exhausted_until(spec.name) is not None:
+                continue
+            cached = self._health.get(spec.name)
+            if cached and now - cached[0] < max_age:
+                continue
+            self.probe(spec, force=True)
+            done.append(spec.name)
+        return done
+
+    def start_health_loop(self, interval: float = 1200.0) -> None:
+        """H4: a daemon thread that keeps the chain's health fresh (every 20 min)."""
+        if self._probe_thread is not None:
+            return
+
+        def loop() -> None:
+            while True:
+                try:
+                    self.probe_stale(interval)
+                except Exception:  # noqa: BLE001, S110 - a probe loop never dies
+                    pass
+                time.sleep(interval)
+
+        self._probe_thread = threading.Thread(target=loop, name="provider-health", daemon=True)
+        self._probe_thread.start()
+
     def status(self, *, probe: bool = False) -> list[dict[str, Any]]:
         """Chain + per-provider health/quota for the UI's engine sheet."""
         out = []
@@ -835,6 +879,9 @@ class ProviderRouter:
                         "not probed yet" if spec.configured else "no key"), None
             req, tok = self.quota.usage(spec.name)
             until = self.quota.exhausted_until(spec.name)
+            slow = self._slow.get(spec.name)
+            if slow and now < slow and ok:
+                detail = "slow: skipped for a few minutes"
             out.append({
                 **spec.public(), "ok": ok, "detail": detail, "age_sec": age,
                 "used_requests": req, "used_tokens": tok,

@@ -66,7 +66,10 @@ def _default_router() -> Any:
     if os.environ.get("LITCHAI_DATABASE_URL"):
         from litchai.ai.pg import ConnectingCallLog, ConnectingQuota
 
-        return build_router(call_log=ConnectingCallLog(), quota=ConnectingQuota())
+        router = build_router(call_log=ConnectingCallLog(), quota=ConnectingQuota())
+        if os.environ.get("LITCHAI_HEALTH_LOOP", "1") == "1":
+            router.start_health_loop()      # H4: keep the chain's health fresh
+        return router
     return build_router()
 
 

@@ -249,3 +249,27 @@ def test_json_tail_picks_outermost_last_object():
     text = 'Need total. Use query_sql.{"thought":"x","action":"tool","args":{"sql":"SELECT 1"}}'
     assert _json_tail(text) == '{"thought":"x","action":"tool","args":{"sql":"SELECT 1"}}'
     assert _json_tail("no json here") is None
+
+
+def test_slow_answer_parks_the_provider_for_a_while():
+    class Slow(Script):
+        def __call__(self, spec, messages, schema, params):
+            self.seen.append((spec.name, messages))
+            ms = 45_000 if spec.name == "groq" else 5
+            return ProviderResponse(text="ok", input_tokens=1, output_tokens=1, latency_ms=ms)
+
+    r = ProviderRouter(_specs(), transport=Slow())
+    first = r.complete([{"role": "user", "content": "hi"}], conversation_id="s1")
+    assert first.provider == "groq"                      # slow, but it answered
+    nxt = r.complete([{"role": "user", "content": "hi"}], conversation_id="s2")
+    assert nxt.provider == "cerebras"
+    assert nxt.fallbacks[0].provider == "groq" and nxt.fallbacks[0].reason == "slow"
+    groq = next(x for x in r.status() if x["name"] == "groq")
+    assert groq["detail"].startswith("slow")
+
+
+def test_probe_stale_checks_only_cloud_providers_with_old_health():
+    t = Script()
+    r = ProviderRouter(_specs(), transport=t)
+    assert r.probe_stale(0.0) == ["groq", "cerebras"]    # no key for sambanova; local is skipped
+    assert r.probe_stale(3600.0) == []                   # fresh now, nothing to do
