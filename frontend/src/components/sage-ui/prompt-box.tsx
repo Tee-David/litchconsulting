@@ -93,7 +93,8 @@ export function PromptBox({
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const cap = Math.round(Math.min(window.innerHeight * (compact ? 0.25 : 0.35), compact ? 160 : 280));
+    const phone = window.innerWidth < 640;
+    const cap = Math.round(Math.min(window.innerHeight * (compact ? 0.25 : phone ? 0.28 : 0.35), compact ? 160 : 280));
     el.style.height = "auto";
     const h = Math.min(el.scrollHeight, cap);
     el.style.height = `${h}px`;
