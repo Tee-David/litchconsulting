@@ -10,6 +10,8 @@ export const maxDuration = 300;
 const body = z.object({
   message: z.string().trim().min(1).max(8000),
   selection: z.string().trim().max(200).nullable().optional(),
+  /** A5: edit-and-resend or regenerate; the earlier question and answer are kept as a branch. */
+  replaceLast: z.boolean().optional(),
 });
 
 /**
@@ -28,7 +30,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   let upstream: Response;
   try {
-    upstream = await wbStream(id, { message: parsed.data.message, selection: parsed.data.selection ?? null }, req.signal);
+    upstream = await wbStream(id, { message: parsed.data.message, selection: parsed.data.selection ?? null, replace_last: parsed.data.replaceLast ?? false }, req.signal);
   } catch {
     return Response.json({ error: "The analysis server did not answer. Try again in a minute." }, { status: 502 });
   }

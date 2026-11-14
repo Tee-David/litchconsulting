@@ -19,6 +19,9 @@ import {
   wbUserEdits,
   wbRestore,
   wbSheetAction,
+  wbNewThread,
+  wbOpenThread,
+  wbFeedback,
   wbListByDocument,
   type WbBatch,
   type WbConversation,
@@ -120,6 +123,47 @@ export async function getConversationAction(conversationId: string): Promise<Res
   if (!(await guard(conversationId))) return DENIED;
   try {
     return { ok: true, conversation: (await wbGet(conversationId)).conversation };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+// --- chats in a workbench (D1) and feedback (A1) ------------------------------------
+export async function newThreadAction(conversationId: string): Promise<Res<{ conversation: WbConversation }>> {
+  if (!(await guard(conversationId))) return DENIED;
+  try {
+    return { ok: true, conversation: (await wbNewThread(conversationId)).conversation };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function openThreadAction(conversationId: string, threadId: string): Promise<Res<{ conversation: WbConversation }>> {
+  if (!(await guard(conversationId)) || !/^t-[a-f0-9]{8}$/.test(threadId)) return DENIED;
+  try {
+    return { ok: true, conversation: (await wbOpenThread(conversationId, threadId)).conversation };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+const feedbackSchema = z.object({
+  conversationId: id,
+  index: z.number().int().min(0).max(10000),
+  vote: z.enum(["good", "bad"]).nullable(),
+  note: z.string().max(1000).optional(),
+});
+
+/** Good / Bad on one Sage answer, stored with the route, tools and model (H1). */
+export async function feedbackAction(input: z.input<typeof feedbackSchema>): Promise<Res<{ conversation: WbConversation }>> {
+  const parsed = feedbackSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "That vote is not valid." };
+  const d = parsed.data;
+  if (!(await guard(d.conversationId))) return DENIED;
+  const u = await getSessionUser();
+  try {
+    const res = await wbFeedback(d.conversationId, d.index, { vote: d.vote, note: d.note, author: (u?.name || u?.email || "a team member").slice(0, 80) });
+    return { ok: true, conversation: res.conversation };
   } catch (e) {
     return fail(e);
   }
@@ -336,6 +380,20 @@ export async function attachFilesAction(conversationId: string, fileIds: string[
     if (e instanceof WorkbenchError && e.status === 409) {
       return { ok: false, error: `${e.message} Try again when it shows Ready.` };
     }
+    return fail(e);
+  }
+}
+
+/** Attach a document uploaded here once the pipeline has read it (PDFs, screenshots).
+ *  The engine refuses a document of another client. 409 = still being read. */
+export async function attachDocumentAction(conversationId: string, documentId: number): Promise<Res<{ conversation: WbConversation; firstLook: WbFirstLook; waiting: boolean }>> {
+  if (!(await guard(conversationId)) || !Number.isInteger(documentId) || documentId < 1) return DENIED;
+  try {
+    const res = await wbAttach(conversationId, [documentId]);
+    await touch(conversationId);
+    return { ok: true, conversation: res.conversation, firstLook: res.first_look, waiting: false };
+  } catch (e) {
+    if (e instanceof WorkbenchError && e.status === 409) return { ok: false, error: "waiting" };
     return fail(e);
   }
 }

@@ -74,7 +74,13 @@ export type WbMessage = {
   /** Figures in the answer that no tool result backs (grounding rule). */
   unverified_figures?: string[];
   steps?: WbEvent[];
+  /** A5: earlier versions of this question and their answers (edit and resend, regenerate). */
+  branches?: { user: WbMessage; assistant: WbMessage | null }[];
+  /** A1: Good / Bad on an answer. */
+  feedback?: { vote: "good" | "bad"; note?: string; by?: string; at?: string } | null;
 };
+
+export type WbThread = { id: string; title: string; at: string | null; questions: number };
 
 export type WbConversation = {
   id: string;
@@ -90,6 +96,9 @@ export type WbConversation = {
   batches: WbBatch[];
   messages: WbMessage[];
   pending: number;
+  /** D1: earlier chats in this workbench (the open chat is `messages`). */
+  threads?: WbThread[];
+  thread_id?: string;
 };
 
 export type WbColumnProfile = { letter: string; name: string; role?: string; [k: string]: unknown };
@@ -255,7 +264,15 @@ export const wbProviders = (probe = false) =>
   call<{ chain: WbProvider[]; local_only_chain: string[] }>(`/ai/providers${probe ? "?probe=true" : ""}`);
 
 /** The agent turn as the backend's SSE stream (piped to the browser as is). */
-export function wbStream(id: string, body: { message: string; selection?: string | null }, signal?: AbortSignal) {
+/** D1: a new chat, or open an earlier one. */
+export const wbNewThread = (id: string) => call<{ conversation: WbConversation }>(`/workbench/conversations/${enc(id)}/threads`, { method: "POST" });
+export const wbOpenThread = (id: string, threadId: string) =>
+  call<{ conversation: WbConversation }>(`/workbench/conversations/${enc(id)}/threads/${enc(threadId)}/open`, { method: "POST" });
+/** A1: Good / Bad on one answer (index in the open chat); null takes it back. */
+export const wbFeedback = (id: string, index: number, body: { vote: "good" | "bad" | null; note?: string; author: string }) =>
+  call<{ conversation: WbConversation }>(`/workbench/conversations/${enc(id)}/messages/${index}/feedback`, json(body));
+
+export function wbStream(id: string, body: { message: string; selection?: string | null; replace_last?: boolean }, signal?: AbortSignal) {
   return litchaiRaw(`/workbench/conversations/${enc(id)}/messages`, { ...json(body), signal });
 }
 

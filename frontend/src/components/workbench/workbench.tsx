@@ -3,12 +3,10 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowUp,
   ChevronDown,
   ChevronUp,
   Cloud,
   Eye,
-  Cpu,
   Download,
   FileSpreadsheet,
   FileText,
@@ -26,14 +24,19 @@ import {
   Search,
   ShieldAlert,
   ShieldCheck,
-  Square,
   Table2,
   Target,
   Undo2,
   X,
 } from "lucide-react";
 import type { WbBatch, WbCell, WbConversation, WbEvent, WbFirstLook, WbGate, WbUserEdit } from "@/lib/litchai/workbench";
-import { attachFilesAction, decideBatchAction, deliverAction, getConversationAction, restoreVersionAction, runToolAction, saveEditsAction, sheetActionAction } from "@/lib/workbench/actions";
+import { attachDocumentAction, attachFilesAction, decideBatchAction, deliverAction, feedbackAction, getConversationAction, newThreadAction, openThreadAction, restoreVersionAction, runToolAction, saveEditsAction, sheetActionAction } from "@/lib/workbench/actions";
+import { FolderOpen, Pencil, SquarePen } from "lucide-react";
+import { MessageActions } from "@/components/sage-ui/message-actions";
+import { ThreadPicker } from "@/components/sage-ui/thread-picker";
+import { PromptBox, type Attachment } from "@/components/sage-ui/prompt-box";
+import { AskSelection } from "@/components/sage-ui/ask-selection";
+import { WORKBENCH_UPLOAD_ACCEPT } from "@/lib/workbench/upload-client";
 import { SheetTabs, type SheetActionKind, type SheetInfo } from "./sheet-tabs";
 import { useToast } from "@/components/admin/ui/toaster";
 import { Button, Segmented } from "@/components/kit";
@@ -55,7 +58,29 @@ import { Select } from "@/components/ui/select";
 import { SAGE_MAX, SAGE_MIN, clampSage, stepZoom, useWorkbenchPrefs } from "./layout";
 import { parseTyped } from "./formula-help";
 
-type Live = { message: string; selection: string | null; events: WbEvent[] };
+type Live = { message: string; selection: string | null; events: WbEvent[]; quote?: string | null; files?: string[] };
+
+/** A question as sent: an optional quote ("> …" lines), the question, an optional file note. */
+const FILES_NOTE = /\n\n\(Files I added: ([^)]*)\)$/;
+function splitQuestion(content: string): { quote: string | null; text: string; files: string[] } {
+  let text = content;
+  let quote: string | null = null;
+  const m = text.match(/^((?:> .*(?:\n|$))+)\n?/);
+  if (m) {
+    quote = m[1].split("\n").filter(Boolean).map((l) => l.replace(/^> ?/, "")).join("\n");
+    text = text.slice(m[0].length);
+  }
+  const f = text.match(FILES_NOTE);
+  const files = f ? f[1].split(", ").filter(Boolean) : [];
+  if (f) text = text.slice(0, f.index);
+  return { quote, text: text.trim(), files };
+}
+function composeQuestion(text: string, quote: string | null, files: string[]): string {
+  const q = quote ? quote.slice(0, 600).split("\n").map((l) => `> ${l}`).join("\n") + "\n\n" : "";
+  const f = files.length ? `\n\n(Files I added: ${files.join(", ")})` : "";
+  return (q + text.trim() + f).slice(0, 8000);
+}
+let attSeq = 0;
 
 export type WorkbenchProps = {
   initial: WbConversation;
@@ -100,6 +125,13 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const [text, setText] = useState("");
   const [selection, setSelection] = useState<Range | null>(null);
   const [context, setContext] = useState<Range | null>(null);
+  // D1: Reply / Ask-about quote, attachments in the composer, edit-and-resend, branch view.
+  const [quote, setQuote] = useState<string | null>(null);
+  const [atts, setAtts] = useState<Attachment[]>([]);
+  const [editIdx, setEditIdx] = useState<number | null>(null);
+  const [editText, setEditText] = useState("");
+  const [branchView, setBranchView] = useState<Record<number, number>>({});
+  const [threadBusy, setThreadBusy] = useState(false);
   const [highlights, setHighlights] = useState<Range[]>([]);
   const [focus, setFocus] = useState<{ r: number; c: number; nonce: number } | null>(null);
   const [activeCell, setActiveCell] = useState<{ cell: WbCell | null; r: number; c: number } | null>(null);
@@ -555,17 +587,31 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   );
 
   const send = useCallback(
-    async (message: string) => {
-      const msg = message.trim();
-      if (!msg || running) return;
+    async (message: string, opts: { replaceLast?: boolean; raw?: boolean } = {}) => {
+      const files = opts.raw ? [] : atts.filter((a) => a.status === "ready").map((a) => a.name);
+      const typed = message.trim() || (files.length ? "Read the files I added." : "");
+      if (!typed || running) return;
+      const msg = opts.raw ? typed : composeQuestion(typed, quote, files);
+      const shown = opts.raw ? splitQuestion(msg) : { quote, text: typed, files };
       // A new question always brings the thread back to the newest message.
       setAtBottom(true);
       const sel = context ?? selection;
       const selText = sel ? rangeLabel(sel) : null;
       setText("");
+      if (!opts.raw) {
+        setQuote(null);
+        setAtts((list) => list.filter((a) => a.status === "uploading"));
+      }
+      if (opts.replaceLast) {
+        // The earlier question and answer are kept by the engine as a branch.
+        setConv((c) => {
+          const lastUser = c.messages.map((m) => m.role).lastIndexOf("user");
+          return lastUser >= 0 ? { ...c, messages: c.messages.slice(0, lastUser) } : c;
+        });
+      }
       setRunning(true);
       setHighlights([]);
-      setLive({ message: msg, selection: selText, events: [] });
+      setLive({ message: shown.text, selection: selText, events: [], quote: shown.quote, files: shown.files });
       setView("sage");
       const ctrl = new AbortController();
       abort.current = ctrl;
@@ -573,7 +619,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         const res = await fetch(`/api/workbench/${conv.id}/stream`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: msg, selection: sel ? rangeRef(sel) : null }),
+          body: JSON.stringify({ message: msg, selection: sel ? rangeRef(sel) : null, replaceLast: Boolean(opts.replaceLast) }),
           signal: ctrl.signal,
         });
         if (!res.ok || !res.body) {
@@ -613,13 +659,117 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         if (ok) setLive(null);
       }
     },
-    [conv.id, context, selection, running, onEvent, refresh],
+    [conv.id, context, selection, running, onEvent, refresh, atts, quote],
   );
 
   const retry = useCallback(() => {
     const lastUser = [...conv.messages].reverse().find((m) => m.role === "user");
-    if (live?.message || lastUser) void send(live?.message ?? lastUser!.content);
+    if (live?.message) void send(composeQuestion(live.message, live.quote ?? null, live.files ?? []), { raw: true });
+    else if (lastUser) void send(lastUser.content, { raw: true });
   }, [conv.messages, live, send]);
+
+  // D1: chats in this workbench.
+  const switchThread = useCallback(
+    async (threadId: string | null) => {
+      if (running) return;
+      setThreadBusy(true);
+      const res = threadId ? await openThreadAction(conv.id, threadId) : await newThreadAction(conv.id);
+      setThreadBusy(false);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setConv(res.conversation);
+      setLive(null);
+      setQuote(null);
+      setEditIdx(null);
+      setBranchView({});
+      setAtBottom(true);
+      if (!threadId) setTimeout(() => composer.current?.focus(), 0);
+    },
+    [conv.id, running, toast],
+  );
+
+  const vote = useCallback(
+    async (index: number, v: "good" | "bad" | null, note?: string) => {
+      const res = await feedbackAction({ conversationId: conv.id, index, vote: v, note });
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setConv(res.conversation);
+      if (v === "good") toast.success("Thanks. Marked as a good answer.");
+      if (v === "bad") toast.success(note ? "Thanks. Your note was saved with how Sage answered." : "Marked as a bad answer.");
+    },
+    [conv.id, toast],
+  );
+
+  // D1: paste or drop screenshots and files; long pasted text becomes a .txt file.
+  const addFiles = useCallback(
+    (files: File[]) => {
+      for (const file of files.slice(0, 6)) {
+        const id = `att-${++attSeq}`;
+        const image = file.type.startsWith("image/");
+        const isText = file.type === "text/plain" && file.name.startsWith("Pasted text");
+        const name = image && /^image\.\w+$/i.test(file.name) ? `Screenshot ${new Date().toTimeString().slice(0, 5).replace(":", ".")}.png` : file.name;
+        const set = (patch: Partial<Attachment>) => setAtts((list) => list.map((a) => (a.id === id ? { ...a, ...patch } : a)));
+        const att: Attachment = {
+          id,
+          kind: image ? "image" : isText ? "text" : "file",
+          name: isText ? file.name.replace(/\.txt$/, "") : name,
+          status: "uploading",
+          detail: "Checking for viruses…",
+          url: image ? URL.createObjectURL(file) : undefined,
+          text: isText ? undefined : undefined,
+        };
+        setAtts((list) => [...list, att]);
+        if (file.size > 4 * 1024 * 1024) {
+          set({ status: "error", detail: "Over 4 MB: add it to the request first" });
+          continue;
+        }
+        const upload = image && !/\.(png|jpe?g)$/i.test(name) ? new File([file], name, { type: file.type }) : image ? new File([file], name, { type: file.type }) : file;
+        void uploadToWorkbench(upload, { conversationId: conv.id }).then(async (res) => {
+          if (!res.ok) {
+            set({ status: "error", detail: res.error });
+            return;
+          }
+          if (res.conversation) setConv(res.conversation);
+          if (res.pending === undefined) {
+            set({ status: "ready", detail: "Added to this workbench" });
+            setGridVersion((v) => v + 1);
+            return;
+          }
+          set({ detail: image ? "Reading the text (OCR)…" : "Reading the file…" });
+          for (let i = 0; i < 30; i++) {
+            await new Promise((r) => setTimeout(r, 8000));
+            const a = await attachDocumentAction(conv.id, res.pending);
+            if (a.ok) {
+              setConv(a.conversation);
+              setGridVersion((v) => v + 1);
+              set({ status: "ready", detail: "Read and added" });
+              return;
+            }
+            if (a.error !== "waiting") {
+              set({ status: "error", detail: a.error });
+              return;
+            }
+          }
+          set({ status: "error", detail: "Still being read. It will appear in Add files when ready." });
+        });
+      }
+    },
+    [conv.id],
+  );
+  const addLongText = useCallback(
+    (t: string) => {
+      const lines = t.split("\n").length;
+      const file = new File([t], `Pasted text ${new Date().toTimeString().slice(0, 5).replace(":", ".")}.txt`, { type: "text/plain" });
+      addFiles([file]);
+      // Keep the text for the preview on the chip.
+      setTimeout(() => setAtts((list) => list.map((a) => (a.kind === "text" && !a.text ? { ...a, text: t, name: `Pasted text · ${lines} lines` } : a))), 0);
+    },
+    [addFiles],
+  );
 
   // --- proposals --------------------------------------------------------------------
   const decide = useCallback(
@@ -1093,21 +1243,115 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     </div>
   );
 
+  const lastUserIdx = conv.messages.map((m) => m.role).lastIndexOf("user");
+  const lastIdx = conv.messages.length - 1;
   const history = conv.messages.map((m, i) => {
     if (m.role === "user") {
+      const n = (m.branches?.length ?? 0) + 1;
+      const bv = branchView[i] ?? n - 1;
+      const shownMsg = bv < n - 1 ? m.branches![bv].user : m;
+      const q = splitQuestion(shownMsg.content);
+      const isLastUser = i === lastUserIdx && !running && bv === n - 1;
+      if (editIdx === i) {
+        return (
+          <div key={i} className="ml-auto flex w-full max-w-[520px] flex-col gap-1.5">
+            <textarea
+              autoFocus
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setEditIdx(null);
+              }}
+              rows={3}
+              aria-label="Edit your question"
+              className="w-full resize-y rounded-2xl border border-accent bg-paper px-3 py-2 text-[13.5px] text-ink outline-none"
+            />
+            <div className="flex justify-end gap-1.5">
+              <Button size="sm" variant="ghost" onClick={() => setEditIdx(null)}>Cancel</Button>
+              <Button
+                size="sm"
+                variant="primary"
+                disabled={!editText.trim()}
+                onClick={() => {
+                  setEditIdx(null);
+                  setBranchView({});
+                  void send(composeQuestion(editText, q.quote, q.files), { replaceLast: true, raw: true });
+                }}
+              >
+                Send again
+              </Button>
+            </div>
+            <p className="text-right text-[11.5px] text-muted">The earlier question and answer stay as version {n} of {n + 1}.</p>
+          </div>
+        );
+      }
       return (
-        <div key={i} className="ml-auto max-w-[88%] rounded-card rounded-br-sm bg-act px-3 py-2 text-[13.5px] text-act-ink">
-          {m.selection ? <span className="mb-0.5 block font-mono text-[11px] opacity-80">{m.selection.replace(/^\(?Selection hint: /, "")}</span> : null}
-          {m.content}
+        <div key={i} className="group ml-auto flex max-w-[88%] flex-col items-end gap-1">
+          {q.files.length ? <p className="text-[11.5px] text-muted">Files: {q.files.join(", ")}</p> : null}
+          <div className="whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-act px-3 py-2 text-[13.5px] text-act-ink">
+            {q.quote ? <span className="mb-1.5 block border-l-2 border-act-ink/50 pl-2 text-[12.5px] opacity-85">{q.quote}</span> : null}
+            {shownMsg.selection ? <span className="mb-0.5 block font-mono text-[11px] opacity-80">{shownMsg.selection.replace(/^\(?Selection hint: /, "")}</span> : null}
+            {q.text}
+          </div>
+          <div className={cn("flex items-center gap-0.5 text-muted transition-opacity", n > 1 ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100")}>
+            {n > 1 ? (
+              <span className="inline-flex items-center gap-0.5 text-[12px]">
+                <button type="button" disabled={bv === 0} onClick={() => setBranchView((b) => ({ ...b, [i]: bv - 1 }))} className="grid size-7 place-items-center rounded-md hover:bg-paper hover:text-ink disabled:opacity-30" aria-label="Earlier version">
+                  <ChevronDown className="size-3.5 rotate-90" />
+                </button>
+                <span className="tabular-nums">{bv + 1}/{n}</span>
+                <button type="button" disabled={bv === n - 1} onClick={() => setBranchView((b) => ({ ...b, [i]: bv + 1 }))} className="grid size-7 place-items-center rounded-md hover:bg-paper hover:text-ink disabled:opacity-30" aria-label="Later version">
+                  <ChevronDown className="size-3.5 -rotate-90" />
+                </button>
+              </span>
+            ) : null}
+            {isLastUser ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditIdx(i);
+                  setEditText(q.text);
+                }}
+                className="grid size-7 place-items-center rounded-md hover:bg-paper hover:text-ink"
+                aria-label="Edit and send again"
+                title="Edit and send again"
+              >
+                <Pencil className="size-3.5" />
+              </button>
+            ) : null}
+          </div>
         </div>
       );
     }
-    const steps = (m.steps ?? []) as WbEvent[];
-    const final: WbEvent = { type: "final", answer: m.content, citations: m.citations ?? [], attribution: m.attribution ?? null, unverified_figures: m.unverified_figures ?? [] };
+    // An answer: the saved one, or an earlier branch's answer when its question is shown.
+    const prev = conv.messages[i - 1];
+    const n = (prev?.branches?.length ?? 0) + 1;
+    const bv = prev?.role === "user" ? (branchView[i - 1] ?? n - 1) : n - 1;
+    const am = bv < n - 1 ? prev!.branches![bv].assistant : m;
+    if (!am) return <p key={i} className="text-[12.5px] text-muted">No answer was saved for that version.</p>;
+    const steps = (am.steps ?? []) as WbEvent[];
+    const final: WbEvent = { type: "final", answer: am.content, citations: am.citations ?? [], attribution: am.attribution ?? null, unverified_figures: am.unverified_figures ?? [] };
+    const latest = bv === n - 1;
     return (
-      <div key={i} className="space-y-1.5">
-        <p className="flex items-center gap-1.5 text-[12px] font-semibold text-ink"><SageIcon className="size-4" /> Sage</p>
-        <TurnView events={m.content ? [...steps, final] : [...steps, { type: "error", message: "No answer was saved for this turn." }]} running={false} onCite={goTo} onRetry={i === conv.messages.length - 1 ? retry : undefined} />
+      <div key={i} className="space-y-2">
+        <p className="flex items-center gap-2 text-[13px] font-semibold text-ink">
+          <span className="grid size-[22px] place-items-center rounded-[7px] bg-brand text-white keep-brand"><SageIcon className="size-3.5" /></span>
+          Sage
+        </p>
+        <TurnView events={am.content ? [...steps, final] : [...steps, { type: "error", message: "No answer was saved for this turn." }]} running={false} onCite={goTo} onRetry={i === lastIdx && latest ? retry : undefined} />
+        {am.content && latest ? (
+          <MessageActions
+            text={am.content}
+            vote={am.feedback?.vote ?? null}
+            onVote={(v, note) => vote(i, v, note)}
+            onRegenerate={i === lastIdx && !running ? () => { setBranchView({}); void send(conv.messages[lastUserIdx].content, { replaceLast: true, raw: true }); } : undefined}
+            onReply={() => {
+              setQuote(am.content.replace(/\s+/g, " ").slice(0, 300));
+              setTimeout(() => composer.current?.focus(), 0);
+            }}
+            onCopied={() => toast.success("Answer copied.")}
+          />
+        ) : null}
       </div>
     );
   });
@@ -1116,18 +1360,27 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
 
   const panel = (
     <div className="flex h-full min-h-0 flex-col bg-surface">
-      <div className="flex items-center gap-2 border-b border-hairline px-3 py-2">
-        <SageIcon className="size-5" />
-        <p className="text-[14px] font-semibold text-ink">Sage</p>
-        <span className="truncate text-[12px] text-muted">one thread for this workbench</span>
-        <button type="button" onClick={() => setSheetOpen("engine")} className="ml-auto rounded p-1 text-muted hover:bg-cloud hover:text-ink" aria-label="What powers Sage">
-          <Cpu className="size-4" />
+      <div className="flex items-center gap-1 border-b border-hairline bg-paper py-1.5 pl-3 pr-1.5">
+        <span className="keep-brand grid size-[26px] shrink-0 place-items-center rounded-lg bg-brand text-white"><SageIcon className="size-4" /></span>
+        <ThreadPicker
+          current={{
+            id: conv.thread_id ?? "open",
+            title: conv.messages.find((m) => m.role === "user") ? splitQuestion(conv.messages.find((m) => m.role === "user")!.content).text.slice(0, 60) : "New chat",
+            at: conv.messages[conv.messages.length - 1]?.at ?? null,
+            questions: conv.messages.filter((m) => m.role === "user").length,
+          }}
+          threads={conv.threads ?? []}
+          onPick={(id) => void switchThread(id)}
+          disabled={running || threadBusy}
+        />
+        <button type="button" onClick={() => void switchThread(null)} disabled={running || threadBusy || conv.messages.length === 0} className="grid size-9 shrink-0 place-items-center rounded-ctl text-body hover:bg-surface hover:text-ink disabled:opacity-40" aria-label="New chat" title="New chat">
+          <SquarePen className="size-4" />
         </button>
-        <button type="button" onClick={() => setView("sheet")} className="rounded p-1 text-muted hover:bg-cloud lg:hidden" aria-label="Back to the sheet">
+        <button type="button" onClick={() => setView("sheet")} className="grid size-9 shrink-0 place-items-center rounded-ctl text-body hover:bg-surface lg:hidden" aria-label="Back to the sheet">
           <X className="size-4" />
         </button>
         {!split ? (
-          <button type="button" onClick={() => setFocusSage(false)} className="hidden rounded p-1 text-muted hover:bg-cloud hover:text-ink lg:block" aria-label="Close Sage" title="Close Sage (Ctrl+J)">
+          <button type="button" onClick={() => setFocusSage(false)} className="hidden size-9 shrink-0 place-items-center rounded-ctl text-body hover:bg-surface hover:text-ink lg:grid" aria-label="Close Sage" title="Close Sage (Ctrl+J)">
             <X className="size-4" />
           </button>
         ) : null}
@@ -1143,19 +1396,36 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
       >
         {look ? <FirstLookCard look={look} onCite={goTo} onSuggest={(s) => void send(s)} disabled={running} /> : null}
         {!look && conv.messages.length === 0 && !live ? (
-          <p className="rounded-card border border-dashed border-hairline p-3 text-[13px] text-body">
-            Ask anything about these files, with or without a selection. Sage reads first, proposes changes, and nothing changes until you accept.
-          </p>
+          <div className="space-y-3 pt-1">
+            <div>
+              <p className="font-display text-[16px] font-semibold text-ink">What should we do with this workbook?</p>
+              <p className="mt-1 text-[13.5px] text-body">Ask about it, or select cells first. Sage proposes changes; nothing changes until you accept.</p>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {["Add an Account Type column beside the account names", "Add totals below the debit and credit columns", "Format the header row and the money columns", "Work out the company income tax for this year"].map((q) => (
+                <button key={q} type="button" onClick={() => void send(q)} disabled={running} className="min-h-10 rounded-xl border border-hairline bg-paper px-3 py-2 text-left text-[13px] text-ink hover:border-line-strong">
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
         ) : null}
         {history}
         {live ? (
           <>
-            <div className="ml-auto max-w-[88%] rounded-card rounded-br-sm bg-act px-3 py-2 text-[13.5px] text-act-ink">
-              {live.selection ? <span className="mb-0.5 block font-mono text-[11px] opacity-80">{live.selection}</span> : null}
-              {live.message}
+            <div className="ml-auto flex max-w-[88%] flex-col items-end gap-1">
+              {live.files?.length ? <p className="text-[11.5px] text-muted">Files: {live.files.join(", ")}</p> : null}
+              <div className="whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-act px-3 py-2 text-[13.5px] text-act-ink">
+                {live.quote ? <span className="mb-1.5 block border-l-2 border-act-ink/50 pl-2 text-[12.5px] opacity-85">{live.quote}</span> : null}
+                {live.selection ? <span className="mb-0.5 block font-mono text-[11px] opacity-80">{live.selection}</span> : null}
+                {live.message}
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <p className="flex items-center gap-1.5 text-[12px] font-semibold text-ink"><SageIcon className="size-4" /> Sage</p>
+            <div className="space-y-2">
+              <p className="flex items-center gap-2 text-[13px] font-semibold text-ink">
+                <span className="grid size-[22px] place-items-center rounded-[7px] bg-brand text-white keep-brand"><SageIcon className="size-3.5" /></span>
+                Sage
+              </p>
               <TurnView events={live.events} running={running} onCite={goTo} onRetry={retry} />
             </div>
           </>
@@ -1203,94 +1473,80 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         onJump={goTo}
         working={running}
       />
-      <form
-        className="border-t border-hairline bg-paper p-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))]"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void send(text);
+      <AskSelection
+        root={scroller}
+        onAsk={(t) => {
+          setQuote(t);
+          setTimeout(() => composer.current?.focus(), 0);
         }}
-      >
-        <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
-          {selLabel ? (
-            <span className="inline-flex max-w-full items-center gap-1 rounded-full bg-diff-sel px-2 py-0.5 font-mono text-[11.5px] text-ink">
-              <span className="truncate">{selLabel}</span>
-              <button
-                type="button"
-                aria-label="Remove range"
-                onClick={() => {
-                  setSelection(null);
-                  setContext(null);
-                }}
-                className="rounded-full p-0.5 hover:bg-cloud"
-              >
-                <X className="size-3" />
+      />
+      {voice.listening ? (
+        <p className="border-t border-hairline bg-paper px-3 pt-2 text-[11.5px] text-bad" role="status">
+          <span className="mr-1.5 inline-block size-2 animate-pulse rounded-full bg-bad" /> Listening. Release to stop; edit the text before sending.
+        </p>
+      ) : null}
+      {voice.error ? <p className="border-t border-hairline bg-paper px-3 pt-2 text-[11.5px] text-bad">{voice.error}</p> : null}
+      <PromptBox
+        value={voice.listening && voice.transcript ? `${text.trim() ? `${text.trimEnd()} ` : ""}${voice.transcript}` : text}
+        readOnly={voice.listening}
+        onChange={setText}
+        onSubmit={() => void send(text)}
+        running={running}
+        onStop={() => abort.current?.abort()}
+        placeholder={local ? "Ask about this workbook (local model, slower)…" : "Ask about this workbook…"}
+        quote={quote}
+        onClearQuote={() => setQuote(null)}
+        attachments={atts}
+        onRemoveAttachment={(id) => setAtts((list) => list.filter((a) => a.id !== id))}
+        onFiles={addFiles}
+        onLongText={addLongText}
+        accept={WORKBENCH_UPLOAD_ACCEPT}
+        textareaRef={composer}
+        context={
+          <>
+            {selLabel ? (
+              <span className="inline-flex min-h-8 max-w-[60%] items-center gap-1 rounded-full bg-diff-sel pl-2.5 pr-1 font-mono text-[11.5px] text-ink">
+                <span className="truncate">{selLabel}</span>
+                <button
+                  type="button"
+                  aria-label="Ask about the whole workbook instead"
+                  onClick={() => {
+                    setSelection(null);
+                    setContext(null);
+                  }}
+                  className="grid size-6 place-items-center rounded-full hover:bg-paper"
+                >
+                  <X className="size-3" />
+                </button>
+              </span>
+            ) : (
+              <button type="button" onClick={() => setSheetOpen("range")} className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-surface px-2.5 text-[12px] text-body hover:text-ink" title="Ask about a range">
+                <Target className="size-3.5" aria-hidden /> Whole workbook
               </button>
-            </span>
-          ) : (
-            <span className="rounded-full bg-cloud px-2 py-0.5 text-[11.5px] text-body">
-              Whole workbook · {conv.workbooks.length} file{conv.workbooks.length === 1 ? "" : "s"}
-            </span>
-          )}
-          <button type="button" onClick={() => setSheetOpen("range")} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] text-muted hover:bg-cloud hover:text-ink">
-            <Target className="size-3" /> Range
-          </button>
-          <button type="button" onClick={() => setSheetOpen("attach")} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] text-muted hover:bg-cloud hover:text-ink">
-            <Paperclip className="size-3" /> Add
-          </button>
-        </div>
-        {voice.listening ? (
-          <p className="mb-1 flex items-center gap-1.5 text-[11.5px] text-bad" role="status">
-            <span className="size-2 animate-pulse rounded-full bg-bad" /> Listening. Release to stop; edit the text before sending.
-          </p>
-        ) : null}
-        {voice.error ? <p className="mb-1 text-[11.5px] text-bad">{voice.error}</p> : null}
-        <div className="flex items-end gap-1.5">
-          <textarea
-            ref={composer}
-            value={voice.listening && voice.transcript ? `${text.trim() ? `${text.trimEnd()} ` : ""}${voice.transcript}` : text}
-            readOnly={voice.listening}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
-                e.preventDefault();
-                void send(text);
-              }
-            }}
-            rows={Math.min(5, Math.max(1, text.split("\n").length))}
-            placeholder={local ? "Ask Sage (local model, slower)…" : "Ask Sage about these files…"}
-            aria-label="Message to Sage"
-            className="min-h-10 flex-1 resize-none rounded-ctl border border-hairline bg-surface px-3 py-2 text-[13.5px] text-ink outline-none focus:border-act focus:ring-2 focus:ring-act/15"
-          />
-          {voice.supported && !local ? (
+            )}
+            {request ? (
+              <button type="button" onClick={() => setSheetOpen("attach")} className="grid size-9 place-items-center rounded-ctl text-body hover:bg-surface hover:text-ink" aria-label="Add a file from the request" title="Add a file from the request">
+                <FolderOpen className="size-4" />
+              </button>
+            ) : null}
+          </>
+        }
+        extra={
+          voice.supported && !local ? (
             <button
               type="button"
               {...voice.handlers}
               aria-pressed={voice.listening}
               aria-label={voice.listening ? "Listening, release to stop" : "Hold to talk"}
               title="Hold to talk"
-              className={cn(
-                "grid size-10 shrink-0 place-items-center rounded-ctl border border-hairline text-body select-none touch-none",
-                voice.listening ? "border-bad bg-bad-soft text-bad" : "hover:bg-cloud",
-              )}
+              className={cn("grid size-9 shrink-0 select-none place-items-center rounded-ctl text-body touch-none", voice.listening ? "bg-bad-soft text-bad" : "hover:bg-surface")}
             >
               <voice.Icon className="size-4" />
             </button>
-          ) : null}
-          {running ? (
-            <button type="button" onClick={() => abort.current?.abort()} className="grid size-10 shrink-0 place-items-center rounded-ctl bg-ink text-paper" aria-label="Stop">
-              <Square className="size-3.5" />
-            </button>
-          ) : (
-            <button type="submit" disabled={!text.trim()} className="grid size-10 shrink-0 place-items-center rounded-ctl bg-act text-act-ink hover:bg-act-hover disabled:cursor-not-allowed disabled:opacity-40" aria-label="Send">
-              <ArrowUp className="size-4" />
-            </button>
-          )}
-        </div>
-        <p className="mt-1 text-[10.5px] text-faint">
-          {local ? "Voice is off for local-only clients (the browser sends speech to an outside service). " : ""}
-          Numbers come from the pipeline, never the model. Text in client files is treated as data, not instructions.
-        </p>
-      </form>
+          ) : null
+        }
+        footnote={<>Numbers come from the pipeline, never the model. Paste a screenshot or long text, or drop files here.</>}
+      />
     </div>
   );
 

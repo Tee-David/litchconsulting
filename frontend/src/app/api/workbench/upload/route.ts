@@ -32,6 +32,10 @@ const MIME_BY_EXT: Record<string, string> = {
   json: "application/json",
   docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   pdf: "application/pdf",
+  // Screenshots and photos: read by OCR in the pipeline.
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
 };
 const MAX = 4 * 1024 * 1024; // the serverless request limit is 4.5 MB
 const bad = (error: string, status = 400) => NextResponse.json({ ok: false, error }, { status });
@@ -49,7 +53,7 @@ export async function POST(req: Request) {
   if (!(file instanceof File)) return bad("Choose a file.");
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
   const mime = MIME_BY_EXT[ext];
-  if (!mime) return bad("The workbench opens XLSX, XLSM, XLS, ODS, CSV, TSV, TXT, JSON, DOCX and PDF files.");
+  if (!mime) return bad("The workbench opens XLSX, XLSM, XLS, ODS, CSV, TSV, TXT, JSON, DOCX, PDF, PNG and JPG files.");
   if (file.size <= 0 || file.size > MAX) return bad("The file must be under 4 MB here. Add larger files to the request first, then open them from the request.");
 
   // Who the file belongs to: the workbench's client, the request's client, or the firm.
@@ -75,8 +79,10 @@ export async function POST(req: Request) {
     return bad("Open the workbench from one of your requests to add files.", 403);
   }
 
+  let sentId: number | null = null;
   try {
     const sent = await postEncryptedDocument(Buffer.from(await file.arrayBuffer()), { clientId, filename: file.name, mime });
+    sentId = sent.document_id;
     if (conversationId) {
       const res = await wbAttach(conversationId, [sent.document_id]);
       await db.update(workbenchConversation).set({ updatedAt: new Date() }).where(eq(workbenchConversation.id, conversationId));
@@ -89,9 +95,13 @@ export async function POST(req: Request) {
     await recordAudit({ action: "workbench.opened", entity: linkedRequest ? "request" : "workbench", entityId: linkedRequest ?? res.conversation.id, meta: { conversation: res.conversation.id, uploaded: file.name } });
     return NextResponse.json({ ok: true, id: res.conversation.id });
   } catch (e) {
+    // A PDF or screenshot is still being read (OCR): the browser attaches it when ready.
+    if (e instanceof WorkbenchError && e.status === 409 && conversationId && sentId !== null) {
+      return NextResponse.json({ ok: true, id: conversationId, pending: sentId });
+    }
     if (e instanceof WorkbenchError) {
       const msg = e.status === 409
-        ? "This file is still being read (PDFs take a minute). Try adding it again shortly."
+        ? "This file is still being read (PDFs and screenshots take a minute). It will appear in the workbench when it is ready."
         : unreadableFile(e.message) ?? e.message;
       return bad(msg, 422);
     }

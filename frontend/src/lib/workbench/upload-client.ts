@@ -1,9 +1,9 @@
 import type { WbConversation, WbFirstLook } from "@/lib/litchai/workbench";
 
-export const WORKBENCH_UPLOAD_ACCEPT = ".xlsx,.xlsm,.xls,.ods,.csv,.tsv,.txt,.json,.docx,.pdf";
+export const WORKBENCH_UPLOAD_ACCEPT = ".xlsx,.xlsm,.xls,.ods,.csv,.tsv,.txt,.json,.docx,.pdf,.png,.jpg,.jpeg";
 
 export type WorkbenchUploadResult =
-  | { ok: true; id: string; conversation?: WbConversation; firstLook?: WbFirstLook }
+  | { ok: true; id: string; conversation?: WbConversation; firstLook?: WbFirstLook; /** Still being read: attach this document id when ready. */ pending?: number }
   | { ok: false; error: string };
 
 /** Send a file from this computer into a workbench (new or existing). The server encrypts it before it goes on. */
