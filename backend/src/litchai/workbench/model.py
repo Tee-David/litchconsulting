@@ -20,6 +20,8 @@ from typing import Any
 
 from openpyxl import Workbook as XlWorkbook
 from openpyxl import load_workbook
+
+from litchai.workbench.styles import apply_style, read_style
 from openpyxl.utils import get_column_letter
 from openpyxl.utils.cell import column_index_from_string, coordinate_from_string
 
@@ -73,6 +75,7 @@ class Cell:
     formula: str | None = None
     preview: Any = None          # Python-computed value of a proposed formula
     number_format: str | None = None
+    style: dict[str, Any] | None = None   # S5, see workbench/styles.py
 
     @property
     def display(self) -> Any:
@@ -90,6 +93,7 @@ class Sheet:
     proposed: bool = False
     color: str | None = None     # tab colour, "RRGGBB"
     hidden: bool = False
+    merged: list[str] = field(default_factory=list)   # S5: merged ranges, e.g. "A1:D1"
 
     @property
     def max_row(self) -> int:
@@ -161,9 +165,17 @@ def load_xlsx(data: bytes, *, wb_id: str, name: str, document_id: int | None = N
         rgb = getattr(tab, "rgb", None) if tab is not None else None
         sheet.color = rgb[-6:] if isinstance(rgb, str) and len(rgb) >= 6 else None
         sheet.hidden = ws.sheet_state != "visible"
+        sheet.merged = [str(m) for m in ws.merged_cells.ranges][:500]
+        styled_empty = 0
         for row in ws.iter_rows():
             for c in row:
                 if c.value is None:
+                    # An empty cell with a fill or border still shows (a coloured header row).
+                    if styled_empty < 5000 and c.has_style and type(c).__name__ == "Cell":
+                        st = read_style(c)
+                        if st:
+                            styled_empty += 1
+                            sheet.set(c.row, c.column, Cell(value=None, style=st))
                     continue
                 total += 1
                 if total > MAX_CELLS:
@@ -172,10 +184,11 @@ def load_xlsx(data: bytes, *, wb_id: str, name: str, document_id: int | None = N
                 if isinstance(raw, str) and raw.startswith("="):
                     sheet.set(c.row, c.column, Cell(
                         value=vs.cell(row=c.row, column=c.column).value, formula=raw,
-                        number_format=c.number_format,
+                        number_format=c.number_format, style=read_style(c) if c.has_style else None,
                     ))
                 else:
-                    sheet.set(c.row, c.column, Cell(value=raw, number_format=c.number_format))
+                    sheet.set(c.row, c.column, Cell(value=raw, number_format=c.number_format,
+                                                    style=read_style(c) if c.has_style else None))
         out.sheets[ws.title] = sheet
     fill_uncached(out)
     return out
@@ -267,6 +280,8 @@ def to_xlsx_bytes(model: Workbook) -> bytes:
             target.value = cell.formula or cell.value
             if cell.number_format:
                 target.number_format = cell.number_format
+            if cell.style:
+                apply_style(target, cell.style)
     if not wb.worksheets:
         wb.create_sheet("Sheet1")
     buf = io.BytesIO()

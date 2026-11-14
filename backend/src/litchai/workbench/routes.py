@@ -92,13 +92,15 @@ class UserEdits(BaseModel):
 class SheetAction(BaseModel):
     """S2: the sheet tab menu. Saved at once as a version named after the person."""
     action: Literal["rename", "move", "copy", "delete", "color", "hide", "unhide",
-                    "insert_rows", "delete_rows", "insert_cols", "delete_cols"]
+                    "insert_rows", "delete_rows", "insert_cols", "delete_cols", "merge", "unmerge"]
     name: str | None = Field(None, max_length=31)
     index: int | None = Field(None, ge=0, le=500)
     color: str | None = Field(None, pattern=r"^[0-9A-Fa-f]{6}$|^$")
     # S3: first row / column (1-based) and how many.
     at: int | None = Field(None, ge=1, le=1_048_576)
     count: int | None = Field(None, ge=1, le=1000)
+    # S5: a range such as "A1:D1" for merge / unmerge.
+    range: str | None = Field(None, max_length=20, pattern=r"^[A-Za-z]{1,3}[0-9]{1,7}:[A-Za-z]{1,3}[0-9]{1,7}$")
     author: str = Field(default="you", min_length=1, max_length=80)
 
 
@@ -427,6 +429,8 @@ def register_workbench_routes(app: FastAPI) -> None:
         from litchai.workbench.formula import FormulaError, check_user_formula
         from litchai.workbench.model import parse_a1
         from litchai.workbench.ops import OpBuilder, new_batch
+        from litchai.workbench.styles import StyleError
+        from litchai.workbench.styles import clean as clean_style
 
         author = " ".join(body.author.split())[:80] or "you"
         with _workbench() as wb:
@@ -447,6 +451,10 @@ def register_workbench_routes(app: FastAPI) -> None:
                     raise HTTPException(422, f"edit {i + 1}: {cell!r} is not a cell") from exc
                 nf = e.get("number_format")
                 nf = str(nf)[:64] if nf else None
+                try:
+                    st = clean_style(e.get("style"))
+                except StyleError as exc:
+                    raise HTTPException(422, f"edit {i + 1}: {exc}") from exc
                 formula = e.get("formula")
                 if formula:
                     f = str(formula).strip()
@@ -455,20 +463,21 @@ def register_workbench_routes(app: FastAPI) -> None:
                         check_user_formula(f)
                     except FormulaError as exc:
                         raise HTTPException(422, f"{sheet}!{cell}: {exc}") from exc
-                    ob.set(sheet, cell, formula=f, number_format=nf, reason=reason)
+                    ob.set(sheet, cell, formula=f, number_format=nf, reason=reason, style=st)
                 elif e.get("clear") or ("value" in e and e["value"] in ("", None)):
-                    ob.set(sheet, cell, value=None, number_format=nf, reason=reason)
+                    ob.set(sheet, cell, value=None, number_format=nf, reason=reason, style=st)
                 elif "value" in e:
                     v = e["value"]
                     if not isinstance(v, (str, int, float, bool)):
                         raise HTTPException(422, f"edit {i + 1}: a value must be text, a number or true/false")
                     ob.set(sheet, cell, value=v[:32000] if isinstance(v, str) else v,
-                           number_format=nf, reason=reason)
-                elif nf is not None:
+                           number_format=nf, reason=reason, style=st)
+                elif nf is not None or st:
                     cur = model.sheets[sheet].get(r, c)
                     ob.set(sheet, cell, value=cur.value if cur else None,
                            formula=cur.formula if cur and cur.formula else None,
-                           number_format=nf, reason=f"Format set by {author}")
+                           number_format=nf or (cur.number_format if cur else None),
+                           reason=f"Format set by {author}", style=st)
                 else:
                     raise HTTPException(422, f"edit {i + 1}: nothing to change")
             n = len(ob.ops)
@@ -589,6 +598,28 @@ def register_workbench_routes(app: FastAPI) -> None:
                     _col_letter(at) if n == 1 else f"{_col_letter(at)}–{_col_letter(at + n - 1)}")
                 title = (f"{'Inserted' if a.startswith('insert') else 'Deleted'} "
                          f"{n} {what}{'s' if n != 1 else ''} at {band} on {sheet}")
+            elif a in ("merge", "unmerge"):
+                from litchai.workbench.model import parse_a1 as _p
+
+                if not body.range:
+                    raise HTTPException(422, "say which range")
+                rng = body.range.upper()
+                (ra, ca), (rb, cb) = (_p(x) for x in rng.split(":"))
+                if (ra, ca) == (rb, cb) or rb < ra or cb < ca:
+                    raise HTTPException(422, "a merge needs two or more cells, top-left first")
+                if a == "unmerge" and rng not in sh.merged:
+                    raise HTTPException(409, f"{rng} is not merged")
+                hidden_cells = []
+                if a == "merge":
+                    for (r, c), cell in sorted(sh.cells.items()):
+                        if ra <= r <= rb and ca <= c <= cb and (r, c) != (ra, ca) and (
+                                cell.value is not None or cell.formula):
+                            v = cell.formula or cell.value
+                            hidden_cells.append([r, c, {"date": v.isoformat()} if hasattr(v, "isoformat") else v,
+                                                 cell.number_format if cell.number_format != "General" else None])
+                op = Operation("merge_cells" if a == "merge" else "unmerge_cells", workbook_id, sheet=sheet,
+                               meta={"range": rng, "cells": hidden_cells})
+                title = f"{'Merged' if a == 'merge' else 'Unmerged'} {rng} on {sheet}"
             elif a == "color":
                 op = Operation("sheet_props", workbook_id, sheet=sheet,
                                meta={"color": (body.color or "").upper() or None,
@@ -715,10 +746,10 @@ def register_workbench_routes(app: FastAPI) -> None:
                 v = cell.display
                 cells.append({"ref": ref, "r": r, "c": c,
                               "v": v.isoformat() if hasattr(v, "isoformat") else v,
-                              "f": cell.formula, "nf": cell.number_format,
+                              "f": cell.formula, "nf": cell.number_format, "s": cell.style,
                               "pending": pending.get((sh.name, ref)),
                               "page": sh.source_pages.get(r)})
-            return {"sheet": sh.name, "max_row": sh.max_row, "max_col": sh.max_col,
+            return {"sheet": sh.name, "max_row": sh.max_row, "max_col": sh.max_col, "merged": sh.merged,
                     "sheets": list(models[workbook_id].sheets), "cells": cells,
                     "sheet_info": [{"name": s.name, "color": s.color, "hidden": s.hidden}
                                    for s in models[workbook_id].sheets.values()]}

@@ -29,7 +29,8 @@ from litchai.workbench.model import Cell, Sheet, Workbook, a1, parse_a1
 
 OP_KINDS = ("set_cell", "create_sheet", "delete_sheet", "create_workbook", "add_chart",
             "remove_chart", "rename_sheet", "move_sheet", "sheet_props", "copy_sheet",
-            "restore_sheet", "insert_rows", "delete_rows", "insert_cols", "delete_cols")
+            "restore_sheet", "insert_rows", "delete_rows", "insert_cols", "delete_cols",
+            "merge_cells", "unmerge_cells")
 SHEET_OPS = ("rename_sheet", "move_sheet", "sheet_props", "copy_sheet", "restore_sheet")
 
 
@@ -53,6 +54,9 @@ class Operation:
     # Sheet operations: {"to": name} rename/copy, {"from": i, "to": j} move,
     # {"color", "hidden", "old_color", "old_hidden"} props, {"index", "cells"} restore.
     meta: dict[str, Any] | None = None
+    # S5: the style keys this op sets, and the full style before it (for undo).
+    style: dict[str, Any] | None = None
+    old_style: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -179,13 +183,18 @@ class OpBuilder:
 
     def set(self, sheet: str, cell: str, *, value: Any = None, formula: str | None = None,
             reason: str = "", source_rows: list[str] | None = None, preview: Any = None,
-            number_format: str | None = None) -> Operation:
+            number_format: str | None = None, style: dict[str, Any] | None = None) -> Operation:
+        from litchai.workbench.styles import full
+
         old_v = old_f = None
+        old_st: dict[str, Any] | None = None
         if sheet in self.model.sheets and sheet not in self._fresh:
             r, c = parse_a1(cell)
             cur = self.model.sheets[sheet].get(r, c)
             if cur is not None:
                 old_v, old_f = cur.value, cur.formula
+                old_st = cur.style
+        old_style = full(old_st) if style else None
         if formula is not None and not formula.startswith("="):
             formula = "=" + formula
         op = Operation(
@@ -194,6 +203,7 @@ class OpBuilder:
             number_format=number_format, reason=reason, tool=self.tool,
             source_rows=list(source_rows or []), preview_value=preview,
             kind="changed" if (old_v is not None or old_f is not None) else "new",
+            style=style or None, old_style=old_style,
         )
         self._ops.append(op)
         return op
@@ -240,9 +250,12 @@ def overlay(model: Workbook, ops: list[Operation]) -> None:
             if op.new_formula is None and op.new_value is None:
                 sheet.cells.pop((r, c), None)
             else:
+                cur = sheet.cells.get((r, c))
+                st = dict(cur.style or {}) if cur and cur.style else {}
+                st.update(op.style or {})
                 sheet.set(r, c, Cell(value=None if op.new_formula else op.new_value,
                                      formula=op.new_formula, preview=op.preview_value,
-                                     number_format=op.number_format))
+                                     number_format=op.number_format, style=st or None))
 
 
 # --- apply ------------------------------------------------------------------------
@@ -295,6 +308,10 @@ def apply_ops(xlsx: bytes, ops: list[Operation], *, check_conflicts: bool = True
             c.value = op.new_formula if op.new_formula else op.new_value
             if op.number_format:
                 c.number_format = op.number_format
+            if op.style:
+                from litchai.workbench.styles import apply_style
+
+                apply_style(c, op.style)
         elif op.op == "add_chart":
             from litchai.workbench.charts import insert_chart
 
@@ -307,6 +324,8 @@ def apply_ops(xlsx: bytes, ops: list[Operation], *, check_conflicts: bool = True
             from litchai.workbench.structure import apply_struct
 
             conflicts.extend(apply_struct(wb, op))
+        elif op.op in ("merge_cells", "unmerge_cells"):
+            conflicts.extend(_apply_merge(wb, op))
         elif op.op == "remove_chart":
             if op.sheet in wb.sheetnames:
                 ws = wb[op.sheet]
@@ -317,6 +336,29 @@ def apply_ops(xlsx: bytes, ops: list[Operation], *, check_conflicts: bool = True
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+def _apply_merge(wb: Any, op: Operation) -> list[str]:
+    """S5: merge or unmerge a range. Undo of a merge brings back the cells it hid."""
+    from datetime import datetime
+
+    m = op.meta or {}
+    rng = str(m.get("range") or "")
+    if op.sheet not in wb.sheetnames or not rng:
+        return ["the range to merge is missing"]
+    ws = wb[op.sheet]
+    if op.op == "merge_cells":
+        ws.merge_cells(rng)
+        return []
+    if rng in {str(x) for x in ws.merged_cells.ranges}:
+        ws.unmerge_cells(rng)
+    for r, c, v, nf in m.get("cells", []):
+        if isinstance(v, dict) and "date" in v:
+            v = datetime.fromisoformat(v["date"])
+        cell = ws.cell(row=r, column=c, value=v)
+        if nf:
+            cell.number_format = nf
+    return []
 
 
 def _quoted(name: str) -> str:
@@ -417,6 +459,7 @@ def inverse_ops(ops: list[Operation]) -> list[Operation]:
                 old_value=op.new_value, old_formula=op.new_formula,
                 new_value=op.old_value, new_formula=op.old_formula,
                 reason=f"undo: {op.reason}", tool=op.tool, kind="changed",
+                style=op.old_style, old_style=None,
             ))
         elif op.op == "create_sheet":
             inv.append(Operation("delete_sheet", op.workbook_id, sheet=op.sheet,
@@ -447,6 +490,13 @@ def inverse_ops(ops: list[Operation]) -> list[Operation]:
                                  reason=f"undo: {op.reason}", tool=op.tool))
         elif op.op == "delete_sheet" and op.meta and "cells" in op.meta:
             inv.append(Operation("restore_sheet", op.workbook_id, sheet=op.sheet, meta=op.meta,
+                                 reason=f"undo: {op.reason}", tool=op.tool))
+        elif op.op in ("merge_cells", "unmerge_cells"):
+            m = op.meta or {}
+            inv.append(Operation("unmerge_cells" if op.op == "merge_cells" else "merge_cells",
+                                 op.workbook_id, sheet=op.sheet,
+                                 meta={"range": m.get("range"),
+                                       "cells": m.get("cells", []) if op.op == "merge_cells" else []},
                                  reason=f"undo: {op.reason}", tool=op.tool))
         elif op.op in ("insert_rows", "delete_rows", "insert_cols", "delete_cols"):
             m = op.meta or {}

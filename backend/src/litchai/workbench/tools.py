@@ -127,6 +127,11 @@ class CellWrite(_Args):
     value: str | float | int | bool | None = None
     formula: str | None = Field(None, description="e.g. =SUM(C2:C20); wins over value")
     number_format: str | None = Field(None, description='e.g. "#,##0.00"')
+    style: dict[str, Any] | None = Field(
+        None, description='formatting: {"b": bold, "i": italic, "u": underline, "fc": text colour '
+                          '"RRGGBB", "bg": fill colour "RRGGBB", "ha": "left"|"center"|"right", '
+                          '"wrap": wrap text, "bt"/"bb"/"bl"/"br": thin border top/bottom/left/right}. '
+                          'Without value or formula, only the format changes.')
 
 
 class WriteCellsArgs(_Args):
@@ -390,6 +395,23 @@ def _write_cells(ctx: ToolContext, a: WriteCellsArgs) -> ToolOutput:
         # Models often put a formula in value: a value that starts with = is one.
         if not w.formula and isinstance(w.value, str) and w.value.strip().startswith("="):
             w.formula, w.value = w.value.strip(), None
+        from litchai.workbench.styles import StyleError
+        from litchai.workbench.styles import clean as clean_style
+
+        try:
+            st = clean_style(w.style)
+        except StyleError as exc:
+            raise ToolError(f"{ref}: {exc}") from exc
+        if st and w.formula is None and w.value is None:
+            # Format only: keep what is in the cell.
+            r_, c_ = parse_a1(ref)
+            cur = sh.get(r_, c_)
+            b.set(sh.name, ref, value=cur.value if cur else None,
+                  formula=cur.formula if cur and cur.formula else None,
+                  number_format=w.number_format or (cur.number_format if cur else None),
+                  reason=reason, style=st)
+            refs.append(ref)
+            continue
         if w.formula:
             f = w.formula.strip()
             f = f if f.startswith("=") else "=" + f
@@ -397,11 +419,11 @@ def _write_cells(ctx: ToolContext, a: WriteCellsArgs) -> ToolOutput:
                 check_user_formula(f)
             except FormulaError as exc:
                 raise ToolError(f"{ref}: {exc}") from exc
-            b.set(sh.name, ref, formula=f, number_format=w.number_format, reason=reason)
+            b.set(sh.name, ref, formula=f, number_format=w.number_format, reason=reason, style=st)
         else:
             v = w.value
             b.set(sh.name, ref, value=v[:32000] if isinstance(v, str) else v,
-                  number_format=w.number_format, reason=reason)
+                  number_format=w.number_format, reason=reason, style=st)
         refs.append(ref)
     n = len(refs)
     batch = finish_batch(ctx, b, f"Write {n} cell{'s' if n != 1 else ''} on {sh.name}",
