@@ -185,8 +185,48 @@ export function Grid({
   const dataCol = Math.max(1, meta?.maxCol ?? 1);
   const maxRow = meta ? dataRow + 100 : 0;
   const maxCol = Math.min(MAX_COLS, Math.max(dataCol + 10, 26));
-  const first = Math.max(1, Math.floor((view.top - headH) / rowH) - 10);
-  const last = Math.min(maxRow, Math.ceil((view.top + view.height) / rowH) + 10);
+  // S4 filter (view only, nothing is saved): rows below the header whose value in `col`
+  // is not `text` are hidden. Rows are placed by their index among the visible rows.
+  const [filter, setFilter] = useState<{ col: number; text: string; header: number } | null>(null);
+  useEffect(() => setFilter(null), [key]);
+  const vis = useMemo(() => {
+    if (!filter || !maxRow) return null;
+    const out: number[] = [];
+    for (let r = 1; r <= maxRow; r++) {
+      if (r <= filter.header || r > dataRow) {
+        if (r <= dataRow) out.push(r);
+        continue;
+      }
+      const blk = blocks.get(Math.floor((r - 1) / BLOCK));
+      const t = blk ? display(blk.cells.get(`${r}:${filter.col}`) ?? null) : null;
+      if (t === null || t === filter.text) out.push(r);
+    }
+    return out;
+  }, [filter, blocks, maxRow, dataRow]);
+  const visIdx = useMemo(() => (vis ? new Map(vis.map((r, i) => [r, i])) : null), [vis]);
+  /** Screen index (0-based) of a row; a hidden row maps to the next visible one. */
+  const idxOf = (r: number) => {
+    if (!vis || !visIdx) return r - 1;
+    const i = visIdx.get(r);
+    if (i !== undefined) return i;
+    const k = vis.findIndex((x) => x > r);
+    return k < 0 ? vis.length - 1 : k;
+  };
+  const rowAtIdx = (i: number) => (vis ? vis[Math.max(0, Math.min(vis.length - 1, i))] ?? 1 : i + 1);
+  /** The filter bar sits under the column letters; rows start below it. */
+  const barH = filter ? Math.round(26 * zoom) : 0;
+  const yOf = (r: number) => headH + barH + idxOf(r) * rowH;
+  const rowCount = vis ? vis.length : maxRow;
+  const firstIdx = Math.max(0, Math.floor((view.top - headH - barH) / rowH) - 10);
+  const lastIdx = Math.min(rowCount - 1, Math.ceil((view.top + view.height) / rowH) + 10);
+  const first = rowAtIdx(firstIdx);
+  const last = vis ? rowAtIdx(lastIdx) : Math.min(maxRow, lastIdx + 1);
+  // A filter needs every data row loaded (capped like Find).
+  useEffect(() => {
+    if (!filter || !meta) return;
+    const lastB = Math.min(Math.floor((Math.max(1, meta.maxRow) - 1) / BLOCK), READ_CAP - 1);
+    for (let b = 0; b <= lastB; b++) if (!blocks.has(b)) void load(b);
+  }, [filter, meta, blocks, load]);
 
   useEffect(() => {
     if (!meta) return;
@@ -333,13 +373,13 @@ export function Grid({
 
   // Jump to a cited cell. Only a new citation moves the view: a zoom step changes the
   // offsets too, and must keep the view where it is, so the sizes are read through a ref.
-  const geom = useRef({ left, rowH, headH, numW });
-  geom.current = { left, rowH, headH, numW };
+  const geom = useRef({ left, rowH, headH, numW, yOf: (r: number) => headH + (r - 1) * rowH });
+  geom.current = { left, rowH, headH, numW, yOf };
   const reveal = useCallback((r: number, c: number, smooth = true) => {
     const el = box.current;
     if (!el) return;
     const g = geom.current;
-    const y = g.headH + (r - 1) * g.rowH;
+    const y = g.yOf(r);
     const x = g.left[c - 1] ?? 0;
     el.scrollTo({ top: Math.max(0, y - el.clientHeight / 3), left: Math.max(0, x - g.numW - 40), behavior: smooth ? "smooth" : "auto" });
   }, []);
@@ -621,9 +661,9 @@ export function Grid({
     const el = box.current;
     if (!el) return null;
     const rect = el.getBoundingClientRect();
-    const gy = y - rect.top + el.scrollTop - headH;
+    const gy = y - rect.top + el.scrollTop - headH - barH;
     const gx = x - rect.left + el.scrollLeft;
-    const r = Math.max(1, Math.floor(gy / rowH) + 1);
+    const r = rowAtIdx(Math.max(0, Math.floor(gy / rowH)));
     let c = 1;
     while (c < left.length - 1 && gx >= left[c]) c++;
     return { r, c };
@@ -875,15 +915,18 @@ export function Grid({
     const step = d[e.key];
     if (!step && !target) return;
     e.preventDefault();
-    const next = target ?? { r: Math.min(Math.max(1, active.r + step[0]), lastRow), c: Math.min(Math.max(1, active.c + step[1]), maxCol) };
+    const next = target ?? {
+      r: vis ? rowAtIdx(idxOf(active.r) + step[0]) : Math.min(Math.max(1, active.r + step[0]), lastRow),
+      c: Math.min(Math.max(1, active.c + step[1]), maxCol),
+    };
     const anchor = e.shiftKey && selection ? { r: selection.r0 === active.r ? selection.r1 : selection.r0, c: selection.c0 === active.c ? selection.c1 : selection.c0 } : next;
     setActive(next);
     onSelect(rangeFrom(e.shiftKey ? anchor : next, next));
     onCell(cellAt(next.r, next.c), next, null);
     const el = box.current;
     if (el) {
-      const y = headH + (next.r - 1) * rowH;
-      if (y < el.scrollTop + headH) el.scrollTop = y - headH;
+      const y = yOf(next.r);
+      if (y < el.scrollTop + headH + barH) el.scrollTop = y - headH - barH;
       else if (y + rowH > el.scrollTop + el.clientHeight) el.scrollTop = y + rowH - el.clientHeight;
     }
   };
@@ -909,7 +952,8 @@ export function Grid({
 
   const totalW = left[left.length - 1];
   const rows: number[] = [];
-  for (let r = first; r <= last; r++) rows.push(r);
+  if (vis) for (let i = firstIdx; i <= lastIdx; i++) rows.push(vis[i]);
+  else for (let r = first; r <= last; r++) rows.push(r);
 
   return (
     <div
@@ -937,7 +981,7 @@ export function Grid({
         panning && "[&_*]:!cursor-grabbing",
       )}
     >
-      <div style={{ height: headH + maxRow * rowH, width: totalW }} className="relative">
+      <div style={{ height: headH + barH + rowCount * rowH, width: totalW }} className="relative">
         {/* Column letters */}
         <div className="sticky top-0 z-20" style={{ width: totalW }}>
         <div role="row" className="flex" style={{ height: headH, width: totalW }}>
@@ -971,6 +1015,16 @@ export function Grid({
             </div>
           ))}
         </div>
+        {filter ? (
+          <div className="sticky left-0 z-[25] flex items-center gap-2 overflow-hidden border-b border-hairline bg-brand-tint px-3 text-[12px] text-ink" style={{ height: barH, width: "max-content", minWidth: "100%" }} role="status">
+            <span>
+              Filter on: column {colLetter(filter.col)} is &ldquo;{filter.text || "blank"}&rdquo;. {Math.max(0, (vis?.length ?? 0) - filter.header)} of {Math.max(0, dataRow - filter.header)} rows shown. Nothing in the file changes.
+            </span>
+            <button type="button" onClick={() => setFilter(null)} className="rounded-ctl border border-hairline bg-paper px-2 py-0.5 font-medium hover:bg-cloud">
+              Show all rows
+            </button>
+          </div>
+        ) : null}
         {freeze.row && maxRow > 1 ? renderRow(1, true) : null}
         </div>
         {rows.map((r) => renderRow(r, false))}
@@ -983,9 +1037,9 @@ export function Grid({
                 className="pointer-events-none absolute z-20 border-2 border-dashed border-accent"
                 style={{
                   left: left[selection.c0 - 1],
-                  top: headH + (selection.r0 - 1) * rowH,
+                  top: yOf(selection.r0),
                   width: (left[Math.max(fillTo.c, selection.c1)] ?? left[left.length - 1]) - left[selection.c0 - 1],
-                  height: (Math.max(fillTo.r, selection.r1) - selection.r0 + 1) * rowH,
+                  height: (idxOf(Math.max(fillTo.r, selection.r1)) - idxOf(selection.r0) + 1) * rowH,
                 }}
               />
             ) : null}
@@ -997,7 +1051,7 @@ export function Grid({
               onMouseDown={startFill}
               onDoubleClick={fillToEnd}
               className="absolute z-20 size-2 cursor-crosshair border border-paper bg-accent"
-              style={{ left: (left[selection.c1] ?? left[left.length - 1]) - 4, top: headH + selection.r1 * rowH - 4 }}
+              style={{ left: (left[selection.c1] ?? left[left.length - 1]) - 4, top: yOf(selection.r1) + rowH - 4 }}
             />
           </>
         ) : null}
@@ -1046,6 +1100,22 @@ export function Grid({
                   ];
                 })()
               : []),
+            ...(active && menu.range.r0 === menu.range.r1 && menu.range.c0 === menu.range.c1
+              ? [
+                  {
+                    label: `Show only rows where ${colLetter(menu.range.c0)} is "${(display(cellAt(menu.range.r0, menu.range.c0)) || "blank").slice(0, 24)}"`,
+                    keys: "",
+                    run: () => {
+                      const col = menu.range.c0;
+                      const t = display(cellAt(menu.range.r0, col));
+                      const head = typeof cellAt(1, col)?.v === "string" && menu.range.r0 > 1 ? 1 : 0;
+                      setFilter({ col, text: t, header: head });
+                    },
+                  },
+                  null,
+                ]
+              : []),
+            ...(filter ? [{ label: "Show all rows (clear the filter)", keys: "", run: () => setFilter(null) }, null] : []),
             ...(onAsk
               ? [
                   { label: "Ask Sage about this range", keys: "", run: () => onAsk(menu.range, "ask") },
@@ -1080,7 +1150,7 @@ export function Grid({
   function renderEditor(ed: { r: number; c: number; text: string }) {
     const x = left[ed.c - 1] ?? numW;
     const w = Math.max(widths[ed.c - 1] ?? 120, 200);
-    const y = headH + (ed.r - 1) * rowH;
+    const y = yOf(ed.r);
     const sg = suggest(ed.text);
     const hn = sg.names.length ? null : hint(ed.text);
     const pick = (name: string) => {
@@ -1159,7 +1229,7 @@ export function Grid({
               aria-rowindex={r}
               aria-hidden={!frozen && freeze.row && r === 1 ? true : undefined}
               className={cn(frozen ? "relative flex shadow-[0_1px_0_var(--color-line-strong)]" : "absolute flex")}
-              style={{ top: frozen ? undefined : headH + (r - 1) * rowH, height: rowH, width: totalW }}
+              style={{ top: frozen ? undefined : yOf(r), height: rowH, width: totalW }}
             >
               <div
                 role="rowheader"
