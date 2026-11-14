@@ -188,7 +188,7 @@ export function SageWorkspace({
                     onDismiss={() => void chat.dismiss(t.id)}
                     onVote={(v, note) => void chat.vote(t.id, v, note)}
                     onRegenerate={t.id === lastAssistantId && !chat.loading ? chat.regenerate : undefined}
-                    onReply={() => setDraft({ text: `About your answer: "${t.content.replace(/s+/g, " ").slice(0, 200)}"
+                    onReply={() => setDraft({ text: `About your answer: "${t.content.replace(/\s+/g, " ").slice(0, 200)}"
 
 `, key: Date.now() })}
                   />

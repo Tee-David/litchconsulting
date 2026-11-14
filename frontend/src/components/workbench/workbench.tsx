@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import type { WbBatch, WbCell, WbConflict, WbConversation, WbEvent, WbFirstLook, WbGate, WbUserEdit } from "@/lib/litchai/workbench";
 import { attachDocumentAction, attachFilesAction, decideBatchAction, deliverAction, feedbackAction, getConversationAction, newThreadAction, openThreadAction, restoreVersionAction, runToolAction, saveEditsAction, sheetActionAction } from "@/lib/workbench/actions";
-import { AlignCenter, AlignLeft, AlignRight, Baseline, Bold, Check, ChevronDown as Chev, Ellipsis, FolderOpen, Grid2x2, Italic, NotebookPen, PaintBucket, Pencil, SquarePen, TableCellsMerge, Underline, WrapText } from "lucide-react";
+import { AlignCenter, AlignLeft, AlignRight, Baseline, Bold, Check, CornerDownRight, ChevronDown as Chev, Ellipsis, FolderOpen, Grid2x2, Italic, NotebookPen, PaintBucket, Pencil, SquarePen, TableCellsMerge, Underline, WrapText } from "lucide-react";
 import { setInstructionsAction } from "@/lib/workbench/actions";
 import type { StyleRequest } from "./grid";
 import { MessageActions } from "@/components/sage-ui/message-actions";
@@ -1614,7 +1614,8 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
             </div>
             <div className="flex flex-col gap-1.5">
               {["Add an Account Type column beside the account names", "Add totals below the debit and credit columns", "Format the header row and the money columns", "Work out the company income tax for this year"].map((q) => (
-                <button key={q} type="button" onClick={() => void send(q)} disabled={running} className="min-h-10 rounded-xl border border-hairline bg-paper px-3 py-2 text-left text-[13px] text-ink hover:border-line-strong">
+                <button key={q} type="button" onClick={() => void send(q)} disabled={running} className="group flex min-h-11 items-center gap-2 rounded-xl border border-hairline bg-paper px-3 py-2 text-left text-[13px] text-body transition-colors hover:border-transparent hover:bg-brand-tint hover:text-ink disabled:opacity-50">
+                  <CornerDownRight className="size-3.5 shrink-0 text-faint transition-colors group-hover:text-accent dark:group-hover:text-info" aria-hidden />
                   {q}
                 </button>
               ))}
