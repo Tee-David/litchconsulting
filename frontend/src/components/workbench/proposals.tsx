@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, Check, ChevronDown, Layers, Loader2, Pencil, ShieldAlert, Undo2 } from "lucide-react";
 import type { WbBatch } from "@/lib/litchai/workbench";
 import { Button } from "@/components/kit";
@@ -47,10 +47,13 @@ export function Proposals({
   const cells = open.reduce((n, b) => n + b.counts.new_cells + b.counts.changed_cells, 0);
   const [expanded, setExpanded] = useState(false);
   const [showDecided, setShowDecided] = useState(false);
-  // Open by itself when new proposals arrive and Sage has finished; fold while it works.
+  // Open by itself only when NEW proposals arrive and Sage has finished (not on load, so the
+  // thread stays visible); fold while it works.
+  const seen = useRef(open.length);
   useEffect(() => {
     if (working) setExpanded(false);
-    else if (open.length) setExpanded(true);
+    else if (open.length > seen.current) setExpanded(true);
+    if (!working) seen.current = open.length;
     // Only when the number waiting or the working state changes.
   }, [open.length, working]);
   if (!open.length && !decided.length) return null;
@@ -72,7 +75,7 @@ export function Proposals({
         <ChevronDown className={cn("size-4 text-muted transition-transform duration-150", expanded && "rotate-180")} aria-hidden />
       </button>
       {expanded ? (
-      <div className="max-h-[42vh] overflow-y-auto border-t border-hairline">
+      <div className="max-h-[30vh] overflow-y-auto sm:max-h-[42vh] border-t border-hairline">
       <ul className="divide-y divide-hairline">
         {list.map((b) => {
           const ref = firstRef(b);
