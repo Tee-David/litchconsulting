@@ -1,0 +1,143 @@
+/* "What needs you" deck (components/kit/attention-deck.tsx). The card is the one navy
+   surface on the page; everything on it reads on --ldeck-hero. Fixed hex on the card,
+   because the semantic tokens flip in dark mode and the card stays navy. */
+.ldeck {
+  --ldeck-hero: #0a196d; --ldeck-line: #0a196d; --ldeck-dim: #d6dbf5;
+  --ldeck-good: #11734a; --ldeck-neutral: #4a5170;
+  --ldeck-bad: #b42318; --ldeck-warn: #975400; --ldeck-info: #2540c4;
+  --ldeck-ease: cubic-bezier(0.22, 1, 0.36, 1); --ldeck-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  display: grid; gap: .75rem; min-width: 0;
+}
+.dark .ldeck { --ldeck-hero: #121b4d; --ldeck-line: #2a3680; --ldeck-info: #3654dc; }
+
+.ldeck__head { display: flex; align-items: center; gap: .6rem .8rem; flex-wrap: wrap; }
+.ldeck__head h2 { margin: 0; font-size: 1.06rem; font-weight: 600; color: var(--color-ink); }
+.ldeck__strip { display: flex; gap: 3px; flex: 1; min-width: 110px; max-width: 260px; }
+.ldeck__strip span { flex: 1; height: 6px; border-radius: 9px; background: var(--color-hairline); transition: background .4s var(--ldeck-ease); }
+.ldeck__strip span.on { background: var(--color-good); }
+.ldeck__count { color: var(--color-muted); font-size: .82rem; }
+.ldeck__keys { margin-left: auto; color: var(--color-muted); font-size: .75rem; }
+@media (max-width: 720px), (pointer: coarse) { .ldeck__keys { display: none; } }
+
+.ldeck__stack { position: relative; padding-bottom: 18px; overflow-x: clip; overflow-clip-margin: 28px; perspective: 1400px; }
+.ldeck__ghost { position: absolute; left: 18px; right: 18px; height: 60px; bottom: 6px; border-radius: 24px; background: var(--ldeck-hero); opacity: .45; border: 1px solid var(--ldeck-line); }
+.ldeck__ghost--2 { left: 36px; right: 36px; bottom: -4px; opacity: .22; }
+
+.ldeck__card {
+  position: relative; z-index: 2; display: flex; flex-direction: column; gap: 1rem;
+  padding: 1.625rem; border-radius: 24px; background: var(--ldeck-hero); border: 1px solid var(--ldeck-line);
+  color: #fff; box-shadow: 0 1px 2px rgb(10 14 26 / .06), 0 12px 32px rgb(10 25 109 / .18);
+  container-type: inline-size; container-name: ldeck; transform-origin: 50% 100%;
+  animation: ldeckIn .55s var(--ldeck-ease) backwards; outline: none;
+}
+.ldeck__card:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 4px; }
+.ldeck__card > :not(.ldeck__stamp) { animation: ldeckKid .55s var(--ldeck-ease) backwards; }
+.ldeck__card > :nth-child(2) { animation-delay: .07s; }
+.ldeck__card > :nth-child(3) { animation-delay: .12s; }
+.ldeck__card > :nth-child(n+4) { animation-delay: .17s; }
+.ldeck__card.is-done { animation: ldeckDone .78s var(--ldeck-ease) forwards; }
+.ldeck__card.is-snooze { animation: ldeckSnooze .52s var(--ldeck-ease) forwards; }
+
+.ldeck__tags { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.ldeck__tag { display: inline-flex; align-items: center; min-height: 1.5rem; padding: 0 .65rem; border-radius: 999px; color: #fff; font-size: .75rem; font-weight: 600; }
+.ldeck__tag--kind { background: #fff; color: #0a196d; }
+.ldeck__tag.is-bad { background: var(--ldeck-bad); }
+.ldeck__tag.is-warn { background: var(--ldeck-warn); }
+.ldeck__tag.is-info { background: var(--ldeck-info); }
+.ldeck__label { margin-left: auto; font-size: .82rem; color: var(--ldeck-dim); }
+.ldeck__text { display: grid; gap: .5rem; }
+.ldeck__text h3 { margin: 0; color: #fff; font-size: clamp(1.3rem, 3cqi, 1.75rem); font-weight: 600; line-height: 1.15; letter-spacing: -.02em; }
+.ldeck__text p { margin: 0; color: var(--ldeck-dim); font-size: .95rem; line-height: 1.5; }
+.ldeck__facts { display: flex; flex-wrap: wrap; gap: .5rem 1.6rem; margin: 0; }
+.ldeck__facts dt { font-size: .75rem; color: var(--ldeck-dim); }
+.ldeck__facts dd { margin: 0; font-weight: 600; font-size: 1.05rem; overflow-wrap: anywhere; }
+
+.ldeck__acts { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.ldeck__sp { flex: 1 1 0; min-width: 0; }
+.ldeck__tools { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }
+.ldeck__btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: .45rem; min-height: 2.75rem; padding: 0 1rem;
+  border-radius: 12px; border: 1px solid rgb(255 255 255 / .28); background: transparent; color: #fff;
+  font: 600 .9rem/1 var(--font-sans); cursor: pointer; text-decoration: none; white-space: nowrap;
+  transition: background .14s, color .14s, border-color .14s, transform .14s;
+}
+.ldeck__btn svg { width: 1.05rem; height: 1.05rem; flex: none; }
+.ldeck__btn:hover { background: rgb(255 255 255 / .14); border-color: rgb(255 255 255 / .5); }
+.ldeck__btn:active { transform: translateY(1px); }
+.ldeck__btn:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.ldeck__btn:disabled { background: rgb(255 255 255 / .12); border-color: transparent; color: rgb(255 255 255 / .6); cursor: not-allowed; }
+.ldeck__btn--act { background: #fff; border-color: #fff; color: #0a196d; }
+.ldeck__btn--act:hover { background: #dfe4f7; border-color: #dfe4f7; }
+.ldeck__btn--act:disabled { background: #dfe4f7; color: #4a5170; }
+.ldeck__btn--quiet { border-color: transparent; color: var(--ldeck-dim); }
+.ldeck__snooze { position: relative; }
+.ldeck__menu {
+  position: absolute; right: 0; bottom: calc(100% + .4rem); z-index: 10; min-width: 13rem; padding: .35rem; display: grid;
+  background: var(--color-paper); color: var(--color-ink); border: 1px solid var(--color-hairline); border-radius: 16px;
+  box-shadow: 0 12px 32px rgb(10 14 26 / .18);
+}
+.ldeck__menu button { display: flex; justify-content: space-between; align-items: center; gap: 1rem; text-align: left; white-space: nowrap; min-height: 2.75rem; padding: 0 .75rem; border: 0; border-radius: 12px; background: transparent; color: inherit; font: 600 .88rem/1 var(--font-sans); cursor: pointer; }
+.ldeck__menu button small { color: var(--color-muted); font-weight: 400; font-size: .75rem; }
+.ldeck__menu button:hover { background: var(--color-surface); }
+.ldeck__menu button:focus-visible { outline: 2px solid var(--color-accent); outline-offset: -2px; }
+.ldeck__note { margin: 0; font-size: .82rem; color: var(--ldeck-dim); }
+
+@container ldeck (max-width: 470px) {
+  .ldeck__acts > .ldeck__btn { flex: 1 1 100%; }
+  .ldeck__sp { display: none; }
+  .ldeck__tools { flex: 1 1 100%; position: relative; }
+  .ldeck__tools > *, .ldeck__tools .ldeck__snooze { flex: 1 1 0; min-width: 0; }
+  .ldeck__tools .ldeck__btn { width: 100%; padding: 0 .6rem; }
+  /* Snooze is the first tool on a phone: the menu spans the tools row so it stays inside the card. */
+  .ldeck__tools .ldeck__snooze { position: static; }
+  .ldeck__menu { left: 0; right: 0; min-width: 0; }
+  .ldeck__label { margin-left: 0; flex-basis: 100%; }
+}
+
+/* No room above on a short card: the menu goes under the tools, inside the card. */
+.ldeck__snooze:has(.ldeck__menu.is-below) { display: contents; }
+.ldeck__tools:has(.ldeck__menu.is-below) { flex-wrap: wrap; }
+.ldeck__menu.is-below { position: static; order: 99; flex: 1 1 100%; width: 100%; margin-top: .25rem; box-shadow: none; }
+
+/* The stamp grows from the button that was pressed. */
+.ldeck__stamp {
+  position: absolute; inset: 0; z-index: 6; display: flex; align-items: center; justify-content: center; border-radius: inherit;
+  background: var(--st); pointer-events: none; clip-path: circle(0 at var(--cx, 50%) var(--cy, 80%));
+  animation: ldeckReveal .5s cubic-bezier(.65, 0, .35, 1) forwards;
+}
+.ldeck__stampIn { display: flex; flex-direction: column; align-items: center; gap: .6rem; color: #fff; animation: ldeckPop .5s var(--ldeck-spring) both .14s; }
+.ldeck__stampIn svg { fill: none; stroke: #fff; stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
+.ldeck__stampIn svg path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: ldeckDraw .4s cubic-bezier(.65, 0, .35, 1) forwards .2s; }
+.ldeck__stampIn b { font-size: 1.2rem; line-height: 1; }
+.ldeck__ring { position: absolute; left: var(--cx, 50%); top: var(--cy, 80%); width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; border: 2px solid rgb(255 255 255 / .7); opacity: 0; animation: ldeckRing .7s var(--ldeck-ease) forwards .05s; }
+
+.ldeck__empty {
+  display: flex; flex-direction: column; align-items: center; gap: .75rem; text-align: center; padding: 2rem 1.25rem;
+  border-radius: 24px; background: var(--ldeck-hero); border: 1px solid var(--ldeck-line); color: #fff;
+}
+.ldeck__empty h3 { margin: 0; color: #fff; font-size: 1.4rem; font-weight: 600; letter-spacing: -.02em; }
+.ldeck__empty p { margin: 0; max-width: 34rem; color: var(--ldeck-dim); font-size: .95rem; }
+.ldeck__emptyIc { width: 3.25rem; height: 3.25rem; border-radius: 50%; display: grid; place-items: center; background: var(--ldeck-good); color: #fff; }
+.ldeck__emptyIc svg { width: 1.6rem; height: 1.6rem; }
+
+@keyframes ldeckIn { from { transform: translateY(22px) scale(.94); opacity: .45; } }
+@keyframes ldeckKid { from { opacity: 0; transform: translateY(10px); } }
+@keyframes ldeckReveal { to { clip-path: circle(150% at var(--cx, 50%) var(--cy, 80%)); } }
+@keyframes ldeckRing { 0% { opacity: 1; transform: scale(.4); } 100% { opacity: 0; transform: scale(9); } }
+@keyframes ldeckPop { from { opacity: 0; transform: scale(.55); } }
+@keyframes ldeckDraw { to { stroke-dashoffset: 0; } }
+@keyframes ldeckDone { 0% { transform: none; } 8% { transform: scale(.985); } 20% { transform: scale(1); } 62% { transform: none; opacity: 1; } 100% { transform: translateY(-60px) rotateX(18deg) scale(.92); opacity: 0; } }
+@keyframes ldeckSnooze { 0% { transform: none; } 44% { transform: scale(.99); opacity: 1; } 100% { transform: translateY(56px) rotateX(-14deg) scale(.86); opacity: 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ldeck__card, .ldeck__card > *, .ldeck__card.is-done, .ldeck__card.is-snooze { animation: none; }
+  .ldeck__card.is-done, .ldeck__card.is-snooze { opacity: 0; }
+  .ldeck__stamp { animation: none; clip-path: none; }
+  .ldeck__stampIn, .ldeck__stampIn svg path, .ldeck__ring { animation: none; }
+  .ldeck__stampIn svg path { stroke-dashoffset: 0; }
+}
+
+@container ldeck (max-width: 360px) {
+  .ldeck__tools > *, .ldeck__tools .ldeck__snooze { flex: 1 1 calc(50% - .25rem); }
+  .ldeck__tools > :last-child:nth-child(odd) { flex-basis: 100%; }
+}

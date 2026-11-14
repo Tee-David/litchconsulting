@@ -10,4 +10,5 @@ export {
   type AttentionActionResult,
   type AttentionIcon,
 } from "./attention-list";
+export { AttentionDeck } from "./attention-deck";
 export { NotificationBell } from "./notification-bell";

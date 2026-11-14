@@ -4,7 +4,7 @@ import { requireArea } from "@/lib/server-user";
 import { buildAdminAttention } from "@/lib/attention/admin";
 import { formatMoney } from "@/lib/invoice/money";
 import { countInvoices } from "@/lib/invoice/late";
-import { AttentionList } from "@/components/kit";
+import { AttentionDeck } from "@/components/kit";
 import { AreaTrend, ChartKey, GroupedBars } from "@/components/charts";
 import { ActLink, Kpi, PageHead, Panel } from "@/components/admin/ui/surface";
 import { UrlSegmented } from "@/components/admin/ui/url-segmented";
@@ -86,13 +86,13 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
 
 
       <div data-tour="needs-action">
-        <AttentionList
+        <AttentionDeck
           items={items}
           actions={{ remindInvoice, followUpQuote, remindReview, assignMe, markReceived, retryEmail, dismissEmail }}
           undo={undoAttention}
           emptyWhy="No transfers to confirm, nothing late, no client waiting. New items appear here the moment they need a decision."
           emptyAction={
-            <Link href="/admin/requests" className="text-sm font-medium text-accent hover:underline">
+            <Link href="/admin/requests" className="ldeck__btn ldeck__btn--act">
               Look at open requests
             </Link>
           }
