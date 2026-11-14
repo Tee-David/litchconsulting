@@ -91,10 +91,14 @@ class UserEdits(BaseModel):
 
 class SheetAction(BaseModel):
     """S2: the sheet tab menu. Saved at once as a version named after the person."""
-    action: Literal["rename", "move", "copy", "delete", "color", "hide", "unhide"]
+    action: Literal["rename", "move", "copy", "delete", "color", "hide", "unhide",
+                    "insert_rows", "delete_rows", "insert_cols", "delete_cols"]
     name: str | None = Field(None, max_length=31)
     index: int | None = Field(None, ge=0, le=500)
     color: str | None = Field(None, pattern=r"^[0-9A-Fa-f]{6}$|^$")
+    # S3: first row / column (1-based) and how many.
+    at: int | None = Field(None, ge=1, le=1_048_576)
+    count: int | None = Field(None, ge=1, le=1000)
     author: str = Field(default="you", min_length=1, max_length=80)
 
 
@@ -152,6 +156,11 @@ def register_workbench_routes(app: FastAPI) -> None:
         if conv is None:
             raise HTTPException(404, "conversation not found")
         return conv
+
+    def _col_letter(c: int) -> str:
+        from openpyxl.utils import get_column_letter
+
+        return get_column_letter(c)
 
     def _attach_document(wb: Workbench, conv: Conversation, document_id: int) -> None:
         from litchai.workbench.formats import FormatError, is_workbench_file, to_working_copy
@@ -555,6 +564,31 @@ def register_workbench_routes(app: FastAPI) -> None:
                 op = Operation("delete_sheet", workbook_id, sheet=sheet,
                                meta=sheet_snapshot(model, sheet, names.index(sheet)))
                 title = f"Deleted {sheet}"
+            elif a in ("insert_rows", "delete_rows", "insert_cols", "delete_cols"):
+                from litchai.workbench.structure import band_snapshot, broken_by_delete
+
+                if not body.at or not body.count:
+                    raise HTTPException(422, "say where and how many")
+                rows = a.endswith("_rows")
+                at, n = body.at, body.count
+                meta: dict[str, Any] = {"at": at, "count": n}
+                if a.startswith("delete"):
+                    formulas = [(s.name, f"{_col_letter(c)}{r}", cell.formula)
+                                for s in model.sheets.values()
+                                for (r, c), cell in s.cells.items() if cell.formula]
+                    bad = broken_by_delete(formulas, target=sheet, rows=rows, at=at, count=n)
+                    if bad:
+                        more = f" and {len(bad) - 3} more" if len(bad) > 3 else ""
+                        raise HTTPException(409, f"{', '.join(bad[:3])}{more} use these "
+                                            f"{'rows' if rows else 'columns'}. Change those "
+                                            "formulas first.")
+                    meta["cells"] = band_snapshot(sh, rows=rows, at=at, count=n)
+                op = Operation(a, workbook_id, sheet=sheet, meta=meta)
+                what = "row" if rows else "column"
+                band = (f"{at}" if n == 1 else f"{at}–{at + n - 1}") if rows else (
+                    _col_letter(at) if n == 1 else f"{_col_letter(at)}–{_col_letter(at + n - 1)}")
+                title = (f"{'Inserted' if a.startswith('insert') else 'Deleted'} "
+                         f"{n} {what}{'s' if n != 1 else ''} at {band} on {sheet}")
             elif a == "color":
                 op = Operation("sheet_props", workbook_id, sheet=sheet,
                                meta={"color": (body.color or "").upper() or None,

@@ -29,7 +29,7 @@ from litchai.workbench.model import Cell, Sheet, Workbook, a1, parse_a1
 
 OP_KINDS = ("set_cell", "create_sheet", "delete_sheet", "create_workbook", "add_chart",
             "remove_chart", "rename_sheet", "move_sheet", "sheet_props", "copy_sheet",
-            "restore_sheet")
+            "restore_sheet", "insert_rows", "delete_rows", "insert_cols", "delete_cols")
 SHEET_OPS = ("rename_sheet", "move_sheet", "sheet_props", "copy_sheet", "restore_sheet")
 
 
@@ -303,6 +303,10 @@ def apply_ops(xlsx: bytes, ops: list[Operation], *, check_conflicts: bool = True
             insert_chart(wb[op.sheet], op.chart or {})
         elif op.op in SHEET_OPS:
             conflicts.extend(_apply_sheet_op(wb, op))
+        elif op.op in ("insert_rows", "delete_rows", "insert_cols", "delete_cols"):
+            from litchai.workbench.structure import apply_struct
+
+            conflicts.extend(apply_struct(wb, op))
         elif op.op == "remove_chart":
             if op.sheet in wb.sheetnames:
                 ws = wb[op.sheet]
@@ -443,6 +447,15 @@ def inverse_ops(ops: list[Operation]) -> list[Operation]:
                                  reason=f"undo: {op.reason}", tool=op.tool))
         elif op.op == "delete_sheet" and op.meta and "cells" in op.meta:
             inv.append(Operation("restore_sheet", op.workbook_id, sheet=op.sheet, meta=op.meta,
+                                 reason=f"undo: {op.reason}", tool=op.tool))
+        elif op.op in ("insert_rows", "delete_rows", "insert_cols", "delete_cols"):
+            m = op.meta or {}
+            flip = {"insert_rows": "delete_rows", "delete_rows": "insert_rows",
+                    "insert_cols": "delete_cols", "delete_cols": "insert_cols"}[op.op]
+            # Undo of a delete brings the cells back; undo of an insert removes the band.
+            inv.append(Operation(flip, op.workbook_id, sheet=op.sheet,
+                                 meta={"at": m.get("at"), "count": m.get("count"),
+                                       "cells": m.get("cells", []) if op.op.startswith("delete") else []},
                                  reason=f"undo: {op.reason}", tool=op.tool))
         elif op.op == "restore_sheet":
             inv.append(Operation("delete_sheet", op.workbook_id, sheet=op.sheet, meta=op.meta,
