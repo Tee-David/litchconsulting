@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Check, Clock } from "lucide-react";
+import { ArrowRight, Check, Clock, ExternalLink } from "lucide-react";
 import { useToast } from "@/components/admin/ui/toaster";
 import { fireConfetti } from "@/components/tour/confetti";
 import type { AttentionAction, AttentionActionResult, AttentionItem } from "./attention-list";
@@ -269,7 +269,7 @@ export function AttentionDeck({
               ))}
             </span>
             <span className="ldeck__count tabular-nums">
-              {queue.length ? `${queue.length} ${queue.length === 1 ? "thing needs" : "things need"} you` : "All handled"}
+              {handled} of {startN} cleared
             </span>
           </>
         ) : null}
@@ -340,8 +340,8 @@ export function AttentionDeck({
                   ) : null}
                 </div>
                 {openHref ? (
-                  <Link className="ldeck__btn ldeck__btn--quiet" href={openHref}>
-                    Open details
+                  <Link className="ldeck__btn ldeck__btn--icon" href={openHref} aria-label="Open details" title="Open details">
+                    <ExternalLink aria-hidden />
                   </Link>
                 ) : null}
               </div>

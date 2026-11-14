@@ -70,6 +70,7 @@
 .ldeck__btn--act:hover { background: #dfe4f7; border-color: #dfe4f7; }
 .ldeck__btn--act:disabled { background: #dfe4f7; color: #4a5170; }
 .ldeck__btn--quiet { border-color: transparent; color: var(--ldeck-dim); }
+.ldeck__btn--icon { width: 2.75rem; padding: 0; flex: none; }
 .ldeck__snooze { position: relative; }
 .ldeck__menu {
   position: absolute; right: 0; bottom: calc(100% + .4rem); z-index: 10; min-width: 13rem; padding: .35rem; display: grid;
@@ -88,6 +89,7 @@
   .ldeck__tools { flex: 1 1 100%; position: relative; }
   .ldeck__tools > *, .ldeck__tools .ldeck__snooze { flex: 1 1 0; min-width: 0; }
   .ldeck__tools .ldeck__btn { width: 100%; padding: 0 .6rem; }
+  .ldeck__tools > .ldeck__btn--icon { flex: none; width: 2.75rem; padding: 0; }
   /* Snooze is the first tool on a phone: the menu spans the tools row so it stays inside the card. */
   .ldeck__tools .ldeck__snooze { position: static; }
   .ldeck__menu { left: 0; right: 0; min-width: 0; }
@@ -143,4 +145,5 @@
 @container ldeck (max-width: 360px) {
   .ldeck__tools > *, .ldeck__tools .ldeck__snooze { flex: 1 1 calc(50% - .25rem); }
   .ldeck__tools > :last-child:nth-child(odd) { flex-basis: 100%; }
+  .ldeck__tools > a.ldeck__btn--icon:last-child { flex: 0 0 2.75rem; }
 }
