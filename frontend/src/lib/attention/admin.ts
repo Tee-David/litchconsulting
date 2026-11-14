@@ -51,6 +51,14 @@ function ago(d: Date | string | null | undefined): string {
 const day = (d: Date | string) =>
   new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "Africa/Lagos" });
 
+/** "Waiting 3 days", "Waiting 5 h", from a time in the past. */
+function waited(d: Date | string): string {
+  const h = Math.max(1, Math.round((Date.now() - new Date(d).getTime()) / H));
+  if (h < 24) return `Waiting ${h} h`;
+  const n = Math.round(h / 24);
+  return `Waiting ${n} ${n === 1 ? "day" : "days"}`;
+}
+
 const nameOf = (c?: { company: string | null; name: string } | null) => c?.company || c?.name || "A client";
 
 /** Proof rows the firm still has to confirm or reject. */
@@ -175,6 +183,15 @@ export const buildAdminAttention = cache(async (): Promise<AttentionItem[]> => {
       whenTone: "bad",
       amount: formatMoney(amt, p.currency),
       primary: { label: "Check and confirm", href: `/admin/billing/payments?proof=${p.id}` },
+      urgency: waited(p.createdAt),
+      ref: inv?.number,
+      facts: [
+        { k: "Transfer", v: formatMoney(amt, p.currency) },
+        ...(inv ? [{ k: "Invoice balance", v: formatMoney(due, inv.currency) }] : []),
+        ...(inv?.billToName ? [{ k: "Contact", v: inv.billToName }] : []),
+      ],
+      why: "The invoice stays unpaid until you check the transfer against the bank.",
+      ...(inv ? { more: [{ label: "Open invoice", href: `/admin/billing/invoices/${inv.id}` }] } : {}),
     });
   }
 
@@ -186,8 +203,16 @@ export const buildAdminAttention = cache(async (): Promise<AttentionItem[]> => {
       group: "Money",
       severity: 3,
       icon: "invoice",
-      title: `${inv.number} is ${daysLate} ${daysLate === 1 ? "day" : "days"} late`,
-      detail: `${inv.billToCompany || inv.billToName || "Client"} · ${formatMoney(bal, inv.currency)} outstanding${inv.billToEmail ? "" : " · no email on the invoice"}`,
+      title: `${inv.billToCompany || inv.billToName || "A client"} owes ${formatMoney(bal, inv.currency)}`,
+      detail: `${inv.number} was due on ${day(inv.dueDate as string)}${num(inv.amountPaid) > 0 ? `. ${formatMoney(num(inv.amountPaid), inv.currency)} is paid so far` : ""}.`,
+      urgency: `${daysLate} ${daysLate === 1 ? "day" : "days"} late`,
+      ref: inv.number,
+      facts: [
+        ...(inv.billToName ? [{ k: "Contact", v: inv.billToName }] : []),
+        ...(inv.sentAt ? [{ k: "Sent", v: day(inv.sentAt) }] : []),
+        { k: "Invoice total", v: formatMoney(num(inv.total), inv.currency) },
+      ],
+      why: inv.billToEmail ? "A reminder goes to the client by email with the pay link." : "There is no email on this invoice, so no reminder can go. Add one on the invoice.",
       when: `Due ${day(inv.dueDate as string)}`,
       whenTone: "bad",
       amount: formatMoney(bal, inv.currency),
@@ -209,6 +234,13 @@ export const buildAdminAttention = cache(async (): Promise<AttentionItem[]> => {
       when: ago(t.lastReplyAt ?? t.createdAt),
       whenTone: now - new Date(t.lastReplyAt ?? t.createdAt).getTime() > D ? "warn" : "muted",
       primary: { label: "Reply", href: `/admin/help-desk?ticket=${t.id}` },
+      urgency: waited(t.lastReplyAt ?? t.createdAt),
+      ref: t.number,
+      facts: [
+        { k: "Subject", v: t.subject },
+        { k: "Priority", v: t.priority.charAt(0).toUpperCase() + t.priority.slice(1) },
+        ...(t.assignee ? [{ k: "With", v: t.assignee }] : []),
+      ],
     });
   }
 
@@ -222,6 +254,12 @@ export const buildAdminAttention = cache(async (): Promise<AttentionItem[]> => {
       detail: `${r.number} · ${r.serviceName} · in internal review`,
       when: ago(r.updatedAt),
       primary: { label: "Review draft", href: `/admin/requests/${r.id}?tab=deliverables` },
+      urgency: "Waiting on you",
+      ref: r.number,
+      facts: [{ k: "Service", v: r.serviceName }, { k: "Client", v: nameOf(c) }],
+      why: "The client sees nothing until you approve the draft.",
+      handOver: { href: `/admin/requests/${r.id}?assign=1` },
+      open: `/admin/requests/${r.id}`,
     });
   }
 
@@ -237,6 +275,11 @@ export const buildAdminAttention = cache(async (): Promise<AttentionItem[]> => {
       whenTone: "warn",
       primary: { label: "Remind client", actionId: "remindReview" },
       more: [{ label: "Open request", href: `/admin/requests/${r.id}` }],
+      urgency: `With the client ${waited(r.updatedAt).replace("Waiting ", "").toLowerCase()}`,
+      ref: r.number,
+      facts: [{ k: "Service", v: r.serviceName }, { k: "Round", v: String(Math.max(1, r.reviewRound)) }],
+      why: "The work waits until the client approves the draft or asks for changes.",
+      handOver: { href: `/admin/requests/${r.id}?assign=1` },
     });
   }
 
@@ -252,7 +295,15 @@ export const buildAdminAttention = cache(async (): Promise<AttentionItem[]> => {
       when: q.dueDate ? `Valid to ${day(q.dueDate)}` : `Sent ${day(q.sentAt ?? q.createdAt)}`,
       whenTone: "warn",
       primary: q.billToEmail ? { label: "Follow up", actionId: "followUpQuote" } : { label: "Open quote", href: `/admin/billing/quotes/${q.id}` },
-      more: [{ label: "Open quote", href: `/admin/billing/quotes/${q.id}` }],
+      more: q.billToEmail ? [{ label: "Open quote", href: `/admin/billing/quotes/${q.id}` }] : undefined,
+      urgency: `${days} days, no answer`,
+      ref: q.number,
+      facts: [
+        { k: "Amount", v: formatMoney(num(q.total), q.currency) },
+        ...(q.billToName ? [{ k: "Contact", v: q.billToName }] : []),
+        ...(q.dueDate ? [{ k: "Valid to", v: day(q.dueDate) }] : []),
+      ],
+      why: q.billToEmail ? "A follow-up goes to the client by email with the quote." : "There is no email on this quote, so no follow-up can go. Add one on the quote.",
     });
   }
 
@@ -266,7 +317,12 @@ export const buildAdminAttention = cache(async (): Promise<AttentionItem[]> => {
       detail: `${r.number} · ${r.serviceName} · not assigned`,
       when: ago(r.createdAt),
       primary: { label: "Assign to me", actionId: "assignMe" },
-      more: [{ label: "Choose who", href: `/admin/requests/${r.id}?assign=1` }],
+      urgency: "Not assigned",
+      ref: r.number,
+      facts: [{ k: "Service", v: r.serviceName }, { k: "Opened", v: day(r.createdAt) }],
+      why: "Nobody owns this request yet, so nobody is working on it.",
+      handOver: { label: "Choose who", href: `/admin/requests/${r.id}?assign=1` },
+      open: `/admin/requests/${r.id}`,
     });
   }
 
@@ -281,6 +337,10 @@ export const buildAdminAttention = cache(async (): Promise<AttentionItem[]> => {
       when: ago(i.suppliedAt ?? i.updatedAt),
       primary: { label: "Mark received", actionId: "markReceived" },
       more: [{ label: "Open request", href: `/admin/requests/${r.id}?tab=items` }],
+      urgency: "New",
+      ref: r.number,
+      facts: [{ k: "Item", v: i.title }, { k: "Service", v: r.serviceName }],
+      why: "Mark it received so the client knows it arrived.",
     });
   }
 
@@ -295,6 +355,9 @@ export const buildAdminAttention = cache(async (): Promise<AttentionItem[]> => {
       when: day(m.createdAt),
       primary: m.retryable && m.payload ? { label: "Retry", actionId: "retryEmail" } : { label: "Dismiss", actionId: "dismissEmail" },
       more: m.retryable && m.payload ? [{ label: "Dismiss", actionId: "dismissEmail" }] : undefined,
+      urgency: "Did not send",
+      facts: [{ k: "To", v: m.to }, { k: "Tries", v: String(m.attempts) }],
+      why: m.retryable && m.payload ? "Retry sends the same email again." : "This email cannot be sent again. Dismiss it after you deal with it.",
     });
   }
 

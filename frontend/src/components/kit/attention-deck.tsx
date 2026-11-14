@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Check, Clock, ExternalLink } from "lucide-react";
+import { ArrowRight, Check, Clock, ExternalLink, Lightbulb, UserPlus } from "lucide-react";
 import { useToast } from "@/components/admin/ui/toaster";
 import { fireConfetti } from "@/components/tour/confetti";
 import type { AttentionAction, AttentionActionResult, AttentionItem } from "./attention-list";
@@ -238,7 +238,8 @@ export function AttentionDeck({
 
   // Secondary = the first extra action; Open details = a place to look that no button already opens.
   const secondary: Act | undefined = top?.more?.[0];
-  const openHref = top ? [top.primary, ...(top.more ?? [])].find((a) => a.href && a.href !== top.primary.href && a.href !== secondary?.href)?.href : undefined;
+  const openHref = top ? top.open ?? [top.primary, ...(top.more ?? [])].find((a) => a.href && a.href !== top.primary.href && a.href !== secondary?.href)?.href : undefined;
+  const facts = top ? top.facts ?? (top.amount && !top.detail?.includes(top.amount) ? [{ k: "Amount", v: top.amount }] : []) : [];
 
   const actBtn = (a: Act, primary: boolean) => {
     const cls = `ldeck__btn${primary ? " ldeck__btn--act" : ""}`;
@@ -290,20 +291,28 @@ export function AttentionDeck({
           >
             <div className="ldeck__tags">
               <span className="ldeck__tag ldeck__tag--kind">{top.group}</span>
-              <span className={`ldeck__tag ${SEV[top.severity].cls}`}>{SEV[top.severity].label}</span>
-              {top.when ? <span className="ldeck__label tabular-nums">{top.when}</span> : null}
+              <span className={`ldeck__tag ${SEV[top.severity].cls}`}>{top.urgency ?? SEV[top.severity].label}</span>
+              {top.ref ?? top.when ? <span className="ldeck__label tabular-nums">{top.ref ?? top.when}</span> : null}
             </div>
             <div className="ldeck__text">
               <h3 className="font-display">{top.title}</h3>
               {top.detail ? <p>{top.detail}</p> : null}
             </div>
-            {top.amount && !top.detail?.includes(top.amount) ? (
+            {facts.length ? (
               <dl className="ldeck__facts">
-                <div>
-                  <dt>Amount</dt>
-                  <dd className="tabular-nums">{top.amount}</dd>
-                </div>
+                {facts.slice(0, 3).map((f) => (
+                  <div key={f.k}>
+                    <dt>{f.k}</dt>
+                    <dd className="tabular-nums">{f.v}</dd>
+                  </div>
+                ))}
               </dl>
+            ) : null}
+            {top.why ? (
+              <p className="ldeck__why">
+                <Lightbulb aria-hidden />
+                {top.why}
+              </p>
             ) : null}
             <div className="ldeck__acts">
               {actBtn(top.primary, true)}
@@ -339,6 +348,12 @@ export function AttentionDeck({
                     </div>
                   ) : null}
                 </div>
+                {top.handOver ? (
+                  <Link className="ldeck__btn" href={top.handOver.href}>
+                    <UserPlus aria-hidden />
+                    {top.handOver.label ?? "Hand over"}
+                  </Link>
+                ) : null}
                 {openHref ? (
                   <Link className="ldeck__btn ldeck__btn--icon" href={openHref} aria-label="Open details" title="Open details">
                     <ExternalLink aria-hidden />

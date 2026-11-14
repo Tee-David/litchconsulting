@@ -52,6 +52,9 @@
 .ldeck__facts dt { font-size: .75rem; color: var(--ldeck-dim); }
 .ldeck__facts dd { margin: 0; font-weight: 600; font-size: 1.05rem; overflow-wrap: anywhere; }
 
+.ldeck__why { display: flex; gap: .5rem; align-items: flex-start; margin: 0; padding: .65rem .75rem; border-radius: 12px; background: rgb(255 255 255 / .1); font-size: .82rem; line-height: 1.4; color: #fff; }
+.ldeck__why svg { width: 1rem; height: 1rem; flex: none; margin-top: 1px; }
+.ldeck__facts dd { font-size: .95rem; }
 .ldeck__acts { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
 .ldeck__sp { flex: 1 1 0; min-width: 0; }
 .ldeck__tools { display: flex; gap: .5rem; flex-wrap: wrap; align-items: center; }

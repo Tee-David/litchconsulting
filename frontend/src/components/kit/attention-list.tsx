@@ -46,6 +46,19 @@ export type AttentionItem = {
   amount?: string; // pre-formatted, e.g. "₦737,500"
   primary: { label: string; href?: string; actionId?: string };
   more?: Array<{ label: string; href?: string; actionId?: string; tone?: "danger" }>;
+  // Deck card (admin home). All optional; the list ignores them.
+  /** Specific urgency, e.g. "12 days late". Defaults to the severity label. */
+  urgency?: string;
+  /** The record's number, top right, e.g. "INV-2026-003". */
+  ref?: string;
+  /** Up to three short facts, e.g. Contact, Due. */
+  facts?: Array<{ k: string; v: string }>;
+  /** One line on why this needs you now. */
+  why?: string;
+  /** Where the full record is (the square open button). */
+  open?: string;
+  /** Give it to someone else. */
+  handOver?: { label?: string; href: string };
 };
 
 export type AttentionActionResult = { ok: true; undoId?: string; message?: string } | { ok: false; error: string };
