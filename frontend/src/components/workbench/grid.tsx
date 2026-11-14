@@ -490,7 +490,15 @@ export function Grid({
   };
   const clearSelection = () => {
     if (!editable) return;
-    void send(selectedCells().map((cell) => ({ r: cell.r, c: cell.c, e: { clear: true }, shown: "" })));
+    const at = new Map(selectedCells().map((cell) => [`${cell.r}:${cell.c}`, { r: cell.r, c: cell.c }]));
+    // Cells typed or pasted a moment ago are still only on screen (the new version is loading).
+    if (selection && selection.sheet === sheet) {
+      for (const [k, shown] of optimistic) {
+        const [r, c] = k.split(":").map(Number);
+        if (shown !== "" && inRange(selection, r, c)) at.set(k, { r, c });
+      }
+    }
+    void send([...at.values()].map(({ r, c }) => ({ r, c, e: { clear: true }, shown: "" })));
   };
   const pasteAt = async () => {
     if (!editable || !active) return;
