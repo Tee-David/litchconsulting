@@ -85,8 +85,12 @@ class UserEdits(BaseModel):
     """A person's own edits (E2). Saved at once as a version named after them."""
     workbook_id: str
     author: str = Field(default="you", min_length=1, max_length=80)
-    # Each: {sheet, cell, value? | formula? | clear?, number_format?}
+    # Each: {sheet, cell, value? | formula? | clear?, number_format?, style?, expect?}
     edits: list[dict[str, Any]] = Field(min_length=1, max_length=5000)
+    # R6: edits kept on a device while offline carry "expect" (what the person saw).
+    # With check_conflicts, a cell that changed on the server since is refused (409)
+    # and listed, so the person chooses "Keep mine" or "Keep theirs" per cell.
+    check_conflicts: bool = False
 
 
 class SheetAction(BaseModel):
@@ -483,6 +487,36 @@ def register_workbench_routes(app: FastAPI) -> None:
                 raise HTTPException(404, "workbook not found")
             ob = OpBuilder(model, "user_edit")
             reason = f"Typed by {author}"
+            if body.check_conflicts:
+                from litchai.workbench.ops import _same
+
+                clashes = []
+                for e in body.edits:
+                    exp = e.get("expect")
+                    sh_name = str(e.get("sheet") or "")
+                    if not isinstance(exp, dict) or sh_name not in model.sheets:
+                        continue
+                    ref = str(e.get("cell") or "").replace("$", "").upper()
+                    try:
+                        rr, cc = parse_a1(ref)
+                    except Exception:  # noqa: BLE001 - checked again below
+                        continue
+                    cur = model.sheets[sh_name].get(rr, cc)
+                    cur_f = (cur.formula if cur else None) or None
+                    cur_v = cur.value if cur else None
+                    exp_f = exp.get("f") or None
+                    same = (cur_f or "").replace(" ", "") == (exp_f or "").replace(" ", "") if (cur_f or exp_f) \
+                        else _same(cur_v if cur_v != "" else None, exp.get("v") if exp.get("v") != "" else None)
+                    if not same:
+                        mine = e.get("formula") or (None if e.get("clear") else e.get("value"))
+                        theirs = cur_f or cur_v
+                        clashes.append({"sheet": sh_name, "cell": ref,
+                                        "mine": mine.isoformat() if hasattr(mine, "isoformat") else mine,
+                                        "theirs": theirs.isoformat() if hasattr(theirs, "isoformat") else theirs,
+                                        "saw": exp_f or exp.get("v")})
+                if clashes:
+                    raise HTTPException(409, {"message": "Some cells changed on the server while you "
+                                              "were offline.", "conflicts": clashes[:200]})
             for i, e in enumerate(body.edits):
                 sheet = str(e.get("sheet") or "")
                 cell = str(e.get("cell") or "").replace("$", "").upper()

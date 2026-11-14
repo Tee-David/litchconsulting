@@ -100,3 +100,35 @@ def test_fallback_plan_never_answers_an_edit_with_statements():
     assert plan("Add a column called Account Type and classify each account") == [
         ("categorise_rows", {})]
     assert plan("What is the profit before tax?")[0][0] == "trial_balance_statements"
+
+
+def test_offline_edits_that_clash_are_refused_with_both_values(tmp_path):
+    """R6: an edit made offline carries what the person saw. If the cell changed on the
+    server since, the save is refused and lists mine and theirs; sending again without
+    the check (Keep mine) saves it."""
+    from procrastinate import testing
+    from test_workbench_api import _client, _setup
+
+    from litchai.queue import queue
+
+    app, _, doc, _ = _setup(tmp_path)
+    with queue.replace_connector(testing.InMemoryConnector()), _client(app) as c:
+        cid = c.post("/workbench/conversations", json={"document_ids": [doc.id]}
+                     ).json()["conversation"]["id"]
+        wid = f"doc-{doc.id}"
+        url = f"/workbench/conversations/{cid}/edits"
+        assert c.post(url, json={"workbook_id": wid, "edits": [
+            {"sheet": "Bank", "cell": "J1", "value": 5}]}).status_code == 200
+        # Someone else changes J1 to 7 while this device is offline.
+        assert c.post(url, json={"workbook_id": wid, "edits": [
+            {"sheet": "Bank", "cell": "J1", "value": 7}]}).status_code == 200
+        offline = {"sheet": "Bank", "cell": "J1", "value": 9, "expect": {"v": 5, "f": None}}
+        r = c.post(url, json={"workbook_id": wid, "edits": [offline], "check_conflicts": True})
+        assert r.status_code == 409
+        clash = r.json()["detail"]["conflicts"][0]
+        assert clash == {"sheet": "Bank", "cell": "J1", "mine": 9, "theirs": 7, "saw": 5}
+        # An unchanged cell passes the check.
+        ok = {"sheet": "Bank", "cell": "J2", "value": 1, "expect": {"v": None, "f": None}}
+        assert c.post(url, json={"workbook_id": wid, "edits": [ok], "check_conflicts": True}).status_code == 200
+        # Keep mine: send again without the check.
+        assert c.post(url, json={"workbook_id": wid, "edits": [offline]}).status_code == 200
