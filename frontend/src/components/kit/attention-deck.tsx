@@ -297,7 +297,7 @@ export function AttentionDeck({
               <h3 className="font-display">{top.title}</h3>
               {top.detail ? <p>{top.detail}</p> : null}
             </div>
-            {top.amount ? (
+            {top.amount && !top.detail?.includes(top.amount) ? (
               <dl className="ldeck__facts">
                 <div>
                   <dt>Amount</dt>
@@ -319,7 +319,7 @@ export function AttentionDeck({
                     onClick={() => {
                       const b = snoozeRef.current?.getBoundingClientRect();
                       const c = cardRef.current?.getBoundingClientRect();
-                      setMenuBelow(Boolean(b && c && b.top - c.top < SNOOZE.length * 46 + 24));
+                      setMenuBelow(Boolean(b && c && b.top - c.top < SNOOZE.length * 44 + 16));
                       setMenu((m) => !m);
                     }}
                   >
