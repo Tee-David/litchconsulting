@@ -1,7 +1,8 @@
 "use client";
 
+import { MessageActions } from "@/components/sage-ui/message-actions";
 import Link from "next/link";
-import { AlertTriangle, Copy, Lock, RefreshCw } from "lucide-react";
+import { AlertTriangle, Lock, RefreshCw } from "lucide-react";
 import { Button } from "@/components/kit";
 import { useToast } from "@/components/admin/ui/toaster";
 import { FAILURE, type FailureKind } from "@/lib/ai-words";
@@ -121,9 +122,16 @@ export function SageAnswer({
   onRetry,
   onConfirm,
   onDismiss,
+  onVote,
+  onRegenerate,
+  onReply,
 }: {
   turn: SageTurn;
   role: SageRole;
+  /** A1: the actions row under the answer. */
+  onVote?: (vote: "good" | "bad" | null, note?: string) => void;
+  onRegenerate?: () => void;
+  onReply?: () => void;
   /** Widget: one column, sources under the answer, smaller type. */
   compact?: boolean;
   busy?: boolean;
@@ -149,16 +157,6 @@ export function SageAnswer({
         <SageMark size="sm" />
         Sage
         {turn.seconds ? <span className="text-xs font-normal text-muted">· answered in {turn.seconds} s</span> : null}
-        <button
-          type="button"
-          aria-label="Copy the answer"
-          onClick={() => {
-            void navigator.clipboard?.writeText(turn.content).then(() => toast.success("Copied"));
-          }}
-          className="ml-auto grid size-8 place-items-center rounded-ctl text-muted outline-none hover:bg-surface hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40"
-        >
-          <Copy className="size-4" strokeWidth={1.5} />
-        </button>
       </div>
 
       {figure ? (
@@ -229,6 +227,17 @@ export function SageAnswer({
       ) : null}
 
       <ProvenanceLine facts={facts} />
+
+      {turn.content && onVote ? (
+        <MessageActions
+          text={turn.content}
+          vote={turn.vote ?? null}
+          onVote={onVote}
+          onRegenerate={onRegenerate}
+          onReply={onReply}
+          onCopied={() => toast.success("Copied")}
+        />
+      ) : null}
 
       {sources.length && compact ? <SourcesList sources={sources} answerId={id} variant="inline" className="border-t border-hairline pt-3" /> : null}
     </div>

@@ -54,6 +54,8 @@ export function SageWorkspace({
   const sourceCount = chat.turns.reduce((n, t) => n + (t.citations?.length ?? 0) + (t.toolResult ? 1 : 0), 0);
   const actions = chat.turns.filter((t) => t.proposal).length;
   const empty = chat.turns.length === 0;
+  const lastAssistantId = [...chat.turns].reverse().find((t) => t.role === "assistant")?.id;
+  const [draft, setDraft] = useState<{ text: string; key: number } | null>(null);
   const clientName = clients.find((c) => c.id === chat.clientId);
 
   return (
@@ -184,6 +186,11 @@ export function SageWorkspace({
                     onRetry={t.retryText && !chat.loading ? () => chat.retry(t.id, t.retryText!) : undefined}
                     onConfirm={(p) => void chat.confirm(t.id, p)}
                     onDismiss={() => void chat.dismiss(t.id)}
+                    onVote={(v, note) => void chat.vote(t.id, v, note)}
+                    onRegenerate={t.id === lastAssistantId && !chat.loading ? chat.regenerate : undefined}
+                    onReply={() => setDraft({ text: `About your answer: "${t.content.replace(/s+/g, " ").slice(0, 200)}"
+
+`, key: Date.now() })}
                   />
                 ),
               )
@@ -202,6 +209,7 @@ export function SageWorkspace({
               disabled={!connected}
               disabledReason="Sage is not connected"
               chips={chips}
+              draft={draft}
               placeholder={
                 chat.scope === "client" && clientName
                   ? `Ask about ${clientName.company || clientName.name}`

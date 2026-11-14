@@ -14,6 +14,7 @@ import {
   loadSageConversationAction,
   renameSageConversationAction,
   type RailConversation,
+  voteSageMessageAction,
 } from "@/app/admin/sage/actions";
 
 type EngineReply = {
@@ -37,7 +38,7 @@ const uid = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? cry
  * persisting turns, the relay call, stop and retry, proposals, and the
  * per-user history rail. The server re-checks the role on every call.
  */
-export function useSageChat({ role, basePath, syncUrl = false }: { role: SageRole; basePath: string; syncUrl?: boolean }) {
+export function useSageChat({ role, basePath, syncUrl = false, enabled = true }: { role: SageRole; basePath: string; syncUrl?: boolean; enabled?: boolean }) {
   const toast = useToast();
   const [turns, setTurns] = useState<SageTurn[]>([]);
   const [loading, setLoading] = useState(false);
@@ -70,9 +71,10 @@ export function useSageChat({ role, basePath, syncUrl = false }: { role: SageRol
   }, []);
 
   useEffect(() => {
+    if (!enabled) return;
     const t = setTimeout(() => void refreshHistory(query), query ? 300 : 0);
     return () => clearTimeout(t);
-  }, [query, refreshHistory]);
+  }, [enabled, query, refreshHistory]);
 
   useEffect(() => {
     if (!loading) {
@@ -131,6 +133,7 @@ export function useSageChat({ role, basePath, syncUrl = false }: { role: SageRol
               engine: meta.engine ?? null,
               routedBy: meta.routedBy,
               seconds: meta.seconds,
+              vote: meta.feedback?.vote ?? null,
             } satisfies SageTurn;
           }),
         );
@@ -297,9 +300,30 @@ export function useSageChat({ role, basePath, syncUrl = false }: { role: SageRol
     [conversationId, newChat, toast],
   );
 
+  // A1: Good / Bad on an answer (saved once the answer has its message id).
+  const vote = useCallback(
+    async (turnId: string, v: "good" | "bad" | null, note?: string) => {
+      const t = turns.find((x) => x.id === turnId);
+      setTurns((prev) => prev.map((x) => (x.id === turnId ? { ...x, vote: v } : x)));
+      if (!t?.savedId) return;
+      const r = await voteSageMessageAction(t.savedId, v, note).catch(() => null);
+      if (r?.ok) {
+        if (v) toast.success(r.message);
+      } else toast.error(r?.message ?? "That vote was not saved. Try again.");
+    },
+    [turns, toast],
+  );
+  // A1: ask the last question again (the earlier answer stays above).
+  const regenerate = useCallback(() => {
+    const last = [...turns].reverse().find((t) => t.role === "user");
+    if (last && !loading) void send(last.content);
+  }, [turns, loading, send]);
+
   return {
     turns,
     loading,
+    vote,
+    regenerate,
     waited,
     opening,
     conversationId,

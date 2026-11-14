@@ -34,12 +34,16 @@ export type SageMessageMeta = {
   routedBy?: string;
   seconds?: number;
   canAnswer?: boolean;
+  /** A1/H1: Good / Bad on this answer. */
+  feedback?: { vote: "good" | "bad"; note?: string; at: string } | null;
 };
 
 export type SageTurn = {
   id: string;
   /** The saved sage_message id (assistant turns), once known. */
   savedId?: string;
+  /** Good / Bad on this answer, once voted. */
+  vote?: "good" | "bad" | null;
   role: "user" | "assistant";
   content: string;
   at?: string;

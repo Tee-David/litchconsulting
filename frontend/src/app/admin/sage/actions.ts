@@ -178,6 +178,27 @@ async function createBillingDraft(params: Record<string, unknown>): Promise<Prop
 }
 
 /** Dismiss a proposal: nothing is sent; the thread stops waiting for you. */
+/** A1/H1: Good or Bad on one of your own Sage answers, with an optional note. Stored on
+ *  the message beside the tool and route, so routing mistakes can be counted. */
+export async function voteSageMessageAction(messageId: string, vote: "good" | "bad" | null, note?: string): Promise<ProposalResult> {
+  const who = await me();
+  if (!who) return { ok: false, message: "Not authorized." };
+  if (!/^[0-9a-f-]{36}$/i.test(messageId) || (vote !== null && vote !== "good" && vote !== "bad")) return { ok: false, message: "That vote is not valid." };
+  const [row] = await db
+    .select({ id: sageMessage.id, meta: sageMessage.meta })
+    .from(sageMessage)
+    .innerJoin(sageConversation, eq(sageConversation.id, sageMessage.conversationId))
+    .where(and(eq(sageMessage.id, messageId), eq(sageConversation.userId, who.userId)))
+    .limit(1);
+  if (!row) return { ok: false, message: "That answer was not found." };
+  const meta = {
+    ...((row.meta ?? {}) as SageMessageMeta),
+    feedback: vote ? { vote, note: (note ?? "").slice(0, 1000) || undefined, at: new Date().toISOString() } : null,
+  };
+  await db.update(sageMessage).set({ meta }).where(eq(sageMessage.id, messageId));
+  return { ok: true, message: vote === "good" ? "Thanks. Marked as a good answer." : vote === "bad" ? "Thanks. Your note was saved with how Sage answered." : "Vote removed." };
+}
+
 export async function dismissSageProposalAction(messageId: string): Promise<ProposalResult> {
   const who = await me();
   if (!who) return { ok: false, message: "Not authorized." };

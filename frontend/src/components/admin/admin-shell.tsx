@@ -9,7 +9,7 @@ import { SidebarNav, type NavCounts, type ShellUser } from "./admin-sidebar";
 import { AdminTopbar, type AdminUser } from "./admin-topbar";
 import { InstallPrompt } from "./install-prompt";
 import { CommandPalette } from "./command-palette";
-import { SageFab } from "./sage-fab";
+import { SageWidget } from "@/components/sage/sage-widget";
 import { TourProvider } from "../tour/tour-provider";
 import { isNavActive, navFor } from "./nav";
 import { roleOf, ROLE_LABEL } from "@/lib/access";
@@ -268,7 +268,7 @@ export function AdminShell({
 
         <InstallPrompt />
         <CommandPalette items={items} />
-        <SageFab />
+        <SageWidget />
       </div>
     </TourProvider>
   );
