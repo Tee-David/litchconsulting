@@ -413,13 +413,21 @@ def register_workbench_routes(app: FastAPI) -> None:
                 if (conv.updated_at or "") < since:
                     continue
                 chats = [conv.messages, *[t.get("messages", []) for t in conv.threads]]
+                pairs: list[tuple[str, dict[str, Any]]] = []
                 for msgs in chats:
                     for i, m in enumerate(msgs):
-                        fb = m.get("feedback") if m.get("role") == "assistant" else None
+                        if m.get("role") == "assistant":
+                            q = next((x.get("content", "") for x in reversed(msgs[:i])
+                                      if x.get("role") == "user"), "")
+                            pairs.append((q, m))
+                        # Earlier versions (regenerate, edit and resend) keep their votes too.
+                        for br in m.get("branches") or [] if m.get("role") == "user" else []:
+                            if br.get("assistant"):
+                                pairs.append(((br.get("user") or {}).get("content", ""), br["assistant"]))
+                for q, m in pairs:
+                        fb = m.get("feedback")
                         if not fb or (fb.get("at") or "") < since:
                             continue
-                        q = next((x.get("content", "") for x in reversed(msgs[:i])
-                                  if x.get("role") == "user"), "")
                         out.append({
                             "conversation_id": conv.id, "title": conv.title, "at": fb.get("at"),
                             "vote": fb.get("vote"), "note": fb.get("note") or "", "by": fb.get("by"),
