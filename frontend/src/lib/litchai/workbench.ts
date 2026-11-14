@@ -243,9 +243,21 @@ export const wbListByDocument = (documentId: number) =>
   call<{ conversations: { id: string; updated_at?: string }[] }>(`/workbench/conversations?document_id=${documentId}&limit=20`);
 
 /** A person's own edits (E2): saved at once as a version named after them. */
-export type WbUserEdit = { sheet: string; cell: string; value?: string | number | boolean | null; formula?: string; clear?: boolean; number_format?: string; style?: WbStyle };
-export const wbUserEdits = (id: string, workbookId: string, author: string, edits: WbUserEdit[]) =>
-  call<{ batch: WbBatch; conversation: WbConversation }>(`/workbench/conversations/${enc(id)}/edits`, json({ workbook_id: workbookId, author, edits }));
+export type WbUserEdit = {
+  sheet: string;
+  cell: string;
+  value?: string | number | boolean | null;
+  formula?: string;
+  clear?: boolean;
+  number_format?: string;
+  style?: WbStyle;
+  /** R6: what the person saw in the cell when they edited it (checked when an offline edit syncs). */
+  expect?: { v: string | number | boolean | null; f: string | null };
+};
+/** R6: a cell that changed on the server while this device was offline. */
+export type WbConflict = { sheet: string; cell: string; mine: unknown; theirs: unknown; saw: unknown };
+export const wbUserEdits = (id: string, workbookId: string, author: string, edits: WbUserEdit[], checkConflicts = false) =>
+  call<{ batch: WbBatch; conversation: WbConversation }>(`/workbench/conversations/${enc(id)}/edits`, json({ workbook_id: workbookId, author, edits, check_conflicts: checkConflicts }));
 
 export const wbRunTool = (id: string, tool: string, args: Record<string, unknown>) =>
   call<{ data: Record<string, unknown>; summary: string; citations: string[]; batch: WbBatch | null; chart_preview?: Record<string, unknown> | null }>(

@@ -19,4 +19,18 @@ export const authClient = createAuthClient({
   plugins: [inferAdditionalFields<typeof auth>(), twoFactorClient()],
 });
 
-export const { signIn, signUp, signOut, useSession, twoFactor } = authClient;
+export const { signIn, signUp, useSession, twoFactor } = authClient;
+
+/**
+ * Sign out, then delete this device's saved copies of pages and sheet data
+ * (the service worker keeps them so an open workbench reads offline, R6).
+ */
+export const signOut: typeof authClient.signOut = async (...args) => {
+  const res = await authClient.signOut(...args);
+  try {
+    if (typeof caches !== "undefined") for (const k of await caches.keys()) if (k.startsWith("litch-")) await caches.delete(k);
+  } catch {
+    /* no cache storage in this browser */
+  }
+  return res;
+};

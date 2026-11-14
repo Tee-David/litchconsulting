@@ -26,6 +26,7 @@ import {
   wbListByDocument,
   type WbBatch,
   type WbConversation,
+  type WbConflict,
   type WbFirstLook,
   type WbProvider,
 } from "@/lib/litchai/workbench";
@@ -265,14 +266,21 @@ const editSchema = z.object({
           .partial()
           .strict()
           .optional(),
+        expect: z
+          .object({ v: z.union([z.string().max(32000), z.number(), z.boolean(), z.null()]), f: z.string().max(8000).nullable() })
+          .optional(),
       }),
     )
     .min(1)
     .max(5000),
+  /** R6: edits that were kept offline: refuse cells that changed on the server since. */
+  checkConflicts: z.boolean().optional(),
 });
 
 /** Typed values, formulas, formats and clears. Admin, or staff assigned to the request. */
-export async function saveEditsAction(input: z.input<typeof editSchema>): Promise<Res<{ batch: WbBatch; conversation: WbConversation }>> {
+export async function saveEditsAction(
+  input: z.input<typeof editSchema>,
+): Promise<Res<{ batch: WbBatch; conversation: WbConversation }> & { conflicts?: WbConflict[] }> {
   const parsed = editSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "That edit is not valid." };
   const d = parsed.data;
@@ -281,7 +289,14 @@ export async function saveEditsAction(input: z.input<typeof editSchema>): Promis
   const u = await getSessionUser();
   const author = (u?.name || u?.email || "a team member").slice(0, 80);
   try {
-    const res = await wbUserEdits(d.conversationId, d.workbookId, author, d.edits);
+    let res: Awaited<ReturnType<typeof wbUserEdits>>;
+    try {
+      res = await wbUserEdits(d.conversationId, d.workbookId, author, d.edits, d.checkConflicts ?? false);
+    } catch (e) {
+      const conflicts = e instanceof WorkbenchError && e.status === 409 && e.detail && typeof e.detail === "object" ? (e.detail as { conflicts?: WbConflict[] }).conflicts : undefined;
+      if (conflicts?.length) return { ok: false, error: "Some cells changed while you were offline.", conflicts };
+      throw e;
+    }
     await touch(d.conversationId);
     await recordAudit({
       action: "workbench.edited",

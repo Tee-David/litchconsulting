@@ -26,7 +26,7 @@ import {
   Undo2,
   X,
 } from "lucide-react";
-import type { WbBatch, WbCell, WbConversation, WbEvent, WbFirstLook, WbGate, WbUserEdit } from "@/lib/litchai/workbench";
+import type { WbBatch, WbCell, WbConflict, WbConversation, WbEvent, WbFirstLook, WbGate, WbUserEdit } from "@/lib/litchai/workbench";
 import { attachDocumentAction, attachFilesAction, decideBatchAction, deliverAction, feedbackAction, getConversationAction, newThreadAction, openThreadAction, restoreVersionAction, runToolAction, saveEditsAction, sheetActionAction } from "@/lib/workbench/actions";
 import { AlignCenter, AlignLeft, AlignRight, Baseline, Bold, Check, ChevronDown as Chev, Ellipsis, FolderOpen, Grid2x2, Italic, NotebookPen, PaintBucket, Pencil, SquarePen, TableCellsMerge, Underline, WrapText } from "lucide-react";
 import { setInstructionsAction } from "@/lib/workbench/actions";
@@ -329,6 +329,8 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     },
     [queueKey],
   );
+  // R6: cells that changed on the server while this device was offline.
+  const [clash, setClash] = useState<{ wbId: string; edits: WbUserEdit[]; conflicts: WbConflict[]; keep: Record<string, "mine" | "theirs"> } | null>(null);
   const flushQueue = useCallback(async () => {
     let q = readQueue();
     if (!q.length || !navigator.onLine) return;
@@ -336,7 +338,13 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     while (q.length) {
       const item = q[0];
       try {
-        const res = await saveEditsAction({ conversationId: conv.id, workbookId: item.wbId, edits: item.edits });
+        const res = await saveEditsAction({ conversationId: conv.id, workbookId: item.wbId, edits: item.edits, checkConflicts: true });
+        if (!res.ok && res.conflicts?.length) {
+          // Stop here: the person chooses per cell; the rest of the queue waits.
+          setClash({ wbId: item.wbId, edits: item.edits, conflicts: res.conflicts, keep: Object.fromEntries(res.conflicts.map((c) => [`${c.sheet}!${c.cell}`, "mine"])) });
+          setSaveState("offline");
+          return;
+        }
         if (!res.ok) toast.error(`A change kept on this device could not be saved: ${res.error}`);
         else setConv(res.conversation);
       } catch {
@@ -370,6 +378,34 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
       window.removeEventListener("beforeunload", leave);
     };
   }, [flushQueue, readQueue]);
+
+  // R6: save the person's choices: "Keep mine" sends the edit as it is; "Keep theirs"
+  // drops it. Then the rest of the queue continues.
+  const [clashBusy, setClashBusy] = useState(false);
+  const resolveClash = useCallback(async () => {
+    if (!clash) return;
+    setClashBusy(true);
+    const send = clash.edits
+      .filter((e) => clash.keep[`${e.sheet}!${e.cell.replace(/\$/g, "").toUpperCase()}`] !== "theirs")
+      .map(({ expect: _drop, ...e }) => e);
+    const rest = readQueue().slice(1);
+    if (send.length) {
+      const res = await saveEditsAction({ conversationId: conv.id, workbookId: clash.wbId, edits: send });
+      if (!res.ok) {
+        setClashBusy(false);
+        toast.error(res.error);
+        return;
+      }
+      setConv(res.conversation);
+    }
+    writeQueue(rest);
+    setClash(null);
+    setClashBusy(false);
+    setGridVersion((v) => v + 1);
+    toast.success("Your choices were saved.");
+    if (rest.length) void flushQueue();
+    else setSaveState("saved");
+  }, [clash, conv.id, readQueue, writeQueue, flushQueue, toast]);
 
   const commitEdits = useCallback(
     async (edits: WbUserEdit[]) => {
@@ -1893,6 +1929,50 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           downloadHref={(v) => `/api/workbench/${conv.id}/download?wb=${encodeURIComponent(wbId)}&version=${v}&name=${encodeURIComponent(activeRef.name.replace(/\.\w+$/, ""))}`}
         />
       ) : null}
+      <Sheet
+        open={Boolean(clash)}
+        onClose={() => undefined}
+        dismissible={false}
+        size="md"
+        title="Some cells changed while you were offline"
+        description="Someone saved a different value in these cells after you lost the connection. Choose what to keep for each cell. Nothing is saved until you choose."
+        footer={
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="ghost" disabled={clashBusy} onClick={() => setClash((c) => (c ? { ...c, keep: Object.fromEntries(Object.keys(c.keep).map((k) => [k, "theirs"])) } : c))}>Keep all theirs</Button>
+            <Button variant="secondary" disabled={clashBusy} onClick={() => setClash((c) => (c ? { ...c, keep: Object.fromEntries(Object.keys(c.keep).map((k) => [k, "mine"])) } : c))}>Keep all mine</Button>
+            <Button disabled={clashBusy} onClick={() => void resolveClash()}>{clashBusy ? "Saving…" : "Save my choices"}</Button>
+          </div>
+        }
+      >
+        <ul className="divide-y divide-hairline">
+          {(clash?.conflicts ?? []).map((c) => {
+            const k = `${c.sheet}!${c.cell}`;
+            const pick = clash?.keep[k] ?? "mine";
+            const show = (v: unknown) => (v === null || v === undefined || v === "" ? "(empty)" : String(v));
+            return (
+              <li key={k} className="py-3">
+                <p className="text-[13px] font-semibold text-ink">{c.sheet}!{c.cell}</p>
+                <p className="text-[12px] text-muted">You saw {show(c.saw)}</p>
+                <div className="mt-2 grid grid-cols-2 gap-2" role="radiogroup" aria-label={`Keep for ${k}`}>
+                  {(["mine", "theirs"] as const).map((side) => (
+                    <button
+                      key={side}
+                      type="button"
+                      role="radio"
+                      aria-checked={pick === side}
+                      onClick={() => setClash((x) => (x ? { ...x, keep: { ...x.keep, [k]: side } } : x))}
+                      className={cn("min-h-11 rounded-ctl border px-3 py-2 text-left text-[13px]", pick === side ? "border-accent bg-brand-tint text-ink" : "border-hairline text-body hover:border-line-strong")}
+                    >
+                      <span className="block text-[11.5px] text-muted">{side === "mine" ? "Keep mine" : "Keep theirs"}</span>
+                      <span className="block truncate font-medium tabular-nums">{show(side === "mine" ? c.mine : c.theirs)}</span>
+                    </button>
+                  ))}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </Sheet>
       <Sheet
         open={instrOpen}
         onClose={() => setInstrOpen(false)}

@@ -490,7 +490,15 @@ export function Grid({
       for (const it of items) n.set(`${it.r}:${it.c}`, it.shown);
       return n;
     });
-    const ok = await onCommit(items.map((it) => ({ sheet, cell: `${colLetter(it.c)}${it.r}`, ...it.e })));
+    // R6: what the person saw, so an edit kept offline can be checked when it syncs.
+    const saw = (r: number, c: number, e: Omit<WbUserEdit, "sheet" | "cell">) => {
+      if (!("value" in e) && !e.formula && !e.clear) return undefined;
+      if (!blocks.has(Math.floor((r - 1) / BLOCK)) || optimistic.has(`${r}:${c}`)) return undefined;
+      const cell = cellAt(r, c);
+      if (cell?.pending) return undefined;
+      return { v: cell?.v ?? null, f: cell?.f ?? null };
+    };
+    const ok = await onCommit(items.map((it) => ({ sheet, cell: `${colLetter(it.c)}${it.r}`, ...it.e, expect: saw(it.r, it.c, it.e) })));
     if (!ok) {
       setOptimistic((m) => {
         const n = new Map(m);

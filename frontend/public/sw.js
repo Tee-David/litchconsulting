@@ -1,5 +1,5 @@
 /* Litch service worker — offline support for the installed app. */
-const CACHE = "litch-v1";
+const CACHE = "litch-v2";
 const OFFLINE_URL = "/offline";
 
 self.addEventListener("install", (event) => {
@@ -23,6 +23,26 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return; // don't touch cross-origin (R2, APIs)
+
+  // R6: workbench sheet data and workbench pages (incl. in-app navigation data):
+  // network-first, so an open workbench stays readable offline from this device's copy.
+  const workbenchData =
+    url.pathname.startsWith("/api/workbench/") && url.pathname.endsWith("/cells");
+  const workbenchPage = url.pathname.startsWith("/admin/analyses/w/") || url.pathname.startsWith("/work/analyses/w/");
+  if (workbenchData || (workbenchPage && req.mode !== "navigate")) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE).then((c) => c.put(req, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.match(req).then((r) => r || Response.error())),
+    );
+    return;
+  }
 
   // Navigations: network-first, fall back to cache, then the offline page.
   if (req.mode === "navigate") {
