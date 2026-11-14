@@ -30,7 +30,11 @@ def _docling_convert(data: bytes, *, force_ocr: bool, page_range: tuple[int, int
     try:
         from docling.datamodel.base_models import InputFormat  # noqa: PLC0415
         from docling.datamodel.pipeline_options import PdfPipelineOptions  # noqa: PLC0415
-        from docling.document_converter import DocumentConverter, PdfFormatOption  # noqa: PLC0415
+        from docling.document_converter import (  # noqa: PLC0415
+            DocumentConverter,
+            ImageFormatOption,
+            PdfFormatOption,
+        )
     except ImportError as exc:  # pragma: no cover - VM-only path
         raise ExtractionError("docling is not installed (VM-only dependency)") from exc
 
@@ -44,8 +48,14 @@ def _docling_convert(data: bytes, *, force_ocr: bool, page_range: tuple[int, int
         from docling.datamodel.pipeline_options import TesseractCliOcrOptions  # noqa: PLC0415
 
         options.ocr_options = TesseractCliOcrOptions(force_full_page_ocr=True)
+    # Docling detects a screenshot by its bytes (PNG/JPEG), not by the name, so images
+    # need the same options; without them it picks its auto OCR (rapidocr), whose model
+    # download fails on the VM's read-only venv.
     converter = DocumentConverter(
-        format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=options)}
+        format_options={
+            InputFormat.PDF: PdfFormatOption(pipeline_options=options),
+            InputFormat.IMAGE: ImageFormatOption(pipeline_options=options),
+        }
     )
     kwargs = {}
     if page_range is not None:
