@@ -136,6 +136,18 @@ cell to unmerge it. Formatting is saved in the Excel file, is a version, and can
 undone. Sage can also format cells when you ask, for example "make the header row bold
 with a light fill and a bottom border"; it proposes the change for you to accept.
 
+## Adding files, archives and working offline
+
+The workbench takes XLSX, XLSM, XLS, ODS, CSV, TSV, TXT, JSON, DOCX, PDF, PNG and JPG files up to 20 MB each,
+and ZIP, RAR (RAR4 and RAR5) or 7z archives of them. An archive with a password asks for it; the password
+is used once to open the files and is never kept. Each file inside is virus-scanned and read like any
+upload; files the workbench cannot read, empty files and archives inside the archive are listed as skipped.
+PDFs and screenshots are read by OCR and appear when ready.
+
+Offline, an open workbench still reads from the copy on this device, and edits are kept and sent when
+the connection is back. If someone changed the same cell meanwhile, you choose Keep mine or Keep theirs
+for each cell. A question to Sage asked offline waits and sends by itself. Signing out deletes the copy.
+
 ## Privacy in the workbench
 
 The workbench follows the client's AI mode. For a client on cloud (masked), only

@@ -89,6 +89,8 @@ TOOLS: tuple[Tool, ...] = (
             "how do i insert or delete a row in the workbench",
             "how do i sort or filter the sheet",
             "how do i make cells bold or add a fill colour and borders",
+            "can i upload a zip or rar file with a password",
+            "what happens if i lose internet in the workbench",
             "how do i message a client on their request",
             "why did the client's analysis fail",
             "how do i confirm a bank transfer payment",
