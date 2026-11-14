@@ -12,7 +12,7 @@ import { CitationTick } from "./citation-tick";
 import { RevealMarkdown, SageMarkdown } from "./markdown";
 import { ProposalPlan } from "./proposal-plan";
 import { ProvenanceLine } from "./provenance";
-import { SourcesList } from "./sources";
+import { SourcesChip } from "./sources";
 
 /** The Sage mark: a small solid tile with the initial. */
 export function SageMark({ size = "md" }: { size?: "sm" | "md" }) {
@@ -236,30 +236,22 @@ export function SageAnswer({
           onRegenerate={onRegenerate}
           onReply={onReply}
           onCopied={() => toast.success("Copied")}
+          extra={<SourcesChip sources={sources} answerId={id} />}
         />
+      ) : sources.length ? (
+        <div className="-ml-1.5">
+          <SourcesChip sources={sources} answerId={id} />
+        </div>
       ) : null}
-
-      {sources.length && compact ? <SourcesList sources={sources} answerId={id} variant="inline" className="border-t border-hairline pt-3" /> : null}
     </div>
   );
 
   return (
     <article
       aria-label="Sage's answer"
-      className={cn(
-        "rounded-card bg-paper shadow-[0_1px_2px_rgb(10_14_26/0.05),0_8px_24px_rgb(10_14_26/0.06)] dark:shadow-none dark:ring-1 dark:ring-hairline",
-        !compact && sources.length && "md:grid md:grid-cols-[minmax(0,1fr)_220px]",
-      )}
+      className="rounded-card bg-paper shadow-[0_1px_2px_rgb(10_14_26/0.05),0_8px_24px_rgb(10_14_26/0.06)] dark:shadow-none dark:ring-1 dark:ring-hairline"
     >
       {main}
-      {!compact && sources.length ? (
-        <SourcesList
-          sources={sources}
-          answerId={id}
-          variant="margin"
-          className="border-t border-hairline bg-cloud px-5 py-4 md:rounded-r-card md:border-l md:border-t-0 md:px-4 md:py-5"
-        />
-      ) : null}
     </article>
   );
 }

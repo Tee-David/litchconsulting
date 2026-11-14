@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Copy, RefreshCw, Reply, ThumbsDown, ThumbsUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -9,7 +9,8 @@ const REASONS = ["Wrong numbers", "Wrong cells", "Did not do what I asked", "Too
 
 /**
  * The row under every Sage answer: Copy, Regenerate (last answer only), Good, Bad
- * (with a short note), Reply. Same parts in the workbench, the widget and the Sage page.
+ * (with a short note), Reply, then `extra` (the sources). Same parts in the workbench,
+ * the widget and the Sage page.
  */
 export function MessageActions({
   text,
@@ -18,6 +19,7 @@ export function MessageActions({
   onRegenerate,
   onReply,
   onCopied,
+  extra,
 }: {
   text: string;
   vote: Vote;
@@ -25,6 +27,8 @@ export function MessageActions({
   onRegenerate?: () => void;
   onReply?: () => void;
   onCopied?: () => void;
+  /** Shown at the end of the row, for example the sources button. */
+  extra?: ReactNode;
 }) {
   const [noteOpen, setNoteOpen] = useState(false);
   const [reason, setReason] = useState<string | null>(null);
@@ -33,7 +37,7 @@ export function MessageActions({
 
   return (
     <div className="space-y-2">
-      <div className="-ml-1.5 flex items-center gap-0.5">
+      <div className="-ml-1.5 flex flex-wrap items-center gap-0.5">
         <button
           type="button"
           className={btn}
@@ -83,6 +87,7 @@ export function MessageActions({
             <Reply className="size-4" />
           </button>
         ) : null}
+        {extra}
       </div>
       {noteOpen ? (
         <div className="space-y-2 rounded-xl border border-hairline bg-paper p-2.5">

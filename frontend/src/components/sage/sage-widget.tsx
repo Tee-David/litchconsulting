@@ -32,7 +32,9 @@ export function SageWidget({ role = "admin", basePath = "/admin/sage" }: { role?
   useEffect(() => {
     if (!open) return;
     const esc = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !(e.target as HTMLElement | null)?.closest?.("[role=dialog][aria-label='Chat history']")) setOpen(false);
+      // Escape inside a dialog on top (chat history, the sources sheet) closes only that dialog.
+      const t = e.target as HTMLElement | null;
+      if (e.key === "Escape" && !t?.closest?.("[role=dialog][aria-label='Chat history'], [role=dialog][aria-modal='true']")) setOpen(false);
     };
     window.addEventListener("keydown", esc);
     return () => window.removeEventListener("keydown", esc);
