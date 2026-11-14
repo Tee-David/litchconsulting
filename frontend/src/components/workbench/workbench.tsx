@@ -8,7 +8,6 @@ import {
   Cloud,
   Eye,
   Download,
-  FileSpreadsheet,
   FileText,
   History,
   Loader2,
@@ -22,8 +21,6 @@ import {
   Redo2,
   Send,
   Search,
-  ShieldAlert,
-  ShieldCheck,
   Table2,
   Target,
   Undo2,
@@ -31,7 +28,7 @@ import {
 } from "lucide-react";
 import type { WbBatch, WbCell, WbConversation, WbEvent, WbFirstLook, WbGate, WbUserEdit } from "@/lib/litchai/workbench";
 import { attachDocumentAction, attachFilesAction, decideBatchAction, deliverAction, feedbackAction, getConversationAction, newThreadAction, openThreadAction, restoreVersionAction, runToolAction, saveEditsAction, sheetActionAction } from "@/lib/workbench/actions";
-import { FolderOpen, Pencil, SquarePen } from "lucide-react";
+import { Check, ChevronDown as Chev, Ellipsis, FolderOpen, Pencil, SquarePen } from "lucide-react";
 import { MessageActions } from "@/components/sage-ui/message-actions";
 import { ThreadPicker } from "@/components/sage-ui/thread-picker";
 import { PromptBox, type Attachment } from "@/components/sage-ui/prompt-box";
@@ -132,6 +129,9 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const [editText, setEditText] = useState("");
   const [branchView, setBranchView] = useState<Record<number, number>>({});
   const [threadBusy, setThreadBusy] = useState(false);
+  // D2: the header's ⋯ menu and the toolbar's "More formats" menu.
+  const [headMenu, setHeadMenu] = useState(false);
+  const [fmtMenu, setFmtMenu] = useState(false);
   const [highlights, setHighlights] = useState<Range[]>([]);
   const [focus, setFocus] = useState<{ r: number; c: number; nonce: number } | null>(null);
   const [activeCell, setActiveCell] = useState<{ cell: WbCell | null; r: number; c: number } | null>(null);
@@ -680,6 +680,8 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         return;
       }
       setConv(res.conversation);
+      // A new or other chat starts clean: the first-look card belongs to the first chat.
+      setLook(null);
       setLive(null);
       setQuote(null);
       setEditIdx(null);
@@ -840,71 +842,95 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const workbooksForSheets = conv.workbooks.map((w) => ({ id: w.id, name: w.name, gate: lastGate(conv, w.id) }));
 
   // --- render ---------------------------------------------------------------------------
+  // One quiet status line under the file name: saving, offline, recompute.
+  const saveText =
+    saveState === "saving" ? "Saving…" : saveState === "offline" || queued ? `Offline: ${queued} change${queued === 1 ? "" : "s"} kept on this device` : "All changes saved";
+  const gateText = gateErrors?.length
+    ? `Recompute blocked: ${gateErrors.length} error${gateErrors.length === 1 ? "" : "s"}`
+    : pendingHere.length
+      ? "Recompute after you accept"
+      : gate?.status === "unverified"
+        ? "Not recomputed"
+        : gate?.status === "passed"
+          ? "Recompute passed"
+          : null;
+  const menuItem = "flex min-h-9 w-full items-center gap-2.5 rounded-lg px-2.5 text-left text-[13px] text-ink hover:bg-surface";
   const header = (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-hairline px-3 py-2.5 sm:px-4">
+    <div className="flex items-center gap-2 border-b border-hairline py-2 pl-3 pr-2 sm:pl-4">
       <div className="min-w-0 flex-1">
         <h1 className="truncate font-display text-[15px] font-semibold text-ink" title={conv.workbooks.map((w) => w.name).join(" + ")}>
           {conv.workbooks.map((w) => w.name).join(" + ") || conv.title}
         </h1>
-        <p className="truncate text-[12px] text-muted">
-          {request ? <Link href={request.href} className="hover:underline">{request.number}</Link> : "No request"} · {conv.client_name} · working copy, every change versioned
+        <p className="flex min-w-0 items-center gap-1.5 truncate text-[12px] text-muted" aria-live="polite">
+          <span className={cn("size-1.5 shrink-0 rounded-full", saveState === "offline" || queued ? "bg-warn" : saveState === "saving" ? "bg-accent" : "bg-good")} aria-hidden />
+          <span className="truncate">
+            {saveText}
+            {gateText ? <span className={cn(gateErrors?.length ? "text-bad" : gate?.status === "unverified" ? "text-warn" : "")} title={gateErrors?.join("\n")}> · {gateText}</span> : null}
+            <span className="hidden sm:inline">
+              {" · "}
+              {request ? <Link href={request.href} className="hover:underline">{request.number}</Link> : "No request"} · {conv.client_name}
+            </span>
+          </span>
         </p>
       </div>
-      <div className="flex flex-wrap items-center gap-1.5">
-        <GateChip pending={pendingHere.length} gate={gate} errors={gateErrors} />
-        <button
-          type="button"
-          onClick={() => setSheetOpen("engine")}
-          className={cn(
-            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-medium",
-            local ? "bg-violet-soft text-violet" : "bg-cloud text-body",
-          )}
-          title="What powers Sage, and where the data goes"
-        >
-          {local ? <Lock className="size-3" aria-hidden /> : <Cloud className="size-3" aria-hidden />}
-          {engineLabel(local ? "local" : "cloud")}
+      <Button size="sm" variant="ghost" onClick={() => setSheetOpen("history")} aria-label="Versions">
+        <History className="size-3.5" /> <span className="hidden sm:inline">Versions</span>
+      </Button>
+      <Button size="sm" onClick={download} disabled={downloading || !wbId} className="hidden sm:inline-flex">
+        {downloading ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />} Download
+      </Button>
+      {canDeliver && request ? (
+        <Button size="sm" variant="primary" onClick={() => setSheetOpen("deliver")} disabled={!wbId} className="hidden sm:inline-flex">
+          <Send className="size-3.5" /> Send to client
+        </Button>
+      ) : null}
+      {!split ? (
+        <Button size="sm" variant={focusSage ? "secondary" : "ghost"} onClick={() => setFocusSage((o) => !o)} aria-pressed={focusSage} title="Open or close Sage (Ctrl+J)" className="hidden lg:inline-flex">
+          <SageIcon className="size-3.5" /> Sage
+          {pending.length ? <span className="rounded-full bg-warn-soft px-1.5 text-[11px] font-semibold text-warn">{pending.length}</span> : null}
+        </Button>
+      ) : null}
+      <div className="relative">
+        <button type="button" onClick={() => setHeadMenu((o) => !o)} aria-expanded={headMenu} aria-haspopup="menu" aria-label="More" className="grid size-9 place-items-center rounded-ctl text-body hover:bg-surface hover:text-ink">
+          <Ellipsis className="size-4" />
         </button>
-        {hasPdf ? (
-          <Button size="sm" onClick={() => setPdfOpen((o) => !o)} aria-pressed={pdfOpen}>
-            <FileText className="size-3.5" /> {pdfOpen ? "Hide PDF" : "PDF side by side"}
-          </Button>
+        {headMenu ? (
+          <>
+            <div className="fixed inset-0 z-40" onMouseDown={() => setHeadMenu(false)} aria-hidden />
+            <div role="menu" aria-label="More" className="absolute right-0 top-full z-50 mt-1 w-72 rounded-xl border border-hairline bg-paper p-1 shadow-lg" onClick={() => setHeadMenu(false)}>
+              <p className="px-2.5 pb-1 pt-1.5 text-[11.5px] text-muted">Layout</p>
+              <button type="button" role="menuitemradio" aria-checked={prefs.layout === "split"} className={cn(menuItem, "hidden lg:flex")} onClick={() => { setPrefs({ layout: "split" }); setFocusSage(false); }}>
+                <Check className={cn("size-4", prefs.layout === "split" ? "text-accent" : "invisible")} /> Split: sheet and Sage side by side
+              </button>
+              <button type="button" role="menuitemradio" aria-checked={prefs.layout === "focus"} className={cn(menuItem, "hidden lg:flex")} onClick={() => { setPrefs({ layout: "focus" }); setFocusSage(false); }}>
+                <Check className={cn("size-4", prefs.layout === "focus" ? "text-accent" : "invisible")} /> Focus: sheet first, Sage on demand
+              </button>
+              <button type="button" role="menuitem" className={menuItem} onClick={() => setFull((f) => !f)}>
+                {full ? <Minimize2 className="size-4 text-muted" /> : <Maximize2 className="size-4 text-muted" />} {full ? "Leave full screen" : "Full screen"}
+              </button>
+              {hasPdf ? (
+                <button type="button" role="menuitem" className={menuItem} onClick={() => setPdfOpen((o) => !o)}>
+                  <FileText className="size-4 text-muted" /> {pdfOpen ? "Hide the PDF" : "PDF side by side"}
+                </button>
+              ) : null}
+              <div className="my-1 border-t border-hairline" />
+              <button type="button" role="menuitem" className={menuItem} onClick={() => setSheetOpen("engine")}>
+                {local ? <Lock className="size-4 text-muted" /> : <Cloud className="size-4 text-muted" />} What powers Sage: {engineLabel(local ? "local" : "cloud").toLowerCase()}
+              </button>
+              <div className="sm:hidden">
+                <div className="my-1 border-t border-hairline" />
+                <button type="button" role="menuitem" className={menuItem} onClick={download} disabled={downloading || !wbId}>
+                  <Download className="size-4 text-muted" /> Download
+                </button>
+                {canDeliver && request ? (
+                  <button type="button" role="menuitem" className={menuItem} onClick={() => setSheetOpen("deliver")} disabled={!wbId}>
+                    <Send className="size-4 text-muted" /> Send to client
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          </>
         ) : null}
-        <Button size="sm" variant="ghost" onClick={() => setSheetOpen("history")} aria-label="Versions">
-          <History className="size-3.5" /> <span className="hidden sm:inline">Versions</span>
-        </Button>
-        <Button size="sm" onClick={download} disabled={downloading || !wbId}>
-          {downloading ? <Loader2 className="size-3.5 animate-spin" /> : <Download className="size-3.5" />} <span className="hidden sm:inline">Download XLSX</span>
-        </Button>
-        {canDeliver && request ? (
-          <Button size="sm" variant="primary" onClick={() => setSheetOpen("deliver")} disabled={!wbId}>
-            <Send className="size-3.5" /> Send to client
-          </Button>
-        ) : null}
-        <span className="mx-0.5 hidden h-5 w-px bg-hairline lg:block" aria-hidden />
-        <div className="hidden items-center gap-1.5 lg:flex">
-          <Segmented
-            size="sm"
-            label="Layout"
-            value={prefs.layout}
-            onChange={(v) => {
-              setPrefs({ layout: v });
-              setFocusSage(false);
-            }}
-            options={[
-              { value: "split", label: "Split" },
-              { value: "focus", label: "Focus" },
-            ]}
-          />
-          {!split ? (
-            <Button size="sm" variant={focusSage ? "secondary" : "ghost"} onClick={() => setFocusSage((o) => !o)} aria-pressed={focusSage} title="Open or close Sage (Ctrl+J)">
-              <SageIcon className="size-3.5" /> Sage
-              {pending.length ? <span className="rounded-full bg-warn-soft px-1.5 text-[11px] font-semibold text-warn">{pending.length}</span> : null}
-            </Button>
-          ) : null}
-          <Button size="sm" variant="ghost" onClick={() => setFull((f) => !f)} aria-pressed={full} aria-label={full ? "Leave full screen" : "Full screen"} title={full ? "Leave full screen (Esc)" : "Full screen"}>
-            {full ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
-          </Button>
-        </div>
       </div>
     </div>
   );
@@ -924,12 +950,22 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         <Percent className="size-4" />
       </button>
       <button type="button" className={cn(tb, "w-auto px-2 text-[12px] font-semibold")} onClick={() => formatSel("thousands")} disabled={!selection} aria-label="Thousands separator" title="Thousands: 1,234.00">0,0</button>
-      <button type="button" className={cn(tb, "w-auto px-1.5 font-mono text-[11.5px]")} onClick={() => formatSel("dec-")} disabled={!selection} aria-label="Fewer decimal places" title="Fewer decimals">.0←</button>
-      <button type="button" className={cn(tb, "w-auto px-1.5 font-mono text-[11.5px]")} onClick={() => formatSel("dec+")} disabled={!selection} aria-label="More decimal places" title="More decimals">.00→</button>
-      <button type="button" className={cn(tb, "w-auto px-2 text-[12px]")} onClick={() => formatSel("plain")} disabled={!selection} aria-label="Plain number format" title="Plain number">123</button>
-      <span className="ml-auto pr-1.5 text-[12px] text-muted" aria-live="polite">
-        {saveState === "saving" ? "Saving…" : saveState === "offline" || queued ? `Offline: ${queued} change${queued === 1 ? "" : "s"} kept on this device` : saveState === "saved" ? "All changes saved" : "Type in a cell to edit. Sage's changes stay proposals."}
-      </span>
+      <div className="relative">
+        <button type="button" className={cn(tb, "w-auto gap-0.5 px-1.5")} onClick={() => setFmtMenu((o) => !o)} disabled={!selection} aria-expanded={fmtMenu} aria-haspopup="menu" aria-label="More number formats" title="More formats">
+          <span className="font-mono text-[11.5px]">.00</span> <Chev className="size-3.5" />
+        </button>
+        {fmtMenu ? (
+          <>
+            <div className="fixed inset-0 z-40" onMouseDown={() => setFmtMenu(false)} aria-hidden />
+            <div role="menu" aria-label="More number formats" className="absolute left-0 top-full z-50 mt-1 w-56 rounded-xl border border-hairline bg-paper p-1 shadow-lg" onClick={() => setFmtMenu(false)}>
+              <button type="button" role="menuitem" className={menuItem} onClick={() => formatSel("dec+")}><span className="w-10 font-mono text-[12px] text-muted">.00→</span> More decimals</button>
+              <button type="button" role="menuitem" className={menuItem} onClick={() => formatSel("dec-")}><span className="w-10 font-mono text-[12px] text-muted">.0←</span> Fewer decimals</button>
+              <button type="button" role="menuitem" className={menuItem} onClick={() => formatSel("plain")}><span className="w-10 font-mono text-[12px] text-muted">123</span> Plain number</button>
+            </div>
+          </>
+        ) : null}
+      </div>
+      <span className="ml-auto hidden pr-1.5 text-[12px] text-muted md:inline">{selection ? "" : "Type in a cell to edit. Sage's changes stay proposals."}</span>
     </div>
   ) : null;
 
@@ -1780,38 +1816,3 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   );
 }
 
-function GateChip({ pending, gate, errors }: { pending: number; gate: WbGate | null; errors: string[] | null }) {
-  if (errors?.length) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-bad-soft px-2 py-0.5 text-[11.5px] font-medium text-bad" title={errors.join("\n")}>
-        <ShieldAlert className="size-3" aria-hidden /> Recompute blocked: {errors.length} error{errors.length === 1 ? "" : "s"}
-      </span>
-    );
-  }
-  if (pending) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-warn-soft px-2 py-0.5 text-[11.5px] font-medium text-warn">
-        <Loader2 className="size-3" aria-hidden /> Recompute after you accept
-      </span>
-    );
-  }
-  if (gate?.status === "passed") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-good-soft px-2 py-0.5 text-[11.5px] font-medium text-good" title={`${gate.formulas ?? 0} formulas, 0 errors`}>
-        <ShieldCheck className="size-3" aria-hidden /> Recompute passed
-      </span>
-    );
-  }
-  if (gate?.status === "unverified") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-warn-soft px-2 py-0.5 text-[11.5px] font-medium text-warn" title={gate.detail ?? undefined}>
-        <ShieldAlert className="size-3" aria-hidden /> Not recomputed
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-cloud px-2 py-0.5 text-[11.5px] font-medium text-body">
-      <FileSpreadsheet className="size-3" aria-hidden /> Original file
-    </span>
-  );
-}
