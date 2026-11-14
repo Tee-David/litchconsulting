@@ -84,7 +84,7 @@ export function AttachSheet({
       <div className="space-y-2" role="radiogroup" aria-label="What to add">
         <label className={radio}>
           <input type="radio" name="att" checked={mode === "upload"} onChange={() => setMode("upload")} className="mt-1" />
-          <span><b className="block text-sm text-ink">A file from your computer</b><span className="text-[12.5px] text-muted">XLSX, XLS, ODS, CSV, TSV, TXT, JSON, DOCX or PDF, up to 4 MB</span></span>
+          <span><b className="block text-sm text-ink">A file from your computer</b><span className="text-[12.5px] text-muted">XLSX, XLS, ODS, CSV, TSV, TXT, JSON, DOCX, PDF or images, or a ZIP, RAR or 7z of them, up to 20 MB</span></span>
         </label>
         {mode === "upload" && (
           <label className="ml-6 flex min-h-[44px] cursor-pointer items-center gap-2 rounded-ctl border border-dashed border-line-strong px-3 py-2 text-[13px] text-body hover:bg-cloud">

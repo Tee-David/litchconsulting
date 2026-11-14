@@ -6,6 +6,7 @@ import { FileSpreadsheet, FileText, FolderOpen, Loader2, Table2, Upload } from "
 import { Button, EmptyState } from "@/components/kit";
 import { startWorkbenchAction } from "@/lib/workbench/actions";
 import { uploadToWorkbench, WORKBENCH_UPLOAD_ACCEPT } from "@/lib/workbench/upload-client";
+import { usePasswordAsk } from "./password-ask";
 import type { FileOption } from "./sheets";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +29,7 @@ export function StartForm({
   const [mode, setMode] = useState<"files" | "blank" | "upload">(requestId && files.length ? "files" : "upload");
   const useBlank = mode === "blank";
   const [upload, setUpload] = useState<File | null>(null);
+  const [askPassword, passwordSheet] = usePasswordAsk();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +39,7 @@ export function StartForm({
     setError(null);
     if (mode === "upload") {
       if (!upload) return setBusy(false);
-      const up = await uploadToWorkbench(upload, { requestId });
+      const up = await uploadToWorkbench(upload, { requestId }, { askPassword });
       if (!up.ok) {
         setBusy(false);
         setError(up.error);
@@ -59,6 +61,7 @@ export function StartForm({
 
   return (
     <section className="mt-4">
+      {passwordSheet}
       <div className="flex flex-col gap-2 sm:flex-row" role="radiogroup" aria-label="Start from">
         {[
           { v: "upload" as const, label: "Upload from your computer", icon: Upload, disabled: false, hide: false },
@@ -98,7 +101,7 @@ export function StartForm({
           >
             <Upload className="size-5 text-muted" aria-hidden />
             {upload ? <b className="text-ink">{upload.name}</b> : <b className="text-ink">Choose a file, or drop it here</b>}
-            <span className="text-[12px] text-muted">XLSX, XLS, ODS, CSV, TSV, TXT, JSON, DOCX or PDF · up to 4 MB · encrypted before it leaves this server</span>
+            <span className="text-[12px] text-muted">XLSX, XLS, ODS, CSV, TSV, TXT, JSON, DOCX, PDF, PNG or JPG, or a ZIP, RAR or 7z of them (with or without a password) · up to 20 MB · encrypted before it reaches the analysis server</span>
           </button>
         </div>
       ) : !useBlank ? (

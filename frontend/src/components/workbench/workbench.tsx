@@ -35,7 +35,8 @@ import { MessageActions } from "@/components/sage-ui/message-actions";
 import { ThreadPicker } from "@/components/sage-ui/thread-picker";
 import { PromptBox, type Attachment } from "@/components/sage-ui/prompt-box";
 import { AskSelection } from "@/components/sage-ui/ask-selection";
-import { WORKBENCH_UPLOAD_ACCEPT } from "@/lib/workbench/upload-client";
+import { WORKBENCH_MAX_BYTES, WORKBENCH_UPLOAD_ACCEPT } from "@/lib/workbench/upload-client";
+import { usePasswordAsk } from "./password-ask";
 import { SheetTabs, type SheetActionKind, type SheetInfo } from "./sheet-tabs";
 import { useToast } from "@/components/admin/ui/toaster";
 import { Button, Segmented, Sheet } from "@/components/kit";
@@ -643,6 +644,8 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     [refresh],
   );
 
+  // Archive passwords (ZIP, RAR, 7z), asked once per upload.
+  const [askPassword, passwordSheet] = usePasswordAsk();
   // R6: a Sage question asked offline waits on this device.
   const sageQKey = `litch.wb.sageq.${conv.id}`;
   const [waitingQ, setWaitingQ] = useState<string | null>(null);
@@ -827,42 +830,45 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           text: isText ? undefined : undefined,
         };
         setAtts((list) => [...list, att]);
-        if (file.size > 4 * 1024 * 1024) {
-          set({ status: "error", detail: "Over 4 MB: add it to the request first" });
+        if (file.size > WORKBENCH_MAX_BYTES) {
+          set({ status: "error", detail: "Over 20 MB" });
           continue;
         }
         const upload = image && !/\.(png|jpe?g)$/i.test(name) ? new File([file], name, { type: file.type }) : image ? new File([file], name, { type: file.type }) : file;
-        void uploadToWorkbench(upload, { conversationId: conv.id }).then(async (res) => {
+        void uploadToWorkbench(upload, { conversationId: conv.id }, { askPassword }).then(async (res) => {
           if (!res.ok) {
             set({ status: "error", detail: res.error });
             return;
           }
           if (res.conversation) setConv(res.conversation);
-          if (res.pending === undefined) {
-            set({ status: "ready", detail: "Added to this workbench" });
+          const many = (res.added?.length ?? 1) > 1;
+          const skippedNote = res.skipped?.length ? ` · ${res.skipped.length} skipped` : "";
+          const waiting = res.pendingIds ?? (res.pending !== undefined ? [res.pending] : []);
+          if (!waiting.length) {
+            set({ status: "ready", detail: many ? `${res.added!.length} files added${skippedNote}` : `Added to this workbench${skippedNote}` });
             setGridVersion((v) => v + 1);
             return;
           }
-          set({ detail: image ? "Reading the text (OCR)…" : "Reading the file…" });
-          for (let i = 0; i < 30; i++) {
+          set({ detail: image ? "Reading the text (OCR)…" : many ? `Reading ${waiting.length} of ${res.added!.length} files…` : "Reading the file…" });
+          let left = [...waiting];
+          for (let i = 0; i < 30 && left.length; i++) {
             await new Promise((r) => setTimeout(r, 8000));
-            const a = await attachDocumentAction(conv.id, res.pending);
-            if (a.ok) {
-              setConv(a.conversation);
-              setGridVersion((v) => v + 1);
-              set({ status: "ready", detail: "Read and added" });
-              return;
+            const still: number[] = [];
+            for (const d of left) {
+              const a = await attachDocumentAction(conv.id, d);
+              if (a.ok) {
+                setConv(a.conversation);
+                setGridVersion((v) => v + 1);
+              } else if (a.error === "waiting") still.push(d);
             }
-            if (a.error !== "waiting") {
-              set({ status: "error", detail: a.error });
-              return;
-            }
+            left = still;
           }
-          set({ status: "error", detail: "Still being read. It will appear in Add files when ready." });
+          if (left.length) set({ status: "error", detail: "Still being read. It will appear in Add files when ready." });
+          else set({ status: "ready", detail: many ? `${res.added!.length} files read and added${skippedNote}` : "Read and added" });
         });
       }
     },
-    [conv.id],
+    [conv.id, askPassword],
   );
   const addLongText = useCallback(
     (t: string) => {
@@ -1907,7 +1913,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           return true;
         }}
         onUpload={async (file) => {
-          const res = await uploadToWorkbench(file, { conversationId: conv.id });
+          const res = await uploadToWorkbench(file, { conversationId: conv.id }, { askPassword });
           if (!res.ok || !res.conversation || !res.firstLook) {
             toast.error(res.ok ? "The file was added, but the view did not refresh. Reload the page." : res.error);
             return false;
@@ -1996,6 +2002,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           downloadHref={(v) => `/api/workbench/${conv.id}/download?wb=${encodeURIComponent(wbId)}&version=${v}&name=${encodeURIComponent(activeRef.name.replace(/\.\w+$/, ""))}`}
         />
       ) : null}
+      {passwordSheet}
       <Sheet
         open={Boolean(clash)}
         onClose={() => undefined}

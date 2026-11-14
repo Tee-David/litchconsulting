@@ -107,3 +107,49 @@ export async function postEncryptedDocument(
   const result = (await res.json()) as UploadResult;
   return { ...result, ciphertextSha256, bytes: envelope.length };
 }
+
+export type ArchiveResult = {
+  archive: string;
+  encrypted: boolean;
+  documents: { document_id: number; filename: string; status: string; duplicate: boolean }[];
+  skipped: { name: string; reason: string }[];
+};
+
+/** Thrown when the archive needs a password, or the one given is wrong. */
+export class ArchivePasswordError extends Error {
+  constructor(readonly code: "password_needed" | "wrong_password", message: string) {
+    super(message);
+  }
+}
+
+/**
+ * Encrypt a ZIP, RAR or 7z archive (blind relay) and ask the engine to unpack it.
+ * The password, when given, travels only in a header to the engine for this one
+ * call; it is never stored or logged here.
+ */
+export async function postEncryptedArchive(
+  plaintext: Buffer,
+  meta: { clientId: string; filename: string; password?: string | null },
+): Promise<ArchiveResult> {
+  const envelope = encryptEnvelope(plaintext, requireEnv("LITCHAI_PUBLIC_KEY").replace(/\\n/g, "\n"));
+  const url = new URL("/archives/unpack", requireEnv("LITCHAI_API_URL"));
+  url.searchParams.set("client_id", meta.clientId);
+  url.searchParams.set("filename", meta.filename);
+  const headers: Record<string, string> = {
+    "content-type": "application/octet-stream",
+    "CF-Access-Client-Id": requireEnv("LITCHAI_ACCESS_CLIENT_ID"),
+    "CF-Access-Client-Secret": requireEnv("LITCHAI_ACCESS_CLIENT_SECRET"),
+  };
+  if (meta.password) headers["X-Archive-Password"] = meta.password;
+  const res = await fetch(url, { method: "POST", headers, body: new Uint8Array(envelope) });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => null)) as { detail?: { code?: string; message?: string } | string } | null;
+    const d = body?.detail;
+    if (res.status === 401 && d && typeof d === "object" && (d.code === "password_needed" || d.code === "wrong_password")) {
+      throw new ArchivePasswordError(d.code, d.message ?? "This archive needs a password.");
+    }
+    const msg = d && typeof d === "object" ? d.message : typeof d === "string" ? d : null;
+    throw new Error(msg || `The archive could not be opened (${res.status}).`);
+  }
+  return (await res.json()) as ArchiveResult;
+}
