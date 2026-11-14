@@ -40,6 +40,7 @@ apt-get -o DPkg::Lock::Timeout=1800 install -y --no-install-recommends \
   postgresql postgresql-contrib postgresql-16-pgvector \
   libreoffice-calc-nogui fonts-noto-core fonts-dejavu \
   clamav clamav-daemon \
+  7zip 7zip-rar \
   rclone jq unattended-upgrades netfilter-persistent iptables-persistent
 
 log "Swap (4 GB) — headroom for docling/LibreOffice peaks"
