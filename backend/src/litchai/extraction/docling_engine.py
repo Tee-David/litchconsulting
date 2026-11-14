@@ -39,10 +39,11 @@ def _docling_convert(data: bytes, *, force_ocr: bool, page_range: tuple[int, int
     from docling.datamodel.base_models import DocumentStream  # noqa: PLC0415
 
     options = PdfPipelineOptions(do_ocr=force_ocr, do_table_structure=True)
-    if force_ocr:  # scanned pages: OCR the whole page (Phase 0 recipe)
-        from docling.datamodel.pipeline_options import TesseractOcrOptions  # noqa: PLC0415
+    if force_ocr:  # scanned pages and screenshots: OCR the whole page
+        # The tesseract CLI (apt package) — the tesserocr binding is not installed on the VM.
+        from docling.datamodel.pipeline_options import TesseractCliOcrOptions  # noqa: PLC0415
 
-        options.ocr_options = TesseractOcrOptions(force_full_page_ocr=True)
+        options.ocr_options = TesseractCliOcrOptions(force_full_page_ocr=True)
     converter = DocumentConverter(
         format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=options)}
     )
