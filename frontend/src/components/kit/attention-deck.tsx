@@ -69,7 +69,7 @@ export function AttentionDeck({
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState("");
   const [menu, setMenu] = useState(false);
-  const [menuBelow, setMenuBelow] = useState(false);
+  const [menuAt, setMenuAt] = useState<"above" | "side" | "below">("above");
   const [startN] = useState(items.length);
   const cardRef = useRef<HTMLElement>(null);
   const snoozeRef = useRef<HTMLDivElement>(null);
@@ -319,7 +319,9 @@ export function AttentionDeck({
                     onClick={() => {
                       const b = snoozeRef.current?.getBoundingClientRect();
                       const c = cardRef.current?.getBoundingClientRect();
-                      setMenuBelow(Boolean(b && c && b.top - c.top < SNOOZE.length * 44 + 16));
+                      // Above when there is room; else beside the button (wide cards); else under the tools.
+                      const h = SNOOZE.length * 44 + 16;
+                      setMenuAt(!b || !c || b.top - c.top >= h ? "above" : b.left - c.left >= 240 && b.bottom - c.top >= h ? "side" : "below");
                       setMenu((m) => !m);
                     }}
                   >
@@ -327,7 +329,7 @@ export function AttentionDeck({
                     Snooze
                   </button>
                   {menu ? (
-                    <div className={`ldeck__menu${menuBelow ? " is-below" : ""}`} role="menu" aria-label="Bring it back">
+                    <div className={`ldeck__menu${menuAt === "above" ? "" : ` is-${menuAt}`}`} role="menu" aria-label="Bring it back">
                       {SNOOZE.map((s) => (
                         <button key={s.label} type="button" role="menuitem" onClick={(e) => snooze(e, top, s.hours, s.label)}>
                           <span>{s.label}</span>

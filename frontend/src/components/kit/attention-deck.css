@@ -94,6 +94,9 @@
   .ldeck__label { margin-left: 0; flex-basis: 100%; }
 }
 
+/* Beside the button on a wide, short card: the bottom edges line up, so it stays inside the card. */
+.ldeck__menu.is-side { bottom: 0; right: calc(100% + .4rem); }
+
 /* No room above on a short card: the menu goes under the tools, inside the card. */
 .ldeck__snooze:has(.ldeck__menu.is-below) { display: contents; }
 .ldeck__tools:has(.ldeck__menu.is-below) { flex-wrap: wrap; }
