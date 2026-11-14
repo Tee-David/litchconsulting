@@ -47,7 +47,7 @@ def _docling_convert(data: bytes, *, force_ocr: bool, page_range: tuple[int, int
         # The tesseract CLI (apt package) — the tesserocr binding is not installed on the VM.
         from docling.datamodel.pipeline_options import TesseractCliOcrOptions  # noqa: PLC0415
 
-        options.ocr_options = TesseractCliOcrOptions(force_full_page_ocr=True)
+        options.ocr_options = TesseractCliOcrOptions(force_full_page_ocr=True, lang=["eng"])  # only eng is installed
     # Docling detects a screenshot by its bytes (PNG/JPEG), not by the name, so images
     # need the same options; without them it picks its auto OCR (rapidocr), whose model
     # download fails on the VM's read-only venv.
