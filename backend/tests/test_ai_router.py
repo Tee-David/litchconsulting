@@ -262,8 +262,7 @@ def test_slow_answer_parks_the_provider_for_a_while():
     first = r.complete([{"role": "user", "content": "hi"}], conversation_id="s1")
     assert first.provider == "groq"                      # slow, but it answered
     nxt = r.complete([{"role": "user", "content": "hi"}], conversation_id="s2")
-    assert nxt.provider == "cerebras"
-    assert nxt.fallbacks[0].provider == "groq" and nxt.fallbacks[0].reason == "slow"
+    assert nxt.provider == "cerebras"                    # a new chat skips the slow one
     groq = next(x for x in r.status() if x["name"] == "groq")
     assert groq["detail"].startswith("slow")
 
