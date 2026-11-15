@@ -14,6 +14,8 @@ export type Attachment = {
   url?: string;
   /** Long pasted text (sent as a .txt file). */
   text?: string;
+  /** An archive: the files it unpacked into the workbench. */
+  contents?: string[];
 };
 
 /** Text longer than this is sent as a .txt file instead of filling the box. */

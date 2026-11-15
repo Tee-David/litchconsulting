@@ -680,7 +680,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const [waitingQ, setWaitingQ] = useState<string | null>(null);
   const send = useCallback(
     async (message: string, opts: { replaceLast?: boolean; raw?: boolean } = {}) => {
-      const files = opts.raw ? [] : atts.filter((a) => a.status === "ready").map((a) => a.name);
+      const files = opts.raw ? [] : atts.filter((a) => a.status === "ready").map((a) => (a.contents?.length ? `${a.name} [${a.contents.join("; ")}]` : a.name));
       const typed = message.trim() || (files.length ? "Read the files I added." : "");
       if (!typed || running) return;
       const msg = opts.raw ? typed : composeQuestion(typed, quote, files);
@@ -871,6 +871,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           }
           if (res.conversation) setConv(res.conversation);
           const many = (res.added?.length ?? 1) > 1;
+          if (/\.(zip|rar|7z)$/i.test(name) && res.added?.length) set({ contents: res.added });
           const skippedNote = res.skipped?.length ? ` · ${res.skipped.length} skipped` : "";
           const waiting = res.pendingIds ?? (res.pending !== undefined ? [res.pending] : []);
           if (!waiting.length) {
