@@ -1817,6 +1817,25 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
                 <Target className="size-3.5" aria-hidden /> Whole workbook
               </button>
             )}
+            {/* Context: what Sage reads besides the question. */}
+            {conv.instructions?.trim() ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setInstrText(conv.instructions ?? "");
+                  setInstrOpen(true);
+                }}
+                className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-surface px-2.5 text-[12px] text-body hover:text-ink"
+                title="Sage follows the instructions for this workbench"
+              >
+                <NotebookPen className="size-3.5" aria-hidden /> Rules on
+              </button>
+            ) : null}
+            {local ? (
+              <span className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-surface px-2.5 text-[12px] text-body" title="This client is set to local only: the private model answers">
+                <Lock className="size-3.5" aria-hidden /> Local only
+              </span>
+            ) : null}
             {request ? (
               <button type="button" onClick={() => setSheetOpen("attach")} className="grid size-9 place-items-center rounded-ctl text-body hover:bg-surface hover:text-ink" aria-label="Add a file from the request" title="Add a file from the request">
                 <FolderOpen className="size-4" />
