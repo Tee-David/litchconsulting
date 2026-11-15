@@ -541,7 +541,8 @@ export function TourProvider({ audience, children }: { audience: TourAudience; c
         floatingOptions={phone ? SHEET : DESKTOP}
         options={{
           ...BRAND_OPTIONS,
-          beforeTimeout: 12000,
+          // The practice workbook can take a while to open (it is made on first use).
+          beforeTimeout: 30000,
           targetWaitTimeout: 3000,
           scrollOffset,
           scrollDuration: reduced ? 0 : 420,
