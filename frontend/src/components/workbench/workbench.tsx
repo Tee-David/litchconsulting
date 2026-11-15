@@ -46,10 +46,10 @@ import { Button, Segmented, Sheet } from "@/components/kit";
 import { SageIcon } from "@/components/admin/sage-icon";
 import { cn } from "@/lib/utils";
 import { FAILURE, engineLabel } from "@/lib/ai-words";
-import { Grid, type GridMeta, type SelStats } from "./grid";
+import { Grid, display, type GridMeta, type SelStats } from "./grid";
 import { FirstLookCard } from "./first-look";
 import { Proposals } from "./proposals";
-import { TurnView } from "./turn";
+import { CitePeekContext, TurnView, type CellPeek } from "./turn";
 import { WhyPopover } from "./why";
 import { uploadToWorkbench } from "@/lib/workbench/upload-client";
 import { AttachSheet, DeliverSheet, EditBatchSheet, HistorySheet, RangeSheet, versionLabel, type FileOption } from "./sheets";
@@ -1587,6 +1587,28 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     );
   });
 
+  // Checkpoints (shadcn.io/ai): the versions an accepted change made, between the turns.
+  const marks = (conv.workbooks.find((w) => w.id === wbId)?.versions ?? []).filter((v) => v.n > 1 && v.batch_id);
+  const historyWithCheckpoints = history.flatMap((el, i) => {
+    const from = conv.messages[i]?.at ?? "";
+    const to = conv.messages[i + 1]?.at ?? "9999";
+    const here = marks.filter((v) => v.at > from && v.at <= to);
+    return [
+      el,
+      ...here.map((v) => (
+        <div key={`cp-${v.n}`} className="flex items-center gap-2 text-[11.5px] text-muted" role="note">
+          <span className="h-px flex-1 bg-hairline" aria-hidden />
+          <History className="size-3.5" aria-hidden />
+          <span className="tabular-nums">Version {v.n} · change accepted</span>
+          <button type="button" onClick={() => setPreviewV(v.n)} className="min-h-8 rounded-md px-1.5 font-medium text-accent hover:bg-paper dark:text-info">
+            Go back to this
+          </button>
+          <span className="h-px flex-1 bg-hairline" aria-hidden />
+        </div>
+      )),
+    ];
+  });
+
   // Learn Sage: a lesson can fill the box or send a safe example question here.
   const sageBox = useRef<HTMLDivElement>(null);
   const tourSendRef = useRef(send);
@@ -1611,9 +1633,26 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     return () => window.removeEventListener(TOUR_SELECT_EVENT, on);
   }, [goTo]);
 
+  // Inline citation cards: read one cited cell from the sheet it names.
+  const peekCell = useCallback<CellPeek>(
+    async (ref) => {
+      const r = parseRef(ref, sheet);
+      if (!r) return null;
+      const owner = Object.entries(sheetsBy).find(([, names]) => names.some((n) => n.toLowerCase() === r.sheet.toLowerCase()))?.[0] ?? wbId;
+      const qs = new URLSearchParams({ wb: owner, sheet: r.sheet, r0: String(r.r0), r1: String(r.r0), c0: String(r.c0), c1: String(r.c0) });
+      const res = await fetch(`/api/workbench/${conv.id}/cells?${qs}`, { cache: "no-store" });
+      if (!res.ok) return null;
+      const w = (await res.json()) as { cells?: WbCell[] };
+      const cell = w.cells?.find((x) => x.r === r.r0 && x.c === r.c0) ?? null;
+      return cell ? { v: cell.v, f: cell.f, shown: display(cell) || "Empty cell" } : null;
+    },
+    [sheet, sheetsBy, wbId, conv.id],
+  );
+
   const chartCards = Object.values(charts).filter((c) => batchById.get(c.batchId)?.status === "pending");
 
   const panel = (
+    <CitePeekContext.Provider value={peekCell}>
     <div ref={sageBox} data-tour="wb-sage" className="flex h-full min-h-0 flex-col bg-surface">
       <div className="flex items-center gap-1 border-b border-hairline bg-paper py-1.5 pl-3 pr-1.5">
         <span className="keep-brand grid size-[26px] shrink-0 place-items-center rounded-lg bg-brand text-white"><SageIcon className="size-4" /></span>
@@ -1681,7 +1720,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
             </div>
           </div>
         ) : null}
-        {history}
+        {historyWithCheckpoints}
         {live ? (
           <>
             <div className="ml-auto flex max-w-[88%] flex-col items-end gap-1">
@@ -1865,6 +1904,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         footnote={<>Numbers come from the pipeline, never the model. Paste a screenshot or long text, or drop files here.</>}
       />
     </div>
+    </CitePeekContext.Provider>
   );
 
   return (

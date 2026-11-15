@@ -154,11 +154,11 @@ def test_default_specs_from_env_and_legacy_chat():
         "https://openrouter.ai/api/v1"
     sn = default_specs({"LITCHAI_PROVIDER_CHAIN": "sambanova"})
     assert [s.name for s in sn] == ["sambanova"] and sn[0].configured is False
-    # Mistral and Z.ai join the default chain only with a key, after Groq.
-    free = default_specs({"MISTRAL_API_KEY": "m", "ZAI_API_KEY": "z"})
-    assert [s.name for s in free] == [*GROQ, "mistral", "zai", "cloudflare", "local"]
-    fb = {s.name: s for s in free}
-    assert fb["mistral"].base_url == "https://api.mistral.ai/v1" and fb["zai"].model == "glm-4.7-flash"
+    # Hetzner joins the default chain only with a key, after Groq.
+    hz = default_specs({"HETZNER_AI_API_KEY": "h"})
+    assert [s.name for s in hz] == [*GROQ, "hetzner", "cloudflare", "local"]
+    h = next(s for s in hz if s.name == "hetzner")
+    assert h.base_url == "https://inference.hetzner.com/api/v1" and h.zero_retention
     assert by["local"].api == "ollama" and by["local"].model == "gemma3:4b"
     llama = default_specs({"LITCHAI_LLAMA_SERVER_URL": "http://127.0.0.1:8080"})
     assert next(s for s in llama if s.name == "local").base_url == "http://127.0.0.1:8080/v1"

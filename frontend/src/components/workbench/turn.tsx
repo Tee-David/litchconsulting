@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, type ReactNode } from "react";
+import { Fragment, createContext, useContext, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowRightLeft, Lightbulb, ListTree, RefreshCw, Table2 } from "lucide-react";
 import { Trace, TraceOutput, seconds, useElapsed, type TraceStatus } from "@/components/sage-ui/trace";
 import type { WbEvent } from "@/lib/litchai/workbench";
@@ -13,8 +13,7 @@ export const PROVIDER_LABEL: Record<string, string> = {
   sambanova: "SambaNova",
   cloudflare: "Cloudflare",
   openrouter: "OpenRouter",
-  mistral: "Mistral",
-  zai: "Z.ai",
+  hetzner: "Hetzner",
   local: "Local model",
   chat: "Chat provider",
 };
@@ -94,16 +93,63 @@ function bold(text: string): ReactNode {
   return out.map((p, i) => (p.startsWith("**") && p.endsWith("**") ? <strong key={i} className="font-semibold">{p.slice(2, -2)}</strong> : <Fragment key={i}>{p}</Fragment>));
 }
 
+/** Inline citation card: the workbench gives a way to read one cell (value, formula). */
+export type CellPeek = (ref: string) => Promise<{ v: unknown; f: string | null; shown: string } | null>;
+export const CitePeekContext = createContext<CellPeek | null>(null);
+
+/**
+ * A cell reference in Sage's words (shadcn.io/ai "Inline Citation"): a click goes to
+ * the cell; hover or focus opens a small card with the cell's value and formula.
+ * On a phone a tap goes to the cell (no hover).
+ */
 export function CiteChip({ refText, onCite }: { refText: string; onCite: (ref: string) => void }) {
+  const peek = useContext(CitePeekContext);
+  const [card, setCard] = useState<{ shown: string; f: string | null } | null | "loading">(null);
+  const [open, setOpen] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const show = () => {
+    if (!peek) return;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      setOpen(true);
+      if (card === null) {
+        setCard("loading");
+        void peek(refText).then((c) => setCard(c ? { shown: c.shown, f: c.f } : { shown: "Empty cell", f: null }), () => setCard({ shown: "Could not read the cell", f: null }));
+      }
+    }, 250);
+  };
+  const hide = () => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setOpen(false), 120);
+  };
   return (
-    <button
-      type="button"
-      onClick={() => onCite(refText)}
-      className="mx-0.5 inline-flex items-center rounded-md border border-transparent bg-brand-tint px-1.5 font-mono text-[11.5px] text-accent hover:border-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
-      aria-label={`Go to cell ${refText}`}
-    >
-      {refText}
-    </button>
+    <span className="relative inline-block" onMouseEnter={show} onMouseLeave={hide}>
+      <button
+        type="button"
+        onClick={() => onCite(refText)}
+        onFocus={show}
+        onBlur={hide}
+        onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
+        className="mx-0.5 inline-flex items-center rounded-md border border-transparent bg-brand-tint px-1.5 font-mono text-[11.5px] text-accent hover:border-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent dark:text-info"
+        aria-label={`Go to cell ${refText}`}
+      >
+        {refText}
+      </button>
+      {open && card ? (
+        <span role="tooltip" className="absolute bottom-full left-0 z-30 mb-1.5 block w-56 rounded-xl border border-hairline bg-paper p-2.5 text-left font-sans shadow-lg">
+          <span className="block truncate font-mono text-[11px] text-muted">{refText}</span>
+          {card === "loading" ? (
+            <span className="mt-1 block text-[12px] text-muted">Reading the cell…</span>
+          ) : (
+            <>
+              <span className="mt-0.5 block truncate text-[14px] font-semibold tabular-nums text-ink">{card.shown}</span>
+              {card.f ? <span className="mt-0.5 block truncate font-mono text-[11px] text-body" title={card.f}>{card.f}</span> : null}
+              <span className="mt-1 block text-[11px] text-muted">Click to go to the cell</span>
+            </>
+          )}
+        </span>
+      ) : null}
+    </span>
   );
 }
 

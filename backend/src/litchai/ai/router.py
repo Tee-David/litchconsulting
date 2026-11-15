@@ -210,26 +210,18 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
         daily_requests=_int_env("LITCHAI_OPENROUTER_DAILY_REQUESTS") or 50,
         daily_tokens=_int_env("LITCHAI_OPENROUTER_DAILY_TOKENS"),
     )
-    # Mistral La Plateforme ("Experiment" free tier; switch off training in the
-    # console) and Z.ai GLM Flash (free per token). Each joins the chain only when
-    # its key is set (MISTRAL_API_KEY, ZAI_API_KEY).
-    mi_key = e.get("MISTRAL_API_KEY") or None
-    specs["mistral"] = ProviderSpec(
-        name="mistral", kind="cloud",
-        model=e.get("LITCHAI_MISTRAL_MODEL") or "mistral-small-latest",
-        base_url="https://api.mistral.ai/v1", api_key=mi_key,
+    # Hetzner Inference (experimental, free while it lasts): no request or response
+    # content is stored. 10 requests a minute per key, so it sits after Groq as a
+    # fallback. Joins the chain only when HETZNER_AI_API_KEY is set.
+    hz_key = e.get("HETZNER_AI_API_KEY") or None
+    specs["hetzner"] = ProviderSpec(
+        name="hetzner", kind="cloud",
+        model=e.get("LITCHAI_HETZNER_MODEL") or "Qwen/Qwen3.6-35B-A3B-FP8",
+        base_url="https://inference.hetzner.com/api/v1", api_key=hz_key,
         params={"_prompt_json": True},
-        daily_requests=_int_env("LITCHAI_MISTRAL_DAILY_REQUESTS"),
-        daily_tokens=_int_env("LITCHAI_MISTRAL_DAILY_TOKENS"),
-    )
-    zai_key = e.get("ZAI_API_KEY") or None
-    specs["zai"] = ProviderSpec(
-        name="zai", kind="cloud",
-        model=e.get("LITCHAI_ZAI_MODEL") or "glm-4.7-flash",
-        base_url="https://api.z.ai/api/paas/v4", api_key=zai_key,
-        params={"_prompt_json": True},
-        daily_requests=_int_env("LITCHAI_ZAI_DAILY_REQUESTS") or 1000,
-        daily_tokens=_int_env("LITCHAI_ZAI_DAILY_TOKENS"),
+        daily_requests=_int_env("LITCHAI_HETZNER_DAILY_REQUESTS"),
+        daily_tokens=_int_env("LITCHAI_HETZNER_DAILY_TOKENS"),
+        zero_retention=True,
     )
     llama_url = e.get("LITCHAI_LLAMA_SERVER_URL", "").rstrip("/")
     if llama_url:
@@ -260,8 +252,7 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
     if not order:
         # Cerebras and SambaNova are out of the default order (their free tiers now
         # answer 402 without a card); LITCHAI_PROVIDER_CHAIN can still name them.
-        order = ["groq", *(["mistral"] if mi_key else []), *(["zai"] if zai_key else []),
-                 "cloudflare", *(["openrouter"] if or_key else []),
+        order = ["groq", *(["hetzner"] if hz_key else []), "cloudflare", *(["openrouter"] if or_key else []),
                  *(["chat"] if "chat" in specs else []), "local"]
     # "groq" in a chain means every Groq model in turn, unless models are named.
     if "groq" in order and not any(n.startswith("groq:") for n in order):

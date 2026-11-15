@@ -212,13 +212,16 @@ export function TourTooltip({
             ) : null}
             {acting && phase === "idle" ? (
               <>
-                <button
-                  {...primaryProps}
-                  type="button"
-                  className="min-h-10 rounded-full px-3 text-[12.5px] font-semibold text-body transition-colors hover:bg-surface hover:text-ink"
-                >
-                  Next
-                </button>
+                {/* A click stop (Open Sage) has no Next: the stops after it need what it opens. */}
+                {action.kind !== "click" ? (
+                  <button
+                    {...primaryProps}
+                    type="button"
+                    className="min-h-10 rounded-full px-3 text-[12.5px] font-semibold text-body transition-colors hover:bg-surface hover:text-ink"
+                  >
+                    Next
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => (action.kind === "ask" ? ask(action.text, action.surface) : void click())}
