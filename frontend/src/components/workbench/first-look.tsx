@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, Eye, Info } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Eye, FileStack, FileText, Info, ListChecks } from "lucide-react";
+import { Trace } from "@/components/sage-ui/trace";
 import type { WbFirstLook, WbSheetProfile } from "@/lib/litchai/workbench";
 import { CiteChip } from "./turn";
 import { quoteSheet } from "./refs";
@@ -47,88 +48,95 @@ export function FirstLookCard({
   const findings = look.anomalies.findings ?? [];
   const warnKinds = new Set(["duplicate", "outlier", "balance_break", "text_date", "text_number"]);
 
+  const notesBy = new Map((look.conversions ?? []).map((c) => [c.workbook_id, c]));
+  const tables = sheets.length;
+  const checks = byKind.map(([kind, n]) => ({ kind, n, refs: findings.filter((f) => f.kind === kind).slice(0, 3), warn: warnKinds.has(kind) }));
+  // The most serious first: warnings, then the larger counts.
+  checks.sort((a, b) => Number(b.warn) - Number(a.warn) || b.n - a.n);
+  const top = checks.slice(0, 3);
+  const rest = checks.slice(3);
+  const Check1 = ({ c }: { c: (typeof checks)[number] }) => (
+    <li className="flex items-start gap-2 text-[12.5px]">
+      {c.warn ? <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warn" aria-hidden /> : <Info className="mt-0.5 size-3.5 shrink-0 text-info" aria-hidden />}
+      <span className="min-w-0 text-body">
+        <b className="font-semibold text-ink">{c.n.toLocaleString("en-NG")}</b> {KIND_LABEL[c.kind] ?? c.kind.replace(/_/g, " ")}
+        {c.refs.length ? " " : ""}
+        {c.refs.map((f) => <CiteChip key={f.cell} refText={qualify(f.cell)} onCite={onCite} />)}
+      </span>
+    </li>
+  );
+
   return (
-    <section className="rounded-card border border-hairline bg-paper" aria-label="First look">
-      <header className="flex items-center gap-2 border-b border-hairline px-3 py-2">
-        <Eye className="size-4 text-muted" aria-hidden />
-        <h3 className="text-[13px] font-semibold text-ink">
-          First look · {files} file{files === 1 ? "" : "s"}, {sheets.length} table{sheets.length === 1 ? "" : "s"}
-        </h3>
-        <span className="ml-auto rounded-full bg-good-soft px-2 py-0.5 text-[11px] font-medium text-good">Ready</span>
-      </header>
-      <div className="space-y-2.5 px-3 py-2.5">
-        {sheets.length === 0 ? (
-          <p className="text-[12.5px] text-body">No tables found yet. Ask Sage to lay one out, or add a sheet.</p>
-        ) : (
-          <dl className="grid grid-cols-2 gap-2">
-            {sheets.slice(0, 6).map(({ w, s }) => (
-              <div key={`${w.workbook_id}:${s.sheet}`} className="rounded-ctl bg-surface px-2.5 py-2">
-                <dt className="truncate text-[11px] text-muted" title={`${w.name} · ${s.sheet}`}>
-                  {files > 1 ? `${w.name} · ` : ""}{s.sheet}
-                </dt>
-                <dd className="text-[13px] font-semibold text-ink">{s.table!.rows.toLocaleString("en-NG")} rows</dd>
-                {s.totals ? (
-                  <dd className="text-[11px] text-body">
-                    In {ngn((s.totals as { inflow: number }).inflow)} · out {ngn((s.totals as { outflow: number }).outflow)}
-                  </dd>
-                ) : null}
-                {span(s) ? <dd className="text-[11px] text-muted">{span(s)}</dd> : null}
-              </div>
-            ))}
-          </dl>
-        )}
+    <section className="space-y-2 rounded-card border border-hairline bg-paper px-3 py-2.5" aria-label="First look">
+      <p className="flex items-center gap-2 text-[13px] font-semibold text-ink">
+        <Eye className="size-4 text-muted" aria-hidden /> First look
+        <span className="font-normal text-muted">
+          · {files} file{files === 1 ? "" : "s"}, {tables} table{tables === 1 ? "" : "s"}
+        </span>
+      </p>
 
-        {byKind.length === 0 ? (
-          <p className="flex items-center gap-1.5 text-[12.5px] text-good">
-            <CheckCircle2 className="size-3.5" aria-hidden /> No duplicates, outliers, text dates or balance breaks found.
-          </p>
-        ) : (
+      {/* Task: every file read, one row each; a working-copy note sits in its row. */}
+      <Trace size="sm" icon={<FileStack />} status="none" title={`Read ${files} file${files === 1 ? "" : "s"}${notesBy.size ? ` · ${notesBy.size} working cop${notesBy.size === 1 ? "y" : "ies"}` : ""}`}>
+        <ul className="space-y-1.5 pt-1">
+          {look.workbooks.map((w) => {
+            const conv = notesBy.get(w.workbook_id);
+            const tabs = w.sheets.filter((sh) => sh.table && sh.table.rows > 0);
+            return (
+              <li key={w.workbook_id} className="rounded-lg bg-surface px-2.5 py-2 text-[12px]">
+                <p className="flex items-center gap-1.5 font-medium text-ink">
+                  <FileText className="size-3.5 shrink-0 text-muted" aria-hidden />
+                  <span className="min-w-0 truncate" title={conv?.filename ?? w.name}>{conv?.filename ?? w.name}</span>
+                  {conv ? <span className="ml-auto shrink-0 rounded bg-paper px-1.5 text-[10.5px] font-semibold uppercase text-muted">{conv.format}</span> : null}
+                </p>
+                {tabs.map((sh) => (
+                  <p key={sh.sheet} className="mt-0.5 text-body">
+                    {sh.sheet}: {sh.table!.rows.toLocaleString("en-NG")} rows
+                    {sh.totals ? ` · in ${ngn((sh.totals as { inflow: number }).inflow)}, out ${ngn((sh.totals as { outflow: number }).outflow)}` : ""}
+                    {span(sh) ? ` · ${span(sh)}` : ""}
+                  </p>
+                ))}
+                {conv ? <p className="mt-0.5 text-muted">Working copy; the original is kept. {conv.notes.join(" ")}</p> : null}
+              </li>
+            );
+          })}
+        </ul>
+      </Trace>
+
+      {checks.length === 0 ? (
+        <p className="flex min-h-8 items-center gap-2 text-[12.5px] text-good">
+          <CheckCircle2 className="size-3.5" aria-hidden /> No duplicates, outliers, text dates or balance breaks found.
+        </p>
+      ) : (
+        <>
           <ul className="space-y-1.5">
-            {byKind.map(([kind, n]) => {
-              const refs = findings.filter((f) => f.kind === kind).slice(0, 3);
-              const warn = warnKinds.has(kind);
-              return (
-                <li key={kind} className="flex items-start gap-1.5 text-[12.5px]">
-                  {warn ? <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warn" aria-hidden /> : <Info className="mt-0.5 size-3.5 shrink-0 text-info" aria-hidden />}
-                  <span className="text-body">
-                    <b className="font-semibold text-ink">{n}</b> {KIND_LABEL[kind] ?? kind.replace(/_/g, " ")}
-                    {refs.length ? " " : ""}
-                    {refs.map((f) => <CiteChip key={f.cell} refText={qualify(f.cell)} onCite={onCite} />)}
-                  </span>
-                </li>
-              );
-            })}
+            {top.map((c) => <Check1 key={c.kind} c={c} />)}
           </ul>
-        )}
+          {rest.length ? (
+            <Trace size="sm" status="none" icon={<ListChecks />} title={`${rest.length} more check${rest.length === 1 ? "" : "s"}`}>
+              <ul className="space-y-1.5 pt-1">
+                {rest.map((c) => <Check1 key={c.kind} c={c} />)}
+              </ul>
+            </Trace>
+          ) : null}
+        </>
+      )}
 
-        {(look.conversions ?? []).map((c) => (
-          <div key={c.workbook_id} className="rounded-ctl border border-hairline bg-surface px-2.5 py-1.5 text-[12px] text-body" role="note">
-            <p className="font-medium text-ink">
-              {c.filename}: working copy made from {c.format.toUpperCase()}. The original file is kept unchanged.
-            </p>
-            {c.notes.map((n) => (
-              <p key={n} className="mt-0.5">{n}</p>
-            ))}
-          </div>
-        ))}
-
-        {look.suggestions.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 pt-0.5">
-            {look.suggestions.map((s) => (
-              <button
-                key={s}
-                type="button"
-                disabled={disabled}
-                onClick={() => onSuggest(s)}
-                className="rounded-full border border-hairline bg-surface px-2.5 py-1 text-[12px] font-medium text-ink hover:border-line-strong hover:bg-cloud disabled:opacity-50"
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        )}
-        <p className="text-[11px] text-muted">Computed by the pipeline from every row. No model was used.</p>
-      </div>
+      {look.suggestions.length > 0 && (
+        <div className="-mx-3 flex gap-1.5 overflow-x-auto px-3 pb-0.5 [mask-image:linear-gradient(90deg,transparent,#000_12px,#000_calc(100%-12px),transparent)] [scrollbar-width:none] sm:flex-wrap sm:overflow-visible sm:[mask-image:none]">
+          {look.suggestions.map((sg) => (
+            <button
+              key={sg}
+              type="button"
+              disabled={disabled}
+              onClick={() => onSuggest(sg)}
+              className="min-h-9 shrink-0 rounded-full border border-hairline bg-surface px-3 text-[12px] font-medium text-ink hover:border-line-strong hover:bg-cloud disabled:opacity-50"
+            >
+              {sg}
+            </button>
+          ))}
+        </div>
+      )}
+      <p className="text-[11px] text-muted">Computed by the pipeline from every row. No model was used.</p>
     </section>
   );
 }

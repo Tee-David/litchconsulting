@@ -60,7 +60,7 @@ export function Proposals({
   const list = expanded ? [...open, ...(showDecided ? decided : [])] : [];
 
   return (
-    <section className="border-t border-hairline bg-paper" aria-label="Proposed changes">
+    <section className="border-t border-hairline bg-paper" aria-label="Proposed changes" data-tour="wb-proposal">
       <button
         type="button"
         onClick={() => setExpanded((x) => !x)}
@@ -113,7 +113,7 @@ export function Proposals({
                   <div className={cn("flex flex-wrap items-center gap-1.5", b.status === "pending" || b.status === "blocked" ? "mt-2" : "mt-0.5")}>
                     {b.status === "pending" || b.status === "blocked" ? (
                       <>
-                        <Button size="sm" variant="primary" disabled={Boolean(busy)} onClick={() => onDecide(b, "accept")}>
+                        <Button size="sm" variant="primary" disabled={Boolean(busy)} onClick={() => onDecide(b, "accept")} data-tour="wb-accept">
                           {isBusy ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />} {b.status === "blocked" ? "Try again" : "Accept"}
                         </Button>
                         {b.ops.some((o) => o.op === "set_cell") ? (

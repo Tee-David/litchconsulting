@@ -26,7 +26,7 @@ import {
   Undo2,
   X,
 } from "lucide-react";
-import type { WbBatch, WbCell, WbConflict, WbConversation, WbEvent, WbFirstLook, WbGate, WbUserEdit } from "@/lib/litchai/workbench";
+import type { WbBatch, WbCell, WbConflict, WbConversation, WbEvent, WbFirstLook, WbGate, WbStyle, WbUserEdit } from "@/lib/litchai/workbench";
 import { attachDocumentAction, attachFilesAction, decideBatchAction, deliverAction, feedbackAction, getConversationAction, newThreadAction, openThreadAction, restoreVersionAction, runToolAction, saveEditsAction, sheetActionAction } from "@/lib/workbench/actions";
 import { AlignCenter, AlignLeft, AlignRight, Baseline, Bold, Check, CornerDownRight, ChevronDown as Chev, Ellipsis, FolderOpen, Grid2x2, Italic, NotebookPen, PaintBucket, Pencil, SquarePen, TableCellsMerge, Underline, WrapText } from "lucide-react";
 import { setInstructionsAction } from "@/lib/workbench/actions";
@@ -203,7 +203,20 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const formatSel = (kind: "currency" | "percent" | "thousands" | "plain" | "dec+" | "dec-") => setFormatRequest({ kind, nonce: Date.now() });
   // S5: bold, colours, alignment, borders for the selection.
   const [styleRequest, setStyleRequest] = useState<StyleRequest | null>(null);
-  const styleSel = (r: Omit<StyleRequest, "nonce">) => setStyleRequest({ ...r, nonce: Date.now() });
+  const styleSel = (r: Omit<StyleRequest, "nonce">) => {
+    setStyleRequest({ ...r, nonce: Date.now() });
+    // The toolbar shows the active cell's format: keep it in step with the change.
+    setActiveCell((a) => {
+      if (!a?.cell) return a;
+      const cur: WbStyle = { ...(a.cell.s ?? {}) };
+      if (r.toggle) (cur as Record<string, unknown>)[r.toggle] = !cur[r.toggle as keyof WbStyle];
+      if (r.style) Object.assign(cur, r.style);
+      return { ...a, cell: { ...a.cell, s: cur } };
+    });
+  };
+  /** Format of the active cell, for the pressed states of the toolbar. */
+  const cs: WbStyle = activeCell?.cell?.s ?? {};
+  const on = "bg-brand-tint text-ink ring-1 ring-inset ring-accent/40 dark:ring-info/50";
   const [styleMenu, setStyleMenu] = useState<null | "fc" | "bg" | "border">(null);
   // A7: standing instructions for this workbench.
   const [instrOpen, setInstrOpen] = useState(false);
@@ -1050,7 +1063,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const tb = "grid size-8 place-items-center rounded-ctl text-body hover:bg-cloud hover:text-ink disabled:cursor-not-allowed disabled:opacity-40";
   const editBar = wbId ? (
     <div className="flex flex-wrap items-center gap-0.5 border-b border-hairline px-1.5 py-1" role="toolbar" aria-label="Edit">
-      <button type="button" className={tb} onClick={() => void stepEdit("undo")} disabled={!undoId || saveState === "saving"} aria-label="Undo" title="Undo the last change (Ctrl+Z)">
+      <button type="button" data-tour="wb-undo" className={tb} onClick={() => void stepEdit("undo")} disabled={!undoId || saveState === "saving"} aria-label="Undo" title="Undo the last change (Ctrl+Z)">
         <Undo2 className="size-4" />
       </button>
       <button type="button" className={tb} onClick={() => void stepEdit("redo")} disabled={!redoStack.length || saveState === "saving"} aria-label="Redo" title="Redo (Ctrl+Y)">
@@ -1078,13 +1091,15 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         ) : null}
       </div>
       <span className="mx-1 h-5 w-px bg-hairline" aria-hidden />
-      <button type="button" className={tb} onClick={() => styleSel({ toggle: "b" })} disabled={!selection} aria-label="Bold" title="Bold"><Bold className="size-4" /></button>
-      <button type="button" className={tb} onClick={() => styleSel({ toggle: "i" })} disabled={!selection} aria-label="Italic" title="Italic"><Italic className="size-4" /></button>
-      <button type="button" className={tb} onClick={() => styleSel({ toggle: "u" })} disabled={!selection} aria-label="Underline" title="Underline"><Underline className="size-4" /></button>
+      <button type="button" className={cn(tb, cs.b && on)} aria-pressed={Boolean(cs.b)} onClick={() => styleSel({ toggle: "b" })} disabled={!selection} aria-label="Bold" title="Bold"><Bold className="size-4" /></button>
+      <button type="button" className={cn(tb, cs.i && on)} aria-pressed={Boolean(cs.i)} onClick={() => styleSel({ toggle: "i" })} disabled={!selection} aria-label="Italic" title="Italic"><Italic className="size-4" /></button>
+      <button type="button" className={cn(tb, cs.u && on)} aria-pressed={Boolean(cs.u)} onClick={() => styleSel({ toggle: "u" })} disabled={!selection} aria-label="Underline" title="Underline"><Underline className="size-4" /></button>
       {(["fc", "bg"] as const).map((k) => (
         <div key={k} className="relative">
-          <button type="button" className={tb} onClick={() => setStyleMenu((m) => (m === k ? null : k))} disabled={!selection} aria-expanded={styleMenu === k} aria-haspopup="menu" aria-label={k === "fc" ? "Text colour" : "Fill colour"} title={k === "fc" ? "Text colour" : "Fill colour"}>
+          <button type="button" className={cn(tb, "relative", cs[k] && on)} onClick={() => setStyleMenu((m) => (m === k ? null : k))} disabled={!selection} aria-expanded={styleMenu === k} aria-haspopup="menu" aria-label={k === "fc" ? "Text colour" : "Fill colour"} title={k === "fc" ? "Text colour" : "Fill colour"}>
             {k === "fc" ? <Baseline className="size-4" /> : <PaintBucket className="size-4" />}
+            {/* The colour now in the cell, as a bar under the icon (as in Excel). */}
+            <span aria-hidden className="absolute inset-x-1.5 bottom-1 h-[3px] rounded-full border border-hairline" style={{ background: cs[k] ? `#${cs[k]}` : "transparent", borderColor: cs[k] ? "transparent" : undefined }} />
           </button>
           {styleMenu === k ? (
             <>
@@ -1101,10 +1116,10 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           ) : null}
         </div>
       ))}
-      <button type="button" className={tb} onClick={() => styleSel({ style: { ha: "left" } })} disabled={!selection} aria-label="Align left" title="Align left"><AlignLeft className="size-4" /></button>
-      <button type="button" className={tb} onClick={() => styleSel({ style: { ha: "center" } })} disabled={!selection} aria-label="Align centre" title="Align centre"><AlignCenter className="size-4" /></button>
-      <button type="button" className={tb} onClick={() => styleSel({ style: { ha: "right" } })} disabled={!selection} aria-label="Align right" title="Align right"><AlignRight className="size-4" /></button>
-      <button type="button" className={tb} onClick={() => styleSel({ toggle: "wrap" })} disabled={!selection} aria-label="Wrap text" title="Wrap text"><WrapText className="size-4" /></button>
+      <button type="button" className={cn(tb, cs.ha === "left" && on)} aria-pressed={cs.ha === "left"} onClick={() => styleSel({ style: { ha: "left" } })} disabled={!selection} aria-label="Align left" title="Align left"><AlignLeft className="size-4" /></button>
+      <button type="button" className={cn(tb, cs.ha === "center" && on)} aria-pressed={cs.ha === "center"} onClick={() => styleSel({ style: { ha: "center" } })} disabled={!selection} aria-label="Align centre" title="Align centre"><AlignCenter className="size-4" /></button>
+      <button type="button" className={cn(tb, cs.ha === "right" && on)} aria-pressed={cs.ha === "right"} onClick={() => styleSel({ style: { ha: "right" } })} disabled={!selection} aria-label="Align right" title="Align right"><AlignRight className="size-4" /></button>
+      <button type="button" className={cn(tb, cs.wrap && on)} aria-pressed={Boolean(cs.wrap)} onClick={() => styleSel({ toggle: "wrap" })} disabled={!selection} aria-label="Wrap text" title="Wrap text"><WrapText className="size-4" /></button>
       <div className="relative">
         <button type="button" className={tb} onClick={() => setStyleMenu((m) => (m === "border" ? null : "border"))} disabled={!selection} aria-expanded={styleMenu === "border"} aria-haspopup="menu" aria-label="Borders" title="Borders"><Grid2x2 className="size-4" /></button>
         {styleMenu === "border" ? (
@@ -1135,6 +1150,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const formulaBar = (
     <div className="flex items-center gap-2 border-b border-hairline px-2 py-1.5 text-[12.5px]">
       <input
+        data-tour="wb-namebox"
         aria-label="Name box: type a cell or range and press Enter"
         title="Type a cell or range (D14, B3:D8, Sheet!A1) and press Enter"
         value={
@@ -1385,7 +1401,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
             )}
           </div>
         ) : null}
-        <div className="min-h-0 h-full">
+        <div className="min-h-0 h-full" data-tour="wb-grid">
           {wbId ? (
             <Grid
               conversationId={conv.id}
@@ -1532,7 +1548,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     const am = bv < n - 1 ? prev!.branches![bv].assistant : m;
     if (!am) return <p key={i} className="text-[12.5px] text-muted">No answer was saved for that version.</p>;
     const steps = (am.steps ?? []) as WbEvent[];
-    const final: WbEvent = { type: "final", answer: am.content, citations: am.citations ?? [], attribution: am.attribution ?? null, unverified_figures: am.unverified_figures ?? [] };
+    const final: WbEvent = { type: "final", answer: am.content, citations: am.citations ?? [], attribution: am.attribution ?? null, unverified_figures: am.unverified_figures ?? [], ms: (am as { ms?: number | null }).ms ?? null };
     const latest = bv === n - 1;
     return (
       <div key={i} className="space-y-2">
@@ -1605,6 +1621,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
             setInstrText(conv.instructions ?? "");
             setInstrOpen(true);
           }}
+          data-tour="wb-instructions"
           className={cn("relative grid size-9 shrink-0 place-items-center rounded-ctl hover:bg-surface hover:text-ink", conv.instructions?.trim() ? "text-accent" : "text-body")}
           aria-label={conv.instructions?.trim() ? "Instructions for this workbench (on)" : "Instructions for this workbench"}
           title="Instructions Sage follows in every answer here"
@@ -1800,8 +1817,8 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
               type="button"
               {...voice.handlers}
               aria-pressed={voice.listening}
-              aria-label={voice.listening ? "Listening, release to stop" : "Hold to talk"}
-              title="Hold to talk"
+              aria-label={voice.listening ? "Listening. Tap to stop" : "Talk to Sage"}
+              title="Tap, speak, then tap again"
               className={cn("grid size-9 shrink-0 select-none place-items-center rounded-ctl text-body touch-none", voice.listening ? "bg-bad-soft text-bad" : "hover:bg-surface")}
             >
               <voice.Icon className="size-4" />
@@ -1834,7 +1851,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     >
       {header}
       {practice ? <PracticeBar /> : null}
-      <div className="flex items-center justify-center border-b border-hairline px-3 py-1.5 lg:hidden">
+      <div className="flex items-center justify-center border-b border-hairline px-3 py-1.5 lg:hidden" data-tour="wb-sage-tab">
         <Segmented
           size="sm"
           label="Show"
@@ -2112,6 +2129,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         <label htmlFor="wb-instructions" className="text-[13px] font-medium text-ink">Instructions</label>
         <textarea
           id="wb-instructions"
+          data-tour="wb-instructions-box"
           value={instrText}
           onChange={(e) => setInstrText(e.target.value)}
           rows={7}

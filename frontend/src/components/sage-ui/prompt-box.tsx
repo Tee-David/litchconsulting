@@ -235,6 +235,7 @@ export function PromptBox({
             <>
               <label
                 htmlFor={fileInput}
+                data-tour="wb-attach"
                 className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full text-body transition-colors hover:bg-surface hover:text-ink has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent/40"
                 title="Add files or a screenshot (or paste, or drop)"
               >

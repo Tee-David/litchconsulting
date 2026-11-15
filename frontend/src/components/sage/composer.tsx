@@ -84,8 +84,8 @@ export function SageComposer({
         type="button"
         {...voice.handlers}
         aria-pressed={voice.listening}
-        aria-label={voice.listening ? "Listening, release to stop" : "Hold to talk"}
-        title="Hold to talk"
+        aria-label={voice.listening ? "Listening. Tap to stop" : "Talk to Sage"}
+        title="Tap, speak, then tap again"
         className={cn(
           "grid size-9 shrink-0 place-items-center rounded-full transition-colors",
           voice.listening ? "bg-bad-soft text-bad" : "text-body hover:bg-surface hover:text-ink",

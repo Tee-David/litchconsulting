@@ -78,6 +78,8 @@ const TARGET_WAIT_MS = 5000;
 /** `?tour=1` in the address bar. */
 const wantsTour = () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tour") === "1";
 
+const OFFER_ON = false;
+
 const resumeKey = (id: string) => `litch:tour:resume:${id}`;
 
 /** Is a step's target present, and does it apply to this viewport? */
@@ -436,8 +438,9 @@ export function TourProvider({ audience, children }: { audience: TourAudience; c
   }, [pathname, startWalkthrough]);
 
   // First sign-in: offer the walkthrough once per role and version. Never forced.
+  // Off until the v3 tour content ships (the offer would start the old walkthrough).
   useEffect(() => {
-    if (wantsTour()) return;
+    if (!OFFER_ON || wantsTour()) return;
     let seen = false;
     try {
       if (localStorage.getItem(offerKey)) seen = true;

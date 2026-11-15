@@ -473,3 +473,21 @@ body {
     transform: translateY(8px) scale(0.97);
   }
 }
+
+/* Sage: a running step title shimmers (shadcn.io/ai "Trace"). Words carry the
+   state; under reduced motion the text stays plain. */
+.sage-shimmer {
+  background: linear-gradient(90deg, var(--color-body) 0%, var(--color-body) 40%, var(--color-faint) 50%, var(--color-body) 60%, var(--color-body) 100%);
+  background-size: 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: sage-shimmer 1.8s linear infinite;
+}
+@keyframes sage-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -150% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sage-shimmer { animation: none; color: var(--color-body); background: none; }
+}

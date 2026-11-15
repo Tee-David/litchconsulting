@@ -1231,6 +1231,7 @@ export function Grid({
     const w = Math.max(widths[ed.c - 1] ?? 120, 200);
     const y = yOf(ed.r);
     const sg = suggest(ed.text);
+    const edStyle = cellAt(ed.r, ed.c)?.s ?? null;
     const hn = sg.names.length ? null : hint(ed.text);
     const pick = (name: string) => {
       setEditing({ ...ed, text: ed.text.slice(0, ed.text.length - sg.word.length) + name + "(" });
@@ -1270,7 +1271,20 @@ export function Grid({
             }
           }}
           className="w-full cursor-text select-text border-2 border-accent bg-paper px-2 text-ink shadow-md outline-none"
-          style={{ height: rowH, fontSize: 12.5 * zoom }}
+          // The editor keeps the cell's own look (fill, colour, weight, alignment).
+          style={{
+            height: rowH,
+            fontSize: 12.5 * zoom,
+            ...(edStyle
+              ? {
+                  backgroundColor: edStyle.bg ? `#${edStyle.bg}` : undefined,
+                  color: edStyle.fc ? `#${edStyle.fc}` : edStyle.bg ? "#0a0e1a" : undefined,
+                  fontWeight: edStyle.b ? 700 : undefined,
+                  fontStyle: edStyle.i ? "italic" : undefined,
+                  textAlign: edStyle.ha ?? undefined,
+                }
+              : {}),
+          }}
         />
         {sg.names.length ? (
           <ul role="listbox" aria-label="Functions" className="mt-0.5 w-72 rounded-ctl border border-hairline bg-paper p-1 text-[12.5px] shadow-lg">
@@ -1336,7 +1350,10 @@ export function Grid({
                 // A merged range: the top-left cell is as wide as the range; the rest of its first row is drawn by it.
                 if (mg && r === mg.r0 && c > mg.c0) return null;
                 const span = mg && r === mg.r0 && c === mg.c0 ? widths.slice(c - 1, mg.c1).reduce((n, x) => n + x, 0) : w;
-                const plain = !sel && !pend;
+                // A selection never hides the cell's own fill, colour or borders: it is drawn
+                // over them (an outline on the active cell, a light tint on the rest of a range).
+                const plain = !pend;
+                const tint = sel && !isActive;
                 const edge = "#8A93A8";
                 const borders = st && plain ? [st.bt && `inset 0 1px 0 ${edge}`, st.bb && `inset 0 -1px 0 ${edge}`, st.bl && `inset 1px 0 0 ${edge}`, st.br && `inset -1px 0 0 ${edge}`].filter(Boolean).join(", ") : "";
                 const look: React.CSSProperties = st
@@ -1371,7 +1388,6 @@ export function Grid({
                       r === 1 && !num && "font-semibold",
                       pend === "new" && "bg-diff-new shadow-[inset_3px_0_0_var(--color-diff-new-line)]",
                       pend === "changed" && "bg-diff-chg shadow-[inset_3px_0_0_var(--color-diff-chg-line)]",
-                      sel && "bg-diff-sel",
                       hi && "outline outline-1 -outline-offset-1 outline-diff-sel-line",
                       isActive && "outline outline-2 -outline-offset-2 outline-diff-sel-line",
                       cell?.f && !pend && "text-ink",
@@ -1379,6 +1395,7 @@ export function Grid({
                     style={{ width: span, lineHeight: `${rowH - 1}px`, left: freeze.col && c === 1 ? numW : undefined, ...look, ...(mg && r !== mg.r0 ? { borderTopColor: "transparent" } : {}) }}
                     title={cell?.f ?? undefined}
                   >
+                    {tint ? <span aria-hidden className="pointer-events-none absolute inset-0 bg-diff-sel" /> : null}
                     {optimistic.has(`${r}:${c}`) ? (
                       <span className="text-muted">{optimistic.get(`${r}:${c}`)}</span>
                     ) : loaded ? (

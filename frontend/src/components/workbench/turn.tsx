@@ -1,10 +1,10 @@
 "use client";
 
-import { Fragment, useState, type ReactNode } from "react";
-import { AlertTriangle, ArrowRightLeft, Check, ChevronDown, Circle, ListTree, Loader2, RefreshCw, X } from "lucide-react";
+import { Fragment, type ReactNode } from "react";
+import { AlertTriangle, ArrowRightLeft, Lightbulb, ListTree, RefreshCw, Table2 } from "lucide-react";
+import { Trace, TraceOutput, seconds, useElapsed, type TraceStatus } from "@/components/sage-ui/trace";
 import type { WbEvent } from "@/lib/litchai/workbench";
 import { REF_IN_TEXT } from "./refs";
-import { cn } from "@/lib/utils";
 import { FAILURE, failureKind, modelName, slotLabel } from "@/lib/ai-words";
 
 export const PROVIDER_LABEL: Record<string, string> = {
@@ -105,7 +105,28 @@ export function CiteChip({ refText, onCite }: { refText: string; onCite: (ref: s
   );
 }
 
-type Step = { t: string; d?: string; s: "done" | "run" | "wait" | "fail" | "switch" };
+type Step = { t: string; d?: string; s: "done" | "run" | "wait" | "fail" | "switch"; tool?: string; args?: string };
+
+/** A step title that says its state in words: "Reading a range", "Read a range", "Failed to read a range". */
+const RUN_LABEL: Record<string, string> = {
+  profile_workbook: "Reading the workbook",
+  profile_range: "Reading a range",
+  query_sql: "Querying the sheets",
+  categorise_rows: "Classifying rows",
+  build_statement: "Building a statement",
+  pivot: "Making a pivot table",
+  write_cells: "Writing cells",
+  add_formula_column: "Adding a formula column",
+  add_chart: "Making a chart",
+  reconcile: "Reconciling bank to ledger",
+  flag_anomalies: "Checking for anomalies",
+  tax_compute: "Computing tax",
+  create_sheet: "Making a new sheet",
+  create_workbook: "Making a new workbook",
+  clean_values: "Converting text values",
+  trial_balance_statements: "Building statements from the trial balance",
+};
+const lower = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
 
 /** The steps of one turn, in order: tools (with what they did) and provider switches. */
 function stepsOf(events: WbEvent[], running: boolean): Step[] {
@@ -116,10 +137,14 @@ function stepsOf(events: WbEvent[], running: boolean): Step[] {
       const tool = s(e.tool);
       const r = results.get(Number(e.step));
       const args = argsSummary(tool, (e.args as Record<string, unknown>) ?? {});
+      const st: Step["s"] = r ? (r.ok === false ? "fail" : "done") : running ? "run" : "fail";
+      const label = TOOL_LABEL[tool] ?? tool;
       out.push({
-        t: TOOL_LABEL[tool] ?? tool,
-        d: r ? (r.ok === false ? s(r.error) : s(r.summary)) : args,
-        s: r ? (r.ok === false ? "fail" : "done") : running ? "run" : "fail",
+        t: st === "run" ? (RUN_LABEL[tool] ?? label) : st === "fail" ? `Failed: ${lower(label)}` : label,
+        d: r ? (r.ok === false ? s(r.error) : s(r.summary)) : undefined,
+        s: st,
+        tool,
+        args,
       });
     } else if (e.type === "fallback" && s(e.detail) !== "skipped") {
       out.push({
@@ -160,13 +185,7 @@ function receipt(events: WbEvent[]): string {
   return bits.join(" · ");
 }
 
-function StepIcon({ st }: { st: Step["s"] }) {
-  if (st === "done") return <Check className="size-3.5 text-good" aria-label="Done" />;
-  if (st === "run") return <Loader2 className="size-3.5 animate-spin text-accent" aria-label="Running" />;
-  if (st === "fail") return <X className="size-3.5 text-bad" aria-label="Failed" />;
-  if (st === "switch") return <ArrowRightLeft className="size-3.5 text-warn" aria-label="Provider switch" />;
-  return <Circle className="size-3 text-faint" aria-label="Waiting" />;
-}
+const TRACE_STATUS: Record<Step["s"], TraceStatus> = { done: "done", run: "running", wait: "waiting", fail: "error", switch: "switch" };
 
 /** Plan + tool steps + notices + the answer for one turn (live or from history). */
 export function TurnView({
@@ -180,7 +199,6 @@ export function TurnView({
   onCite: (ref: string) => void;
   onRetry?: () => void;
 }) {
-  const [open, setOpen] = useState(false);
   const final = events.find((e) => e.type === "final");
   const error = events.find((e) => e.type === "error");
   const steps = stepsOf(events, running);
@@ -188,51 +206,55 @@ export function TurnView({
   const live = running && !final && !error;
   const current = steps.find((x) => x.s === "run");
   const lastSwitch = [...events].reverse().find((e) => e.type === "fallback" && s(e.detail) !== "skipped" && e.from !== "all");
-  const showSteps = live || open;
+  const calls = steps.filter((x) => x.tool).length;
+  const failed = steps.filter((x) => x.s === "fail").length;
+  const thoughts = events.map((e) => (e.type === "tool_call" ? s(e.thought).trim() : "")).filter(Boolean);
+  const elapsed = useElapsed(live);
+  const doneMs = typeof final?.ms === "number" ? (final.ms as number) : null;
 
   return (
     <div className="space-y-2.5">
       {steps.length > 0 || live ? (
-        <div className={cn("rounded-xl border bg-paper", live ? "border-line-strong" : "border-hairline")}>
-          <button
-            type="button"
-            onClick={() => setOpen((o) => !o)}
-            disabled={live}
-            aria-expanded={showSteps}
-            className="flex min-h-9 w-full items-center gap-2 px-2.5 text-left text-[12.5px] text-body hover:text-ink disabled:cursor-default"
-          >
-            {live ? (
-              <>
-                <span className="size-2 shrink-0 animate-pulse rounded-full bg-accent" aria-hidden />
-                <span className="min-w-0 flex-1 truncate">{current ? `${current.t}…` : steps.length ? "Thinking…" : "Reading the workbook…"}</span>
-              </>
-            ) : (
-              <>
-                <ListTree className="size-3.5 shrink-0" aria-hidden />
-                <span className="min-w-0 flex-1 truncate">{receipt(events)}</span>
-                <ChevronDown className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-180")} aria-hidden />
-              </>
-            )}
-          </button>
-          {showSteps && steps.length > 0 ? (
-            <ol className="space-y-1 px-2.5 pb-2.5" aria-label="How Sage did this">
-              {steps.map((x, i) => (
-                <li key={i} className="grid grid-cols-[16px_1fr] gap-2 py-0.5 text-[12.5px]">
-                  <span className="mt-0.5 grid size-4 place-items-center"><StepIcon st={x.s} /></span>
-                  <span className="min-w-0">
-                    <span className={cn(x.s === "wait" ? "text-muted" : "text-ink")}>{x.t}</span>
-                    {x.d ? <span className="block break-words text-[12px] text-muted">{x.d}</span> : null}
-                  </span>
-                </li>
-              ))}
-              {retries > 0 && !live ? (
-                <li className="flex items-center gap-1.5 pl-6 text-[11.5px] text-muted">
-                  <RefreshCw className="size-3" aria-hidden /> {retries === 1 ? "One step was malformed and asked again." : `${retries} steps were malformed and asked again.`}
-                </li>
-              ) : null}
-            </ol>
-          ) : null}
-        </div>
+        <Trace
+          status={live ? "running" : failed ? "error" : "none"}
+          icon={<ListTree />}
+          title={
+            live
+              ? current
+                ? `${current.t}`
+                : steps.length
+                  ? "Thinking"
+                  : "Reading the workbook"
+              : calls
+                ? `Worked in ${calls} step${calls === 1 ? "" : "s"}${failed ? `, ${failed} failed` : ""}`
+                : "Answered directly"
+          }
+          meta={live ? (elapsed > 1 ? `${elapsed} s` : null) : seconds(doneMs)}
+        >
+          <div className="space-y-0.5 pt-0.5">
+            {thoughts.length ? (
+              <Trace size="sm" icon={<Lightbulb />} title={live ? "Thinking" : "Thought"} status={live ? "running" : "none"}>
+                <TraceOutput>{thoughts.join(" ")}</TraceOutput>
+              </Trace>
+            ) : null}
+            {steps.map((x, i) => (
+              <Trace key={i} size="sm" status={TRACE_STATUS[x.s]} title={x.t} defaultOpen={x.s === "fail" ? true : undefined}>
+                {x.args || x.d ? (
+                  <>
+                    {x.args ? <TraceOutput mono>{x.args}</TraceOutput> : null}
+                    {x.d ? <TraceOutput>{x.d}</TraceOutput> : null}
+                  </>
+                ) : undefined}
+              </Trace>
+            ))}
+            {retries > 0 && !live ? (
+              <p className="flex min-h-8 items-center gap-2 text-[12px] text-muted">
+                <RefreshCw className="size-3.5" aria-hidden /> {retries === 1 ? "One step was malformed and asked again." : `${retries} steps were malformed and asked again.`}
+              </p>
+            ) : null}
+            {!live ? <p className="pt-1 text-[11.5px] text-muted">{receipt(events)}</p> : null}
+          </div>
+        </Trace>
       ) : null}
 
       {live && lastSwitch ? (
@@ -246,10 +268,15 @@ export function TurnView({
         <div className="space-y-2">
           <CitedText text={s(final.answer)} onCite={onCite} />
           {Array.isArray(final.citations) && final.citations.length > 0 ? (
-            <div className="flex flex-wrap items-center gap-1">
-              <span className="text-[11.5px] text-muted">Cells used:</span>
-              {(final.citations as string[]).slice(0, 12).map((c) => <CiteChip key={c} refText={c} onCite={onCite} />)}
-            </div>
+            <Trace
+              size="sm"
+              icon={<Table2 />}
+              title={`Used ${(final.citations as string[]).length} cell${(final.citations as string[]).length === 1 ? "" : "s"}`}
+            >
+              <div className="flex flex-wrap gap-1 pt-1">
+                {(final.citations as string[]).slice(0, 40).map((c) => <CiteChip key={c} refText={c} onCite={onCite} />)}
+              </div>
+            </Trace>
           ) : null}
           {Array.isArray(final.unverified_figures) && final.unverified_figures.length > 0 ? (
             <div className="rounded-ctl bg-warn-soft px-2.5 py-2 text-[12.5px] text-ink" role="note">

@@ -26,15 +26,15 @@ function ctor(): RecognitionCtor | null {
 }
 
 const ERRORS: Record<string, string> = {
-  "not-allowed": "Microphone access is blocked. Allow it in the browser to talk to Sage.",
-  "service-not-allowed": "Microphone access is blocked. Allow it in the browser to talk to Sage.",
-  "no-speech": "Nothing was heard. Hold the button while you speak.",
+  "not-allowed": "The browser blocks the microphone for this site. Click the lock icon in the address bar, allow the microphone, then try again.",
+  "service-not-allowed": "The browser blocks the microphone for this site. Click the lock icon in the address bar, allow the microphone, then try again.",
+  "no-speech": "Nothing was heard. Tap the microphone and speak.",
   "audio-capture": "No microphone was found.",
   network: "Speech recognition needs a connection. Type instead.",
 };
 
 /**
- * Push-to-talk: hold the mic, speak, release. The live transcript fills the
+ * Talk to Sage: tap the mic, speak, tap again to stop. The live transcript fills the
  * composer as you talk; it never sends on its own, so you can edit it first.
  * Uses the browser's speech recognition (Nigerian English).
  */
@@ -53,10 +53,30 @@ export function useVoice(onText: (text: string) => void) {
     rec.current?.stop();
   }, []);
 
-  const start = useCallback(() => {
+  // An error clears itself after a short time; it never stays on screen.
+  useEffect(() => {
+    if (!error) return;
+    const t = setTimeout(() => setError(null), 7000);
+    return () => clearTimeout(t);
+  }, [error]);
+
+  const start = useCallback(async () => {
     const C = ctor();
     if (!C || rec.current) return;
     setError(null);
+    // Ask for the microphone first: the browser shows its own prompt once, and a
+    // refusal gives a clear message instead of a silent failure.
+    if (navigator.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach((t) => t.stop());
+      } catch (e) {
+        const name = (e as { name?: string })?.name;
+        setError(name === "NotFoundError" ? ERRORS["audio-capture"] : ERRORS["not-allowed"]);
+        return;
+      }
+    }
+    if (rec.current) return;
     finalText.current = "";
     latest.current = "";
     const r = new C();
@@ -94,21 +114,12 @@ export function useVoice(onText: (text: string) => void) {
 
   useEffect(() => () => rec.current?.abort(), []);
 
-  // Hold to talk (mouse, touch and pen); Space/Enter toggle for keyboard users.
+  // Tap to start, tap again to stop (mouse, touch, pen and keyboard alike).
   const handlers = {
-    onPointerDown: (e: React.PointerEvent) => {
+    onClick: (e: React.MouseEvent) => {
       e.preventDefault();
-      start();
-    },
-    onPointerUp: stop,
-    onPointerLeave: () => listening && stop(),
-    onPointerCancel: stop,
-    onKeyDown: (e: React.KeyboardEvent) => {
-      if (e.key === " " || e.key === "Enter") {
-        e.preventDefault();
-        if (listening) stop();
-        else start();
-      }
+      if (listening) stop();
+      else void start();
     },
     onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
   };

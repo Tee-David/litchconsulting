@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -170,7 +171,7 @@ def pop_last_turn(conv: Conversation) -> list[dict[str, Any]]:
 # A6: words that point at what the person selected.
 _DEICTIC = re.compile(
     r"\b(this|these|those|selected|selection|highlighted|this range|these cells|"
-    r"the range|these rows|this column|this row|this table)\b", re.I)
+    r"the range|these rows|this column|this row|this table)\b", re.IGNORECASE)
 
 
 def selection_matters(message: str, selection: str | None) -> bool:
@@ -215,6 +216,7 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
              selection: str | None = None, max_steps: int = 8,
              replace_last: bool = False) -> Iterator[dict[str, Any]]:
     wbench = deps.workbench
+    t0 = time.monotonic()
     decision = deps.decision or HeuristicDecisionLayer()
     ctx = wbench.context(conv, taxonomy=deps.taxonomy, categoriser=deps.categoriser)
     masker = _masker_for(conv, ctx)
@@ -273,6 +275,7 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
         fast = _tb_fast_path(message, ctx, execute)
     if fast is not None:
         for ev in fast:
+            ev.setdefault("ms", int((time.monotonic() - t0) * 1000))
             yield ev
         _finish(wbench, conv, masker, fast)
         return
@@ -314,6 +317,8 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
                              fallback_plan=_plan_for(has_tb), max_tools=len(tools)):
         if ev["type"] == "provider":
             conv.provider = ev["provider"]
+        # Elapsed time, so the page can say "Worked in 4 steps · 6 s".
+        ev.setdefault("ms", int((time.monotonic() - t0) * 1000))
         events.append(ev)
         yield ev
     _finish(wbench, conv, masker, events)
@@ -331,6 +336,7 @@ def _finish(wbench: Workbench, conv: Conversation, masker: Masker,
         "proposals": [p["id"] for p in (final or {}).get("proposals", [])],
         "attribution": (final or {}).get("attribution"),
         "unverified_figures": (final or {}).get("unverified_figures") or [],
+        "ms": (final or {}).get("ms"),
         "steps": [e for e in events if e["type"] in ("plan", "tool_call", "tool_result",
                                                       "fallback", "provider", "retry")][:60],
     })
