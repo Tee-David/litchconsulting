@@ -122,6 +122,9 @@ const SHEET: FloatingOptions = {
   ],
 };
 
+/** Desktop: a card next to a tall part (a full table) shifts up into view instead of hanging below the screen. */
+const DESKTOP: FloatingOptions = { shiftOptions: { crossAxis: true, padding: 12 } };
+
 export function TourProvider({ audience, children }: { audience: TourAudience; children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -532,7 +535,7 @@ export function TourProvider({ audience, children }: { audience: TourAudience; c
         continuous
         scrollToFirstStep
         locale={LOCALE}
-        floatingOptions={phone ? SHEET : undefined}
+        floatingOptions={phone ? SHEET : DESKTOP}
         options={{
           ...BRAND_OPTIONS,
           beforeTimeout: 12000,
