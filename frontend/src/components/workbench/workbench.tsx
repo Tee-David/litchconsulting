@@ -588,6 +588,17 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   // Follow the newest message while the person is at the bottom of the thread. If they
   // scrolled up to read, stay put and offer "Jump to latest" instead.
   const [atBottom, setAtBottom] = useState(true);
+  // Message scroller: an answer that finished while the person read above says so on the pill.
+  const [unseen, setUnseen] = useState(false);
+  const wasRunning = useRef(false);
+  useEffect(() => {
+    if (wasRunning.current && !running && !atBottom) setUnseen(true);
+    wasRunning.current = running;
+  }, [running, atBottom]);
+  useEffect(() => {
+    if (atBottom) setUnseen(false);
+  }, [atBottom]);
+
   useEffect(() => {
     if (!atBottom) return;
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" });
@@ -1720,7 +1731,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
             onClick={() => scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: "smooth" })}
             className="absolute -top-12 left-1/2 z-10 inline-flex -translate-x-1/2 items-center gap-1 rounded-full border border-hairline bg-paper px-3 py-1.5 text-[12px] font-medium text-ink shadow-md hover:bg-cloud"
           >
-            <ChevronDown className="size-3.5" aria-hidden /> {running ? "Sage is working · jump to latest" : "Jump to latest"}
+            <ChevronDown className="size-3.5" aria-hidden /> {running ? "Sage is working · jump to latest" : unseen ? "New answer · jump to it" : "Jump to latest"}
           </button>
         </div>
       ) : null}
@@ -1775,7 +1786,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         onSubmit={() => void send(text)}
         running={running}
         onStop={() => abort.current?.abort()}
-        placeholder={local ? "Ask about this workbook (local model, slower)…" : "Ask about this workbook…"}
+        placeholder={voice.listening ? "Listening. Speak now, then tap the mic to stop." : local ? "Ask about this workbook (local model, slower)…" : "Ask about this workbook…"}
         quote={quote}
         onClearQuote={() => setQuote(null)}
         attachments={atts}
@@ -1821,7 +1832,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
               aria-pressed={voice.listening}
               aria-label={voice.listening ? "Listening. Tap to stop" : "Talk to Sage"}
               title="Tap, speak, then tap again"
-              className={cn("grid size-9 shrink-0 select-none place-items-center rounded-ctl text-body touch-none", voice.listening ? "bg-bad-soft text-bad" : "hover:bg-surface")}
+              className={cn("grid size-9 shrink-0 select-none place-items-center rounded-ctl text-body touch-none", voice.listening ? "bg-bad-soft text-bad ring-2 ring-bad/30" : "hover:bg-surface")}
             >
               <voice.Icon className="size-4" />
             </button>

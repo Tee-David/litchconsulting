@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { AlertCircle, ArrowRightLeft, Check, ChevronRight, Circle, Loader2 } from "lucide-react";
+import { AlertCircle, ArrowRightLeft, Check, ChevronRight, Circle, Copy, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
@@ -112,17 +112,40 @@ export function useElapsed(running: boolean): number {
 export const seconds = (ms: number | null | undefined) =>
   typeof ms === "number" && ms > 0 ? (ms < 1000 ? "under 1 s" : `${Math.round(ms / 1000)} s`) : null;
 
-/** A small output box inside a step: wraps, scrolls past 16rem, mono when asked. */
+/**
+ * A small output box inside a step: wraps, scrolls past 16rem. `mono` makes it a
+ * code block (a query, a formula) with a Copy button (shadcn.io/ai "Code Block").
+ */
 export function TraceOutput({ children, mono = false }: { children: ReactNode; mono?: boolean }) {
+  const [copied, setCopied] = useState(false);
+  const text = typeof children === "string" ? children : null;
   return (
-    <div
-      tabIndex={0}
-      className={cn(
-        "mt-1 max-h-64 overflow-auto rounded-lg bg-surface px-2.5 py-2 text-[12px] leading-relaxed text-body outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
-        mono ? "whitespace-pre-wrap break-words font-mono text-[11.5px]" : "break-words",
-      )}
-    >
-      {children}
+    <div className="group/out relative mt-1">
+      <div
+        tabIndex={0}
+        className={cn(
+          "max-h-64 overflow-auto rounded-lg bg-surface px-2.5 py-2 text-[12px] leading-relaxed text-body outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+          mono ? "whitespace-pre-wrap break-words pr-9 font-mono text-[11.5px]" : "break-words",
+        )}
+      >
+        {children}
+      </div>
+      {mono && text ? (
+        <button
+          type="button"
+          onClick={() => {
+            void navigator.clipboard?.writeText(text).then(() => {
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            });
+          }}
+          aria-label={copied ? "Copied" : "Copy"}
+          title={copied ? "Copied" : "Copy"}
+          className="absolute right-1 top-1 grid size-7 place-items-center rounded-md text-muted opacity-100 hover:bg-paper hover:text-ink sm:opacity-0 sm:focus-visible:opacity-100 sm:group-hover/out:opacity-100"
+        >
+          {copied ? <Check className="size-3.5 text-good" aria-hidden /> : <Copy className="size-3.5" aria-hidden />}
+        </button>
+      ) : null}
     </div>
   );
 }

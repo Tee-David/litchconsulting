@@ -88,7 +88,7 @@ export function SageComposer({
         title="Tap, speak, then tap again"
         className={cn(
           "grid size-9 shrink-0 place-items-center rounded-full transition-colors",
-          voice.listening ? "bg-bad-soft text-bad" : "text-body hover:bg-surface hover:text-ink",
+          voice.listening ? "bg-bad-soft text-bad ring-2 ring-bad/30" : "text-body hover:bg-surface hover:text-ink",
         )}
       >
         <voice.Icon className="size-[18px]" strokeWidth={1.75} />
@@ -106,7 +106,7 @@ export function SageComposer({
         onSubmit={() => void submit()}
         running={busy && Boolean(onStop)}
         onStop={() => onStop?.()}
-        placeholder={disabled ? disabledReason ?? placeholder : placeholder}
+        placeholder={disabled ? disabledReason ?? placeholder : voice.listening ? "Listening. Speak now, then tap the mic to stop." : placeholder}
         attachments={[]}
         onRemoveAttachment={() => undefined}
         textareaRef={ref}
