@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { ShowMeHow } from "@/components/tour/show-me-how";
 import { cn } from "@/lib/utils";
 
 /**
@@ -28,6 +29,7 @@ export function EmptyState({
       <p className="font-display text-base font-semibold text-ink">{title}</p>
       <p className="mt-1 text-sm text-body">{why}</p>
       {action ? <div className="mt-4">{action}</div> : null}
+      {compact ? null : <ShowMeHow />}
     </div>
   );
 }

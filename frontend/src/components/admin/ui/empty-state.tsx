@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import { ShowMeHow } from "@/components/tour/show-me-how";
 
 /** Centered empty/placeholder state for sections with no data yet. */
 export function EmptyState({
@@ -23,6 +24,7 @@ export function EmptyState({
       <h3 className="font-display text-lg font-semibold text-ink">{title}</h3>
       {description && <p className="mt-1.5 max-w-sm text-sm text-body">{description}</p>}
       {action && <div className="mt-5">{action}</div>}
+      <ShowMeHow />
     </div>
   );
 }

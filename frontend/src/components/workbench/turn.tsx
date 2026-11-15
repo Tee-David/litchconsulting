@@ -210,6 +210,9 @@ export function TurnView({
   const failed = steps.filter((x) => x.s === "fail").length;
   const thoughts = events.map((e) => (e.type === "tool_call" ? s(e.thought).trim() : "")).filter(Boolean);
   const elapsed = useElapsed(live);
+  // Plan: the engine names its steps first, so a running turn can say "step 2 of 4".
+  const planEv = events.find((e) => e.type === "plan");
+  const planTotal = Math.max(Array.isArray(planEv?.steps) ? (planEv!.steps as unknown[]).length : 0, calls);
   const doneMs = typeof final?.ms === "number" ? (final.ms as number) : null;
 
   return (
@@ -229,7 +232,11 @@ export function TurnView({
                 ? `Worked in ${calls} step${calls === 1 ? "" : "s"}${failed ? `, ${failed} failed` : ""}`
                 : "Answered directly"
           }
-          meta={live ? (elapsed > 1 ? `${elapsed} s` : null) : seconds(doneMs)}
+          meta={
+            live
+              ? [planTotal > 1 ? `step ${Math.min(calls + (current ? 0 : 1), planTotal)} of ${planTotal}` : null, elapsed > 1 ? `${elapsed} s` : null].filter(Boolean).join(" · ") || null
+              : seconds(doneMs)
+          }
         >
           <div className="space-y-0.5 pt-0.5">
             {thoughts.length ? (

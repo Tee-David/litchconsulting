@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import type { WbBatch, WbCell, WbConflict, WbConversation, WbEvent, WbFirstLook, WbGate, WbStyle, WbUserEdit } from "@/lib/litchai/workbench";
 import { attachDocumentAction, attachFilesAction, decideBatchAction, deliverAction, feedbackAction, getConversationAction, newThreadAction, openThreadAction, restoreVersionAction, runToolAction, saveEditsAction, sheetActionAction } from "@/lib/workbench/actions";
-import { AlignCenter, AlignLeft, AlignRight, Baseline, Bold, Check, CornerDownRight, ChevronDown as Chev, Ellipsis, FolderOpen, Grid2x2, Italic, NotebookPen, PaintBucket, Pencil, SquarePen, TableCellsMerge, Underline, WrapText } from "lucide-react";
+import { WifiOff, AlignCenter, AlignLeft, AlignRight, Baseline, Bold, Check, CornerDownRight, ChevronDown as Chev, Ellipsis, FolderOpen, Grid2x2, Italic, NotebookPen, PaintBucket, Pencil, SquarePen, TableCellsMerge, Underline, WrapText } from "lucide-react";
 import { setInstructionsAction } from "@/lib/workbench/actions";
 import type { StyleRequest } from "./grid";
 import { MessageActions } from "@/components/sage-ui/message-actions";
@@ -1758,26 +1758,31 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
       ) : null}
       {voice.error ? <p className="border-t border-hairline bg-paper px-3 pt-2 text-[11.5px] text-bad">{voice.error}</p> : null}
       {waitingQ ? (
-        <div className="mx-3 mb-2 flex items-start gap-2 rounded-ctl border border-hairline bg-warn-soft px-3 py-2 text-[12.5px] text-ink" role="status">
-          <span className="min-w-0 flex-1">
-            Waiting for the network: &ldquo;{splitQuestion(waitingQ).text.slice(0, 80)}{splitQuestion(waitingQ).text.length > 80 ? "…" : ""}&rdquo;. It sends by itself when you are back online.
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              try {
-                window.localStorage.removeItem(sageQKey);
-              } catch {
-                /* ignore */
-              }
-              setText(splitQuestion(waitingQ).text);
-              setWaitingQ(null);
-            }}
-            className="shrink-0 font-medium text-accent hover:underline dark:text-info"
-          >
-            Cancel
-          </button>
-        </div>
+        // Queue (shadcn.io/ai): a question kept on this device until the network is back.
+        <section aria-label="Waiting to send" className="mx-3 mb-2 rounded-xl border border-hairline bg-paper" role="status">
+          <p className="flex min-h-8 items-center gap-2 border-b border-hairline px-3 text-[12px] font-medium text-body">
+            <WifiOff className="size-3.5 text-warn" aria-hidden /> Waiting to send · 1
+            <span className="ml-auto font-normal text-muted">Sends by itself when you are online</span>
+          </p>
+          <div className="flex items-center gap-2 px-3 py-2 text-[12.5px] text-ink">
+            <span className="min-w-0 flex-1 truncate">{splitQuestion(waitingQ).text}</span>
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  window.localStorage.removeItem(sageQKey);
+                } catch {
+                  /* ignore */
+                }
+                setText(splitQuestion(waitingQ).text);
+                setWaitingQ(null);
+              }}
+              className="min-h-8 shrink-0 rounded-md px-2 font-medium text-accent hover:bg-surface dark:text-info"
+            >
+              Edit
+            </button>
+          </div>
+        </section>
       ) : null}
       <PromptBox
         value={voice.listening && voice.transcript ? `${text.trim() ? `${text.trimEnd()} ` : ""}${voice.transcript}` : text}
