@@ -141,7 +141,7 @@ def test_default_specs_from_env_and_legacy_chat():
         "LITCHAI_CHAT_MODEL": "gpt-oss-120b",
     })
     by = {s.name: s for s in specs}
-    assert [s.name for s in specs] == [*GROQ, "cloudflare", "sambanova", "local"]
+    assert [s.name for s in specs] == [*GROQ, "cloudflare", "local"]
     assert not by["cloudflare"].configured  # no CLOUDFLARE_ACCOUNT_ID in this env
     assert by["groq"].params["reasoning_effort"] == "medium"
     assert "cerebras" not in by and "openrouter" not in by
@@ -149,10 +149,16 @@ def test_default_specs_from_env_and_legacy_chat():
                          "LITCHAI_CHAT_API_KEY": "c", "LITCHAI_PROVIDER_CHAIN": "cerebras"})
     assert [s.name for s in cer] == ["cerebras"] and cer[0].api_key == "c"
     orr = default_specs({"OPENROUTER_API_KEY": "o"})
-    assert [s.name for s in orr] == [*GROQ, "cloudflare", "sambanova", "openrouter", "local"]
+    assert [s.name for s in orr] == [*GROQ, "cloudflare", "openrouter", "local"]
     assert next(s for s in orr if s.name == "openrouter").base_url == \
         "https://openrouter.ai/api/v1"
-    assert by["sambanova"].configured is False
+    sn = default_specs({"LITCHAI_PROVIDER_CHAIN": "sambanova"})
+    assert [s.name for s in sn] == ["sambanova"] and sn[0].configured is False
+    # Mistral and Z.ai join the default chain only with a key, after Groq.
+    free = default_specs({"MISTRAL_API_KEY": "m", "ZAI_API_KEY": "z"})
+    assert [s.name for s in free] == [*GROQ, "mistral", "zai", "cloudflare", "local"]
+    fb = {s.name: s for s in free}
+    assert fb["mistral"].base_url == "https://api.mistral.ai/v1" and fb["zai"].model == "glm-4.7-flash"
     assert by["local"].api == "ollama" and by["local"].model == "gemma3:4b"
     llama = default_specs({"LITCHAI_LLAMA_SERVER_URL": "http://127.0.0.1:8080"})
     assert next(s for s in llama if s.name == "local").base_url == "http://127.0.0.1:8080/v1"

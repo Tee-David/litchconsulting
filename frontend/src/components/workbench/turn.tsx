@@ -13,6 +13,8 @@ export const PROVIDER_LABEL: Record<string, string> = {
   sambanova: "SambaNova",
   cloudflare: "Cloudflare",
   openrouter: "OpenRouter",
+  mistral: "Mistral",
+  zai: "Z.ai",
   local: "Local model",
   chat: "Chat provider",
 };

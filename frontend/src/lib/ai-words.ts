@@ -19,6 +19,8 @@ const PROVIDER_NAMES: Record<string, string> = {
   cerebras: "Cerebras",
   sambanova: "SambaNova",
   openrouter: "OpenRouter",
+  mistral: "Mistral",
+  zai: "Z.ai",
   local: "Litch's own server",
   chat: "a cloud provider",
 };

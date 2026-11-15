@@ -710,7 +710,7 @@ export const contactPage = {
 };
 
 const LEGAL_UPDATED = "2 July 2026";
-const PRIVACY_UPDATED = "5 November 2026";
+const PRIVACY_UPDATED = "15 November 2026";
 export const legalImage = U("1450101499163-c8848c66ca85", 1200);
 
 export const legal = [
@@ -740,7 +740,7 @@ export const legal = [
         "We use AI models to help analyse the documents you send us and to answer questions about our own knowledge. Before anything reaches a cloud model, client identifiers are masked. A client can ask us to keep their data local-only, in which case it is processed only on our own server and never sent to a cloud model. AI never sends anything to a client on its own: a person at Litch reviews every result.",
       ] },
       { heading: "Who processes data for us", body: [
-        "Vercel (website and app hosting), Cockroach Labs (database), Cloudflare R2 (encrypted document, deliverable and backup storage), Groq, Cloudflare Workers AI, Cerebras and SambaNova (AI models, masked data only; we use the first one available), our own Oracle Cloud server (document pipeline and local AI models), Paystack (card payments), Truehost (email delivery), Google (only if you choose \"Continue with Google\") and Cal.com (the booking calendar, only if you allow it).",
+        "Vercel (website and app hosting), Cockroach Labs (database), Cloudflare R2 (encrypted document, deliverable and backup storage), Groq, Cloudflare Workers AI, Cerebras, SambaNova, Mistral AI and Z.ai (AI models, masked data only; we use the first one available), our own Oracle Cloud server (document pipeline and local AI models), Paystack (card payments), Truehost (email delivery), Google (only if you choose \"Continue with Google\") and Cal.com (the booking calendar, only if you allow it).",
         "Some of these process data outside Nigeria. Where they do, we rely on their data processing agreements and standard contractual safeguards, and we send them only what they need.",
         "We do not sell personal data, and we do not use it for advertising.",
       ] },

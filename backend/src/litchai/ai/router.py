@@ -210,6 +210,27 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
         daily_requests=_int_env("LITCHAI_OPENROUTER_DAILY_REQUESTS") or 50,
         daily_tokens=_int_env("LITCHAI_OPENROUTER_DAILY_TOKENS"),
     )
+    # Mistral La Plateforme ("Experiment" free tier; switch off training in the
+    # console) and Z.ai GLM Flash (free per token). Each joins the chain only when
+    # its key is set (MISTRAL_API_KEY, ZAI_API_KEY).
+    mi_key = e.get("MISTRAL_API_KEY") or None
+    specs["mistral"] = ProviderSpec(
+        name="mistral", kind="cloud",
+        model=e.get("LITCHAI_MISTRAL_MODEL") or "mistral-small-latest",
+        base_url="https://api.mistral.ai/v1", api_key=mi_key,
+        params={"_prompt_json": True},
+        daily_requests=_int_env("LITCHAI_MISTRAL_DAILY_REQUESTS"),
+        daily_tokens=_int_env("LITCHAI_MISTRAL_DAILY_TOKENS"),
+    )
+    zai_key = e.get("ZAI_API_KEY") or None
+    specs["zai"] = ProviderSpec(
+        name="zai", kind="cloud",
+        model=e.get("LITCHAI_ZAI_MODEL") or "glm-4.7-flash",
+        base_url="https://api.z.ai/api/paas/v4", api_key=zai_key,
+        params={"_prompt_json": True},
+        daily_requests=_int_env("LITCHAI_ZAI_DAILY_REQUESTS") or 1000,
+        daily_tokens=_int_env("LITCHAI_ZAI_DAILY_TOKENS"),
+    )
     llama_url = e.get("LITCHAI_LLAMA_SERVER_URL", "").rstrip("/")
     if llama_url:
         specs["local"] = ProviderSpec(
@@ -237,9 +258,10 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
 
     order = [s.strip() for s in (e.get("LITCHAI_PROVIDER_CHAIN") or "").split(",") if s.strip()]
     if not order:
-        # Cerebras is out of the default order (its free tier now answers 402); it
-        # stays available through LITCHAI_PROVIDER_CHAIN, e.g. "groq,cerebras,local".
-        order = ["groq", "cloudflare", "sambanova", *(["openrouter"] if or_key else []),
+        # Cerebras and SambaNova are out of the default order (their free tiers now
+        # answer 402 without a card); LITCHAI_PROVIDER_CHAIN can still name them.
+        order = ["groq", *(["mistral"] if mi_key else []), *(["zai"] if zai_key else []),
+                 "cloudflare", *(["openrouter"] if or_key else []),
                  *(["chat"] if "chat" in specs else []), "local"]
     # "groq" in a chain means every Groq model in turn, unless models are named.
     if "groq" in order and not any(n.startswith("groq:") for n in order):
