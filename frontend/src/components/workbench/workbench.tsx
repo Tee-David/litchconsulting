@@ -1144,7 +1144,8 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
       >
         <TableCellsMerge className="size-4" />
       </button>
-      <span className="ml-auto hidden pr-1.5 text-[12px] text-muted md:inline">{selection ? "" : "Type in a cell to edit. Sage's changes stay proposals."}</span>
+      {/* basis-0 + truncate: the hint never wraps the toolbar to a second line, so the sheet never jumps. */}
+      <span className="hidden min-w-0 flex-1 basis-0 truncate pr-1.5 text-right text-[12px] text-muted md:block">Type in a cell to edit. Sage&apos;s changes stay proposals.</span>
     </div>
   ) : null;
 
