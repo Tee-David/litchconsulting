@@ -36,6 +36,7 @@ import { ThreadPicker } from "@/components/sage-ui/thread-picker";
 import { PromptBox, type Attachment } from "@/components/sage-ui/prompt-box";
 import { TOUR_SELECT_EVENT, useTourAsk } from "@/components/tour/tour-actions";
 import { PracticeBar } from "./practice-bar";
+import { SentFiles } from "@/components/sage-ui/attachment";
 import { AskSelection } from "@/components/sage-ui/ask-selection";
 import { WORKBENCH_MAX_BYTES, WORKBENCH_UPLOAD_ACCEPT } from "@/lib/workbench/upload-client";
 import { usePasswordAsk } from "./password-ask";
@@ -1505,7 +1506,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
       }
       return (
         <div key={i} className="group ml-auto flex max-w-[88%] flex-col items-end gap-1">
-          {q.files.length ? <p className="text-[11.5px] text-muted">Files: {q.files.join(", ")}</p> : null}
+          <SentFiles names={q.files} />
           <div className="whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-act px-3 py-2 text-[13.5px] text-act-ink">
             {q.quote ? <span className="mb-1.5 block border-l-2 border-act-ink/50 pl-2 text-[12.5px] opacity-85">{q.quote}</span> : null}
             {shownMsg.selection ? <span className="mb-0.5 block font-mono text-[11px] opacity-80">{shownMsg.selection.replace(/^\(?Selection hint: /, "")}</span> : null}
@@ -1513,12 +1514,12 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           </div>
           <div className={cn("flex items-center gap-0.5 text-muted transition-opacity", n > 1 ? "opacity-100" : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100")}>
             {n > 1 ? (
-              <span className="inline-flex items-center gap-0.5 text-[12px]">
-                <button type="button" disabled={bv === 0} onClick={() => setBranchView((b) => ({ ...b, [i]: bv - 1 }))} className="grid size-7 place-items-center rounded-md hover:bg-paper hover:text-ink disabled:opacity-30" aria-label="Earlier version">
+              <span role="group" aria-label="Versions" className="inline-flex items-center gap-0.5 text-[12px]">
+                <button type="button" disabled={bv === 0} onClick={() => setBranchView((b) => ({ ...b, [i]: bv - 1 }))} className="grid size-8 place-items-center rounded-md hover:bg-paper hover:text-ink disabled:opacity-30" aria-label="Previous version">
                   <ChevronDown className="size-3.5 rotate-90" />
                 </button>
-                <span className="tabular-nums">{bv + 1}/{n}</span>
-                <button type="button" disabled={bv === n - 1} onClick={() => setBranchView((b) => ({ ...b, [i]: bv + 1 }))} className="grid size-7 place-items-center rounded-md hover:bg-paper hover:text-ink disabled:opacity-30" aria-label="Later version">
+                <span className="tabular-nums" aria-live="polite">{bv + 1} of {n}</span>
+                <button type="button" disabled={bv === n - 1} onClick={() => setBranchView((b) => ({ ...b, [i]: bv + 1 }))} className="grid size-8 place-items-center rounded-md hover:bg-paper hover:text-ink disabled:opacity-30" aria-label="Next version">
                   <ChevronDown className="size-3.5 -rotate-90" />
                 </button>
               </span>
@@ -1672,7 +1673,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         {live ? (
           <>
             <div className="ml-auto flex max-w-[88%] flex-col items-end gap-1">
-              {live.files?.length ? <p className="text-[11.5px] text-muted">Files: {live.files.join(", ")}</p> : null}
+              <SentFiles names={live.files ?? []} />
               <div className="whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-act px-3 py-2 text-[13.5px] text-act-ink">
                 {live.quote ? <span className="mb-1.5 block border-l-2 border-act-ink/50 pl-2 text-[12.5px] opacity-85">{live.quote}</span> : null}
                 {live.selection ? <span className="mb-0.5 block font-mono text-[11px] opacity-80">{live.selection}</span> : null}

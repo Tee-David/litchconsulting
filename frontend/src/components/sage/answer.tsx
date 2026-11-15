@@ -83,12 +83,8 @@ export function Working({ seconds, onStop }: { seconds: number; onStop?: () => v
       <SageMark size="sm" />
       <div className="text-[13px] text-body">
         <p className="flex h-6 items-center gap-2">
-          Sage is working
-          <span className="inline-flex gap-1" aria-hidden>
-            {[0, 1, 2].map((i) => (
-              <span key={i} className="size-1.5 rounded-full bg-muted motion-safe:animate-[pulse_1.2s_ease-in-out_infinite]" style={{ animationDelay: `${i * 200}ms` }} />
-            ))}
-          </span>
+          <span className="sage-shimmer">Working</span>
+          {seconds > 1 ? <span className="tabular-nums text-muted">{seconds} s</span> : null}
         </p>
         {note ? (
           <p className="text-xs text-muted">
