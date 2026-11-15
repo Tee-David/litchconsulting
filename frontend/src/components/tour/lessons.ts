@@ -274,6 +274,7 @@ function lessonWorkbench(): TourStep[] {
     },
     {
       key: "show-changes",
+      optional: true,
       target: '[data-tour="wb-proposal"]',
       inDialog: true,
       placement: "auto",
@@ -284,6 +285,7 @@ function lessonWorkbench(): TourStep[] {
     },
     {
       key: "proposal",
+      optional: true,
       target: '[data-tour="wb-proposal"]',
       inDialog: true,
       placement: "auto",

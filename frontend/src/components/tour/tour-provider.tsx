@@ -255,8 +255,10 @@ export function TourProvider({ audience, children }: { audience: TourAudience; c
             before: async () => {
               if (route) await goTo(route);
               const target = typeof step.target === "string" ? step.target : null;
-              if (target && target !== "body") await waitForTarget(target, TARGET_WAIT_MS);
+              if (target && target !== "body") await waitForTarget(target, step.optional ? 1500 : TARGET_WAIT_MS);
             },
+            // An optional part that is not there (no proposal this time) is skipped fast.
+            ...(step.optional ? { targetWaitTimeout: 500 } : {}),
           };
         });
       } else {
