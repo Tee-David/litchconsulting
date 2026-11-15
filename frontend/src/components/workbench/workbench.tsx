@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import type { WbBatch, WbCell, WbConflict, WbConversation, WbEvent, WbFirstLook, WbGate, WbStyle, WbUserEdit } from "@/lib/litchai/workbench";
 import { attachDocumentAction, attachFilesAction, decideBatchAction, deliverAction, feedbackAction, getConversationAction, newThreadAction, openThreadAction, restoreVersionAction, runToolAction, saveEditsAction, sheetActionAction } from "@/lib/workbench/actions";
-import { WifiOff, AlignCenter, AlignLeft, AlignRight, Baseline, Bold, Check, CornerDownRight, ChevronDown as Chev, Ellipsis, FolderOpen, Grid2x2, Italic, NotebookPen, PaintBucket, Pencil, SquarePen, TableCellsMerge, Underline, WrapText } from "lucide-react";
+import { BarChart3, WifiOff, AlignCenter, AlignLeft, AlignRight, Baseline, Bold, Check, CornerDownRight, ChevronDown as Chev, Ellipsis, FolderOpen, Grid2x2, Italic, NotebookPen, PaintBucket, Pencil, SquarePen, TableCellsMerge, Underline, WrapText } from "lucide-react";
 import { setInstructionsAction } from "@/lib/workbench/actions";
 import type { StyleRequest } from "./grid";
 import { MessageActions } from "@/components/sage-ui/message-actions";
@@ -53,7 +53,7 @@ import { CitePeekContext, TurnView, type CellPeek } from "./turn";
 import { WhyPopover } from "./why";
 import { uploadToWorkbench } from "@/lib/workbench/upload-client";
 import { AttachSheet, DeliverSheet, EditBatchSheet, HistorySheet, RangeSheet, versionLabel, type FileOption } from "./sheets";
-import { colLetter, parseRef, rangeLabel, rangeRef, type Range } from "./refs";
+import { colLetter, parseRef, quoteSheet, rangeLabel, rangeRef, type Range } from "./refs";
 import { ChartCard, type ChartProposal } from "./chart-card";
 import { EngineSheet } from "./engine-sheet";
 import { useVoice } from "./voice";
@@ -1477,6 +1477,22 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
 
   const lastUserIdx = conv.messages.map((m) => m.role).lastIndexOf("user");
   const lastIdx = conv.messages.length - 1;
+  /** New sheets and charts in a turn's proposals (shown as Artifact cards). */
+  const artifactsFor = (ids: string[]) =>
+    conv.batches
+      .filter((b) => ids.includes(b.id))
+      .flatMap((b) =>
+        b.ops
+          .filter((o) => o.op === "create_sheet" || o.op === "add_chart" || o.op === "create_workbook")
+          .map((o, k) => ({
+            key: `${b.id}-${k}`,
+            chart: o.op === "add_chart",
+            label: o.op === "add_chart" ? `Chart on ${o.sheet ?? "the sheet"}` : o.op === "create_workbook" ? "New workbook" : `New sheet: ${o.sheet ?? ""}`,
+            sheet: o.op === "create_workbook" ? null : o.sheet,
+            status: b.status,
+          })),
+      );
+
   const history = conv.messages.map((m, i) => {
     if (m.role === "user") {
       const n = (m.branches?.length ?? 0) + 1;
@@ -1571,6 +1587,23 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           Sage
         </p>
         <TurnView events={am.content ? [...steps, final] : [...steps, { type: "error", message: "No answer was saved for this turn." }]} running={false} onCite={goTo} onRetry={i === lastIdx && latest ? retry : undefined} />
+        {artifactsFor(am.proposals ?? []).map((x) => (
+          // Artifact (shadcn.io/ai): a new sheet or chart Sage made, with a way to open it.
+          <div key={x.key} className="flex items-center gap-3 rounded-xl border border-hairline bg-paper px-3 py-2.5">
+            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-surface text-muted" aria-hidden>
+              {x.chart ? <BarChart3 className="size-4" /> : <Table2 className="size-4" />}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[13px] font-medium text-ink">{x.label}</span>
+              <span className="block text-[11.5px] text-muted">{x.status === "pending" ? "Proposed · accept it below to keep it" : x.status === "accepted" ? "Accepted" : x.status === "rejected" ? "Rejected" : "Undone"}</span>
+            </span>
+            {x.sheet && x.status !== "rejected" ? (
+              <button type="button" onClick={() => goTo(`${quoteSheet(x.sheet!)}!A1`)} className="min-h-9 shrink-0 rounded-lg px-2.5 text-[12.5px] font-medium text-accent hover:bg-surface dark:text-info">
+                Open
+              </button>
+            ) : null}
+          </div>
+        ))}
         {am.content && latest ? (
           <MessageActions
             text={am.content}

@@ -50,9 +50,9 @@ function lessonAsk(role: Role): TourStep[] {
       key: "sources",
       target: `${ANSWER} [data-tour="sage-sources"]`,
       title: "See the sources",
-      content: "This chip shows how many sources Sage used.",
+      content: "This chip shows how many sources Sage used. Open it to see each one.",
       icon: "fileStack",
-      interact: { hint: "Click the sources chip to open them." },
+      action: { kind: "click", label: "Open the sources", selector: `${ANSWER} [data-tour="sage-sources"]`, wait: '[data-tour="sage-sources-sheet"]' },
     },
     {
       key: "sources-sheet",
@@ -325,7 +325,7 @@ function lessonRules(): TourStep[] {
       title: "Instructions",
       content: "A dot on this button shows that the workbook has instructions.",
       icon: "penSquare",
-      interact: { hint: "Click Instructions." },
+      action: { kind: "click", label: "Open Instructions", selector: '[data-tour="wb-instructions"]', wait: '[data-tour="wb-instructions-box"]' },
     },
     {
       key: "box",
