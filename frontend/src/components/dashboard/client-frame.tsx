@@ -22,11 +22,7 @@ export function ClientFrame({
         kind="client"
         user={user}
         counts={counts}
-        launcher={
-          <div className="hidden sm:block" data-tour="tour-launcher">
-            <TourLauncher />
-          </div>
-        }
+        launcher={<TourLauncher />}
       >
         {children}
       </AppShell>
@@ -53,11 +49,7 @@ export function StaffFrame({
         kind="staff"
         user={user}
         counts={counts}
-        launcher={
-          <div className="hidden sm:block" data-tour="tour-launcher">
-            <TourLauncher />
-          </div>
-        }
+        launcher={<TourLauncher />}
         banner={
           preview ? (
             <div

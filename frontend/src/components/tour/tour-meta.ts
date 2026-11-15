@@ -1,4 +1,4 @@
-import type { TourKind, TourStep } from "./registry";
+import type { TourAction, TourKind, TourStep } from "./registry";
 import type { TourIconName } from "./tour-icon";
 
 /**
@@ -33,6 +33,8 @@ export type TourStepMeta = {
   page?: string;
   /** Pre-computed nudge shown under the progress rail. */
   encouragement?: string;
+  /** Try it / Your turn: what the card does for the person. */
+  action?: TourAction;
 };
 
 /**
@@ -73,21 +75,18 @@ function encouragementFor(options: {
 }): string | undefined {
   const { index, total, kind, pagesLeft, stopsLeftOnPage } = options;
 
-  if (index === total - 1) return "That's the lot — you're all set.";
+  if (index === total - 1) return undefined;
   // The opener leads with the duration estimate instead.
   if (index === 0) return undefined;
 
-  if (kind === "walkthrough") {
+  if (kind === "walkthrough" || kind === "lesson") {
     // Last stop on this page → celebrate and point at what's left.
     if (stopsLeftOnPage === 0 && pagesLeft > 0) {
-      return `Good job — ${plural(pagesLeft, "page", "pages")} to go.`;
+      return `${plural(pagesLeft, "page", "pages")} to go.`;
     }
-    if (stopsLeftOnPage > 0) return `${plural(stopsLeftOnPage, "stop", "stops")} left on this page.`;
     return undefined;
   }
-
-  const left = total - 1 - index;
-  return left > 0 ? `Only ${plural(left, "step", "steps")} left on this page.` : undefined;
+  return undefined;
 }
 
 /**
@@ -114,6 +113,7 @@ export function withStepMeta(steps: TourStep[], kind: TourKind): TourStep[] {
       totalStops: total,
       page: pageOf[index],
       encouragement: encouragementFor({ index, total, kind, pagesLeft, stopsLeftOnPage }),
+      action: step.action,
     };
 
     return { ...step, data: meta };

@@ -868,6 +868,8 @@ export const workbenchConversation = pgTable(
     clientId: uuid("client_id"),
     title: text("title").notNull(),
     createdBy: text("created_by").notNull(),
+    /** A practice workbook (sample data, Learn Sage): only its maker opens it. */
+    practice: boolean("practice").default(false).notNull(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

@@ -37,7 +37,7 @@ export function MessageActions({
 
   return (
     <div className="space-y-2">
-      <div className="-ml-1.5 flex flex-wrap items-center gap-0.5">
+      <div data-tour="sage-actions" className="-ml-1.5 flex flex-wrap items-center gap-0.5">
         <button
           type="button"
           className={btn}

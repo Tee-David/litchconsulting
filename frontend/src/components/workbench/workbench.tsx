@@ -34,6 +34,8 @@ import type { StyleRequest } from "./grid";
 import { MessageActions } from "@/components/sage-ui/message-actions";
 import { ThreadPicker } from "@/components/sage-ui/thread-picker";
 import { PromptBox, type Attachment } from "@/components/sage-ui/prompt-box";
+import { TOUR_SELECT_EVENT, useTourAsk } from "@/components/tour/tour-actions";
+import { PracticeBar } from "./practice-bar";
 import { AskSelection } from "@/components/sage-ui/ask-selection";
 import { WORKBENCH_MAX_BYTES, WORKBENCH_UPLOAD_ACCEPT } from "@/lib/workbench/upload-client";
 import { usePasswordAsk } from "./password-ask";
@@ -99,6 +101,8 @@ export type WorkbenchProps = {
   /** LitchAI document ids whose original is a PDF we can show beside the grid. */
   pdfDocs: number[];
   canDeliver: boolean;
+  /** A practice workbook (sample data, Learn Sage). */
+  practice?: boolean;
 };
 
 function lastGate(c: WbConversation, wbId: string): WbGate | null {
@@ -106,7 +110,7 @@ function lastGate(c: WbConversation, wbId: string): WbGate | null {
   return ref?.versions[ref.versions.length - 1]?.gate ?? null;
 }
 
-export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeliver }: WorkbenchProps) {
+export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeliver, practice = false }: WorkbenchProps) {
   const toast = useToast();
   const [conv, setConv] = useState(initial);
   const [look, setLook] = useState(firstLook);
@@ -1554,10 +1558,34 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     );
   });
 
+  // Learn Sage: a lesson can fill the box or send a safe example question here.
+  const sageBox = useRef<HTMLDivElement>(null);
+  const tourSendRef = useRef(send);
+  tourSendRef.current = send;
+  useTourAsk(
+    "workbench",
+    sageBox,
+    useCallback((t: string, go: boolean) => {
+      if (go) void tourSendRef.current(t);
+      else setText(t);
+    }, []),
+  );
+
+  useEffect(() => {
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ range: string; handled: boolean }>).detail;
+      if (!d?.range) return;
+      d.handled = true;
+      goTo(d.range);
+    };
+    window.addEventListener(TOUR_SELECT_EVENT, on);
+    return () => window.removeEventListener(TOUR_SELECT_EVENT, on);
+  }, [goTo]);
+
   const chartCards = Object.values(charts).filter((c) => batchById.get(c.batchId)?.status === "pending");
 
   const panel = (
-    <div className="flex h-full min-h-0 flex-col bg-surface">
+    <div ref={sageBox} data-tour="wb-sage" className="flex h-full min-h-0 flex-col bg-surface">
       <div className="flex items-center gap-1 border-b border-hairline bg-paper py-1.5 pl-3 pr-1.5">
         <span className="keep-brand grid size-[26px] shrink-0 place-items-center rounded-lg bg-brand text-white"><SageIcon className="size-4" /></span>
         <ThreadPicker
@@ -1604,6 +1632,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         }}
         className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-3"
         aria-live="polite"
+        aria-busy={running}
       >
         {look ? <FirstLookCard look={look} onCite={goTo} onSuggest={(s) => void send(s)} disabled={running} /> : null}
         {!look && conv.messages.length === 0 && !live ? (
@@ -1801,8 +1830,10 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
       role={full ? "dialog" : undefined}
       aria-modal={full || undefined}
       aria-label={full ? "Workbench, full screen" : undefined}
+      data-practice={practice ? "1" : undefined}
     >
       {header}
+      {practice ? <PracticeBar /> : null}
       <div className="flex items-center justify-center border-b border-hairline px-3 py-1.5 lg:hidden">
         <Segmented
           size="sm"

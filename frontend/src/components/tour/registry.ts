@@ -1,98 +1,13 @@
-import type { Step } from "react-joyride";
-import type { TourIconName } from "./tour-icon";
+import { centerStep, navStep, type TourDef } from "./tour-types";
+import { LESSONS } from "./lessons";
+
+export type { TourAction, TourAudience, TourDef, TourKind, TourStep } from "./tour-types";
 
 /**
- * Tour registry — the single source of truth for every guided tour in the app.
- *
- * A `TourStep` is a react-joyride `Step` plus a few Litch-specific fields:
- *  - `key`          stable id for the step (debugging / React keys)
- *  - `route`        walkthrough steps that live on another page set this; the
- *                   provider decorates them with a `before` hook that navigates
- *                   there and waits for the target to mount.
- *  - `page`         friendly page name, shown in the tooltip and used to count
- *                   "N pages to go" in the walkthroughs.
- *  - `optional`     the step is dropped silently if its target isn't in the DOM
- *                   (empty tables, unconfigured cards, …).
- *  - `desktopOnly`  dropped below the `lg` breakpoint — the sidebar rail is
- *                   `hidden lg:block`, so its anchors exist but are invisible.
- *  - `mobileOnly`   dropped at `lg` and up (e.g. the drawer's hamburger).
- *  - `icon`         animated tooltip icon (see `tour-icon.tsx`).
- *  - `interact`     interactive stop: the user clicks the target and the tour
- *                   advances itself. The Next button still works as a fallback.
- *  - `showEstimate` render the "~3 min · 12 stops" chip (intro steps only).
- *
- * Copy rule: say what is *actually* on the page and what the operator can do
- * with it. No filler, no "this is the dashboard".
+ * Tour registry: every guided tour in the app, by id. Types and the step
+ * helpers live in `tour-types.ts`; the Learn Sage lessons in `lessons.ts`.
  */
-export type TourAudience = "client" | "admin" | "staff";
-export type TourKind = "page" | "welcome" | "walkthrough";
-
-export type TourStep = Step & {
-  key: string;
-  route?: string;
-  page?: string;
-  optional?: boolean;
-  desktopOnly?: boolean;
-  mobileOnly?: boolean;
-  icon?: TourIconName;
-  interact?: { hint: string; clickTarget?: string };
-  showEstimate?: boolean;
-};
-
-export type TourDef = {
-  id: string;
-  audience: TourAudience;
-  kind: TourKind;
-  /** Home route for a page tour (informational; page tours are matched by route-match). */
-  route?: string;
-  /**
-   * Bump when the copy or stops change enough to show again. Completion is
-   * stored per user and version on the server (user_onboarding.tours), so a
-   * finished tour stays finished on every device until its version moves.
-   */
-  version?: number;
-  steps: TourStep[];
-};
-
-/** Convenience for a full-screen, centered "intro / outro" step. */
-function centerStep(
-  key: string,
-  title: string,
-  content: string,
-  extra: Partial<TourStep> = {},
-): TourStep {
-  return {
-    key,
-    target: "body",
-    placement: "center",
-    // Centered steps have nothing to scroll to — joyride skips scrolling for
-    // `placement: center` anyway, but being explicit keeps intent obvious.
-    skipScroll: true,
-    title,
-    content,
-    ...extra,
-  };
-}
-
-/** A sidebar nav anchor. Desktop-only: the rail is `hidden` below `lg`. */
-function navStep(
-  tourKey: string,
-  title: string,
-  content: string,
-  extra: Partial<TourStep> = {},
-): TourStep {
-  return {
-    key: `nav-${tourKey}`,
-    target: `[data-tour="nav-${tourKey}"]`,
-    placement: "right",
-    desktopOnly: true,
-    title,
-    content,
-    ...extra,
-  };
-}
-
-export const TOURS: Record<string, TourDef> = {
+const BASE: Record<string, TourDef> = {
   // ─── Client · page tours (v2: the portal rebuilt around "what needs you") ───
   "client-dashboard": {
     id: "client-dashboard",
@@ -1309,3 +1224,5 @@ export const TOURS: Record<string, TourDef> = {
     ],
   },
 };
+
+export const TOURS: Record<string, TourDef> = { ...BASE, ...LESSONS };

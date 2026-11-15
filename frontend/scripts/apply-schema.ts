@@ -438,6 +438,8 @@ export const STATEMENTS = [
     "created_at" timestamp with time zone DEFAULT now() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT now() NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS "workbench_conversation_request_idx" ON "workbench_conversation" ("request_id")`,
+  // Practice workbooks (Learn Sage): sample data, opened only by their maker.
+  `ALTER TABLE "workbench_conversation" ADD COLUMN IF NOT EXISTS "practice" boolean DEFAULT false NOT NULL`,
   // Virus scan of bank-transfer proofs (documents already carry scan_status).
   `ALTER TABLE "payment" ADD COLUMN IF NOT EXISTS "proof_scan_status" text DEFAULT 'unscanned' NOT NULL`,
   // Trash shows who moved each item there.

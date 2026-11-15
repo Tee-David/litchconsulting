@@ -3,9 +3,10 @@
 import { Fragment, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronRight, Home, LogOut, Menu, Search, UserRound } from "lucide-react";
+import { ChevronRight, CircleHelp, Home, LogOut, Menu, Search, UserRound } from "lucide-react";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { TourLauncher } from "@/components/tour/tour-launcher";
+import { useTourOptional } from "@/components/tour/tour-provider";
 import { NotificationBell } from "@/components/kit";
 import { signOut } from "@/lib/auth-client";
 import { SageIcon } from "./sage-icon";
@@ -25,6 +26,7 @@ export function openCommandPalette() {
 }
 
 function AccountMenu({ user }: { user: AdminUser }) {
+  const tour = useTourOptional();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -56,6 +58,17 @@ function AccountMenu({ user }: { user: AdminUser }) {
             {user.email && <p className="truncate text-xs text-muted">{user.email}</p>}
           </div>
           <div className="my-1 h-px bg-hairline" />
+          <button
+            role="menuitem"
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              tour?.openMenu();
+            }}
+            className="flex w-full items-center gap-2.5 rounded-ctl px-3 py-2 text-sm text-ink hover:bg-surface"
+          >
+            <CircleHelp className="size-4 text-muted" /> Take a tour
+          </button>
           <Link role="menuitem" href="/" onClick={() => setOpen(false)} className="flex items-center gap-2.5 rounded-ctl px-3 py-2 text-sm text-ink hover:bg-surface">
             <Home className="size-4 text-muted" /> Back to the website
           </Link>
@@ -124,9 +137,7 @@ export function AdminTopbar({ onMenuClick, user }: { onMenuClick: () => void; us
         <kbd className="hidden rounded border border-hairline bg-paper px-1.5 font-sans text-[11px] text-muted md:inline">{mac ? "⌘K" : "Ctrl K"}</kbd>
       </button>
 
-      <div className="hidden sm:block">
-        <TourLauncher />
-      </div>
+      <TourLauncher />
       <div className="hidden sm:block">
         <ThemeToggle />
       </div>

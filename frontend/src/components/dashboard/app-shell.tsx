@@ -11,6 +11,7 @@ import {
   LifeBuoy,
   LogOut,
   Menu,
+  CircleHelp,
   MessageCircleQuestionMark,
   MessagesSquare,
   Search,
@@ -23,6 +24,7 @@ import { Logo, LogoMark } from "@/components/ui/logo";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { NotificationBell } from "@/components/kit";
 import { signOut } from "@/lib/auth-client";
+import { useTourOptional } from "@/components/tour/tour-provider";
 import { cn } from "@/lib/utils";
 import { NAV, isActive, type NavIcon, type NavItem, type ShellKind } from "./nav";
 
@@ -95,7 +97,7 @@ export function AppShell({
             >
               <X className="size-5" />
             </button>
-            <Sidebar kind={kind} items={items} counts={counts} pathname={pathname} root={root} user={user} expanded />
+            <Sidebar kind={kind} items={items} counts={counts} pathname={pathname} root={root} user={user} expanded onLeave={() => setDrawer(false)} />
           </aside>
         </div>
       ) : null}
@@ -152,6 +154,7 @@ function Sidebar({
   root,
   user,
   expanded = false,
+  onLeave,
 }: {
   kind: ShellKind;
   items: NavItem[];
@@ -160,6 +163,8 @@ function Sidebar({
   root: string;
   user: { name: string; email: string; sub: string };
   expanded?: boolean;
+  /** The drawer closes before a tour starts. */
+  onLeave?: () => void;
 }) {
   // `expanded` = drawer (always labelled). Otherwise labels appear at xl.
   const lbl = expanded ? "" : "hidden xl:inline";
@@ -223,13 +228,14 @@ function Sidebar({
           );
         })}
       </nav>
-      <AccountMenu user={user} expanded={expanded} />
+      <AccountMenu user={user} expanded={expanded} onLeave={onLeave} />
     </>
   );
 }
 
-function AccountMenu({ user, expanded }: { user: { name: string; email: string; sub: string }; expanded: boolean }) {
+function AccountMenu({ user, expanded, onLeave }: { user: { name: string; email: string; sub: string }; expanded: boolean; onLeave?: () => void }) {
   const router = useRouter();
+  const tour = useTourOptional();
   const [busy, setBusy] = useState(false);
   const initials = (user.name || user.email).split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
   const lbl = expanded ? "" : "hidden xl:block";
@@ -244,6 +250,23 @@ function AccountMenu({ user, expanded }: { user: { name: string; email: string; 
           <p className="truncate text-xs text-muted">{user.sub}</p>
         </div>
       </div>
+      {tour ? (
+        <button
+          type="button"
+          onClick={() => {
+            onLeave?.();
+            setTimeout(() => tour.openMenu(), onLeave ? 220 : 0);
+          }}
+          title="Take a tour"
+          className={cn(
+            "mt-2 flex h-9 w-full items-center gap-2 rounded-ctl text-sm text-body hover:bg-surface hover:text-ink",
+            expanded ? "px-3" : "justify-center xl:justify-start xl:px-3",
+          )}
+        >
+          <CircleHelp className="size-4" />
+          <span className={expanded ? "" : "hidden xl:inline"}>Take a tour</span>
+        </button>
+      ) : null}
       <button
         type="button"
         disabled={busy}

@@ -53,6 +53,7 @@ export async function WorkbenchScreen({ id, base }: { id: string; base: Base }) 
       files={files.map((f) => ({ id: f.id, fileName: f.fileName, kind: f.kind, stage: f.stage, usable: f.usable, litchaiDocumentId: f.litchaiDocumentId, litchaiStatus: f.litchaiStatus }))}
       pdfDocs={files.filter((f) => PDF_TYPE.test(f.fileName) && f.litchaiDocumentId).map((f) => Number(f.litchaiDocumentId))}
       canDeliver={Boolean(rid)}
+      practice={access.row.practice}
     />
   );
 }

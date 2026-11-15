@@ -12,44 +12,58 @@ import {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { recordTourAction, tourStateAction } from "@/app/account/actions";
-import { Joyride, EVENTS, STATUS, type EventData, type Controls } from "react-joyride";
-import { TOURS, type TourAudience, type TourStep } from "./registry";
+import { Joyride, EVENTS, STATUS, type EventData, type Controls, type FloatingOptions } from "react-joyride";
+import { TOURS, type TourAudience, type TourDef, type TourStep } from "./registry";
 import { pageTourIdFor } from "./route-match";
 import { BRAND_OPTIONS, LOCALE } from "./joyride-theme";
 import { withStepMeta, type TourStepMeta } from "./tour-meta";
 import { TourTooltip } from "./tour-tooltip";
 import { isDesktop, prefersReducedMotion, waitForTarget } from "./wait-for-target";
+import { openDialog } from "./tour-actions";
 import { fireConfetti } from "./confetti";
+import { LearnSage } from "./learn-sage";
+import { TourOffer } from "./tour-offer";
+
+type TourState = Record<string, { version: number; status: string }>;
 
 type TourContextValue = {
   /** Which side of the app this provider serves. */
   audience: TourAudience;
-  /** Start any registered tour by id. */
-  startTour: (id: string) => void;
+  /** Start any registered tour by id. `resume` continues where the person stopped. */
+  startTour: (id: string, opts?: { resume?: boolean }) => void;
   /** Start the page tour for the current route (no-op if none). */
   startPageTour: () => void;
-  /** Start the audience's cross-page walkthrough. */
-  startWalkthrough: () => void;
-  /** Start (replay) the audience's welcome tour. */
-  startWelcome: () => void;
+  /** Start (or resume) the audience's cross-page walkthrough. */
+  startWalkthrough: (opts?: { resume?: boolean }) => void;
   /** Stop any running tour. */
   stopTour: () => void;
   /** Whether a runnable page tour exists for the current route. */
   hasPageTour: () => boolean;
+  /** Where a stopped tour can continue: "step 7 of 40", or null. */
+  resumePoint: (id: string) => { index: number; total: number } | null;
   /** Whether a tour is currently running. */
   isRunning: boolean;
   /** Whether this audience has a cross-page walkthrough. */
   hasWalkthrough: boolean;
+  /** Admin and staff: open the Learn Sage lessons. */
+  hasLessons: boolean;
+  openLessons: () => void;
+  /** Open the "?" menu (the account menu "Take a tour" item uses it). */
+  openMenu: () => void;
+  menuSignal: number;
 };
 
 const TourContext = createContext<TourContextValue | null>(null);
 
 export function useTour(): TourContextValue {
   const ctx = useContext(TourContext);
-  if (!ctx) {
-    throw new Error("useTour must be used within a <TourProvider>");
-  }
+  if (!ctx) throw new Error("useTour must be used within a <TourProvider>");
   return ctx;
+}
+
+/** The same, but null outside a provider (shared components such as the Sage page). */
+export function useTourOptional(): TourContextValue | null {
+  return useContext(TourContext);
 }
 
 const LEGACY_CLIENT_KEY = "litch:portal-tour-done";
@@ -64,10 +78,11 @@ const TARGET_WAIT_MS = 5000;
 /** `?tour=1` in the address bar. */
 const wantsTour = () => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("tour") === "1";
 
+const resumeKey = (id: string) => `litch:tour:resume:${id}`;
+
 /** Is a step's target present, and does it apply to this viewport? */
 function isStepPresent(step: TourStep): boolean {
-  // Sidebar anchors are `hidden lg:block` — present in the DOM but invisible —
-  // so a viewport check has to gate them, not just `querySelector`.
+  // Sidebar anchors are `hidden lg:block`: present in the DOM but invisible.
   if (step.desktopOnly && !isDesktop()) return false;
   if (step.mobileOnly && isDesktop()) return false;
   const target = step.target;
@@ -76,20 +91,44 @@ function isStepPresent(step: TourStep): boolean {
   return typeof document !== "undefined" && document.querySelector(target) !== null;
 }
 
-export function TourProvider({
-  audience,
-  children,
-}: {
-  audience: TourAudience;
-  children: ReactNode;
-}) {
+const fitsViewport = (step: TourStep) => !(step.desktopOnly && !isDesktop()) && !(step.mobileOnly && isDesktop());
+
+const isPhone = () => typeof window !== "undefined" && window.matchMedia("(max-width: 640px)").matches;
+
+/**
+ * Phones: the card is a full-width sheet at the bottom of the screen, or at the
+ * top when the part it points at sits in the lower half (the tab bar).
+ */
+const SHEET: FloatingOptions = {
+  strategy: "fixed",
+  hideArrow: true,
+  middleware: [
+    {
+      name: "litchSheet",
+      fn: ({ rects }) => {
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        const ref = rects.reference;
+        const low = ref.height > 0 && ref.y + ref.height / 2 > vh * 0.5;
+        const top = 72; // under the sticky top bar
+        return {
+          x: Math.max(8, (vw - rects.floating.width) / 2),
+          y: low ? top : Math.max(top, vh - rects.floating.height - 8),
+        };
+      },
+    },
+  ],
+};
+
+export function TourProvider({ audience, children }: { audience: TourAudience; children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const welcomeId = `${audience}-welcome`;
   const walkthroughId = `${audience}-walkthrough`;
-  const welcomeVersion = TOURS[welcomeId]?.version ?? 1;
+  // The first sign-in offer is shown once per role and walkthrough version.
+  const offerVersion = TOURS[walkthroughId]?.version ?? TOURS[welcomeId]?.version ?? 1;
+  const hasLessons = audience !== "client" && Object.values(TOURS).some((t) => t.kind === "lesson" && t.audience === audience);
 
-  // Live refs so before-hooks / callbacks always see the current values.
   const pathnameRef = useRef(pathname);
   useEffect(() => {
     pathnameRef.current = pathname;
@@ -98,30 +137,37 @@ export function TourProvider({
   const [activeTourId, setActiveTourId] = useState<string | null>(null);
   const [steps, setSteps] = useState<TourStep[]>([]);
   const [run, setRun] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const [startIndex, setStartIndex] = useState(0);
   const [stepIndex, setStepIndex] = useState(0);
   const [scrollOffset, setScrollOffset] = useState(96);
   const [reduced, setReduced] = useState(false);
+  const [phone, setPhone] = useState(false);
+  const [lessonsOpen, setLessonsOpen] = useState(false);
+  const [offer, setOffer] = useState(false);
+  const [menuSignal, setMenuSignal] = useState(0);
+  const [tourState, setTourState] = useState<TourState>({});
 
   const activeTourIdRef = useRef<string | null>(null);
   useEffect(() => {
     activeTourIdRef.current = activeTourId;
   }, [activeTourId]);
-  // Joyride hands `controls` to the event handler; stash them so the
-  // interactive-step listener can advance the tour from outside React's tree.
+  const stepsRef = useRef<TourStep[]>([]);
+  useEffect(() => {
+    stepsRef.current = steps;
+  }, [steps]);
+  const indexRef = useRef(0);
   const controlsRef = useRef<Controls | null>(null);
-  // Guards the terminal handler — a finished tour can emit more than one event
-  // carrying the terminal status before the teardown re-render lands.
+  // A finished tour can emit more than one terminal event before teardown.
   const terminalHandledRef = useRef(false);
 
-  // Local fast path; the server record (user_onboarding.tours) is the source of truth.
-  const welcomeKey = useMemo(() => `litch:tour:${audience}:welcome:v${welcomeVersion}`, [audience, welcomeVersion]);
+  const offerKey = useMemo(() => `litch:tour:${audience}:offer:v${offerVersion}`, [audience, offerVersion]);
 
-  // Keep the scroll offset clear of the sticky 4rem topbar, and track the
-  // reduced-motion preference live (users flip it mid-session).
   useEffect(() => {
     const sync = () => {
       setScrollOffset(isDesktop() ? 104 : 84);
       setReduced(prefersReducedMotion());
+      setPhone(isPhone());
     };
     sync();
     window.addEventListener("resize", sync);
@@ -135,76 +181,105 @@ export function TourProvider({
 
   const stopTour = useCallback(() => {
     setRun(false);
+    setPaused(false);
     setActiveTourId(null);
     setSteps([]);
     setStepIndex(0);
+    setStartIndex(0);
   }, []);
 
   /** Poll until the router has actually landed on `route` (or we time out). */
   const waitForRoute = useCallback(async (route: string, timeout = 8000) => {
     const start = Date.now();
-    while (pathnameRef.current !== route && Date.now() - start < timeout) {
+    const matches = () => pathnameRef.current === route || (route.endsWith("/*") && pathnameRef.current.startsWith(route.slice(0, -1)));
+    while (!matches() && Date.now() - start < timeout) {
       await new Promise((r) => setTimeout(r, 60));
     }
   }, []);
 
-  const startTour = useCallback(
-    (id: string) => {
-      const def = TOURS[id];
-      if (!def) return;
-
-      let built: TourStep[];
-      if (def.kind === "walkthrough") {
-        // Cross-page steps: we can't know whether a target exists until we're on
-        // its page, so viewport-only filtering happens up front and missing
-        // anchors fall through to the TARGET_NOT_FOUND skip path.
-        built = def.steps
-          .filter((step) => {
-            if (step.desktopOnly && !isDesktop()) return false;
-            if (step.mobileOnly && isDesktop()) return false;
-            return true;
-          })
-          .map((step) => {
-            const route = step.route;
-            if (!route) return step;
-            return {
-              ...step,
-              before: async () => {
-                if (pathnameRef.current !== route) {
-                  router.push(route);
-                  await waitForRoute(route);
-                }
-                const target = typeof step.target === "string" ? step.target : null;
-                if (target && target !== "body") {
-                  await waitForTarget(target, TARGET_WAIT_MS);
-                }
-              },
-            };
-          });
-      } else {
-        // Page / welcome tours run on the current page — drop any step whose
-        // target isn't in the DOM so we never spotlight nothing.
-        built = def.steps.filter(isStepPresent);
+  /** A route can be a token: "@practice" opens (or makes) the practice workbook. */
+  const goTo = useCallback(
+    async (route: string) => {
+      if (route === "@practice") {
+        if (/\/analyses\/[^/]+$/.test(pathnameRef.current) && document.querySelector('[data-practice="1"]')) return;
+        const { openPracticeAction } = await import("@/lib/workbench/practice-actions");
+        const res = await openPracticeAction().catch(() => null);
+        if (!res?.ok) return;
+        router.push(res.href);
+        await waitForRoute(res.href);
+        return;
       }
-
-      if (built.length === 0) return;
-
-      terminalHandledRef.current = false;
-      setSteps(withStepMeta(built, def.kind));
-      setActiveTourId(id);
-      setStepIndex(0);
-      setRun(true);
+      if (pathnameRef.current !== route) {
+        router.push(route);
+        await waitForRoute(route);
+      }
     },
     [router, waitForRoute],
   );
 
-  const startWelcome = useCallback(() => {
-    startTour(welcomeId);
-  }, [welcomeId, startTour]);
+  const resumePoint = useCallback((id: string) => {
+    const def = TOURS[id];
+    if (!def) return null;
+    try {
+      const key = localStorage.getItem(resumeKey(id));
+      if (!key) return null;
+      const list = def.steps.filter(fitsViewport);
+      const index = list.findIndex((s) => s.key === key);
+      return index > 0 ? { index, total: list.length } : null;
+    } catch {
+      return null;
+    }
+  }, []);
 
-  const startWalkthrough = useCallback(() => {
-    startTour(walkthroughId);
-  }, [walkthroughId, startTour]);
+  const startTour = useCallback(
+    (id: string, opts: { resume?: boolean } = {}) => {
+      const def: TourDef | undefined = TOURS[id];
+      if (!def) return;
+      setOffer(false);
+
+      let built: TourStep[];
+      if (def.kind === "walkthrough" || def.kind === "lesson") {
+        // Cross-page steps: a target can only be checked on its page, so only the
+        // viewport filter runs now; a missing part is skipped when its turn comes.
+        built = def.steps.filter(fitsViewport).map((step) => {
+          const route = step.route;
+          return {
+            ...step,
+            before: async () => {
+              if (route) await goTo(route);
+              const target = typeof step.target === "string" ? step.target : null;
+              if (target && target !== "body") await waitForTarget(target, TARGET_WAIT_MS);
+            },
+          };
+        });
+      } else {
+        // Page tours run on the current page: drop any stop whose part is absent.
+        built = def.steps.filter(isStepPresent);
+      }
+      if (built.length === 0) return;
+
+      // Typing in the message box and clicking real parts need the focus free.
+      built = built.map((s) => (s.action || s.interact || s.inDialog ? { ...s, disableFocusTrap: true } : s));
+
+      let from = 0;
+      if (opts.resume) {
+        const point = resumePoint(id);
+        if (point) from = point.index;
+      }
+
+      terminalHandledRef.current = false;
+      setSteps(withStepMeta(built, def.kind));
+      setActiveTourId(id);
+      setStartIndex(from);
+      setStepIndex(from);
+      indexRef.current = from;
+      setPaused(false);
+      setRun(true);
+    },
+    [goTo, resumePoint],
+  );
+
+  const startWalkthrough = useCallback((opts?: { resume?: boolean }) => startTour(walkthroughId, opts), [walkthroughId, startTour]);
 
   const startPageTour = useCallback(() => {
     const id = pageTourIdFor(pathnameRef.current);
@@ -218,21 +293,39 @@ export function TourProvider({
     return !!def && def.steps.some(isStepPresent);
   }, []);
 
+  const loadState = useCallback(async () => {
+    const s = await tourStateAction().catch(() => ({}) as TourState);
+    setTourState(s);
+    return s;
+  }, []);
+
+  const openLessons = useCallback(() => {
+    setLessonsOpen(true);
+    void loadState();
+  }, [loadState]);
+
   const onEvent = useCallback(
     (data: EventData, controls: Controls) => {
       controlsRef.current = controls;
 
-      // Track the live index so the interactive listener knows which step is up.
       if (data.type === EVENTS.STEP_BEFORE || data.type === EVENTS.TOOLTIP) {
         setStepIndex(data.index);
+        indexRef.current = data.index;
+        // Walkthroughs and lessons remember the stop, for "Resume".
+        const id = activeTourIdRef.current;
+        const def = id ? TOURS[id] : null;
+        const key = stepsRef.current[data.index]?.key;
+        if (id && key && (def?.kind === "walkthrough" || def?.kind === "lesson")) {
+          try {
+            localStorage.setItem(resumeKey(id), key);
+          } catch {}
+        }
       }
-      // A missing target (e.g. an optional anchor on an empty table) just
-      // advances the tour rather than stalling on nothing.
+      // A missing part (an empty table, a page that did not load) is skipped.
       if (data.type === EVENTS.TARGET_NOT_FOUND) {
         controls.next();
         return;
       }
-      // Terminal states: persist the welcome flag and tear the tour down.
       const finished = data.status === STATUS.FINISHED;
       const skipped = data.status === STATUS.SKIPPED;
       if (!finished && !skipped) return;
@@ -241,50 +334,90 @@ export function TourProvider({
 
       const id = activeTourIdRef.current;
       const def = id ? TOURS[id] : null;
-      if (def?.kind === "welcome") {
-        try {
-          localStorage.setItem(welcomeKey, "1");
-        } catch {}
+      if (id && def) {
+        if (finished) {
+          try {
+            localStorage.removeItem(resumeKey(id));
+          } catch {}
+        }
+        // Per user and version, on the server: follows the person to every device.
+        void recordTourAction(id, def.version ?? 1, finished ? "finished" : "skipped").catch(() => {});
+        setTourState((s) => ({ ...s, [id]: { version: def.version ?? 1, status: finished ? "finished" : "skipped" } }));
+        // The walkthrough also answers the first sign-in offer.
+        if (def.kind === "walkthrough") {
+          try {
+            localStorage.setItem(offerKey, "1");
+          } catch {}
+          void recordTourAction(welcomeId, offerVersion, "finished").catch(() => {});
+        }
       }
-      // Per user + version, on the server: follows them to every device and
-      // ticks the onboarding "tour" step for welcome tours.
-      if (id && def) void recordTourAction(id, def.version ?? 1, finished ? "finished" : "skipped").catch(() => {});
-      // Celebrate only when they made it to the end — never on a skip.
       if (finished) fireConfetti();
+      // A finished lesson brings the list back, with its tick.
+      if (finished && def?.kind === "lesson") setTimeout(() => setLessonsOpen(true), 900);
       stopTour();
     },
-    [stopTour, welcomeKey],
+    [stopTour, offerKey, welcomeId, offerVersion],
   );
 
   /**
-   * Interactive steps: the user clicks the real UI and the tour moves itself on.
-   * Listening on the document in the capture phase means we still fire when the
-   * target is a nav link that unmounts the page out from under us, and it
-   * survives the target re-rendering mid-step.
+   * Do stops: the person clicks the real part and the tour moves on. Capture
+   * phase, so it still fires when the click navigates away.
    */
   useEffect(() => {
-    if (!run) return;
+    if (!run || paused) return;
     const meta = steps[stepIndex]?.data as TourStepMeta | undefined;
     const selector = meta?.interactSelector;
     if (!selector) return;
-
     const onClick = (event: MouseEvent) => {
       const el = event.target as Element | null;
-      if (el?.closest?.(selector)) {
-        // Let the click do its real work (navigate, toggle) before advancing.
-        setTimeout(() => controlsRef.current?.next(), 0);
-      }
+      if (el?.closest?.(selector)) setTimeout(() => controlsRef.current?.next(), 0);
     };
     document.addEventListener("click", onClick, true);
     return () => document.removeEventListener("click", onClick, true);
-  }, [run, stepIndex, steps]);
+  }, [run, paused, stepIndex, steps]);
+
+  /** Keys: arrows move, Esc stops (the place is kept for Resume). */
+  useEffect(() => {
+    if (!run || paused) return;
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (e.key === "Escape") controlsRef.current?.skip("button_close");
+      else if (e.key === "ArrowRight") controlsRef.current?.next();
+      else if (e.key === "ArrowLeft" && indexRef.current > 0) controlsRef.current?.prev();
+      else return;
+      e.preventDefault();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [run, paused]);
 
   /**
-   * `globals.css` sets `html { scroll-behavior: smooth }`, which fights
-   * joyride's rAF scroll tween (every scrollTop write gets re-smoothed by the
-   * browser, so the spotlight lands late and jitters). Neutralise it for the
-   * duration of a tour, then hand it back.
+   * A dialog that the stop does not point into pauses the tour; it comes back
+   * on the same stop when the dialog closes.
    */
+  useEffect(() => {
+    if (!run) return;
+    // Two ticks in a row, so a stop that opens a sheet on purpose (the next stop
+    // points into it) does not flicker into a pause.
+    let seen = 0;
+    let pausedNow = false;
+    const timer = setInterval(() => {
+      const dialog = openDialog();
+      const step = stepsRef.current[indexRef.current];
+      const sel = typeof step?.target === "string" && step.target !== "body" ? step.target : null;
+      const inside = Boolean(dialog && sel && dialog.querySelector(sel));
+      seen = dialog && !inside ? seen + 1 : 0;
+      const next = seen >= 2;
+      if (next === pausedNow) return;
+      pausedNow = next;
+      if (next) setStartIndex(indexRef.current);
+      setPaused(next);
+    }, 400);
+    return () => clearInterval(timer);
+  }, [run]);
+
+  /** `html { scroll-behavior: smooth }` fights joyride's scroll; turn it off during a tour. */
   useEffect(() => {
     if (!run) return;
     const html = document.documentElement;
@@ -295,54 +428,57 @@ export function TourProvider({
     };
   }, [run]);
 
-  // `?tour=1` (the welcome screens and the onboarding checklist link here)
-  // starts the welcome tour on arrival, whatever has been seen before.
-  // Read from the URL directly (no useSearchParams: this provider wraps whole
-  // shells, and a Suspense boundary around them is not worth it).
+  // `?tour=1` (the welcome screens and the onboarding list link here) starts the walkthrough.
   useEffect(() => {
     if (!wantsTour()) return;
-    const timer = setTimeout(() => startWelcome(), 700);
+    const timer = setTimeout(() => startWalkthrough(), 700);
     return () => clearTimeout(timer);
-  }, [pathname, startWelcome]);
+  }, [pathname, startWalkthrough]);
 
-  // Auto-run the welcome tour once per audience and version.
+  // First sign-in: offer the walkthrough once per role and version. Never forced.
   useEffect(() => {
     if (wantsTour()) return;
     let seen = false;
     try {
-      if (localStorage.getItem(welcomeKey)) {
-        seen = true;
-      } else if (audience === "client" && localStorage.getItem(LEGACY_CLIENT_KEY)) {
-        // Existing portal users already saw the old tour — don't re-nag them.
-        localStorage.setItem(welcomeKey, "1");
+      if (localStorage.getItem(offerKey)) seen = true;
+      else if (audience === "client" && localStorage.getItem(LEGACY_CLIENT_KEY)) {
+        localStorage.setItem(offerKey, "1");
         seen = true;
       }
     } catch {
-      seen = true; // storage blocked — err on the side of not auto-running.
+      seen = true;
     }
-    if (seen || !TOURS[welcomeId]) return;
-
+    if (seen || !TOURS[walkthroughId]) return;
     let cancelled = false;
     const timer = setTimeout(async () => {
-      // Seen on another device? The server knows.
-      const state = await tourStateAction().catch(() => ({}) as Record<string, { version: number }>);
+      const state = await loadState();
       if (cancelled) return;
       const rec = state[welcomeId];
-      if (rec && rec.version >= welcomeVersion) {
+      if (rec && rec.version >= offerVersion) {
         try {
-          localStorage.setItem(welcomeKey, "1");
+          localStorage.setItem(offerKey, "1");
         } catch {}
         return;
       }
-      startWelcome();
-    }, 900);
+      if (!openDialog()) setOffer(true);
+    }, 1200);
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-    // Run once on mount for this audience.
+    // Once on mount for this audience.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const declineOffer = useCallback(() => {
+    setOffer(false);
+    try {
+      localStorage.setItem(offerKey, "1");
+    } catch {}
+    void recordTourAction(welcomeId, offerVersion, "skipped").catch(() => {});
+  }, [offerKey, welcomeId, offerVersion]);
+
+  const openMenu = useCallback(() => setMenuSignal((n) => n + 1), []);
 
   const value = useMemo<TourContextValue>(
     () => ({
@@ -350,25 +486,51 @@ export function TourProvider({
       startTour,
       startPageTour,
       startWalkthrough,
-      startWelcome,
       stopTour,
       hasPageTour,
+      resumePoint,
       isRunning: run,
       hasWalkthrough: Boolean(TOURS[walkthroughId]),
+      hasLessons,
+      openLessons,
+      openMenu,
+      menuSignal,
     }),
-    [audience, startTour, startPageTour, startWalkthrough, startWelcome, stopTour, hasPageTour, run, walkthroughId],
+    [audience, startTour, startPageTour, startWalkthrough, stopTour, hasPageTour, resumePoint, run, walkthroughId, hasLessons, openLessons, openMenu, menuSignal],
   );
 
   return (
     <TourContext.Provider value={value}>
       {children}
+      {offer && !run ? (
+        <TourOffer
+          audience={audience}
+          minutes={TOURS[walkthroughId] ? Math.max(1, Math.round((TOURS[walkthroughId].steps.length * 9) / 60)) : 3}
+          onStart={() => startWalkthrough()}
+          onLater={declineOffer}
+        />
+      ) : null}
+      {hasLessons ? (
+        <LearnSage
+          open={lessonsOpen}
+          onClose={() => setLessonsOpen(false)}
+          audience={audience}
+          state={tourState}
+          onStart={(id) => {
+            setLessonsOpen(false);
+            setTimeout(() => startTour(id, { resume: Boolean(resumePoint(id)) }), 250);
+          }}
+        />
+      ) : null}
       <Joyride
         key={activeTourId ?? "idle"}
         steps={steps}
-        run={run}
+        run={run && !paused}
+        initialStepIndex={startIndex}
         continuous
         scrollToFirstStep
         locale={LOCALE}
+        floatingOptions={phone ? SHEET : undefined}
         options={{
           ...BRAND_OPTIONS,
           beforeTimeout: 12000,

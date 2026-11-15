@@ -78,6 +78,7 @@ export function SourcesChip({ sources, answerId }: { sources: SageSource[]; answ
         type="button"
         onClick={() => setOpen(true)}
         aria-haspopup="dialog"
+        data-tour="sage-sources"
         aria-label={`${n} ${n === 1 ? "source" : "sources"}. Show the list.`}
         className="ml-1 inline-flex min-h-8 items-center gap-2 rounded-full py-1 pl-1 pr-2.5 text-[13px] text-muted hover:bg-paper hover:text-ink"
       >
@@ -96,7 +97,9 @@ export function SourcesChip({ sources, answerId }: { sources: SageSource[]; answ
         </span>
       </button>
       <Sheet open={open} onClose={() => setOpen(false)} title="Sources" description="The records behind this answer. Open one to check it." size="sm">
-        <SourcesList sources={sources} answerId={answerId} />
+        <div data-tour="sage-sources-sheet">
+          <SourcesList sources={sources} answerId={answerId} />
+        </div>
       </Sheet>
     </>
   );

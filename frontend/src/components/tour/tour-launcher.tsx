@@ -1,148 +1,134 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion } from "framer-motion";
-import { HelpCircle, Compass, Sparkles, MousePointerClick } from "lucide-react";
+import { CircleHelp, Compass, GraduationCap, MousePointerClick, RotateCcw } from "lucide-react";
 import { useTour } from "./tour-provider";
-import { prefersReducedMotion } from "./wait-for-target";
 import { cn } from "@/lib/utils";
 
-const OPENED_KEY = "litch:tour:launcher-opened";
-
 /**
- * Round "?" help button for the topbar. It does a gentle idle wiggle every few
- * seconds to hint that a guided tour is available — paused on hover, once the
- * user has opened it, and when reduced-motion is requested. Clicking opens a
- * small popover with the available tours for the current page.
+ * The "?" button in the top bar and its menu: Tour this page, the full
+ * walkthrough (or Resume), and Learn Sage for the firm's team. The account
+ * menu's "Take a tour" opens the same menu.
  */
 export function TourLauncher() {
-  const { startPageTour, startWalkthrough, startWelcome, hasPageTour, audience, hasWalkthrough } = useTour();
-
+  const { startPageTour, startWalkthrough, hasPageTour, audience, hasWalkthrough, resumePoint, hasLessons, openLessons, menuSignal } = useTour();
   const [open, setOpen] = useState(false);
-  const [hovered, setHovered] = useState(false);
-  const [opened, setOpened] = useState(true); // assume opened until we read storage (no wiggle during SSR/hydration)
-  const [reduced, setReduced] = useState(true);
   const [canPage, setCanPage] = useState(false);
+  const [resume, setResume] = useState<{ index: number; total: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  const walkthroughId = `${audience}-walkthrough`;
+
+  const show = () => {
+    setCanPage(hasPageTour());
+    setResume(resumePoint(walkthroughId));
+    setOpen(true);
+  };
+
+  // "Take a tour" in the account menu.
+  useEffect(() => {
+    if (menuSignal === 0) return;
+    show();
+    button.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [menuSignal]);
 
   useEffect(() => {
-    setReduced(prefersReducedMotion());
-    try {
-      setOpened(localStorage.getItem(OPENED_KEY) === "1");
-    } catch {
-      setOpened(true);
-    }
-  }, []);
-
-  useEffect(() => {
+    if (!open) return;
     const onDoc = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     document.addEventListener("mousedown", onDoc);
-    return () => document.removeEventListener("mousedown", onDoc);
-  }, []);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDoc);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
-  function markOpened() {
-    setOpened(true);
-    try {
-      localStorage.setItem(OPENED_KEY, "1");
-    } catch {}
-  }
-
-  function toggle() {
-    setOpen((o) => {
-      const next = !o;
-      if (next) {
-        markOpened();
-        setCanPage(hasPageTour());
-      }
-      return next;
-    });
-  }
-
-  function run(fn: () => void) {
+  const run = (fn: () => void) => {
     setOpen(false);
     fn();
-  }
+  };
 
-  const wiggling = !reduced && !opened && !hovered && !open;
-  const walkthroughLabel = audience === "admin" ? "Platform walkthrough" : "Take the full tour";
+  const item = "flex min-h-11 w-full items-start gap-3 rounded-xl px-3 py-2.5 text-left transition-colors";
 
   return (
     <div className="relative" ref={ref}>
-      <motion.button
+      <button
+        ref={button}
         type="button"
         aria-label="Guided tours"
         aria-haspopup="menu"
         aria-expanded={open}
         data-tour="tour-launcher"
-        onClick={toggle}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        className="grid size-9 place-items-center rounded-full border border-hairline text-body transition-colors hover:bg-surface hover:text-ink"
-        animate={wiggling ? { rotate: [0, -12, 11, -7, 6, 0], scale: [1, 1.09, 1] } : { rotate: 0, scale: 1 }}
-        transition={
-          wiggling
-            ? { duration: 0.85, repeat: Infinity, repeatDelay: 8.2, ease: "easeInOut" }
-            : { duration: 0.2 }
-        }
+        onClick={() => (open ? setOpen(false) : show())}
+        className="grid size-10 place-items-center rounded-ctl border border-hairline bg-paper text-ink transition-colors hover:bg-surface"
       >
-        <HelpCircle className="size-4.5" />
-      </motion.button>
+        <CircleHelp className="size-[18px]" strokeWidth={1.75} />
+      </button>
 
-      {open && (
+      {open ? (
         <div
           role="menu"
-          // The help icon sits mid-topbar on phones, so `right-0` pushed this
-          // 16rem menu off the left edge. Pin it to the viewport under the bar on
-          // mobile; keep the anchored dropdown on ≥sm.
-          className="fixed inset-x-3 top-16 z-50 overflow-hidden rounded-2xl border border-hairline bg-paper p-1.5 shadow-xl shadow-black/10 sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-64"
+          aria-label="Guided tours"
+          // Phones: pinned under the top bar, full width. Wider screens: under the button.
+          className="fixed inset-x-3 top-[4.25rem] z-50 rounded-2xl border border-hairline bg-paper p-1.5 shadow-[0_12px_40px_rgb(10_14_26/0.16)] sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-[19rem] dark:shadow-[0_12px_40px_rgb(0_0_0/0.5)]"
         >
-          <div className="px-3 py-2">
-            <p className="text-sm font-semibold text-ink">Guided tours</p>
-            <p className="mt-0.5 text-xs text-muted">Take a quick, friendly walk-through.</p>
-          </div>
-          <div className="my-1 h-px bg-hairline" />
-
           <button
             type="button"
             role="menuitem"
             disabled={!canPage}
             onClick={() => run(startPageTour)}
-            className={cn(
-              "flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors",
-              canPage
-                ? "text-ink hover:bg-surface"
-                : "cursor-not-allowed text-muted opacity-60",
-            )}
+            className={cn(item, canPage ? "hover:bg-surface" : "cursor-not-allowed opacity-55")}
           >
-            <MousePointerClick className="size-4 text-muted" />
-            Tour this page
+            <MousePointerClick className="mt-0.5 size-4 shrink-0 text-muted" aria-hidden />
+            <span>
+              <span className="block text-sm font-medium text-ink">Tour this page</span>
+              <span className="block text-[12px] text-muted">{canPage ? "The parts of this page, in under a minute" : "No tour for this page yet"}</span>
+            </span>
           </button>
 
           {hasWalkthrough ? (
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => run(startWalkthrough)}
-              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-surface"
-            >
-              <Compass className="size-4 text-muted" />
-              {walkthroughLabel}
-            </button>
+            resume ? (
+              <>
+                <button type="button" role="menuitem" onClick={() => run(() => startWalkthrough({ resume: true }))} className={cn(item, "hover:bg-surface")}>
+                  <Compass className="mt-0.5 size-4 shrink-0 text-muted" aria-hidden />
+                  <span>
+                    <span className="block text-sm font-medium text-ink">Resume the walkthrough</span>
+                    <span className="block text-[12px] tabular-nums text-muted">
+                      From step {resume.index + 1} of {resume.total}
+                    </span>
+                  </span>
+                </button>
+                <button type="button" role="menuitem" onClick={() => run(() => startWalkthrough())} className={cn(item, "hover:bg-surface")}>
+                  <RotateCcw className="mt-0.5 size-4 shrink-0 text-muted" aria-hidden />
+                  <span className="block text-sm font-medium text-ink">Start the walkthrough again</span>
+                </button>
+              </>
+            ) : (
+              <button type="button" role="menuitem" onClick={() => run(() => startWalkthrough())} className={cn(item, "hover:bg-surface")}>
+                <Compass className="mt-0.5 size-4 shrink-0 text-muted" aria-hidden />
+                <span>
+                  <span className="block text-sm font-medium text-ink">Full walkthrough</span>
+                  <span className="block text-[12px] text-muted">Every page, in order. Stop and resume at any time.</span>
+                </span>
+              </button>
+            )
           ) : null}
 
-          <button
-            type="button"
-            role="menuitem"
-            onClick={() => run(startWelcome)}
-            className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-surface"
-          >
-            <Sparkles className="size-4 text-muted" />
-            Replay welcome
-          </button>
+          {hasLessons ? (
+            <button type="button" role="menuitem" onClick={() => run(openLessons)} className={cn(item, "hover:bg-surface")}>
+              <GraduationCap className="mt-0.5 size-4 shrink-0 text-muted" aria-hidden />
+              <span>
+                <span className="block text-sm font-medium text-ink">Learn Sage</span>
+                <span className="block text-[12px] text-muted">Short lessons. You ask, Sage answers, you see how.</span>
+              </span>
+            </button>
+          ) : null}
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

@@ -16,7 +16,12 @@ export async function workbenchAccess(id: string) {
   if (!u || u.banned) return { ok: false as const, status: 401 };
   const [row] = await db.select().from(workbenchConversation).where(eq(workbenchConversation.id, id)).limit(1);
   if (!row) return { ok: false as const, status: 404 };
-  const allowed = row.requestId ? await canWorkOnRequest(row.requestId) : roleOf(u) === "admin";
+  // A practice workbook (sample data) opens only for the person who made it.
+  const allowed = row.practice
+    ? row.createdBy === u.id
+    : row.requestId
+      ? await canWorkOnRequest(row.requestId)
+      : roleOf(u) === "admin";
   if (!allowed) return { ok: false as const, status: 403 };
   return { ok: true as const, row, user: u, role: roleOf(u) };
 }
@@ -108,7 +113,7 @@ export async function conversationsFor(requestIds: string[] | "all", limit = 40)
   const q = db.select().from(workbenchConversation);
   const rows =
     requestIds === "all"
-      ? await q.orderBy(desc(workbenchConversation.updatedAt)).limit(limit)
+      ? await q.where(eq(workbenchConversation.practice, false)).orderBy(desc(workbenchConversation.updatedAt)).limit(limit)
       : requestIds.length
         ? await q.where(inArray(workbenchConversation.requestId, requestIds)).orderBy(desc(workbenchConversation.updatedAt)).limit(limit)
         : [];

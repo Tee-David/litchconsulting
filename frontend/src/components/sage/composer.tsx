@@ -5,6 +5,7 @@ import { useVoice } from "@/components/workbench/voice";
 import { PromptBox } from "@/components/sage-ui/prompt-box";
 import { Suggestions } from "@/components/sage-ui/suggestions";
 import { cn } from "@/lib/utils";
+import { useTourAsk } from "@/components/tour/tour-actions";
 
 const MAX = 3000;
 
@@ -62,6 +63,19 @@ export function SageComposer({
     if (ok === false) setText((cur) => cur || v);
   };
 
+  // A guided tour can fill the box, or send a safe example question for the person.
+  const box = useRef<HTMLDivElement>(null);
+  const submitRef = useRef(submit);
+  submitRef.current = submit;
+  useTourAsk(
+    "sage",
+    box,
+    useCallback((t: string, send: boolean) => {
+      if (send) void submitRef.current(t);
+      else setText(t);
+    }, []),
+  );
+
   const shown = voice.listening && voice.transcript ? `${text.trim() ? `${text.trimEnd()} ` : ""}${voice.transcript}` : text;
 
   const mic =
@@ -82,7 +96,7 @@ export function SageComposer({
     ) : null;
 
   return (
-    <div className={cn("flex flex-col", compact ? "gap-2" : "gap-2.5")}>
+    <div ref={box} data-tour="sage-composer" className={cn("flex flex-col", compact ? "gap-2" : "gap-2.5")}>
       {chips.length && !disabled ? <Suggestions items={chips} disabled={busy} onPick={(c) => void submit(c)} /> : null}
       {voice.error ? <p className="text-xs text-bad">{voice.error}</p> : null}
       <PromptBox

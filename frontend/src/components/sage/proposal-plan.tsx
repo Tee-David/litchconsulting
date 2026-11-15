@@ -57,7 +57,7 @@ export function ProposalPlan({
   }
 
   return (
-    <section aria-label="Needs your confirmation" className="overflow-hidden rounded-xl border border-warn/30">
+    <section aria-label="Needs your confirmation" data-tour="sage-proposal" className="overflow-hidden rounded-xl border border-warn/30">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 border-b border-warn/30 bg-warn-soft px-3.5 py-2.5">
         <AlertTriangle className="size-4 text-warn" strokeWidth={1.5} aria-hidden />
         <span className="text-[13px] font-semibold text-warn">{settled ? (state === "confirmed" ? "Done" : "Dismissed") : "Needs your confirmation"}</span>
@@ -122,7 +122,7 @@ export function ProposalPlan({
               {editing ? "Done editing" : letter ? "Edit the message" : "Edit first"}
             </Button>
           ) : null}
-          <Button variant="ghost" size={compact ? "sm" : "md"} disabled={busy} onClick={onDismiss}>
+          <Button variant="ghost" size={compact ? "sm" : "md"} disabled={busy} onClick={onDismiss} data-tour="sage-proposal-dismiss">
             Dismiss
           </Button>
           {!compact ? <span className="ml-auto text-xs text-muted">Logged in the audit log</span> : null}

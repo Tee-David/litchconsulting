@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { History, PlugZap } from "lucide-react";
+import { GraduationCap, History, PlugZap } from "lucide-react";
+import { useTourOptional } from "@/components/tour/tour-provider";
 import { Sheet } from "@/components/kit";
 import { Select } from "@/components/ui/select";
 import { STARTERS, followUpsFor, type SageRole } from "@/lib/sage/present";
@@ -34,6 +35,7 @@ export function SageWorkspace({
   frameClassName?: string;
 }) {
   const chat = useSageChat({ role, basePath, syncUrl: true });
+  const tour = useTourOptional();
   const [railOpen, setRailOpen] = useState(false);
   const bottom = useRef<HTMLDivElement>(null);
   const connected = online && !chat.offline;
@@ -60,7 +62,7 @@ export function SageWorkspace({
 
   return (
     <div className={cn("flex min-h-0 overflow-hidden bg-desk", frameClassName)}>
-      <aside aria-label="Chat history" className="hidden w-[268px] shrink-0 border-r border-hairline bg-surface lg:block">
+      <aside aria-label="Chat history" data-tour="sage-history" className="hidden w-[268px] shrink-0 border-r border-hairline bg-surface lg:block">
         <HistoryRail chat={chat} online={connected} />
       </aside>
 
@@ -75,6 +77,7 @@ export function SageWorkspace({
           <button
             type="button"
             onClick={() => setRailOpen(true)}
+            data-tour="sage-history-button"
             aria-label="Open chat history"
             className="grid size-10 shrink-0 place-items-center rounded-ctl border border-hairline text-body outline-none hover:bg-surface focus-visible:ring-2 focus-visible:ring-accent/40 lg:hidden"
           >
@@ -93,7 +96,7 @@ export function SageWorkspace({
             </p>
           </div>
           {role === "admin" ? (
-            <div className="flex w-full items-center gap-2 sm:w-auto">
+            <div data-tour="sage-scope" className="flex w-full items-center gap-2 sm:w-auto">
               <span className="text-[12.5px] text-body">Scope</span>
               <div className="w-40 shrink-0">
                 <Select
@@ -159,7 +162,18 @@ export function SageWorkspace({
                     </p>
                   </div>
                 </div>
-                <ul className="mt-5 grid gap-2 sm:grid-cols-2">
+                {tour?.hasLessons ? (
+                  <button
+                    type="button"
+                    onClick={tour.openLessons}
+                    data-tour="learn-sage-link"
+                    className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-full bg-info-soft px-3.5 text-[13px] font-medium text-ink transition-colors hover:bg-brand-tint"
+                  >
+                    <GraduationCap className="size-4 text-info" aria-hidden />
+                    New to Sage? Take the short lessons
+                  </button>
+                ) : null}
+                <ul data-tour="sage-starters" className="mt-5 grid gap-2 sm:grid-cols-2">
                   {STARTERS[role].map((s) => (
                     <li key={s.label}>
                       <button
@@ -178,8 +192,8 @@ export function SageWorkspace({
                 t.role === "user" ? (
                   <UserBubble key={t.id} text={t.content} at={t.at} />
                 ) : (
+                  <div key={t.id} data-tour={t.id === lastAssistantId ? "sage-answer-last" : undefined}>
                   <SageAnswer
-                    key={t.id}
                     turn={t}
                     role={role}
                     busy={chat.applying === t.id}
@@ -192,6 +206,7 @@ export function SageWorkspace({
 
 `, key: Date.now() })}
                   />
+                  </div>
                 ),
               )
             )}

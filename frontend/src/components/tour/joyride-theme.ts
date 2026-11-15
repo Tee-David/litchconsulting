@@ -34,6 +34,10 @@ export const BRAND_OPTIONS: Partial<Options> = {
   // A stray overlay click shouldn't silently skip a step — the tooltip's own
   // Back / Skip / Next buttons are the only way through.
   overlayClickAction: false,
+  // Esc and the close button stop the tour (the provider keeps the place for
+  // Resume). Joyride's default "close" would move on to the next stop instead.
+  dismissKeyAction: false,
+  closeButtonAction: "skip",
   // The custom tooltip draws its own progress rail and "Step N of M" line.
   showProgress: false,
 };

@@ -13,7 +13,7 @@ export function TourWizardButton() {
   return (
     <button
       type="button"
-      onClick={startWalkthrough}
+      onClick={() => startWalkthrough()}
       className="inline-flex items-center gap-2 self-start rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover keep-brand"
     >
       <Sparkles className="size-4" />

@@ -1,6 +1,6 @@
 "use client";
 
-import { motion, useReducedMotion, type Transition, type TargetAndTransition } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import {
   Activity,
   BadgeCheck,
@@ -92,64 +92,9 @@ export const TOUR_ICONS = {
 
 export type TourIconName = keyof typeof TOUR_ICONS;
 
-type MotionFamily = "float" | "pulse" | "wiggle" | "spin" | "bob" | "nudge";
-
-/** Each family is a small, low-amplitude loop — presence, never distraction. */
-const FAMILIES: Record<MotionFamily, { animate: TargetAndTransition; transition: Transition }> = {
-  float: {
-    animate: { y: [0, -2.5, 0] },
-    transition: { duration: 2.6, repeat: Infinity, ease: "easeInOut" },
-  },
-  pulse: {
-    animate: { scale: [1, 1.12, 1] },
-    transition: { duration: 2, repeat: Infinity, ease: "easeInOut" },
-  },
-  wiggle: {
-    animate: { rotate: [0, -9, 8, -4, 0] },
-    transition: { duration: 1.6, repeat: Infinity, repeatDelay: 1.6, ease: "easeInOut" },
-  },
-  spin: {
-    animate: { rotate: 360 },
-    transition: { duration: 10, repeat: Infinity, ease: "linear" },
-  },
-  bob: {
-    animate: { y: [0, -1.5, 0], scale: [1, 1.06, 1] },
-    transition: { duration: 2.8, repeat: Infinity, ease: "easeInOut" },
-  },
-  nudge: {
-    animate: { x: [0, 2.5, 0], y: [0, 2.5, 0] },
-    transition: { duration: 1.4, repeat: Infinity, repeatDelay: 0.6, ease: "easeInOut" },
-  },
-};
-
-/** Icon → motion family. Anything unmapped floats. */
-const ICON_MOTION: Partial<Record<TourIconName, MotionFamily>> = {
-  activity: "pulse",
-  bell: "wiggle",
-  bot: "bob",
-  compass: "spin",
-  check: "pulse",
-  badgeCheck: "pulse",
-  clock: "spin",
-  flag: "wiggle",
-  gauge: "pulse",
-  lightbulb: "pulse",
-  pointer: "nudge",
-  panelLeft: "nudge",
-  pin: "wiggle",
-  plus: "pulse",
-  replay: "spin",
-  search: "nudge",
-  send: "nudge",
-  settings: "spin",
-  sparkles: "pulse",
-  trash: "wiggle",
-};
-
 /**
- * Animated step icon. Renders a lucide glyph in a brand disc with a soft halo
- * that breathes behind it. All motion is disabled under `prefers-reduced-motion`
- * (via framer's `useReducedMotion`), leaving a clean static icon.
+ * Step icon on a solid brand tile. It scales in once when the stop opens; it
+ * never loops. No motion with reduced motion.
  */
 export function TourIcon({
   name = "sparkles",
@@ -160,30 +105,15 @@ export function TourIcon({
 }) {
   const reduced = useReducedMotion();
   const Icon = TOUR_ICONS[name] ?? Sparkles;
-  const family = FAMILIES[ICON_MOTION[name] ?? "float"];
-
   return (
-    <span
-      className={cn(
-        "relative grid size-9 shrink-0 place-items-center rounded-full bg-brand-tint text-brand",
-        className,
-      )}
+    <motion.span
+      key={name}
+      initial={reduced ? false : { scale: 0.85, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      transition={{ duration: 0.18, ease: "easeOut" }}
+      className={cn("keep-brand grid size-9 shrink-0 place-items-center rounded-xl bg-brand text-white dark:bg-info dark:text-paper", className)}
     >
-      {!reduced && (
-        <motion.span
-          aria-hidden
-          className="absolute inset-0 rounded-full bg-brand/10"
-          animate={{ scale: [1, 1.3, 1], opacity: [0.55, 0, 0.55] }}
-          transition={{ duration: 3, repeat: Infinity, ease: "easeOut" }}
-        />
-      )}
-      <motion.span
-        className="relative grid place-items-center"
-        animate={reduced ? undefined : family.animate}
-        transition={reduced ? undefined : family.transition}
-      >
-        <Icon className="size-[18px]" strokeWidth={2} aria-hidden />
-      </motion.span>
-    </span>
+      <Icon className="size-[18px]" strokeWidth={1.75} aria-hidden />
+    </motion.span>
   );
 }

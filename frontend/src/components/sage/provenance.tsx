@@ -9,7 +9,7 @@ const TONE = { books: "text-good", knowledge: "text-info", route: "text-info", m
 export function ProvenanceLine({ facts, className }: { facts: ProvenanceFact[]; className?: string }) {
   if (!facts.length) return null;
   return (
-    <div className={cn("flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-xs text-muted", className)}>
+    <div data-tour="sage-provenance" className={cn("flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-xs text-muted", className)}>
       <span>How this answer was made</span>
       {facts.map((f) => {
         const Icon = ICON[f.kind];
