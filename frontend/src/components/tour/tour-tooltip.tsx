@@ -86,6 +86,11 @@ export function TourTooltip({
       return;
     }
     if (action?.kind !== "click") return;
+    // Already open (the list is unfolded, Sage is on screen): a click would close it.
+    if (action.wait && document.querySelector(action.wait)?.getClientRects().length) {
+      controls.next();
+      return;
+    }
     const el = document.querySelector<HTMLElement>(action.selector);
     if (!el) {
       setPhase("missing");

@@ -267,6 +267,9 @@ export function TourProvider({ audience, children }: { audience: TourAudience; c
 
       // Typing in the message box and clicking real parts need the focus free.
       built = built.map((s) => (s.action || s.interact || s.inDialog ? { ...s, disableFocusTrap: true } : s));
+      // The workbench fills the screen and scrolls inside: scrolling the page for its
+      // parts only pushes the layout up and leaves a blank band.
+      built = built.map((s) => (typeof s.target === "string" && s.target.includes('data-tour="wb-') ? { ...s, skipScroll: true } : s));
 
       let from = 0;
       if (opts.resume) {

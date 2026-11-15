@@ -273,6 +273,16 @@ function lessonWorkbench(): TourStep[] {
       },
     },
     {
+      key: "show-changes",
+      target: '[data-tour="wb-proposal"]',
+      inDialog: true,
+      placement: "auto",
+      title: "Sage's change waits here",
+      content: "Nothing changes on the sheet until you accept. Let us open the list of changes.",
+      icon: "fileText",
+      action: { kind: "click", label: "Show the changes", selector: '[data-tour="wb-proposal"] > button', wait: '[data-tour="wb-accept"]' },
+    },
+    {
       key: "proposal",
       target: '[data-tour="wb-proposal"]',
       inDialog: true,
