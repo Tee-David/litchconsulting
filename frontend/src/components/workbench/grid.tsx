@@ -1366,7 +1366,8 @@ export function Grid({
                       textAlign: st.ha ?? undefined,
                       whiteSpace: st.wrap ? "normal" : undefined,
                       lineHeight: st.wrap ? 1.15 : undefined,
-                      boxShadow: borders || undefined,
+                      // On a filled cell the selection outline gets a white inner line, so it shows on dark fills.
+                      boxShadow: isActive && st.bg ? "inset 0 0 0 3px rgba(255,255,255,0.9)" : borders || undefined,
                     }
                   : {};
                 return (
