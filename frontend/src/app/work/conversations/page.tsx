@@ -30,7 +30,7 @@ export default async function ConversationsPage({ searchParams }: { searchParams
         </Panel>
       ) : (
         <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
-          <nav aria-label="Threads" className={cn("rounded-card border border-hairline bg-paper", selected && "hidden lg:block")}>
+          <nav aria-label="Threads" data-tour="threads-list" className={cn("rounded-card border border-hairline bg-paper", selected && "hidden lg:block")}>
             <ul className="divide-y divide-hairline">
               {threads.map((t) => (
                 <li key={t.id}>

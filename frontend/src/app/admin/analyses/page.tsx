@@ -99,7 +99,7 @@ export default async function LitchaiStudioPage({ searchParams }: { searchParams
             <Link href="/admin/analyses/observability" className="inline-flex min-h-[40px] items-center gap-1.5 rounded-ctl border border-hairline bg-paper px-3.5 text-sm font-medium text-ink outline-none hover:bg-surface focus-visible:ring-2 focus-visible:ring-accent/40">
               <Activity className="size-4" aria-hidden /> AI health
             </Link>
-            <Link href="/admin/analyses/w/new" className="keep-brand inline-flex min-h-[40px] items-center gap-1.5 rounded-ctl bg-brand px-3.5 text-sm font-semibold text-white outline-none hover:bg-brand-hover focus-visible:ring-2 focus-visible:ring-accent/40">
+            <Link href="/admin/analyses/w/new" data-tour="analyses-new" className="keep-brand inline-flex min-h-[40px] items-center gap-1.5 rounded-ctl bg-brand px-3.5 text-sm font-semibold text-white outline-none hover:bg-brand-hover focus-visible:ring-2 focus-visible:ring-accent/40">
               <Plus className="size-4" aria-hidden /> New analysis
             </Link>
           </>
@@ -120,6 +120,7 @@ export default async function LitchaiStudioPage({ searchParams }: { searchParams
 
       <div className="space-y-5">
         <Panel
+          tour="analyses-recent"
           title="Recent workbenches"
           action={<Link href="/admin/analyses/w/new" className="text-sm font-medium text-accent hover:underline">New analysis</Link>}
           bodyClassName="p-0"

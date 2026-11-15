@@ -155,7 +155,7 @@ export default async function ClientRequestPage({
                 <b className="text-ink">Now:</b> {nn.now}. <b className="text-ink">Next:</b> {nn.next}.
               </p>
             </Panel>
-            <Panel title="We asked you for" sub={openItems.length ? `${openItems.length} open` : undefined} right={items.length ? <Link className={linkBtn.ghost} href={`${base}/asks`}>Open all</Link> : null}>
+            <Panel title="We asked you for" tour="client-asks" sub={openItems.length ? `${openItems.length} open` : undefined} right={items.length ? <Link className={linkBtn.ghost} href={`${base}/asks`}>Open all</Link> : null}>
               {items.length ? (
                 <ul className="divide-y divide-hairline">
                   {items.slice(0, 5).map((it) => (

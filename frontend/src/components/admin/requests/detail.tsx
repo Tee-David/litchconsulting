@@ -451,7 +451,7 @@ export function AssignCard({
     router.refresh();
   };
   return (
-    <section className="rounded-card border border-hairline bg-paper p-4">
+    <section data-tour="req-assign" className="rounded-card border border-hairline bg-paper p-4">
       <div className="mb-2 flex items-center justify-between gap-2">
         <h3 className="text-sm font-semibold text-ink">Assigned</h3>
         <Button size="sm" onClick={() => setOpen(true)}>

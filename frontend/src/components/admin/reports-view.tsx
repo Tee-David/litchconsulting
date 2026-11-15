@@ -349,7 +349,7 @@ export function ReportsView({ invoices }: { invoices: InvoiceRow[] }) {
   return (
     <div className="space-y-6">
       {/* Report type tabs */}
-      <div className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
+      <div data-tour="reports-tabs" className="no-scrollbar -mx-1 flex gap-1.5 overflow-x-auto px-1 pb-1">
         {REPORTS.map((r) => {
           const active = r.key === report;
           return (
@@ -435,7 +435,7 @@ export function ReportsView({ invoices }: { invoices: InvoiceRow[] }) {
       {/* ===================== OVERVIEW ===================== */}
       {report === "overview" && (
         <>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div data-tour="reports-stats" className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard label="Billed" value={fmt(totals.billed)} icon={Wallet} hint={`${live.length} invoices`} />
             <StatCard label="Collected" value={fmt(totals.collected)} icon={BadgeCheck} hint={`${totals.rate}% rate`} />
             <StatCard label="Outstanding" value={fmt(totals.outstanding)} icon={Clock} />

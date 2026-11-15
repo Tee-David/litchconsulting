@@ -110,7 +110,7 @@ export default async function ClientHome() {
             </Link>
           ) : null}
 
-          <Panel title="Recent files from us" right={<Link href="/dashboard/files" className={linkBtn.ghost}>All files</Link>}>
+          <Panel title="Recent files from us" tour="recent-files" right={<Link href="/dashboard/files" className={linkBtn.ghost}>All files</Link>}>
             {fromUs.length ? (
               <ul className="space-y-2">
                 {fromUs.map((f) => (
@@ -132,7 +132,7 @@ export default async function ClientHome() {
         </div>
 
         <aside className="space-y-6">
-          <Panel title="Billing" right={<Link href="/dashboard/billing" className={linkBtn.ghost}>Billing</Link>}>
+          <Panel title="Billing" tour="billing-summary" right={<Link href="/dashboard/billing" className={linkBtn.ghost}>Billing</Link>}>
             <KV
               rows={[
                 [`Paid in ${year}`, formatMoney(paidThisYear)],

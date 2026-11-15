@@ -22,7 +22,7 @@ export default function PrivacyRegisterPage() {
         ; client erasure requests are on each client&apos;s Privacy tab.
       </p>
 
-      <Panel title="Processing activities" sub={String(ACTIVITIES.length)} bodyClassName="p-0">
+      <Panel title="Processing activities" tour="privacy-register" sub={String(ACTIVITIES.length)} bodyClassName="p-0">
         <ul className="divide-y divide-hairline">
           {ACTIVITIES.map((a) => (
             <li key={a.id} className="px-4 py-4 sm:px-5">

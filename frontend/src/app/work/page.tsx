@@ -44,7 +44,7 @@ export default async function StaffHome() {
       {/* R1.5 first-run checklist: below the queue, so real work stays first. Renders nothing once done or hidden. */}
       <Onboarding />
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <Panel title="My requests" sub={String(open.length)} right={<Link href="/work/requests" className={linkBtn.ghost}>All my requests</Link>}>
+        <Panel title="My requests" tour="work-requests" sub={String(open.length)} right={<Link href="/work/requests" className={linkBtn.ghost}>All my requests</Link>}>
           {open.length ? (
             <ul className="divide-y divide-hairline">
               {open.slice(0, 6).map((r) => (
@@ -64,7 +64,7 @@ export default async function StaffHome() {
             <EmptyState compact icon={<Inbox />} title="Nothing open" why="Requests assigned to you appear here." />
           )}
         </Panel>
-        <Panel title="This week">
+        <Panel title="This week" tour="work-week">
           {week.length ? (
             <ul className="space-y-3">
               {week.map((r) => (
@@ -84,7 +84,7 @@ export default async function StaffHome() {
       </div>
 
       {open.length ? (
-        <section aria-label="Ask Sage about your requests" className="rounded-card border border-hairline bg-paper p-4 sm:p-5">
+        <section aria-label="Ask Sage about your requests" data-tour="work-sage" className="rounded-card border border-hairline bg-paper p-4 sm:p-5">
           <p className="flex items-center gap-2 text-sm font-semibold text-ink">
             <SageIcon className="size-4 text-accent" /> Ask Sage about your requests
           </p>

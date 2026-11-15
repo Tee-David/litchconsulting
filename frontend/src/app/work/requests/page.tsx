@@ -13,7 +13,9 @@ export default async function StaffRequestsPage() {
   return (
     <>
       <PageHead title="My requests" lede="Only requests assigned to you. Ask an admin to assign more." />
-      <StaffRequestsTable rows={rows} />
+      <div data-tour="staff-requests-table">
+        <StaffRequestsTable rows={rows} />
+      </div>
     </>
   );
 }

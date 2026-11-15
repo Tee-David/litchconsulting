@@ -187,7 +187,7 @@ export default async function AdminRequestPage({ params, searchParams }: { param
         initialOpen={sp.assign === "1"}
         assignees={d.assignees.map((a) => ({ userId: a.userId, name: a.name, role: a.role, at: a.at.toISOString() }))}
       />
-      <section className="rounded-card border border-hairline bg-paper p-4 text-sm">
+      <section data-tour="req-workbench" className="rounded-card border border-hairline bg-paper p-4 text-sm">
         <h3 className="mb-2 font-semibold text-ink">Work on the files</h3>
         <p className="mb-3 text-body">Open client spreadsheets in the workbench with Sage beside you, scoped by this client&rsquo;s AI mode.</p>
         <ActLink variant="secondary" href={`/admin/analyses?requestId=${r.id}`}>
@@ -228,6 +228,7 @@ export default async function AdminRequestPage({ params, searchParams }: { param
 
   const nextCard = (
     <div
+      data-tour="req-move"
       className={cn(
         "flex flex-col gap-3 rounded-card border p-4 sm:flex-row sm:items-center sm:p-5",
         next.tone === "us" ? "border-act/40 bg-brand-tint" : next.tone === "client" ? "border-hairline bg-paper" : "border-hairline bg-surface",
@@ -250,7 +251,7 @@ export default async function AdminRequestPage({ params, searchParams }: { param
     main = (
       <div className="space-y-5">
         {nextCard}
-        <Panel title="Progress">{stepper}</Panel>
+        <Panel title="Progress" tour="req-progress">{stepper}</Panel>
         {r.details || r.intake ? (
           <Panel title="The brief">
             {r.details ? <p className="whitespace-pre-line text-sm text-body">{r.details}</p> : null}
@@ -267,7 +268,7 @@ export default async function AdminRequestPage({ params, searchParams }: { param
             ) : null}
           </Panel>
         ) : null}
-        <Panel title="Asks" sub={openItems ? `${openItems} open` : undefined}>
+        <Panel title="Asks" tour="req-asks" sub={openItems ? `${openItems} open` : undefined}>
           <AsksPanel requestId={r.id} clientName={clientName} items={items} closed={closed} />
         </Panel>
         {process.env.LITCHAI_API_URL && uploads.length > 0 ? (

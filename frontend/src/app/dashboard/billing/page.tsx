@@ -60,7 +60,7 @@ export default async function BillingPage() {
     <div>
       <PageHead title="Billing" lede="Quotes to answer, invoices to pay, and receipts for everything paid." />
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-        <div className="min-w-0">
+        <div className="min-w-0" data-tour="billing-table">
           <BillingTable rows={rows} />
         </div>
         <aside>

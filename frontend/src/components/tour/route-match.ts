@@ -37,14 +37,15 @@ export function normalizeRoute(pathname: string): string {
 }
 
 /**
- * Normalized route → page tour id. Detail routes (`[id]`) intentionally have no
- * tour: they're driven by the record in front of you, not by a fixed layout.
+ * Normalized route → page tour id. A detail route (`[id]`) has a tour only where
+ * its layout is fixed (a request, a workbench).
  */
 const ROUTE_TO_TOUR: Record<string, string> = {
   // Client portal
   "/dashboard": "client-dashboard",
   "/dashboard/requests": "client-requests",
   "/dashboard/requests/new": "client-request-new",
+  "/dashboard/requests/[id]": "client-request",
   "/dashboard/billing": "client-billing",
   "/dashboard/invoices": "client-billing",
   "/dashboard/files": "client-files",
@@ -64,6 +65,7 @@ const ROUTE_TO_TOUR: Record<string, string> = {
   // Admin
   "/admin": "admin-dashboard",
   "/admin/requests": "admin-requests",
+  "/admin/requests/[id]": "admin-request",
   "/admin/clients": "admin-clients",
   "/admin/reports": "admin-reports",
   "/admin/billing": "admin-billing",

@@ -56,7 +56,7 @@ export function SettingsForm({ initialData }: SettingsFormProps) {
 
   return (
     <div className="max-w-2xl space-y-6">
-    <div className="rounded-card border border-hairline bg-paper overflow-hidden">
+    <div data-tour="settings-form" className="rounded-card border border-hairline bg-paper overflow-hidden">
       <div className="border-b border-hairline px-6 py-4">
         <h3 className="font-display text-sm font-bold text-ink">Business and profile information</h3>
         <p className="text-xs text-muted mt-1">

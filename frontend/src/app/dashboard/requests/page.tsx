@@ -22,7 +22,7 @@ export default async function ClientRequestsPage() {
         title="Requests"
         lede="Every piece of work you asked us for, and whose move it is."
         actions={
-          <Link href="/dashboard/requests/new" className={linkBtn.primary}>
+          <Link href="/dashboard/requests/new" data-tour="request-service" className={linkBtn.primary}>
             <Plus className="size-4" aria-hidden /> Request a service
           </Link>
         }

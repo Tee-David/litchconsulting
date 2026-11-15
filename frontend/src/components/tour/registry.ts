@@ -1,5 +1,6 @@
 import { centerStep, navStep, type TourDef } from "./tour-types";
 import { LESSONS } from "./lessons";
+import { TOURS_V3 } from "./tours-v3";
 
 export type { TourAction, TourAudience, TourDef, TourKind, TourStep } from "./tour-types";
 
@@ -1225,4 +1226,9 @@ const BASE: Record<string, TourDef> = {
   },
 };
 
-export const TOURS: Record<string, TourDef> = { ...BASE, ...LESSONS };
+// The old Analyses ("LitchAI") and Assistant tours point at pages that are gone.
+const { "admin-litchai": _oldAnalyses, "admin-assistant": _oldAssistant, ...KEPT } = BASE;
+void _oldAnalyses;
+void _oldAssistant;
+
+export const TOURS: Record<string, TourDef> = { ...KEPT, ...TOURS_V3, ...LESSONS };
