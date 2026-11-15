@@ -192,6 +192,17 @@ function lessonPlans(): TourStep[] {
   ];
 }
 
+/** Phones: the tour opens the Sage sheet, so the next stops can point into it. */
+const openSage = (): TourStep => ({
+  key: "open-sage",
+  target: '[data-tour="wb-sage-tab"]',
+  mobileOnly: true,
+  title: "Open Sage",
+  content: "On a phone, Sage sits behind this tab. The sheet keeps its place.",
+  icon: "sparkles",
+  action: { kind: "click", label: "Open Sage", selector: '[data-tour="wb-sage-tab"] [role="radio"]:last-child', wait: WB },
+});
+
 function lessonWorkbench(): TourStep[] {
   return [
     centerStep(
@@ -225,18 +236,11 @@ function lessonWorkbench(): TourStep[] {
       icon: "search",
       optional: true,
     },
-    {
-      key: "open-sage",
-      target: '[data-tour="wb-sage-tab"]',
-      mobileOnly: true,
-      title: "Open Sage",
-      content: "On a phone, Sage sits behind this tab. Your selection stays.",
-      icon: "sparkles",
-      interact: { hint: "Tap Sage." },
-    },
+    openSage(),
     {
       key: "ask-sum",
       target: WB,
+      inDialog: true,
       placement: "left",
       title: "Ask about the selection",
       content: "Let us ask Sage to add up the selected cells.",
@@ -246,6 +250,7 @@ function lessonWorkbench(): TourStep[] {
     {
       key: "answer",
       target: WB,
+      inDialog: true,
       placement: "left",
       title: "Sage used your selection",
       content: "Sage read C2:C20 only. The total comes from the sheet, not from the AI. Click a cell name in the answer to jump to it.",
@@ -254,6 +259,7 @@ function lessonWorkbench(): TourStep[] {
     {
       key: "ask-change",
       target: WB,
+      inDialog: true,
       placement: "left",
       title: "Ask for a change",
       content: "Sage can also write to the sheet. It shows the change first, and you accept or reject it.",
@@ -269,6 +275,7 @@ function lessonWorkbench(): TourStep[] {
     {
       key: "proposal",
       target: '[data-tour="wb-proposal"]',
+      inDialog: true,
       placement: "auto",
       title: "Check, then accept",
       content: "The change shows on the sheet in colour. Accept keeps it. Reject drops it. This is the practice workbook, so accept it.",
@@ -278,6 +285,7 @@ function lessonWorkbench(): TourStep[] {
     {
       key: "undo",
       target: '[data-tour="wb-undo"]',
+      desktopOnly: true,
       title: "Undo at any time",
       content: "Changed your mind? Undo takes the change back. Every version stays in the history, so nothing is lost.",
       icon: "replay",
@@ -286,6 +294,7 @@ function lessonWorkbench(): TourStep[] {
     {
       key: "turn",
       target: WB,
+      inDialog: true,
       placement: "left",
       title: "Your turn",
       content: "Ask Sage to do something with this sheet.",
@@ -308,8 +317,10 @@ function lessonRules(): TourStep[] {
       "Each workbook has its own instructions. Sage reads them before every answer in that workbook.",
       { route: "@practice", page: "Practice workbook", icon: "lightbulb", showEstimate: true },
     ),
+    openSage(),
     {
       key: "button",
+      inDialog: true,
       target: '[data-tour="wb-instructions"]',
       title: "Instructions",
       content: "A dot on this button shows that the workbook has instructions.",
@@ -337,7 +348,9 @@ function lessonFiles(): TourStep[] {
       "Give Sage the papers: spreadsheets, CSV, PDF, Word and pictures, up to 20 MB each.",
       { route: "@practice", page: "Practice workbook", icon: "fileStack", showEstimate: true },
     ),
+    openSage(),
     {
+      inDialog: true,
       key: "attach",
       target: '[data-tour="wb-attach"]',
       title: "Add a file",

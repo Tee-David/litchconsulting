@@ -19,7 +19,7 @@ import { BRAND_OPTIONS, LOCALE } from "./joyride-theme";
 import { withStepMeta, type TourStepMeta } from "./tour-meta";
 import { TourTooltip } from "./tour-tooltip";
 import { isDesktop, prefersReducedMotion, waitForTarget } from "./wait-for-target";
-import { openDialog } from "./tour-actions";
+import { blockedByDialog, openDialog } from "./tour-actions";
 import { fireConfetti } from "./confetti";
 import { LearnSage } from "./learn-sage";
 import { TourOffer } from "./tour-offer";
@@ -212,6 +212,8 @@ export function TourProvider({ audience, children }: { audience: TourAudience; c
         if (!res?.ok) return;
         router.push(res.href);
         await waitForRoute(res.href);
+        // The sheet loads after the page: the next stops point into it.
+        await waitForTarget('[data-tour="wb-grid"] [role="gridcell"]', 20000);
         return;
       }
       if (pathnameRef.current !== route) {
@@ -408,11 +410,9 @@ export function TourProvider({ audience, children }: { audience: TourAudience; c
     let seen = 0;
     let pausedNow = false;
     const timer = setInterval(() => {
-      const dialog = openDialog();
       const step = stepsRef.current[indexRef.current];
       const sel = typeof step?.target === "string" && step.target !== "body" ? step.target : null;
-      const inside = Boolean(dialog && sel && dialog.querySelector(sel));
-      seen = dialog && !inside ? seen + 1 : 0;
+      seen = blockedByDialog(sel) ? seen + 1 : 0;
       const next = seen >= 2;
       if (next === pausedNow) return;
       pausedNow = next;

@@ -69,14 +69,25 @@ export function waitForMore(sel: string, before: number, timeout: number, signal
   });
 }
 
-/** A modal that is not the tour's own card. */
+/** Open modals that are not the tour's own card. */
+export function openDialogs(): Element[] {
+  return Array.from(document.querySelectorAll('[role="dialog"][aria-modal="true"]')).filter(
+    (el) =>
+      !el.closest("[data-tour-card]") &&
+      !el.querySelector("[data-tour-card]") &&
+      !el.closest("#react-joyride-portal, .react-joyride__floater") &&
+      el.getClientRects().length > 0,
+  );
+}
+
 export function openDialog(): Element | null {
-  const list = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
-  for (const el of Array.from(list)) {
-    if (el.closest("[data-tour-card]") || el.querySelector("[data-tour-card]")) continue;
-    if (el.closest("#react-joyride-portal, .react-joyride__floater")) continue;
-    if (el.getClientRects().length === 0) continue;
-    return el;
-  }
-  return null;
+  return openDialogs()[0] ?? null;
+}
+
+/** True when a modal is open and none of the open modals holds the stop's part. */
+export function blockedByDialog(sel: string | null): boolean {
+  const list = openDialogs();
+  if (!list.length) return false;
+  // A centred stop (no part) sits above any sheet, so it never waits.
+  return Boolean(sel) && !list.some((d) => d.querySelector(sel!));
 }
