@@ -4,7 +4,7 @@ import { db } from "@/lib/db/client";
 import { client, requestAssignment, serviceRequest, user } from "@/lib/db/schema";
 import { getSessionUser } from "@/lib/server-user";
 import { listInvitations } from "@/lib/invitations";
-import { twoStepEnabledFor } from "@/lib/two-step";
+import { twoStepEnabledFor, twoStepExemptFor } from "@/lib/two-step";
 import { AccessPage, type TeamRow, type InviteRow, type AssignmentRow } from "@/components/access/access-page";
 
 export const metadata: Metadata = { title: "Team and access" };
@@ -28,8 +28,9 @@ export default async function TeamAccessPage({ searchParams }: { searchParams: P
     .orderBy(user.name);
   const ids = people.map((p) => p.id);
 
-  const [twoStep, lastSeen, invites, assigned] = await Promise.all([
+  const [twoStep, exempt, lastSeen, invites, assigned] = await Promise.all([
     twoStepEnabledFor(ids).catch(() => new Set<string>()),
+    twoStepExemptFor(ids).catch(() => new Set<string>()),
     ids.length
       ? db
           .execute<{ userId: string; at: Date; n: number }>(
@@ -68,6 +69,7 @@ export default async function TeamAccessPage({ searchParams }: { searchParams: P
     role: p.role === "admin" ? "admin" : "staff",
     banned: Boolean(p.banned),
     twoStep: twoStep.has(p.id),
+    twoStepOptional: exempt.has(p.id),
     lastActive: seen.get(p.id)?.at ? new Date(seen.get(p.id)!.at).toISOString() : null,
     devices: seen.get(p.id)?.n ?? 0,
     open: assigned.filter((a) => a.userId === p.id).length,

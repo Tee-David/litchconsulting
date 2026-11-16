@@ -856,6 +856,16 @@ export const sessionTwoStep = pgTable(
 );
 
 /**
+ * Two-step exemption: an Admin may make two-step sign-in optional for one admin
+ * or staff member. One row per exempt person; no row means two-step is required.
+ */
+export const twoStepExemption = pgTable("two_step_exemption", {
+  userId: text("user_id").primaryKey(),
+  setBy: text("set_by").notNull(),
+  createdAt: createdAt(),
+});
+
+/**
  * R5 workbench: one row per LitchAI workbench conversation, linking it to the
  * request it works on (staff access = canWorkOnRequest on request_id). The
  * thread, workbooks and proposals themselves live on the analysis server.

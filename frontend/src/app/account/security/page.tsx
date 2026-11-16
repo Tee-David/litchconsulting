@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getAccountUser, twoStepState } from "@/lib/server-user";
 import { roleOf, ROLE_LABEL } from "@/lib/access";
-import { twoStepRequired } from "@/lib/two-step";
+import { twoStepExempt, twoStepRequired } from "@/lib/two-step";
 import { onboardingFor } from "@/lib/onboarding";
 import { listDevices, signInHistory, signInMethods } from "../_lib";
 import { SecurityPage } from "@/components/access/security-page";
@@ -22,6 +22,8 @@ export default async function AccountSecurityPage() {
   if (hold === "enrol") redirect("/account/two-step");
   if (hold === "verify") redirect("/account/two-step/verify");
   const role = roleOf(u);
+  // Required for the firm, unless an Admin made it optional for this person.
+  const required = twoStepRequired(role) && !(await twoStepExempt(u.id));
 
   const [devices, history, methods, onboarding] = await Promise.all([
     listDevices(u.id, u.sessionId).catch(() => []),
@@ -38,7 +40,7 @@ export default async function AccountSecurityPage() {
       devices={devices}
       history={history}
       methods={methods}
-      twoStep={{ enabled: u.twoFactorEnabled, required: twoStepRequired(role) }}
+      twoStep={{ enabled: u.twoFactorEnabled, required: required }}
       alertsHref={alertsHref}
       onboardingClosed={Boolean(onboarding && !onboarding.visible && onboarding.done < onboarding.total)}
       now={Date.now()}

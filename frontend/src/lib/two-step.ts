@@ -1,7 +1,7 @@
 import "server-only";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { sessionTwoStep } from "@/lib/db/schema";
+import { sessionTwoStep, twoStepExemption } from "@/lib/db/schema";
 import type { Role } from "@/lib/access";
 
 /**
@@ -38,6 +38,29 @@ export async function sessionVerified(sessionId: string): Promise<boolean> {
 
 export async function markSessionVerified(sessionId: string, userId: string): Promise<void> {
   await db.insert(sessionTwoStep).values({ sessionId, userId }).onConflictDoNothing();
+}
+
+/** Is two-step optional for this person (an Admin exempted them)? Fails closed (required). */
+export async function twoStepExempt(userId: string): Promise<boolean> {
+  try {
+    const [row] = await db.select({ id: twoStepExemption.userId }).from(twoStepExemption).where(eq(twoStepExemption.userId, userId)).limit(1);
+    return Boolean(row);
+  } catch (err) {
+    console.error("[two-step] exemption lookup failed:", err);
+    return false;
+  }
+}
+
+/** Exempt people among these ids (team table). */
+export async function twoStepExemptFor(userIds: string[]): Promise<Set<string>> {
+  if (!userIds.length) return new Set();
+  const rows = await db.select({ id: twoStepExemption.userId }).from(twoStepExemption).where(inArray(twoStepExemption.userId, userIds));
+  return new Set(rows.map((r) => r.id));
+}
+
+export async function setTwoStepExempt(userId: string, exempt: boolean, setBy: string): Promise<void> {
+  if (exempt) await db.insert(twoStepExemption).values({ userId, setBy }).onConflictDoNothing();
+  else await db.delete(twoStepExemption).where(eq(twoStepExemption.userId, userId));
 }
 
 export function twoStepStateFor(input: { role: Role; enabled: boolean; verified: boolean }): TwoStepState {

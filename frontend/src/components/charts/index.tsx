@@ -298,7 +298,17 @@ export function Donut({
         </ResponsiveContainer>
         {(centerLabel || centerValue) && (
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-            {centerValue && <span className="font-display text-xl font-bold text-ink">{centerValue}</span>}
+            {/* The hole is about 7rem wide at 200 px: long amounts step down a size so they stay inside the ring. */}
+            {centerValue && (
+              <span
+                className={cn(
+                  "max-w-[7rem] font-display font-bold leading-tight tabular-nums text-ink",
+                  centerValue.length > 13 ? "text-[13px]" : centerValue.length > 9 ? "text-base" : "text-xl",
+                )}
+              >
+                {centerValue}
+              </span>
+            )}
             {centerLabel && <span className="max-w-[7rem] text-xs text-muted">{centerLabel}</span>}
           </div>
         )}

@@ -66,7 +66,7 @@ export const ACTIVITIES: Activity[] = [
     processors: ["vercel", "cockroach", "google", "truehost"],
     retention: "While the account is open; sessions expire after 7 days; sign-in history kept with the audit log.",
     enforcement: "Sessions expire automatically. Accounts are deleted by an Admin (Settings → Team and access) or on an erasure request.",
-    where: "user, account, session, twoFactor, session_two_step",
+    where: "user, account, session, twoFactor, session_two_step, two_step_exemption",
   },
   {
     id: "engagements",

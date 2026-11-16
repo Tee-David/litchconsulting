@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { getAccountUser, twoStepState } from "@/lib/server-user";
 import { roleOf } from "@/lib/access";
-import { twoStepRequired } from "@/lib/two-step";
+import { twoStepExempt, twoStepRequired } from "@/lib/two-step";
 import { safePath, continueUrl } from "@/lib/post-auth";
 import { hasPassword } from "../_lib";
 import { TwoStepEnrol } from "@/components/auth/two-step-enrol";
@@ -21,16 +21,18 @@ export default async function TwoStepPage({ searchParams }: { searchParams: Prom
   const sp = await searchParams;
   const next = safePath(sp.next);
   const role = roleOf(u);
+  // Required for the firm, unless an Admin made it optional for this person.
+  const required = twoStepRequired(role) && !(await twoStepExempt(u.id));
   const state = await twoStepState();
   if (state === "verify") redirect(`/account/two-step/verify${next ? `?next=${encodeURIComponent(next)}` : ""}`);
   if (u.twoFactorEnabled) redirect("/account/security#two-step");
 
   return (
     <TwoStepEnrol
-      required={twoStepRequired(role)}
+      required={required}
       needsPassword={await hasPassword(u.id)}
       email={u.email}
-      done={next ? continueUrl(next) : twoStepRequired(role) ? continueUrl(null) : "/account/security#two-step"}
+      done={next ? continueUrl(next) : required ? continueUrl(null) : "/account/security#two-step"}
     />
   );
 }

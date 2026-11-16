@@ -9,7 +9,7 @@ import { sessionTwoStep, user } from "@/lib/db/schema";
 import { recordAudit } from "@/lib/audit";
 import { getSessionUser, isAdmin } from "@/lib/server-user";
 import { createInvitation, InvitationError, reissueInvitation, revokeInvitation, sendInvitationEmail } from "@/lib/invitations";
-import { resetTwoStep } from "@/lib/two-step";
+import { resetTwoStep, setTwoStepExempt } from "@/lib/two-step";
 import { changeUserRoleAction } from "../actions";
 
 /*
@@ -110,6 +110,49 @@ export async function resetTwoStepAction(userId: string): Promise<Res> {
   });
   revalidatePath(PATH);
   return { ok: true, message: `Two-step reset for ${u.name || u.email}. They are signed out and set it up again at next sign-in.` };
+}
+
+/**
+ * Make two-step sign-in optional (exempt) or required again for one admin or staff
+ * member. Admin only, never for yourself, always audit-logged and emailed.
+ */
+export async function setTwoStepRequiredAction(userId: string, required: boolean): Promise<Res> {
+  const me = await admin();
+  if (!me) return { ok: false, error: "Only Admin can change two-step sign-in rules." };
+  const [u] = typeof userId === "string" && userId
+    ? await db.select({ id: user.id, name: user.name, email: user.email, role: user.role }).from(user).where(eq(user.id, userId)).limit(1)
+    : [];
+  if (!u) return { ok: false, error: "That person no longer exists." };
+  if (u.role !== "admin" && u.role !== "staff") return { ok: false, error: "Two-step rules apply to the firm's team only." };
+  if (u.id === me.id) return { ok: false, error: "Another Admin must change your own two-step rule." };
+  await setTwoStepExempt(u.id, !required, me.id);
+  await recordAudit({
+    action: required ? "auth.two_step_required" : "auth.two_step_exempt",
+    entity: "user",
+    entityId: u.id,
+    actorId: me.id,
+    actorName: me.name || me.email,
+    meta: { email: u.email },
+  });
+  after(async () => {
+    try {
+      const { sendTemplate } = await import("@/lib/email-templates");
+      await sendTemplate(
+        "securityNotice",
+        { name: u.name, what: `${me.name || "An Admin"} made two-step sign-in ${required ? "required" : "optional"} for you`, when: new Date(), device: "Team and access" },
+        { to: u.email },
+      );
+    } catch (err) {
+      console.error("[access] two-step rule notice failed:", err);
+    }
+  });
+  revalidatePath(PATH);
+  return {
+    ok: true,
+    message: required
+      ? `Two-step is required again for ${u.name || u.email}. They set it up at their next page load if they have not.`
+      : `Two-step is now optional for ${u.name || u.email}.`,
+  };
 }
 
 export async function signOutEverywhereAction(userId: string): Promise<Res> {

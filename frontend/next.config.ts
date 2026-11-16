@@ -38,7 +38,13 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    // Private areas and one-off links never belong in a search index, whatever a page's
+    // own metadata says (a missing record streams as "not found" with status 200).
+    const noindex = [{ key: "X-Robots-Tag", value: "noindex, nofollow" }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      ...["/admin/:path*", "/dashboard/:path*", "/work/:path*", "/account/:path*", "/invite/:path*", "/i/:path*", "/pay/:path*", "/offline"].map((source) => ({ source, headers: noindex })),
+    ];
   },
   images: {
     // Unsplash URLs are already sized via query params; serve them directly so

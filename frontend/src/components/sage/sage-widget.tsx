@@ -40,6 +40,18 @@ export function SageWidget({ role = "admin", basePath = "/admin/sage" }: { role?
     return () => window.removeEventListener("keydown", esc);
   }, [open]);
 
+  // The round button must not sit on top of an open menu (table row actions near the
+  // bottom right): it steps aside while a menu or a list box is open.
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    if (open) return;
+    const check = () => setMenuOpen(Boolean(document.querySelector('[role="menu"], [role="listbox"]')));
+    const mo = new MutationObserver(check);
+    mo.observe(document.body, { childList: true, subtree: true });
+    check();
+    return () => mo.disconnect();
+  }, [open]);
+
   if (pathname?.startsWith(basePath) || pathname?.startsWith("/admin/analyses/w/")) return null;
 
   const expand = () => {
@@ -54,6 +66,7 @@ export function SageWidget({ role = "admin", basePath = "/admin/sage" }: { role?
         onClick={() => setOpen(true)}
         aria-label="Ask Sage"
         data-tour="sage-fab"
+        hidden={menuOpen}
         className="keep-brand fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 z-40 inline-flex min-h-12 items-center gap-2 rounded-full bg-brand pl-2 pr-4 text-[14px] font-medium text-white shadow-lg ring-1 ring-white/10 transition-transform hover:scale-[1.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-paper motion-reduce:transition-none sm:bottom-6 sm:right-6 lg:bottom-6"
       >
         <span className="grid size-8 place-items-center rounded-full bg-white/15">

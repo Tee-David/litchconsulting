@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { KeyRound, LogOut, Send, ShieldAlert, ShieldCheck, UserPlus, X } from "lucide-react";
+import { KeyRound, LogOut, Send, ShieldAlert, ShieldCheck, ShieldOff, UserPlus, X } from "lucide-react";
 import { useToast } from "@/components/admin/ui/toaster";
 import { Panel } from "@/components/admin/ui/surface";
 import { Button, ConfirmSheet, EmptyState, Segmented, Sheet, StatusChip } from "@/components/kit";
@@ -14,6 +14,7 @@ import {
   resendInvitationAction,
   resetTwoStepAction,
   revokeInvitationAction,
+  setTwoStepRequiredAction,
   signOutEverywhereAction,
 } from "@/app/admin/settings/access/actions";
 import { cn } from "@/lib/utils";
@@ -27,6 +28,8 @@ export type TeamRow = {
   role: "admin" | "staff";
   banned: boolean;
   twoStep: boolean;
+  /** An Admin made two-step optional for this person. */
+  twoStepOptional: boolean;
   lastActive: string | null;
   devices: number;
   open: number;
@@ -67,7 +70,7 @@ const INVITE_STATE: Record<InviteRow["state"], { label: string; cls: string }> =
   redeemed: { label: "Accepted", cls: "bg-good-soft text-good" },
 };
 
-type Confirm = { kind: "reset" | "signout" | "revoke" | "role"; id: string; label: string; role?: "admin" | "staff" } | null;
+type Confirm = { kind: "reset" | "signout" | "revoke" | "role" | "optional" | "require"; id: string; label: string; role?: "admin" | "staff" } | null;
 
 /**
  * Settings → Team and access (R1.3). Rendered inside the Settings layout, so
@@ -82,7 +85,7 @@ export function AccessPage({ team, invites, work, unassigned, openInvite, tab: i
   const [confirm, setConfirm] = useState<Confirm>(null);
   const [pending, start] = useTransition();
   const admins = team.filter((t) => t.role === "admin" && !t.banned).length;
-  const missing2fa = team.filter((t) => !t.twoStep && !t.banned).length;
+  const missing2fa = team.filter((t) => !t.twoStep && !t.twoStepOptional && !t.banned).length;
   const waiting = invites.filter((i) => i.state === "pending");
 
   function quick(fn: () => Promise<{ ok: boolean; message?: string; error?: string }>) {
@@ -103,7 +106,9 @@ export function AccessPage({ team, invites, work, unassigned, openInvite, tab: i
           ? await signOutEverywhereAction(confirm.id)
           : confirm.kind === "revoke"
             ? await revokeInvitationAction(confirm.id)
-            : await changeTeamRoleAction(confirm.id, confirm.role ?? "staff");
+            : confirm.kind === "optional" || confirm.kind === "require"
+              ? await setTwoStepRequiredAction(confirm.id, confirm.kind === "require")
+              : await changeTeamRoleAction(confirm.id, confirm.role ?? "staff");
     if (!r.ok) throw new Error(r.error);
     toast.success(r.message);
     router.refresh();
@@ -118,6 +123,17 @@ export function AccessPage({ team, invites, work, unassigned, openInvite, tab: i
     },
     signout: { title: `Sign ${confirm?.label} out everywhere?`, body: "Every device they are signed in on ends now. Their password and two-step stay as they are.", cta: "Sign out everywhere", danger: true },
     revoke: { title: `Withdraw the invitation to ${confirm?.label}?`, body: "The link stops working. You can send a new one later.", cta: "Withdraw" },
+    optional: {
+      title: `Make two-step optional for ${confirm?.label}?`,
+      body: "They can then sign in with only their password. This makes their account easier to take over, and they can open client files and money. If they already use an authenticator, it keeps working. They get an email, and the audit log keeps the change.",
+      cta: "Make it optional",
+      danger: true,
+    },
+    require: {
+      title: `Require two-step for ${confirm?.label} again?`,
+      body: "If they have no authenticator yet, they must set one up at their next page load before the workspace opens. They get an email about it.",
+      cta: "Require two-step",
+    },
     role: {
       title: confirm?.role === "admin" ? `Make ${confirm?.label} an Admin?` : `Make ${confirm?.label} Staff?`,
       body:
@@ -216,11 +232,26 @@ export function AccessPage({ team, invites, work, unassigned, openInvite, tab: i
                             <span className="inline-flex items-center gap-1 text-[13px] font-medium text-good">
                               <ShieldCheck className="size-4" aria-hidden /> On
                             </span>
+                          ) : t.twoStepOptional ? (
+                            <span className="inline-flex items-center gap-1 text-[13px] font-medium text-muted">
+                              <ShieldOff className="size-4" aria-hidden /> Off
+                            </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 text-[13px] font-medium text-warn">
                               <ShieldAlert className="size-4" aria-hidden /> Not set up
                             </span>
                           )}
+                          <span className="block text-[12px] text-muted">{t.twoStepOptional ? "Optional" : "Required"}</span>
+                          {!t.me ? (
+                            <button
+                              type="button"
+                              disabled={pending}
+                              onClick={() => setConfirm({ kind: t.twoStepOptional ? "require" : "optional", id: t.id, label: t.name || t.email })}
+                              className="mt-0.5 min-h-8 rounded-md text-[12px] font-medium text-accent hover:underline disabled:opacity-50 dark:text-info"
+                            >
+                              {t.twoStepOptional ? "Require it" : "Make optional"}
+                            </button>
+                          ) : null}
                         </td>
                         <td className="px-3 py-3 text-[13px] text-body">
                           {ago(t.lastActive)}

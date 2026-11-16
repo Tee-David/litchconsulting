@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { canAccess, homeFor, roleOf, type Area, type Role } from "@/lib/access";
-import { sessionVerified, twoStepRequired, twoStepStateFor, type TwoStepState } from "@/lib/two-step";
+import { sessionVerified, twoStepExempt, twoStepRequired, twoStepStateFor, type TwoStepState } from "@/lib/two-step";
 
 export type SessionUser = {
   id: string;
@@ -36,6 +36,8 @@ export const twoStepState = cache(async (): Promise<TwoStepState> => {
   const u = s.user as unknown as { role?: string; twoFactorEnabled?: boolean | null };
   const role = roleOf(u);
   if (!twoStepRequired(role)) return "ok";
+  // An Admin made two-step optional for this person (Settings → Team and access).
+  if (await twoStepExempt(s.user.id)) return "ok";
   const enabled = Boolean(u.twoFactorEnabled);
   const verified = enabled ? await sessionVerified(s.session.id) : false;
   return twoStepStateFor({ role, enabled, verified });
