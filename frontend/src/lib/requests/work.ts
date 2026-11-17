@@ -113,6 +113,7 @@ export async function staffRequestDetail(id: string) {
       details: serviceRequest.details,
       intake: serviceRequest.intake,
       reviewRound: serviceRequest.reviewRound,
+      pricingMode: serviceRequest.pricingMode,
       invoiceId: serviceRequest.invoiceId,
       parentRequestId: serviceRequest.parentRequestId,
       createdAt: serviceRequest.createdAt,

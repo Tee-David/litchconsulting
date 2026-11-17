@@ -13,6 +13,7 @@ import { canWorkOnRequest, requireArea } from "@/lib/server-user";
 import { staffRequestDetail } from "@/lib/requests/work";
 import { INCLUDED_ROUNDS } from "@/lib/requests/review";
 import { formatDate } from "@/lib/format-date";
+import { nextStepFor } from "@/app/admin/_lib/requests-data";
 import { replyAction } from "../../actions";
 
 export const metadata: Metadata = { title: "Request" };
@@ -51,6 +52,16 @@ export default async function StaffRequestPage({ params, searchParams }: { param
   const closed = ["completed", "cancelled", "declined", "refunded"].includes(req.status);
   const latest = rounds[0] ?? null;
   const nn = nowNext(req.status, "firm");
+  const ourMove = !closed && (supplied > 0 || ["in_progress", "in_review"].includes(req.status));
+  const nextTitle = nextStepFor(req.status, { openItems: open, suppliedItems: supplied, round: req.reviewRound });
+  const nextHref =
+    supplied > 0
+      ? { href: `${base}?tab=asks`, label: "Check items" }
+      : req.status === "in_progress"
+        ? { href: `${base}?tab=deliverables`, label: "Send a draft" }
+        : req.status === "awaiting_documents" && open > 0
+          ? { href: `${base}?tab=asks`, label: "Open asks" }
+          : null;
 
   const messages: ThreadMessage[] = [...events]
     .reverse()
@@ -61,10 +72,43 @@ export default async function StaffRequestPage({ params, searchParams }: { param
     <div>
       <PageHead
         crumbs={[{ href: "/work/requests", label: "My requests" }, { label: req.number }]}
-        title={req.client}
+        title={req.serviceName}
         chip={<StatusChip domain="request" status={req.status} suffix={req.status === "client_review" ? `round ${req.reviewRound}` : undefined} />}
-        lede={`${req.number} · ${req.serviceName} · payment: ${payment}`}
+        lede={`${req.number} · ${req.client} · payment: ${payment}`}
+        actions={
+          !closed ? (
+            <>
+              <Link href={`${base}?tab=asks`} className={linkBtn.secondary}>
+                Ask client
+              </Link>
+              <Link href={`${base}?tab=deliverables`} className={linkBtn.primary}>
+                {req.status === "in_progress" ? "Send a draft" : "Deliverables"}
+              </Link>
+            </>
+          ) : null
+        }
       />
+
+      {/* Next move: what to do now and whose turn it is (as on the admin page). */}
+      <div
+        className={
+          "mb-6 flex flex-col gap-3 rounded-card border p-4 sm:flex-row sm:items-center sm:p-5 " +
+          (ourMove ? "border-act/40 bg-brand-tint" : "border-hairline bg-paper")
+        }
+      >
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-medium text-muted">{closed ? "Closed" : ourMove ? "Your move" : "Waiting on the client"}</p>
+          <h2 className="font-display text-base font-semibold text-ink">{nextTitle}</h2>
+          <p className="text-sm text-body">
+            <b className="text-ink">Now:</b> {nn.now}. <b className="text-ink">Next:</b> {nn.next}.
+          </p>
+        </div>
+        {!closed && nextHref ? (
+          <Link href={nextHref.href} className={`${linkBtn.primary} shrink-0`}>
+            {nextHref.label}
+          </Link>
+        ) : null}
+      </div>
 
       {latest?.decision === "changes" && req.status === "in_progress" ? (
         <div className="mb-6">
@@ -88,7 +132,7 @@ export default async function StaffRequestPage({ params, searchParams }: { param
         active={tab}
         tabs={[
           { id: "overview", label: "Overview", href: base },
-          { id: "asks", label: "Asks and documents", href: `${base}?tab=asks`, count: supplied || open },
+          { id: "asks", label: "Asks and documents", href: `${base}?tab=asks`, count: open + supplied },
           { id: "deliverables", label: "Deliverables", href: `${base}?tab=deliverables`, count: deliverables.length },
           { id: "messages", label: "Messages", href: `${base}?tab=messages`, count: messages.length },
           { id: "activity", label: "Activity", href: `${base}?tab=activity` },
@@ -99,10 +143,7 @@ export default async function StaffRequestPage({ params, searchParams }: { param
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-w-0 space-y-6">
             <Panel title="Progress">
-              <Stepper steps={requestSteps({ status: req.status, reviewRound: req.reviewRound }, "firm")} />
-              <p className="mt-4 text-sm text-body">
-                <b className="text-ink">Now:</b> {nn.now}. <b className="text-ink">Next:</b> {nn.next}.
-              </p>
+              <Stepper steps={requestSteps({ status: req.status, reviewRound: req.reviewRound, pricingMode: req.pricingMode }, "firm")} />
             </Panel>
             <Panel title="Client brief">
               {req.details ? <p className="whitespace-pre-wrap text-sm text-body">{req.details}</p> : <p className="text-sm text-muted">No brief given.</p>}
