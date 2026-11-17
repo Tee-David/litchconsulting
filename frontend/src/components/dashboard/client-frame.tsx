@@ -5,6 +5,27 @@ import { TourProvider } from "@/components/tour/tour-provider";
 import { TourLauncher } from "@/components/tour/tour-launcher";
 import { InstallPrompt } from "@/components/admin/install-prompt";
 import { AppShell, type ShellCounts } from "./app-shell";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { SageIcon } from "@/components/admin/sage-icon";
+import { SageWidget } from "@/components/sage/sage-widget";
+
+/** Staff top bar: Ask Sage, as in the admin top bar (hidden on the Sage page itself). */
+function AskSageLink() {
+  const pathname = usePathname();
+  if (pathname?.startsWith("/work/sage")) return null;
+  return (
+    <Link
+      href="/work/sage"
+      data-tour="sage"
+      aria-label="Ask Sage"
+      className="inline-flex h-10 shrink-0 items-center gap-2 rounded-ctl border border-line-strong bg-paper px-2.5 text-[13.5px] font-semibold text-ink hover:bg-surface max-sm:w-10 max-sm:justify-center"
+    >
+      <SageIcon className="size-[18px] text-accent" />
+      <span className="hidden sm:inline">Ask Sage</span>
+    </Link>
+  );
+}
 
 /** Client portal frame: shell + guided tours + PWA install prompt. */
 export function ClientFrame({
@@ -49,7 +70,12 @@ export function StaffFrame({
         kind="staff"
         user={user}
         counts={counts}
-        launcher={<TourLauncher />}
+        launcher={
+          <>
+            <TourLauncher />
+            <AskSageLink />
+          </>
+        }
         banner={
           preview ? (
             <div
@@ -64,6 +90,7 @@ export function StaffFrame({
       >
         {children}
       </AppShell>
+      <SageWidget role="staff" basePath="/work/sage" />
     </TourProvider>
   );
 }

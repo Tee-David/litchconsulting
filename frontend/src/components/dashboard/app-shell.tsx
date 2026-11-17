@@ -205,11 +205,11 @@ function Sidebar({
                     className={cn(
                       "group relative flex h-10 items-center gap-3 rounded-ctl text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-accent/40",
                       expanded ? "px-3" : "justify-center px-0 xl:justify-start xl:px-3",
-                      active ? "bg-brand-tint text-ink" : "text-body hover:bg-surface hover:text-ink",
+                      // Same active look as the admin sidebar.
+                      active ? "keep-brand bg-act text-act-ink" : "text-body hover:bg-surface hover:text-ink",
                     )}
                   >
-                    {active ? <span aria-hidden className="absolute inset-y-2 left-0 w-[3px] rounded-r-full bg-act" /> : null}
-                    <Icon className={cn("size-[18px] shrink-0", active ? "text-ink" : "text-muted group-hover:text-ink")} />
+                    <Icon className={cn("size-[18px] shrink-0", active ? "text-act-ink" : "text-muted group-hover:text-ink")} />
                     <span className={lbl}>{item.label}</span>
                     {n ? (
                       <>

@@ -4,7 +4,7 @@ import { getAccountUser, twoStepState } from "@/lib/server-user";
 import { roleOf } from "@/lib/access";
 import { twoStepExempt, twoStepRequired } from "@/lib/two-step";
 import { safePath, continueUrl } from "@/lib/post-auth";
-import { hasPassword } from "../_lib";
+import { hasPassword } from "@/app/account/_lib";
 import { TwoStepEnrol } from "@/components/auth/two-step-enrol";
 
 export const metadata: Metadata = { title: "Set up two-step sign-in", robots: { index: false, follow: false } };

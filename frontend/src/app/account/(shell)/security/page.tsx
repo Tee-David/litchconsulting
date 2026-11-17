@@ -4,7 +4,7 @@ import { getAccountUser, twoStepState } from "@/lib/server-user";
 import { roleOf, ROLE_LABEL } from "@/lib/access";
 import { twoStepExempt, twoStepRequired } from "@/lib/two-step";
 import { onboardingFor } from "@/lib/onboarding";
-import { listDevices, signInHistory, signInMethods } from "../_lib";
+import { listDevices, signInHistory, signInMethods } from "@/app/account/_lib";
 import { SecurityPage } from "@/components/access/security-page";
 
 export const metadata: Metadata = { title: "Profile and security", robots: { index: false, follow: false } };

@@ -52,7 +52,7 @@ export function SageWidget({ role = "admin", basePath = "/admin/sage" }: { role?
     return () => mo.disconnect();
   }, [open]);
 
-  if (pathname?.startsWith(basePath) || pathname?.startsWith("/admin/analyses/w/")) return null;
+  if (pathname?.startsWith(basePath) || /\/analyses\/w\//.test(pathname ?? "")) return null;
 
   const expand = () => {
     setOpen(false);
