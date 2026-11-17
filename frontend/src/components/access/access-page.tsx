@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { KeyRound, LogOut, Send, ShieldAlert, ShieldCheck, ShieldOff, UserPlus, X } from "lucide-react";
+import { KeyRound, LogOut, Search, Send, ShieldAlert, ShieldCheck, ShieldOff, UserPlus, X } from "lucide-react";
 import { useToast } from "@/components/admin/ui/toaster";
 import { Panel } from "@/components/admin/ui/surface";
 import { Button, ConfirmSheet, EmptyState, Segmented, Sheet, StatusChip } from "@/components/kit";
@@ -70,6 +70,13 @@ const INVITE_STATE: Record<InviteRow["state"], { label: string; cls: string }> =
   redeemed: { label: "Accepted", cls: "bg-good-soft text-good" },
 };
 
+const TEAM_VIEWS = [
+  { id: "all", label: "Everyone", match: () => true },
+  { id: "admin", label: "Admins", match: (t: TeamRow) => t.role === "admin" },
+  { id: "staff", label: "Staff", match: (t: TeamRow) => t.role === "staff" },
+  { id: "nostep", label: "Two-step not set up", match: (t: TeamRow) => !t.twoStep && !t.twoStepOptional && !t.banned },
+] as const;
+
 type Confirm = { kind: "reset" | "signout" | "revoke" | "role" | "optional" | "require"; id: string; label: string; role?: "admin" | "staff" } | null;
 
 /**
@@ -87,6 +94,115 @@ export function AccessPage({ team, invites, work, unassigned, openInvite, tab: i
   const admins = team.filter((t) => t.role === "admin" && !t.banned).length;
   const missing2fa = team.filter((t) => !t.twoStep && !t.twoStepOptional && !t.banned).length;
   const waiting = invites.filter((i) => i.state === "pending");
+  const [q, setQ] = useState("");
+  const [view, setView] = useState<(typeof TEAM_VIEWS)[number]["id"]>("all");
+  const needle = q.trim().toLowerCase();
+  const shown = team.filter((t) => (TEAM_VIEWS.find((v) => v.id === view) ?? TEAM_VIEWS[0]).match(t) && (!needle || `${t.name} ${t.email}`.toLowerCase().includes(needle)));
+
+  /** One person's controls, shown as a table row or a phone card. */
+  function cellsFor(t: TeamRow) {
+    const lastAdmin = t.role === "admin" && admins <= 1;
+    const label = t.name || t.email;
+    return {
+      person: (
+        <>
+          <span className="block font-medium text-ink">
+            {label}
+            {t.me ? <span className="ml-1.5 text-[12px] font-normal text-muted">You</span> : null}
+            {t.banned ? <span className="ml-1.5 text-[12px] font-normal text-bad">Suspended</span> : null}
+          </span>
+          <span className="block truncate text-[13px] text-muted">{t.email}</span>
+        </>
+      ),
+      role: (
+        <div
+          role="radiogroup"
+          aria-label={`Role for ${label}`}
+          title={t.me ? "You cannot change your own role" : lastAdmin ? "The last Admin cannot be demoted. Make someone else Admin first." : undefined}
+          className="inline-flex rounded-ctl border border-line-strong bg-paper p-0.5"
+        >
+          {(["staff", "admin"] as const).map((r) => (
+            <button
+              key={r}
+              type="button"
+              role="radio"
+              aria-checked={t.role === r}
+              disabled={pending || t.me || lastAdmin || t.role === r}
+              onClick={() => setConfirm({ kind: "role", id: t.id, label, role: r })}
+              className={cn(
+                "h-8 rounded-[calc(var(--radius-ctl)-2px)] px-2.5 text-[13px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
+                t.role === r ? "bg-act text-act-ink" : "text-body hover:text-ink disabled:opacity-60",
+              )}
+            >
+              {r === "admin" ? "Admin" : "Staff"}
+            </button>
+          ))}
+        </div>
+      ),
+      twoStep: (
+        <>
+          {t.twoStep ? (
+            <span className="inline-flex items-center gap-1 text-[13px] font-medium text-good">
+              <ShieldCheck className="size-4" aria-hidden /> On
+            </span>
+          ) : t.twoStepOptional ? (
+            <span className="inline-flex items-center gap-1 text-[13px] font-medium text-muted">
+              <ShieldOff className="size-4" aria-hidden /> Off
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 whitespace-nowrap text-[13px] font-medium text-warn">
+              <ShieldAlert className="size-4" aria-hidden /> Not set up
+            </span>
+          )}
+          <span className="block text-[12px] text-muted">{t.twoStepOptional ? "Optional" : "Required"}</span>
+          {!t.me ? (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => setConfirm({ kind: t.twoStepOptional ? "require" : "optional", id: t.id, label })}
+              className="mt-0.5 min-h-8 whitespace-nowrap rounded-md text-[12px] font-medium text-accent hover:underline disabled:opacity-50 dark:text-info"
+            >
+              {t.twoStepOptional ? "Require it" : "Make optional"}
+            </button>
+          ) : null}
+        </>
+      ),
+      last: (
+        <>
+          {ago(t.lastActive)}
+          {t.devices > 1 ? <span className="block text-muted">{t.devices} devices</span> : null}
+        </>
+      ),
+      actions: !t.me ? (
+        <div className="flex justify-end gap-1">
+          <button
+            type="button"
+            disabled={!t.twoStep || pending}
+            title="Reset two-step"
+            aria-label={`Reset two-step for ${label}`}
+            onClick={() => setConfirm({ kind: "reset", id: t.id, label })}
+            className="grid size-10 place-items-center rounded-ctl text-muted outline-none hover:bg-surface hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-40"
+          >
+            <KeyRound className="size-4" aria-hidden />
+          </button>
+          <button
+            type="button"
+            disabled={!t.devices || pending}
+            title="Sign out everywhere"
+            aria-label={`Sign ${label} out everywhere`}
+            onClick={() => setConfirm({ kind: "signout", id: t.id, label })}
+            className="grid size-10 place-items-center rounded-ctl text-muted outline-none hover:bg-surface hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-40"
+          >
+            <LogOut className="size-4" aria-hidden />
+          </button>
+        </div>
+      ) : (
+        <Link href="/account/security" className="inline-flex min-h-10 items-center text-[13px] font-medium text-accent hover:underline dark:text-info">
+          Yours
+        </Link>
+      ),
+    };
+  }
 
   function quick(fn: () => Promise<{ ok: boolean; message?: string; error?: string }>) {
     start(async () => {
@@ -176,124 +292,112 @@ export function AccessPage({ team, invites, work, unassigned, openInvite, tab: i
             </p>
           ) : null}
 
-          <Panel title="Team" sub={`${admins} Admin · ${team.length - admins} Staff`} bodyClassName="p-0" tour="access-team">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-sm">
-                <thead>
-                  <tr className="border-b border-hairline text-left text-[12.5px] text-muted">
-                    <th className="px-4 py-2.5 font-medium sm:px-5">Person</th>
-                    <th className="px-3 py-2.5 font-medium">Role</th>
-                    <th className="px-3 py-2.5 font-medium">Two-step</th>
-                    <th className="px-3 py-2.5 font-medium">Last active</th>
-                    <th className="px-3 py-2.5 text-right font-medium">Open requests</th>
-                    <th className="w-24 px-3 py-2.5" aria-label="Actions" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-hairline">
-                  {team.map((t) => {
-                    const lastAdmin = t.role === "admin" && admins <= 1;
-                    return (
-                      <tr key={t.id} className={cn(t.banned && "opacity-60")}>
-                        <td className="px-4 py-3 sm:px-5">
-                          <span className="block font-medium text-ink">
-                            {t.name || t.email}
-                            {t.me ? <span className="ml-1.5 text-[12px] font-normal text-muted">You</span> : null}
-                            {t.banned ? <span className="ml-1.5 text-[12px] font-normal text-bad">Suspended</span> : null}
-                          </span>
-                          <span className="block text-[13px] text-muted">{t.email}</span>
-                        </td>
-                        <td className="px-3 py-3">
-                          <div
-                            role="radiogroup"
-                            aria-label={`Role for ${t.name || t.email}`}
-                            title={t.me ? "You cannot change your own role" : lastAdmin ? "The last Admin cannot be demoted. Make someone else Admin first." : undefined}
-                            className="inline-flex rounded-ctl border border-line-strong bg-paper p-0.5"
-                          >
-                            {(["staff", "admin"] as const).map((r) => (
-                              <button
-                                key={r}
-                                type="button"
-                                role="radio"
-                                aria-checked={t.role === r}
-                                disabled={pending || t.me || lastAdmin || t.role === r}
-                                onClick={() => setConfirm({ kind: "role", id: t.id, label: t.name || t.email, role: r })}
-                                className={cn(
-                                  "h-8 rounded-[calc(var(--radius-ctl)-2px)] px-2.5 text-[13px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
-                                  t.role === r ? "bg-act text-act-ink" : "text-body hover:text-ink disabled:opacity-60",
-                                )}
-                              >
-                                {r === "admin" ? "Admin" : "Staff"}
-                              </button>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="px-3 py-3">
-                          {t.twoStep ? (
-                            <span className="inline-flex items-center gap-1 text-[13px] font-medium text-good">
-                              <ShieldCheck className="size-4" aria-hidden /> On
-                            </span>
-                          ) : t.twoStepOptional ? (
-                            <span className="inline-flex items-center gap-1 text-[13px] font-medium text-muted">
-                              <ShieldOff className="size-4" aria-hidden /> Off
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[13px] font-medium text-warn">
-                              <ShieldAlert className="size-4" aria-hidden /> Not set up
-                            </span>
-                          )}
-                          <span className="block text-[12px] text-muted">{t.twoStepOptional ? "Optional" : "Required"}</span>
-                          {!t.me ? (
-                            <button
-                              type="button"
-                              disabled={pending}
-                              onClick={() => setConfirm({ kind: t.twoStepOptional ? "require" : "optional", id: t.id, label: t.name || t.email })}
-                              className="mt-0.5 min-h-8 rounded-md text-[12px] font-medium text-accent hover:underline disabled:opacity-50 dark:text-info"
-                            >
-                              {t.twoStepOptional ? "Require it" : "Make optional"}
-                            </button>
-                          ) : null}
-                        </td>
-                        <td className="px-3 py-3 text-[13px] text-body">
-                          {ago(t.lastActive)}
-                          {t.devices > 1 ? <span className="block text-muted">{t.devices} devices</span> : null}
-                        </td>
-                        <td className="px-3 py-3 text-right tabular-nums text-body">{t.open}</td>
-                        <td className="px-3 py-3 text-right">
-                          {!t.me ? (
-                            <div className="flex justify-end gap-1">
-                              <button
-                                type="button"
-                                disabled={!t.twoStep || pending}
-                                title="Reset two-step"
-                                aria-label={`Reset two-step for ${t.name || t.email}`}
-                                onClick={() => setConfirm({ kind: "reset", id: t.id, label: t.name || t.email })}
-                                className="grid size-8 place-items-center rounded-ctl text-muted outline-none hover:bg-surface hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-40"
-                              >
-                                <KeyRound className="size-4" aria-hidden />
-                              </button>
-                              <button
-                                type="button"
-                                disabled={!t.devices || pending}
-                                title="Sign out everywhere"
-                                aria-label={`Sign ${t.name || t.email} out everywhere`}
-                                onClick={() => setConfirm({ kind: "signout", id: t.id, label: t.name || t.email })}
-                                className="grid size-8 place-items-center rounded-ctl text-muted outline-none hover:bg-surface hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-40"
-                              >
-                                <LogOut className="size-4" aria-hidden />
-                              </button>
-                            </div>
-                          ) : (
-                            <Link href="/account/security" className="text-[13px] font-medium text-accent hover:underline">
-                              Yours
-                            </Link>
-                          )}
-                        </td>
+          <Panel
+            title="Team"
+            sub={`${admins} Admin · ${team.length - admins} Staff`}
+            bodyClassName="p-0"
+            tour="access-team"
+          >
+            <div className="flex flex-wrap items-center gap-2 border-b border-hairline px-4 py-3 sm:px-5">
+              <label className="relative min-w-0 flex-1 basis-56">
+                <span className="sr-only">Search the team</span>
+                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" aria-hidden />
+                <input
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                  placeholder="Search name or email"
+                  className="h-10 w-full rounded-ctl border border-hairline bg-paper pl-9 pr-3 text-sm text-ink outline-none placeholder:text-faint focus:border-accent"
+                />
+              </label>
+              <div className="flex flex-wrap gap-1" role="group" aria-label="Show">
+                {TEAM_VIEWS.map((v) => {
+                  const n = team.filter(v.match).length;
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      aria-pressed={view === v.id}
+                      onClick={() => setView(v.id)}
+                      className={cn(
+                        "inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-[13px] font-medium",
+                        view === v.id ? "bg-act text-act-ink" : "bg-surface text-body hover:text-ink",
+                      )}
+                    >
+                      {v.label}
+                      <span className="tabular-nums opacity-70">{n}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {shown.length === 0 ? (
+              <p className="px-5 py-8 text-center text-sm text-muted">Nobody matches. Clear the search or pick another view.</p>
+            ) : (
+              <>
+                {/* Wide screens: a table. */}
+                <div className="hidden overflow-x-auto md:block">
+                  <table className="w-full min-w-[720px] text-sm">
+                    <thead>
+                      <tr className="border-b border-hairline text-left text-[12.5px] text-muted">
+                        <th className="px-4 py-2.5 font-medium sm:px-5">Person</th>
+                        <th className="px-3 py-2.5 font-medium">Role</th>
+                        <th className="px-3 py-2.5 font-medium">Two-step</th>
+                        <th className="px-3 py-2.5 font-medium">Last active</th>
+                        <th className="px-3 py-2.5 text-right font-medium">Open requests</th>
+                        <th className="w-24 px-3 py-2.5" aria-label="Actions" />
                       </tr>
+                    </thead>
+                    <tbody className="divide-y divide-hairline">
+                      {shown.map((t) => {
+                        const c = cellsFor(t);
+                        return (
+                          <tr key={t.id} className={cn(t.banned && "opacity-60")}>
+                            <td className="px-4 py-3 sm:px-5">{c.person}</td>
+                            <td className="px-3 py-3">{c.role}</td>
+                            <td className="px-3 py-3">{c.twoStep}</td>
+                            <td className="px-3 py-3 text-[13px] text-body">{c.last}</td>
+                            <td className="px-3 py-3 text-right tabular-nums text-body">{t.open}</td>
+                            <td className="px-3 py-3 text-right">{c.actions}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {/* Phones: one card per person, nothing clipped. */}
+                <ul className="divide-y divide-hairline md:hidden">
+                  {shown.map((t) => {
+                    const c = cellsFor(t);
+                    return (
+                      <li key={t.id} className={cn("space-y-3 px-4 py-4", t.banned && "opacity-60")}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">{c.person}</div>
+                          <div className="shrink-0">{c.actions}</div>
+                        </div>
+                        <div className="flex flex-wrap items-start gap-x-6 gap-y-3">
+                          <div>
+                            <p className="mb-1 text-[12px] text-muted">Role</p>
+                            {c.role}
+                          </div>
+                          <div>
+                            <p className="mb-1 text-[12px] text-muted">Two-step</p>
+                            {c.twoStep}
+                          </div>
+                          <div className="text-[13px] text-body">
+                            <p className="mb-1 text-[12px] text-muted">Last active</p>
+                            {c.last}
+                          </div>
+                          <div className="text-[13px] text-body">
+                            <p className="mb-1 text-[12px] text-muted">Open requests</p>
+                            <span className="tabular-nums">{t.open}</span>
+                          </div>
+                        </div>
+                      </li>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
+                </ul>
+              </>
+            )}
           </Panel>
 
           <Panel title="Invitations" sub={waiting.length ? `${waiting.length} waiting` : undefined} bodyClassName="p-0">
