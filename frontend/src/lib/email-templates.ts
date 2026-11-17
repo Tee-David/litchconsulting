@@ -29,20 +29,36 @@ import type { NotifyCategory } from "@/lib/notifications";
 
 /* ------------------------------------------------------------------ tokens
    Email HTML is its own world: tables, inline styles, 600px. These are the
-   brand values (fixed hex is correct inside an email). */
+   brand values of the approved email system (the same one MGT and WDC use),
+   in Litch's identity: a navy header with the white logo and a blue rule, a
+   light hero with an animated navy icon tile and the faded Litch mark, the
+   body, one navy button with an icon (full width on phones), and a footer
+   with the real contact details. Fixed hex is correct inside an email. */
 const C = {
   navy: "#0a196d",
   brand: "#2540c4",
   ink: "#0a0e1a",
-  body: "#41485a",
-  muted: "#6b7386",
-  hair: "#e6e8f0",
-  tint: "#eef1fb",
-  page: "#f4f6fb",
-  card: "#ffffff",
+  body: "#2f3646",
+  muted: "#5d6578",
+  line: "#e6e8f0",
+  soft: "#f5f6fa",
+  page: "#eceef5",
+  headerText: "#c7cff2",
+  rule: "#4c6ef5",
+  hero: "#eef1fb",
+  heroTitle: "#0a196d",
+  heroSub: "#4f5869",
+  trackDone: "#0a196d",
+  trackNow: "#4c6ef5",
+  trackOff: "#d5dbf2",
 };
-const FONT = "'Outfit','Segoe UI',Arial,Helvetica,sans-serif";
-const DISPLAY = "'Space Grotesk','Segoe UI',Arial,Helvetica,sans-serif";
+const FONT = "Outfit,'Segoe UI',Helvetica,Arial,sans-serif";
+const DISPLAY = "'Space Grotesk','Segoe UI',Helvetica,Arial,sans-serif";
+/** The request stages the hero tracker shows. */
+const STAGES = ["Received", "Quoted", "In progress", "Draft review", "Delivered"];
+/** "Done: Received, Quoted. Now: In progress." for the phone line under the tracker. */
+const stageLine = (now: number, next?: string) =>
+  `${now > 0 ? `Done: ${STAGES.slice(0, now).join(", ")}. ` : ""}Now: ${STAGES[now]}.${next ? ` Next: ${next}.` : ""}`;
 
 export type EmailAudience = "client" | "staff" | "admin" | "anyone";
 
@@ -56,7 +72,10 @@ export type EmailBody = {
   paragraphs: string[];
   /** Summary box: label/value rows (figures, dates, references). */
   rows?: Array<{ label: string; value: string; strong?: boolean }>;
-  cta?: { label: string; href: string };
+  /** The button. `icon` names a white icon in /public/email (btn-<icon>-white.png). */
+  cta?: { label: string; href: string; icon?: string };
+  /** The coloured band under the header: a short label, an icon tile, a title and a sub line, and an optional stage tracker. */
+  hero?: EmailHero;
   /** Small print under the button (expiry, "ignore if not you"). */
   note?: string;
   /** "You got this because…" — required, specific to this send. */
@@ -64,6 +83,9 @@ export type EmailBody = {
   /** Display name for the From header, e.g. "Hauwa at Litch Consulting". */
   fromName?: string;
 };
+
+/** `icon` names an animated tile in /public/email (tile-<icon>.gif). `stage` indexes STAGES. */
+export type EmailHero = { label: string; icon: string; title: string; sub?: string | null; stage?: number; stageLine?: string };
 
 type Def<D> = {
   audience: EmailAudience;
@@ -133,6 +155,19 @@ const ACCESS_TEXT: Record<string, string> = {
   viewer: "a viewer (can see requests and files)",
 };
 
+/** Where a request status sits on the hero tracker; statuses off the main path show no tracker. */
+const UPDATE_STAGE: Record<string, number> = {
+  "Quote requested": 0,
+  "Quote sent": 1,
+  "Awaiting payment": 1,
+  "Awaiting documents": 2,
+  "In progress": 2,
+  "Internal review": 2,
+  "Client review": 3,
+  Delivered: 4,
+  Completed: 4,
+};
+
 export const EMAIL_TEMPLATES = {
   invitation: {
     audience: "anyone",
@@ -156,7 +191,8 @@ export const EMAIL_TEMPLATES = {
         { label: "Sign in with", value: d.email },
         { label: "Link expires", value: fmtDate(d.expiresAt) },
       ],
-      cta: { label: "Accept the invitation", href: d.url },
+      hero: { label: "Invitation", icon: "user-plus", title: "You are invited", sub: d.role === "client" ? d.company || "Litch Consulting" : d.role === "admin" ? "Admin access" : "Staff access" },
+      cta: { label: "Accept the invitation", href: d.url, icon: "user-plus" },
       note: "The link works once. Sending a new invitation replaces it.",
       why: `You got this because ${d.inviterName} invited this address to Litch Consulting. If you did not expect it, ignore it; nothing is created until you accept.`,
     }),
@@ -177,7 +213,8 @@ export const EMAIL_TEMPLATES = {
           ? `Press the button to confirm this address. Your request for **${d.serviceName}** is saved and waits for you, on any device.`
           : "Press the button to confirm this address and open your client portal: request services, track progress, pay invoices and download your files.",
       ],
-      cta: { label: "Confirm my email", href: d.url },
+      hero: { label: "Account", icon: "mail-check", title: "Confirm your email", sub: d.serviceName || "One click" },
+      cta: { label: "Confirm my email", href: d.url, icon: "mail-check" },
       note: "The link works for 1 hour. If it has expired, sign in and we will send a fresh one.",
       why: "You got this because someone created a Litch account with this address. If it was not you, ignore this email and no account is activated.",
     }),
@@ -194,7 +231,8 @@ export const EMAIL_TEMPLATES = {
       heading: "Choose a new password",
       greeting: first(d.name),
       paragraphs: ["Someone asked to reset the password for this Litch account. If it was you, choose a new one below."],
-      cta: { label: "Choose a new password", href: d.url },
+      hero: { label: "Security", icon: "lock", title: "New password", sub: "Works once, for 1 hour" },
+      cta: { label: "Choose a new password", href: d.url, icon: "lock" },
       note: "The link works once, for 1 hour. If you did not ask for this, ignore this email; your password stays the same.",
       why: "You got this because a password reset was requested for this address. Security emails always send.",
     }),
@@ -216,7 +254,8 @@ export const EMAIL_TEMPLATES = {
           : d.role === "staff"
             ? ["You will see the requests assigned to you, their files and the client's messages. Two-step sign-in protects your account, so keep your authenticator app handy."]
             : ["You have full access: requests, clients, billing, settings and the team. Two-step sign-in protects your account."],
-      cta: { label: d.role === "client" ? "Open my dashboard" : "Open my work", href: d.homeUrl },
+      hero: { label: "Account", icon: "check-circle", title: d.role === "client" ? "Account ready" : "Welcome to the team", sub: d.role === "client" ? "Your client portal" : d.role === "admin" ? "Admin access" : "Staff access" },
+      cta: { label: d.role === "client" ? "Open my dashboard" : "Open my work", href: d.homeUrl, icon: "log-in" },
       why: "You got this because your Litch account was just activated.",
     }),
   } satisfies Def<WelcomeData>,
@@ -235,7 +274,8 @@ export const EMAIL_TEMPLATES = {
         `This happened on your Litch account on ${fmtDate(d.when)}${d.device ? ` (${d.device})` : ""}.`,
         "If this was you, there is nothing to do. If it was not, reset your password now and sign out every other device from Profile and security.",
       ],
-      cta: { label: "Review my security", href: `${siteOrigin()}/account/security` },
+      hero: { label: "Security", icon: "shield", title: d.what, sub: fmtDate(d.when) },
+      cta: { label: "Review my security", href: `${siteOrigin()}/account/security`, icon: "shield" },
       why: "You got this because something changed on your account's sign-in. Security emails always send.",
     }),
   } satisfies Def<SecurityNoticeData>,
@@ -255,7 +295,8 @@ export const EMAIL_TEMPLATES = {
           ? `${d.personName} (${d.personEmail}) accepted the invitation and is now Staff. They see nothing until you assign them a request.`
           : `${d.personName} (${d.personEmail}) accepted the invitation and joined ${d.company || "their company"}.`,
       ],
-      cta: { label: d.role === "staff" ? "Assign a request" : "Open Team and access", href: `${siteOrigin()}/admin/settings/access${d.role === "staff" ? "?tab=assign" : ""}` },
+      hero: { label: "Team", icon: "users", title: "Invitation accepted", sub: d.personName },
+      cta: { label: d.role === "staff" ? "Assign a request" : "Open Team and access", href: `${siteOrigin()}/admin/settings/access${d.role === "staff" ? "?tab=assign" : ""}`, icon: "arrow-right" },
       why: "You got this because you are an Admin and an invitation was accepted.",
     }),
   } satisfies Def<InviteAcceptedData>,
@@ -277,7 +318,8 @@ export const EMAIL_TEMPLATES = {
         ...(d.deposit ? [{ label: "Deposit to start", value: d.deposit }] : []),
         ...(d.validTo ? [{ label: "Valid to", value: d.validTo }] : []),
       ],
-      cta: { label: "Review and accept", href: d.url },
+      hero: { label: "Quote", icon: "file-text", title: `Quote ${d.quoteNumber}`, sub: d.serviceName, stage: 1, stageLine: stageLine(1) },
+      cta: { label: "Review and accept", href: d.url, icon: "check" },
       fromName: d.senderName ? `${first(d.senderName)} at Litch Consulting` : undefined,
       why: `You got this because you requested ${d.serviceName} on Litch${d.requestDate ? ` on ${d.requestDate}` : ""}. Billing emails are sent right away; change this in Notifications.`,
     }),
@@ -295,7 +337,8 @@ export const EMAIL_TEMPLATES = {
       greeting: first(d.name),
       paragraphs: [`To keep ${d.requestNumber} moving we need: **${d.what}**.${d.why ? ` ${d.why}` : ""}`, ...(d.hint ? [d.hint] : [])],
       rows: [{ label: "Request", value: d.requestNumber }, ...(d.due ? [{ label: "Due", value: d.due }] : [])],
-      cta: { label: "Answer now", href: d.url },
+      hero: { label: "Action needed", icon: "alert", title: "One thing needed", sub: d.requestNumber },
+      cta: { label: "Answer now", href: d.url, icon: "arrow-right" },
       fromName: d.senderName ? `${first(d.senderName)} at Litch Consulting` : undefined,
       why: `You got this because ${d.senderName || "the team"} working on ${d.requestNumber} asked for it. Action emails have a due date, so we recommend keeping them on.`,
     }),
@@ -320,7 +363,8 @@ export const EMAIL_TEMPLATES = {
         { label: "Round", value: `${d.round} of ${d.rounds}` },
         ...(d.answerBy ? [{ label: "Please answer by", value: d.answerBy }] : []),
       ],
-      cta: { label: "Review the draft", href: d.url },
+      hero: { label: "Review", icon: "eye", title: `Draft v${d.version} ready`, sub: d.requestNumber, stage: 3, stageLine: stageLine(3, "Delivered") },
+      cta: { label: "Review the draft", href: d.url, icon: "eye" },
       fromName: d.senderName ? `${first(d.senderName)} at Litch Consulting` : undefined,
       why: `You got this because a draft on your request ${d.requestNumber} is waiting for your approval.`,
     }),
@@ -338,7 +382,8 @@ export const EMAIL_TEMPLATES = {
       greeting: first(d.name),
       paragraphs: [`We received your payment for ${d.forWhat}. Your receipt is attached and is also in Billing.`],
       rows: d.rows,
-      cta: { label: "View receipt", href: d.url },
+      hero: { label: "Receipt", icon: "receipt", title: "Payment received", sub: d.receiptNumber },
+      cta: { label: "View receipt", href: d.url, icon: "download" },
       why: "You got this because a payment was recorded on your account. Receipts always send, for your records.",
     }),
   } satisfies Def<ReceiptData>,
@@ -357,7 +402,13 @@ export const EMAIL_TEMPLATES = {
         ...(d.needsYou.length ? [`**Needs you (${d.needsYou.length})**\n${d.needsYou.join("\n")}`] : ["Nothing needs you right now."]),
         ...(d.updates.length ? [`**Updates (${d.updates.length})**\n${d.updates.join("\n")}`] : []),
       ],
-      cta: { label: "Open my dashboard", href: d.url },
+      hero: {
+        label: "Summary",
+        icon: "list",
+        title: d.needsYou.length ? `${d.needsYou.length} ${d.needsYou.length === 1 ? "thing needs" : "things need"} you` : "Nothing needs you",
+        sub: `${d.updates.length} ${d.updates.length === 1 ? "update" : "updates"}`,
+      },
+      cta: { label: "Open my dashboard", href: d.url, icon: "arrow-right" },
       why: `You got this because you chose a digest for ${d.categoryLabel}.`,
     }),
   } satisfies Def<DigestData>,
@@ -382,7 +433,8 @@ export const EMAIL_TEMPLATES = {
         { label: "Service", value: d.serviceName },
         { label: "Reference", value: d.requestNumber },
       ],
-      cta: { label: d.mode === "quote" ? "Track your request" : "Complete payment", href: d.url },
+      hero: { label: "Request", icon: "inbox", title: `Request ${d.requestNumber}`, sub: d.serviceName, stage: 0, stageLine: stageLine(0, d.mode === "quote" ? "your quote" : "your payment") },
+      cta: { label: d.mode === "quote" ? "Track your request" : "Complete payment", href: d.url, icon: d.mode === "quote" ? "arrow-right" : "credit-card" },
       why: `You got this because you requested ${d.serviceName} on Litch.`,
     }),
   } satisfies Def<RequestReceivedData>,
@@ -398,7 +450,8 @@ export const EMAIL_TEMPLATES = {
       heading: "An update on your request",
       greeting: first(d.name),
       paragraphs: [`Your **${d.serviceName}** request (${d.requestNumber}) is now **${d.statusLabel}**.`, ...(d.note ? [d.note] : [])],
-      cta: { label: "View progress", href: d.url },
+      hero: { label: "Update", icon: "layers", title: d.statusLabel, sub: d.requestNumber, ...(UPDATE_STAGE[d.statusLabel] != null ? { stage: UPDATE_STAGE[d.statusLabel], stageLine: stageLine(UPDATE_STAGE[d.statusLabel]) } : {}) },
+      cta: { label: "View progress", href: d.url, icon: "arrow-right" },
       why: `You got this because the status of your request ${d.requestNumber} changed.`,
     }),
   } satisfies Def<RequestUpdateData>,
@@ -418,7 +471,8 @@ export const EMAIL_TEMPLATES = {
         { label: "Request", value: d.requestNumber },
         { label: "File", value: d.fileName },
       ],
-      cta: { label: "Download", href: d.url },
+      hero: { label: "Delivered", icon: "check-circle", title: "Delivered", sub: d.requestNumber, stage: 4, stageLine: "Done: every stage. Delivered." },
+      cta: { label: "Download", href: d.url, icon: "download" },
       why: `You got this because we delivered work on your request ${d.requestNumber}.`,
     }),
   } satisfies Def<DeliverableData>,
@@ -438,7 +492,13 @@ export const EMAIL_TEMPLATES = {
         ...(d.reason ? [d.reason] : []),
         "If you want to talk it through or start again, we are one message away.",
       ],
-      cta: { label: "Contact support", href: d.url },
+      hero: {
+        label: d.outcome === "refunded" ? "Refund" : d.outcome === "cancelled" ? "Cancelled" : "Declined",
+        icon: d.outcome === "refunded" ? "undo" : "x-circle",
+        title: d.outcome === "refunded" ? "Refund confirmed" : d.outcome === "cancelled" ? "Request cancelled" : "Request declined",
+        sub: d.requestNumber,
+      },
+      cta: { label: "Contact support", href: d.url, icon: "message" },
       why: `You got this because your request ${d.requestNumber} was closed. Closing notices always send.`,
     }),
   } satisfies Def<RequestClosedData>,
@@ -460,7 +520,8 @@ export const EMAIL_TEMPLATES = {
         ...(d.due ? [{ label: "Due", value: d.due }] : []),
         { label: "Amount due", value: d.total, strong: true },
       ],
-      cta: { label: "View and pay", href: d.url },
+      hero: { label: "Invoice", icon: "file-text", title: `Invoice ${d.invoiceNumber}`, sub: d.projectTitle || d.total },
+      cta: { label: "View and pay", href: d.url, icon: "credit-card" },
       note: `Or open it here: ${d.url}`,
       why: "You got this because Litch Consulting issued you an invoice. Invoices always send, for your records.",
     }),
@@ -478,7 +539,8 @@ export const EMAIL_TEMPLATES = {
       greeting: first(d.name),
       paragraphs: d.paragraphs,
       rows: d.rows,
-      cta: d.cta ?? undefined,
+      hero: { label: "Notice", icon: "bell", title: "A note from Litch Consulting", sub: fmtDate(new Date()) },
+      cta: d.cta ? { ...d.cta, icon: "arrow-right" } : undefined,
       note: d.note ?? undefined,
       why: d.why,
       fromName: d.fromName ?? undefined,
@@ -496,7 +558,8 @@ export const EMAIL_TEMPLATES = {
       heading: "New work assigned to you",
       greeting: first(d.name),
       paragraphs: [`${d.assignerName} assigned you:`, d.requests.map((r) => `**${r.number}** · ${r.service}${r.client ? ` · ${r.client}` : ""}`).join("\n")],
-      cta: { label: "Open my work", href: d.url },
+      hero: { label: "Team", icon: "briefcase", title: "New work", sub: d.requests.length === 1 ? d.requests[0].number : `${d.requests.length} requests` },
+      cta: { label: "Open my work", href: d.url, icon: "arrow-right" },
       why: "You got this because you were assigned to a client request at Litch Consulting.",
     }),
   } satisfies Def<AssignedData>,
@@ -540,15 +603,123 @@ export function notificationSettingsHref(audience: EmailAudience): string {
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 /** Escape, then allow **bold** and line breaks — the only markup builders may use. */
-const rich = (s: string) => esc(s).replace(/\*\*(.+?)\*\*/g, '<strong class="ink" style="color:#0a0e1a;">$1</strong>').replace(/\n/g, "<br>");
+const rich = (s: string) => esc(s).replace(/\*\*(.+?)\*\*/g, `<strong class="lt-ink" style="color:${C.ink};font-weight:600">$1</strong>`).replace(/\n/g, "<br>");
 const plain = (s: string) => s.replace(/\*\*(.+?)\*\*/g, "$1");
 const absolute = (href: string) => (/^https?:\/\//i.test(href) ? href : `${siteOrigin()}${href.startsWith("/") ? "" : "/"}${href}`);
+
+/** Gmail apps force-invert colours in dark mode. A same-colour gradient is left alone, so a fixed band keeps its colour. */
+const bg = (c: string) => `background-color:${c};background-image:linear-gradient(${c},${c})`;
+/** Light text on a fixed band. Gmail apps darken it in forced dark mode; this block-level blend wrapper undoes that (its classes only match inside Gmail, via u + .body). It wraps whole blocks, never inline text, so no stray edges are drawn. */
+const keep = (html: string) => `<div class="lt-gs"><div class="lt-gd">${html}</div></div>`;
+const T = (a = "") => `<table role="presentation" cellpadding="0" cellspacing="0" border="0" ${a}>`;
+
+/** Label and value rows: the facts of the email. A strong row is the figure that matters, set larger and right-aligned. */
+function facts(rows: Array<{ label: string; value: string; strong?: boolean }>) {
+  const cells = rows
+    .map(
+      (r) =>
+        `<tr><td class="lt-line lt-muted" width="150" valign="top" style="padding:12px 16px 12px 0;border-bottom:1px solid ${C.line};font-family:${FONT};font-size:14px;line-height:1.5;color:${C.muted}">${esc(r.label)}</td>` +
+        `<td class="lt-line lt-ink" valign="top"${r.strong ? ' align="right"' : ""} style="padding:12px 0;border-bottom:1px solid ${C.line};font-family:${r.strong ? DISPLAY : FONT};font-size:${r.strong ? 18 : 15}px;line-height:1.5;font-weight:${r.strong ? 700 : 500};color:${C.ink};font-variant-numeric:tabular-nums">${esc(r.value)}</td></tr>`,
+    )
+    .join("");
+  return `${T(`width="100%" class="lt-line" style="margin:0 0 24px;border-top:1px solid ${C.line}"`)}${cells}</table>`;
+}
+
+/** The one action: a navy button with a white icon before the label. Full width on phones. */
+function button(label: string, href: string, icon: string) {
+  const o = siteOrigin();
+  return (
+    `${T('class="lt-btn-t" style="margin:8px 0 24px"')}<tr><td class="lt-btn" bgcolor="${C.navy}" style="${bg(C.navy)};border-radius:8px">` +
+    `<a class="lt-btn-a" href="${esc(href)}" style="display:inline-block;padding:14px 26px;font-family:${FONT};font-size:16px;font-weight:600;line-height:20px;color:#ffffff;text-decoration:none;border-radius:8px">` +
+    `${keep(`<img src="${o}/email/btn-${icon}-white.png" width="18" height="18" alt="" style="display:inline-block;width:18px;height:18px;border:0;vertical-align:middle;margin-right:8px"><span style="vertical-align:middle;color:#ffffff">${esc(label)}</span>`)}</a>` +
+    `</td></tr></table>`
+  );
+}
+
+/** The request stages: done in navy, now in blue, to come in pale blue. Labels on wide screens, one line on phones. */
+function tracker(now: number, line: string) {
+  const n = STAGES.length, w = (100 / n).toFixed(2);
+  const bar = STAGES.map((_, i) => {
+    const color = i < now ? C.trackDone : i === now ? C.trackNow : C.trackOff;
+    const cls = i < now ? "lt-trk-done" : i > now ? "lt-trk-off" : "";
+    return `<td width="${w}%" valign="top" style="padding:0 ${i < n - 1 ? 4 : 0}px 0 0"><div class="${cls}" style="height:6px;line-height:6px;font-size:0;${bg(color)};border-radius:3px">&nbsp;</div></td>`;
+  }).join("");
+  const labels = STAGES.map((s, i) => `<td width="${w}%" valign="top" class="${i === now ? "lt-hero-t" : "lt-hero-s"}" style="padding:10px ${i < n - 1 ? 4 : 0}px 0 0;font-family:${FONT};font-size:12px;line-height:1.35;font-weight:${i === now ? 700 : 400};color:${i === now ? C.heroTitle : C.heroSub}">${esc(s)}</td>`).join("");
+  return `${T('width="100%" style="margin-top:20px"')}<tr>${bar}</tr></table>
+<div class="lt-hide-sm">${T('width="100%"')}<tr>${labels}</tr></table></div>
+<!--[if !mso]><!--><div class="lt-show-sm" style="display:none"><p class="lt-hero-s" style="margin:12px 0 0;font-family:${FONT};font-size:13px;line-height:1.5;color:${C.heroSub}">${esc(line)}</p></div><!--<![endif]-->`;
+}
+
+/** The light hero: a navy icon tile and the faded Litch mark, then the title, the sub line and the optional tracker.
+ *  The hero is a light band with navy text, so it is not locked: a client that darkens the page darkens it too, and
+ *  the mark (9% blue on a clear ground) stays faint. Only the navy tile is locked. */
+function hero(h: EmailHero) {
+  const o = siteOrigin();
+  return `<tr><td bgcolor="${C.hero}" class="lt-pad lt-hero" style="padding:0 0 0 40px;background:${C.hero}">${T('width="100%"')}<tr>
+<td valign="top" style="padding:28px 0 0">${T()}<tr><td bgcolor="${C.navy}" width="52" height="52" align="center" valign="middle" style="width:52px;height:52px;${bg(C.navy)};border-radius:12px;line-height:0"><img src="${o}/email/tile-${h.icon}.gif" width="32" height="32" alt="" style="display:block;border:0;width:32px;height:32px"></td></tr></table></td>
+<td class="lt-hero-mark" align="right" valign="top" width="160" style="line-height:0;font-size:0"><img class="lt-ico-l" src="${o}/email/hero-mark.png" width="160" height="112" alt="" style="display:block;border:0;width:160px;height:112px"><img class="lt-ico-d" src="${o}/email/hero-mark-dark.png" width="160" height="112" alt="" style="display:none;border:0;width:160px;height:112px"></td></tr></table></td></tr>
+<tr><td bgcolor="${C.hero}" class="lt-pad lt-hero" style="padding:12px 40px 32px;background:${C.hero}">
+<p class="lt-hero-t" style="margin:0;font-family:${DISPLAY};font-size:21px;line-height:1.3;font-weight:700;color:${C.heroTitle}">${esc(h.title)}</p>
+${h.sub ? `<p class="lt-hero-s" style="margin:4px 0 0;font-family:${FONT};font-size:14px;line-height:1.5;color:${C.heroSub}">${esc(h.sub)}</p>` : ""}
+${h.stage != null ? tracker(h.stage, h.stageLine ?? stageLine(h.stage)) : ""}
+</td></tr>`;
+}
+
+/* Phone layout and dark colours. `background:` shorthand also clears the locking gradient, so dark mode still repaints a band. */
+const CSS = `:root{color-scheme:light dark;supported-color-schemes:light dark}
+body{margin:0;padding:0;-webkit-text-size-adjust:100%}
+.lt-show-sm{display:none}
+.lt-ico-d{display:none}
+@media only screen and (max-width:620px){
+  .lt-outer{padding:8px 0 !important}
+  .lt-wrap{width:100% !important}
+  .lt-pad{padding-left:24px !important;padding-right:24px !important}
+  .lt-h1{font-size:25px !important}
+  .lt-col{display:block !important;width:100% !important;padding:0 0 4px 0 !important}
+  .lt-hide-sm{display:none !important}
+  .lt-show-sm{display:block !important}
+  .lt-hero-mark{display:none !important}
+  .lt-btn-t{width:100% !important}
+  .lt-btn-a{display:block !important;text-align:center !important}
+}
+@media (prefers-color-scheme: dark){
+  .lt-page{background:#0b0e17 !important}
+  .lt-card{background:#161c2b !important;border-color:#2a3245 !important}
+  .lt-ink{color:#f0f3fa !important}
+  .lt-body{color:#c3cad9 !important}
+  .lt-muted{color:#9aa3b8 !important}
+  .lt-line{border-color:#2a3245 !important}
+  .lt-soft{background:#1e2740 !important;border-color:#2a3245 !important}
+  .lt-btn{background:#4a6cf7 !important}
+  .lt-hero{background:#121a33 !important}
+  .lt-hero-t{color:#ffffff !important}
+  .lt-hero-s{color:#b7bfd0 !important}
+  .lt-trk-off{background:#2a3245 !important}
+  .lt-trk-done{background:#c7d2ff !important}
+  .lt-ico-l{display:none !important}
+  .lt-ico-d{display:block !important}
+}
+u + .body .lt-gs{background:#000;mix-blend-mode:screen}
+u + .body .lt-gd{background:#000;mix-blend-mode:difference}
+[data-ogsc] .lt-ink{color:#f0f3fa !important}
+[data-ogsc] .lt-body{color:#c3cad9 !important}
+[data-ogsc] .lt-muted{color:#9aa3b8 !important}
+[data-ogsc] .lt-hero-t{color:#ffffff !important}
+[data-ogsc] .lt-hero-s{color:#b7bfd0 !important}
+[data-ogsb] .lt-page{background:#0b0e17 !important}
+[data-ogsb] .lt-card{background:#161c2b !important}
+[data-ogsb] .lt-soft{background:#1e2740 !important}
+[data-ogsb] .lt-hero{background:#121a33 !important}
+[data-ogsc] .lt-ico-l{display:none !important}
+[data-ogsc] .lt-ico-d{display:block !important}`;
 
 export type RenderOptions = {
   /** The recipient's user id: enables the signed one-click unsubscribe link. */
   recipientUserId?: string | null;
   /** Override the template's audience (e.g. a digest to staff). */
   audience?: EmailAudience;
+  /** The recipient's address, shown in the footer ("Sent to ..."). sendTemplate passes it. */
+  to?: string | null;
 };
 
 export type RenderedEmail = { subject: string; html: string; text: string; fromName?: string };
@@ -561,71 +732,77 @@ export function renderTemplate<K extends TemplateKey>(key: K, data: TemplateData
   const settings = def.category ? notificationSettingsHref(audience) : null;
   const unsub = def.category && !def.always && opts.recipientUserId ? unsubscribeUrl(opts.recipientUserId, def.category) : null;
   const year = new Date().getFullYear();
+  const o = siteOrigin();
+  const h: EmailHero = b.hero ?? { label: "Litch Consulting", icon: "bell", title: b.heading };
 
-  const rowsHtml = b.rows?.length
-    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="tint" style="background:${C.tint};border-radius:14px;margin:6px 0 18px;"><tr><td style="padding:16px 20px;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${b.rows
-        .map(
-          (r) =>
-            `<tr><td class="body" style="padding:5px 0;color:${C.body};font-size:14px;">${esc(r.label)}</td><td class="ink" align="right" style="padding:5px 0;color:${C.ink};font-size:14px;font-weight:${r.strong ? 700 : 500};">${esc(r.value)}</td></tr>`,
-        )
-        .join("")}</table></td></tr></table>`
-    : "";
-
+  const muted = (html: string, mb = 6) => `<p class="lt-muted" style="margin:0 0 ${mb}px;font-family:${FONT};font-size:12px;line-height:1.6;color:${C.muted}">${html}</p>`;
+  const link = (href: string, t: string) => `<a class="lt-muted" href="${esc(href)}" style="color:${C.muted};text-decoration:underline">${esc(t)}</a>`;
   const footerLinks = def.always
-    ? `<span>This is a ${def.category === "billing" ? "payment" : "security"} email, so it always sends.</span>`
+    ? `This is a ${def.category === "billing" ? "payment" : "security"} email, so it always sends.`
     : settings
-      ? `<a href="${settings}" style="color:${C.muted};text-decoration:underline;">Manage notifications</a>${unsub ? ` &nbsp;·&nbsp; <a href="${unsub}" style="color:${C.muted};text-decoration:underline;">Unsubscribe from this kind of email</a>` : ""}`
+      ? `${link(settings, "Manage notifications")}${unsub ? ` &nbsp;&middot;&nbsp; ${link(unsub, "Unsubscribe from this kind of email")}` : ""}`
       : "";
+  const grp = (label: string, html: string, mb = 16) =>
+    `<p class="lt-muted" style="margin:0 0 2px;font-family:${FONT};font-size:12px;line-height:1.5;color:${C.muted}">${label}</p><div class="lt-ink" style="margin:0 0 ${mb}px;font-family:${FONT};font-size:14px;line-height:1.5;font-weight:500;color:${C.ink}">${html}</div>`;
+  // PLACEHOLDER: the RC number is not known yet. When the owner supplies it, add " &middot; RC <number>" here. Social links are left out for the same reason.
+  const legal = `&copy; ${year} ${esc(site.legalName)}`;
+  const a = (href: string, t: string, u = false) => `<a class="lt-ink" href="${esc(href)}" style="color:${C.ink};text-decoration:${u ? "underline" : "none"}">${esc(t)}</a>`;
 
   const html = `<!doctype html>
-<html lang="en">
+<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="x-ua-compatible" content="ie=edge">
+<meta name="x-apple-disable-message-reformatting">
 <meta name="color-scheme" content="light dark">
 <meta name="supported-color-schemes" content="light dark">
 <title>${esc(b.subject)}</title>
+<!--[if mso]><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml><![endif]-->
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
 <style>
-  @media (prefers-color-scheme: dark) {
-    .bg-page { background:#0b0e17 !important; }
-    .card, .foot { background:#161c2b !important; border-color:#2a3245 !important; }
-    .ink { color:#f0f3fa !important; }
-    .body { color:#b7bfd0 !important; }
-    .muted, .muted a { color:#8d97ab !important; }
-    .tint { background:#1e2740 !important; }
-    .btn { background:#4a6cf7 !important; color:#ffffff !important; }
-    .logo-light { display:none !important; }
-    .logo-dark { display:block !important; }
-  }
-  @media (max-width:600px){ .card{ border-radius:0 !important; } .pad{ padding-left:22px !important; padding-right:22px !important; } }
+${CSS}
 </style>
 </head>
-<body class="bg-page" style="margin:0;padding:0;background:${C.page};">
-<div style="display:none;max-height:0;overflow:hidden;opacity:0;">${esc(b.preheader)}</div>
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="bg-page" style="background:${C.page};padding:28px 12px;">
-<tr><td align="center">
-<table role="presentation" width="600" cellpadding="0" cellspacing="0" class="card" style="width:600px;max-width:100%;background:${C.card};border:1px solid ${C.hair};border-radius:18px;overflow:hidden;">
-<tr><td class="pad" style="padding:30px 40px 6px;">
-<img src="${siteOrigin()}/brand/email-logo-navy.png" width="132" height="64" alt="Litch Consulting" class="logo-light" style="display:block;border:0;">
-<img src="${siteOrigin()}/brand/email-logo-white.png" width="132" height="64" alt="Litch Consulting" class="logo-dark" style="display:none;border:0;mso-hide:all;">
+<body class="lt-page body" style="margin:0;padding:0;background:${C.page}">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;mso-hide:all">${esc(b.preheader)}&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;&#8203;</div>
+${T(`width="100%" class="lt-page" style="background:${C.page}"`)}<tr><td align="center" class="lt-outer" style="padding:32px 12px">
+${T(`width="600" class="lt-wrap lt-card" style="width:600px;max-width:600px;background:#ffffff;border:1px solid ${C.line};border-radius:14px;overflow:hidden"`)}
+
+<tr><td bgcolor="${C.navy}" class="lt-pad" style="padding:18px 40px;${bg(C.navy)}">${T('width="100%"')}<tr>
+<td valign="middle"><a href="${o}" style="text-decoration:none"><img src="${o}/brand/email-logo-white.png" width="98" height="48" alt="${esc(site.name)}" style="display:block;width:98px;height:48px;border:0;color:#ffffff;font-family:${DISPLAY};font-size:17px;font-weight:700"></a></td>
+<td valign="middle" align="right" style="font-family:${FONT};font-size:13px;line-height:1.4;color:${C.headerText}">${keep(`<span style="color:${C.headerText}">${esc(h.label)}</span>`)}</td></tr></table></td></tr>
+<tr><td height="2" style="height:2px;line-height:2px;font-size:0;${bg(C.rule)}">&nbsp;</td></tr>
+${hero(h)}
+
+<tr><td class="lt-pad" style="padding:36px 40px 16px">
+<h1 class="lt-ink lt-h1" style="margin:0 0 20px;font-family:${DISPLAY};font-size:28px;line-height:1.18;font-weight:700;letter-spacing:-0.02em;color:${C.ink}">${esc(b.heading)}</h1>
+${b.greeting ? `<p class="lt-body" style="margin:0 0 16px;font-family:${FONT};font-size:16px;line-height:1.65;color:${C.body}">Hello ${esc(b.greeting)},</p>` : ""}
+${b.paragraphs.map((p) => `<p class="lt-body" style="margin:0 0 16px;font-family:${FONT};font-size:16px;line-height:1.65;color:${C.body}">${rich(p)}</p>`).join("\n")}
+${b.rows?.length ? facts(b.rows) : ""}
+${cta ? button(cta.label, cta.href, cta.icon ?? "arrow-right") : ""}
+${b.note ? `<p class="lt-muted" style="margin:0 0 24px;font-family:${FONT};font-size:14px;line-height:1.6;color:${C.muted};word-break:break-word">${esc(b.note)}</p>` : ""}
 </td></tr>
-<tr><td class="pad" style="padding:18px 40px 30px;font-family:${FONT};font-size:15px;line-height:1.65;color:${C.ink};">
-<h1 class="ink" style="margin:0 0 14px;font-family:${DISPLAY};font-size:22px;line-height:1.3;color:${C.ink};">${esc(b.heading)}</h1>
-${b.greeting ? `<p class="body" style="margin:0 0 12px;color:${C.body};">Hello ${esc(b.greeting)},</p>` : ""}
-${b.paragraphs.map((p) => `<p class="body" style="margin:0 0 14px;color:${C.body};">${rich(p)}</p>`).join("")}
-${rowsHtml}
-${cta ? `<p style="margin:20px 0 10px;"><a href="${esc(cta.href)}" class="btn" style="display:inline-block;background:${C.navy};color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:13px 24px;border-radius:10px;">${esc(cta.label)}</a></p>
-<p class="muted" style="margin:0 0 6px;font-size:12.5px;color:${C.muted};word-break:break-all;">Or copy this link: <a href="${esc(cta.href)}" style="color:${C.brand};">${esc(cta.href)}</a></p>` : ""}
-${b.note ? `<p class="muted" style="margin:12px 0 0;font-size:13px;color:${C.muted};">${esc(b.note)}</p>` : ""}
-</td></tr>
-<tr><td class="foot pad muted" style="padding:20px 40px 26px;border-top:1px solid ${C.hair};background:${C.card};font-family:${FONT};font-size:12px;line-height:1.7;color:${C.muted};">
-<p class="muted" style="margin:0 0 10px;color:${C.muted};">${esc(b.why)}</p>
-<p class="muted" style="margin:0 0 10px;color:${C.muted};">${footerLinks}</p>
-<p class="muted" style="margin:0;color:${C.muted};">${esc(site.legalName)} · ${esc(site.location)} · Financial reporting, tax, modelling, forensic accounting, advisory<br>© ${year} ${esc(site.legalName)}</p>
-</td></tr>
+
+<tr><td class="lt-soft lt-line lt-pad" style="padding:32px 40px;background:${C.soft};border-top:1px solid ${C.line}">
+${T('width="100%" style="margin:0 0 20px"')}<tr><td valign="middle">${T()}<tr><td bgcolor="${C.navy}" style="${bg(C.navy)};border-radius:10px;padding:8px 14px"><a href="${o}" style="text-decoration:none;display:block"><img src="${o}/brand/email-logo-white.png" width="82" height="40" alt="${esc(site.name)}" style="display:block;width:82px;height:40px;border:0;color:#ffffff;font-family:${DISPLAY};font-size:15px;font-weight:700"></a></td></tr></table>
+<p class="lt-muted" style="margin:10px 0 0;font-family:${FONT};font-size:13px;line-height:1.5;color:${C.muted}">${esc(site.tagline)}</p></td></tr></table>
+${T('width="100%" style="margin:0 0 4px"')}<tr>
+<td class="lt-col" width="50%" valign="top" style="padding:0 16px 0 0">
+${grp("Call or WhatsApp", `${a(`tel:${site.phoneHref}`, site.phone)} <span class="lt-muted" style="color:${C.muted}">&middot;</span> ${a(`https://wa.me/${site.phoneHref.replace("+", "")}`, "WhatsApp", true)}`)}
+${grp("Email", a(`mailto:${site.email}`, site.email))}</td>
+<td class="lt-col" width="50%" valign="top">
+${grp("Based in", esc(site.location))}
+${grp("What we do", "Financial reporting, tax, modelling, forensic accounting and advisory", 0)}</td>
+</tr></table>
+${T('width="100%"')}<tr><td class="lt-line" style="border-top:1px solid ${C.line};padding-top:16px">
+${muted(`${esc(b.why)}${opts.to ? ` Sent to <span class="lt-ink" style="color:${C.ink}">${esc(opts.to)}</span>.` : ""}`)}
+${footerLinks ? muted(footerLinks) : ""}
+${muted(legal, 0)}
+</td></tr></table></td></tr>
+
 </table>
-</td></tr>
-</table>
+</td></tr></table>
 </body>
 </html>`;
 
