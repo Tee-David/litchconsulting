@@ -446,6 +446,27 @@ def run_agent_loop(
     grounded: list[float] = figures_in(" ".join(m["content"] for m in base[1:]))
     grounding_retries = 0
     malformed = 0
+    # One switch to another vendor after unusable steps, before the deterministic plan.
+    escalated = False
+
+    def other_vendor_after(name: str) -> tuple[str, str] | None:
+        """(start_after, next provider): the first provider of a different vendor after
+        ``name``, and the name just before it for ``start_after``. Groq models share a vendor."""
+        chain_fn = getattr(router, "chain", None)
+        if chain_fn is None:
+            return None
+        try:
+            names = [sp.name for sp in chain_fn(local_only=local_only)]
+        except Exception:  # noqa: BLE001 - a test router without a real chain
+            return None
+        if name not in names:
+            return None
+        vendor = name.split(":")[0]
+        i = names.index(name)
+        for j in range(i + 1, len(names)):
+            if names[j].split(":")[0] != vendor and names[j] != "local":
+                return names[j - 1], names[j]
+        return None
     yield {"type": "start", "tools": [t.name for t in tools], "max_steps": max_steps}
 
     budget = turn_budget or (LOCAL_TURN_BUDGET if local_only else AGENT_TURN_BUDGET)
@@ -468,7 +489,7 @@ def run_agent_loop(
         last_err: str | None = None
         extra: list[dict[str, str]] = []
         start_after: str | None = None
-        for attempt in range(3):
+        for attempt in range(4):
             try:
                 routed = call(extra, start_after)
             except AllProvidersFailed as exc:
@@ -495,6 +516,17 @@ def run_agent_loop(
             yield {"type": "retry", "step": step + 1, "attempt": attempt + 1,
                    "provider": routed.provider, "error": last_err}
             malformed += 1
+            if malformed >= MAX_MALFORMED and not escalated:
+                # The weak models failed: try the next vendor (for example Cloudflare's
+                # larger model) once before the deterministic plan answers instead.
+                hop = other_vendor_after(routed.provider)
+                if hop is not None:
+                    escalated = True
+                    yield {"type": "fallback", "from": routed.provider, "reason": "invalid",
+                           "to": hop[1], "detail": (last_err or "")[:200]}
+                    start_after = hop[0]
+                    extra = []
+                    continue
             if malformed >= MAX_MALFORMED and fallback_plan is not None:
                 # Each retry resends the whole prompt (per-minute token limits): after two
                 # malformed steps the decision layer's deterministic plan answers instead.

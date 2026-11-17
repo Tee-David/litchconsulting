@@ -308,3 +308,25 @@ def test_a_write_tool_is_never_run_in_parallel():
                            {"echo", "make"}, None, {"echo"})
     assert turn is None and "read tools" in err
     assert write.kind == "write"
+
+
+def test_unusable_steps_from_one_vendor_try_the_next_vendor_before_the_plan():
+    # Two Groq models send unusable steps: the loop tries the next vendor once
+    # (Cloudflare here) before the deterministic plan answers instead.
+    t = Scripted({
+        "groq": ["garbage"],
+        "groq:gpt-oss-20b": ["still garbage"],
+        "cloudflare": [{"action": "final", "answer": "Recovered on Cloudflare."}],
+    })
+    specs = [ProviderSpec("groq", "cloud", "gpt-oss-120b", "https://g", api_key="k"),
+             ProviderSpec("groq:gpt-oss-20b", "cloud", "gpt-oss-20b", "https://g", api_key="k"),
+             ProviderSpec("cloudflare", "cloud", "gpt-oss-120b", "https://cf", api_key="k"),
+             ProviderSpec("local", "local", "gemma3:4b", "http://l", api="ollama")]
+    router = ProviderRouter(specs, transport=t)
+    events = list(run_agent_loop(system="S", user="please reconcile bank to ledger", tools=[ECHO],
+                                 execute=_execute, router=router, conversation_id="esc",
+                                 fallback_plan=fallback_plan))
+    assert events[-1]["type"] == "final" and events[-1]["answer"] == "Recovered on Cloudflare."
+    hop = [e for e in events if e["type"] == "fallback" and e["reason"] == "invalid"]
+    assert hop and hop[0]["to"] == "cloudflare"
+    assert "cloudflare" in [name for name, _ in t.calls]
