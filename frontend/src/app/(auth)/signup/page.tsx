@@ -7,6 +7,7 @@ import { getAuthSession } from "@/lib/server-user";
 import { continueUrl } from "@/lib/post-auth";
 import { openDraft } from "@/app/get-started/draft";
 import { getCatalogService } from "@/lib/services/catalog";
+import { formatMoney } from "@/lib/invoice/money";
 
 export const metadata: Metadata = {
   title: "Create an account",
@@ -32,6 +33,7 @@ export default async function SignupPage({ searchParams }: { searchParams: Promi
         <SignupForm
           draftId={draft?.id ?? null}
           serviceName={service?.name ?? null}
+          priceLabel={service ? (service.pricingMode === "fixed" && service.priceNgn ? `From ${formatMoney(Number(service.priceNgn))}` : "We send you a quote first. You pay nothing before you accept it.") : null}
           googleEnabled={Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET)}
         />
       </Suspense>

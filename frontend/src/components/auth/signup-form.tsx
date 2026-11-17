@@ -19,7 +19,7 @@ import { AuthHeading, Callout, Check, Field, GoogleButton, OrDivider, SubmitButt
  * to it, and the draft id rides in the verification link, so verifying on a
  * phone still lands on the pre-filled request.
  */
-export function SignupForm({ draftId: initialDraft, serviceName, googleEnabled }: { draftId: string | null; serviceName: string | null; googleEnabled: boolean }) {
+export function SignupForm({ draftId: initialDraft, serviceName, priceLabel = null, googleEnabled }: { draftId: string | null; serviceName: string | null; priceLabel?: string | null; googleEnabled: boolean }) {
   const toast = useToast();
   const params = useSearchParams();
   const redirect = params.get("redirect");
@@ -149,7 +149,27 @@ export function SignupForm({ draftId: initialDraft, serviceName, googleEnabled }
       <AuthHeading title="Create your Litch account" lede="For clients of Litch Consulting. Staff and colleagues join from an invitation email." />
 
       {serviceName ? (
+        <ol aria-label="Steps" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px]">
+          {["Service", "Account", "Verify email", "Your details"].map((t, i) => (
+            <li key={t} className="flex items-center gap-2" aria-current={i === 1 ? "step" : undefined}>
+              <span
+                className={
+                  "grid size-6 place-items-center rounded-full text-[11.5px] font-semibold " +
+                  (i === 0 ? "bg-good text-white" : i === 1 ? "bg-act text-act-ink" : "bg-surface text-muted")
+                }
+              >
+                {i + 1}
+              </span>
+              <span className={i === 1 ? "font-semibold text-ink" : "text-muted"}>{t}</span>
+              {i < 3 ? <span aria-hidden className="h-px w-4 bg-hairline" /> : null}
+            </li>
+          ))}
+        </ol>
+      ) : null}
+
+      {serviceName ? (
         <Callout icon={<FileText />} title={`You are requesting: ${serviceName}`}>
+          {priceLabel ? <b className="block font-semibold text-ink">{priceLabel}</b> : null}
           Saved as a draft on our side. It survives verifying your email on another device.{" "}
           <Link href="/get-started" className="font-medium text-accent hover:underline">
             Change
