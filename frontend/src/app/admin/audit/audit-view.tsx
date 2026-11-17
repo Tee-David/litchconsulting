@@ -103,7 +103,23 @@ const PHRASE: Record<string, string> = {
   "upload.infected": "Blocked an infected upload",
   "notification.unsubscribed": "Unsubscribed from emails",
 };
-export const phrase = (a: string) => PHRASE[a] ?? a.replace(/[._]/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+/** Families of codes built from a variable part (workbench.sheet_merge, request.review_approve). */
+const FAMILY: Array<[RegExp, (m: RegExpMatchArray) => string]> = [
+  [/^workbench\.batch_(accept|reject|undo)$/, (m) => ({ accept: "Accepted Sage's change in a workbook", reject: "Rejected Sage's change in a workbook", undo: "Undid a change in a workbook" })[m[1] as "accept"]],
+  [/^workbench\.sheet_(.+)$/, (m) => `Changed a workbook sheet (${m[1].replace(/_/g, " ")})`],
+  [/^workbench\.deliver_(.+)$/, (m) => `Delivered a workbook (${m[1].replace(/_/g, " ")})`],
+  [/^request\.review_(.+)$/, (m) => `Client review: ${m[1].replace(/_/g, " ")}`],
+  [/^engagement\.(.+)$/, (m) => `Moved an engagement (${m[1].replace(/_/g, " ")})`],
+  [/^(quote|invoice)\.drafted$/, (m) => `Sage drafted ${m[1] === "quote" ? "a quote" : "an invoice"} (confirmed)`],
+];
+export const phrase = (a: string) => {
+  if (PHRASE[a]) return PHRASE[a];
+  for (const [re, fn] of FAMILY) {
+    const m = a.match(re);
+    if (m) return fn(m);
+  }
+  return a.replace(/[._]/g, " ").replace(/^\w/, (c) => c.toUpperCase());
+};
 
 /** The change in plain words: "sent → paid · ₦250,000.00 · reason: late". */
 const LABEL: Record<string, string> = { status: "status", role: "role", mode: "mode", aiMode: "AI mode", count: "items", fileName: "file", file: "file", files: "files", reason: "reason", error: "error" };
