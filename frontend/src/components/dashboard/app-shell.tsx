@@ -12,7 +12,6 @@ import {
   LogOut,
   Menu,
   CircleHelp,
-  MessageCircleQuestionMark,
   MessagesSquare,
   Search,
   Settings,
@@ -21,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { Logo, LogoMark } from "@/components/ui/logo";
+import { SageIcon } from "@/components/admin/sage-icon";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { NotificationBell } from "@/components/kit";
 import { signOut } from "@/lib/auth-client";
@@ -38,7 +38,7 @@ const ICONS: Record<NavIcon, typeof Home> = {
   settings: Settings,
   table: Table2,
   msg: MessagesSquare,
-  sage: MessageCircleQuestionMark,
+  sage: SageIcon as unknown as typeof Home,
 };
 
 export type ShellCounts = Partial<Record<NonNullable<NavItem["count"]>, number>>;
@@ -113,7 +113,7 @@ export function AppShell({
           >
             <Menu className="size-5" />
           </button>
-          <p className="min-w-0 flex-1 truncate font-display text-[15px] font-semibold text-ink">{current?.label ?? (kind === "staff" ? "My work" : "Home")}</p>
+          <p className="min-w-0 flex-1 truncate font-display text-[15px] font-semibold text-ink">{current?.label ?? (pathname.startsWith("/account") ? "Profile and security" : kind === "staff" ? "My work" : "Home")}</p>
           <SearchBox kind={kind} />
           {launcher}
           <ThemeToggle className="hidden sm:grid" />
