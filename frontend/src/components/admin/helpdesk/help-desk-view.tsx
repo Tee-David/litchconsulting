@@ -258,7 +258,7 @@ export function HelpDeskView({
   }
 
   const StatusTabs = (
-    <div className="no-scrollbar flex gap-1 overflow-x-auto">
+    <div className="flex flex-wrap gap-1">
       {[{ key: "all", label: "All" }, ...TICKET_STATUSES].map((s) => (
         <button
           key={s.key}
