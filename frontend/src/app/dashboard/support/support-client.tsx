@@ -225,7 +225,7 @@ export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
               <input
                 type="text"
-                placeholder="Search tickets by ID or subject..."
+                placeholder="Search your questions"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 aria-label="Search your tickets"
@@ -247,11 +247,11 @@ export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
             <div className="p-12">
               <EmptyState
                 icon={MessageSquare}
-                title="No tickets found"
+                title={tickets.length ? "No questions match" : "No questions yet"}
                 description={
                   searchQuery || selectedStatus !== "all"
-                    ? "Try resetting your search query or status filter."
-                    : "You haven't opened any support tickets yet. Use 'Contact support' to get started."
+                    ? "Clear the search or pick another status."
+                    : "Use New question to ask the team. We reply here and by email."
                 }
               />
             </div>
