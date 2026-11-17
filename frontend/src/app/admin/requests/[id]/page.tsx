@@ -28,6 +28,7 @@ const STEPS: Array<{ label: string; statuses: string[] }> = [
   { label: "Completed", statuses: ["completed"] },
 ];
 
+const shortDate = (d: Date | string | null | undefined) => (d ? new Date(d).toLocaleDateString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "short" }) : "");
 const date = (d: Date | string | null | undefined) => (d ? new Date(d).toLocaleDateString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "short", year: "numeric" }) : "");
 
 export default async function AdminRequestPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ tab?: string; assign?: string }> }) {
@@ -121,6 +122,13 @@ export default async function AdminRequestPage({ params, searchParams }: { param
     { id: "activity", label: "Activity", href: `/admin/requests/${r.id}?tab=activity` },
   ];
 
+  // When each step began: the first time the request moved into one of its statuses
+  // (the first step is the day the request was made).
+  const enteredAt = STEPS.map((st, i) => {
+    if (i === 0) return r.createdAt;
+    const hit = [...d.events].reverse().find((e) => e.toStatus && st.statuses.includes(e.toStatus));
+    return hit?.createdAt ?? null;
+  });
   const stepper = (
     <ol className="grid grid-cols-1 gap-2 sm:grid-cols-7 sm:gap-0" aria-label="Progress">
       {STEPS.map((s, i) => {
@@ -142,6 +150,7 @@ export default async function AdminRequestPage({ params, searchParams }: { param
             <span className={cn("text-[13px]", cur ? "font-semibold text-ink" : done ? "text-ink" : "text-muted")}>
               {s.label}
               {s.label === "Client review" && r.reviewRound > 0 ? <span className="block text-xs font-normal text-muted">round {r.reviewRound}</span> : null}
+              {(done || cur) && enteredAt[i] ? <span className="block text-xs font-normal tabular-nums text-muted">{shortDate(enteredAt[i])}</span> : null}
             </span>
           </li>
         );

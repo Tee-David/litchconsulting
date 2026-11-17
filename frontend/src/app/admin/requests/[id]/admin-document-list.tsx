@@ -103,8 +103,17 @@ export function AdminDocumentList({
               {doc.uploadedByName ? ` · ${doc.uploadedByName}` : ""}
               {doc.litchaiStatus ? ` · AI: ${doc.litchaiStatus}` : ""}
             </p>
+            {/* Virus scan state: a blocked file cannot be downloaded or opened. */}
+            <p
+              className={
+                "mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium " +
+                (doc.scanStatus === "infected" ? "bg-bad-soft text-bad" : doc.scanStatus === "clean" ? "bg-good-soft text-good" : "bg-surface text-muted")
+              }
+            >
+              {doc.scanStatus === "infected" ? "Blocked: virus found" : doc.scanStatus === "clean" ? "Virus scan: clean" : "Not scanned yet"}
+            </p>
             {doc.correctionReason && (
-              <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400">
+              <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-warn-soft px-2 py-0.5 text-[11px] font-medium text-warn">
                 <AlertTriangle className="size-3" />
                 Correction requested: {doc.correctionReason}
               </p>
@@ -135,7 +144,7 @@ export function AdminDocumentList({
           <button
             type="button"
             onClick={() => download(doc)}
-            disabled={busyId === doc.id}
+            disabled={busyId === doc.id || doc.scanStatus === "infected"}
             className="grid size-8 place-items-center rounded-full text-muted transition-colors hover:bg-surface hover:text-ink"
             title="Download"
           >
