@@ -48,7 +48,7 @@ export function InvoicePaymentsCard({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [detail, setDetail] = useState<PaymentView | null>(null);
   const [touched, setTouched] = useState(false);
-  const [form, setForm] = useState({ amount: "", method: "bank_transfer", date: todayISO(), note: "" });
+  const [form, setForm] = useState({ amount: "", method: "bank_transfer", date: todayISO(), note: "", wht: "" });
 
   const totalN = num(total);
   const paidN = num(amountPaid);
@@ -73,10 +73,11 @@ export function InvoicePaymentsCard({
         channel: form.method,
         paidAt: form.date,
         note: form.note || undefined,
+        whtCredit: Number(form.wht) || 0,
       });
       if (res.ok) {
         toast.success("Payment recorded.");
-        setForm({ amount: "", method: "bank_transfer", date: todayISO(), note: "" });
+        setForm({ amount: "", method: "bank_transfer", date: todayISO(), note: "", wht: "" });
         setTouched(false);
         setOpen(false);
         router.refresh();
@@ -173,6 +174,17 @@ export function InvoicePaymentsCard({
             placeholder="Reference or note (optional)"
             className={inputCls}
           />
+          <div>
+            <input
+              value={form.wht}
+              onChange={(e) => setForm((f) => ({ ...f, wht: e.target.value.replace(/[^0-9.]/g, "") }))}
+              inputMode="decimal"
+              placeholder="WHT withheld by the client (optional)"
+              aria-label="WHT withheld by the client"
+              className={inputCls}
+            />
+            <p className="mt-1 text-[12px] text-muted">Tax the client kept back for FIRS. It settles the invoice like cash; ask them for the credit note.</p>
+          </div>
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
             <button
               type="button"

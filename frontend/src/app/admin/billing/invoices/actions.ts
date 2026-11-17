@@ -506,10 +506,14 @@ export async function recordManualPaymentAction(input: {
   channel?: string;
   paidAt?: string;
   note?: string;
+  /** Tax the client withheld (WHT) and will cover with a credit note. Settles the invoice like cash. */
+  whtCredit?: number;
 }): Promise<ActionResult> {
   if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
   const amount = Number(input.amount);
   if (!Number.isFinite(amount) || amount <= 0) return { ok: false, error: "Enter an amount greater than zero." };
+  const wht = Number(input.whtCredit ?? 0);
+  if (!Number.isFinite(wht) || wht < 0) return { ok: false, error: "The WHT amount must be zero or more." };
 
   try {
     const [inv] = await db.select().from(invoice).where(eq(invoice.id, input.invoiceId)).limit(1);
@@ -531,14 +535,33 @@ export async function recordManualPaymentAction(input: {
       rawEvent: input.note?.trim() ? { note: input.note.trim() } : null,
     });
 
+    // WHT the client withheld: its own line, so every sum of payments counts it and the
+    // accounts export shows it apart from cash (the credit note is the client's proof).
+    if (wht > 0.004) {
+      await db.insert(payment).values({
+        reference: `WHT-${inv.number}-${randomUUID().slice(0, 6)}`,
+        provider: "wht",
+        invoiceId: inv.id,
+        clientId: inv.clientId ?? null,
+        status: "success",
+        amount: String(wht.toFixed(2)),
+        amountSettled: String(wht.toFixed(2)),
+        currency: inv.currency,
+        channel: "wht_credit",
+        paidAt: input.paidAt ? new Date(input.paidAt) : new Date(),
+        verifiedAt: new Date(),
+        rawEvent: { note: "WHT withheld by the client (credit note expected)" },
+      });
+    }
+
     await recordAudit({
       action: "payment.recorded_manual",
       entity: "invoice",
       entityId: inv.id,
-      meta: { number: inv.number, amount, currency: inv.currency, channel: input.channel || "bank_transfer", reference },
+      meta: { number: inv.number, amount, whtCredit: wht || undefined, currency: inv.currency, channel: input.channel || "bank_transfer", reference },
     });
 
-    await applyManualPayment(inv.id, amount);
+    await applyManualPayment(inv.id, amount + (wht > 0.004 ? wht : 0));
     paymentsRevalidate(inv.id);
     return { ok: true, id: inv.id };
   } catch (err) {

@@ -23,7 +23,9 @@ const methodOf = (p: PaymentLine) =>
       ? `Paystack${p.channel ? `, ${p.channel.replace(/_/g, " ")}` : ""}`
       : p.provider === "manual"
         ? `Recorded by hand${p.channel && p.channel !== "mark_paid" ? `, ${p.channel.replace(/_/g, " ")}` : ""}`
-        : p.provider;
+        : p.provider === "wht"
+          ? "WHT credit (withheld by the client)"
+          : p.provider;
 
 export type OpenInvoice = { id: string; number: string; client: string; balance: number; currency: string };
 
@@ -56,11 +58,12 @@ export function PaymentsTable({ lines, openInvoices }: { lines: PaymentLine[]; o
     const rows = lines.filter((l) => l.status === "success" && (exportMonth === "all" || l.at.startsWith(exportMonth)));
     downloadCsv(
       `payments-for-accounts-${exportMonth}`,
-      ["Date", "Reference", "Client", "Invoice", "Request", "Method", "Amount", "Currency", "Debit account", "Credit account", "Confirmed on"],
+      ["Date", "Reference", "Client", "Invoice", "Request", "Method", "Amount", "Currency", "Debit account", "Credit account", "Confirmed on", "Paystack fee"],
       rows.map((p) => [
         p.at.slice(0, 10), p.reference, p.payer, p.invoiceNumber ?? "", p.requestNumber ?? "", methodOf(p), p.amount, p.currency,
         // A WHT credit note settles the invoice without cash: it is a tax asset, not bank.
         p.channel === "wht_credit" ? "WHT receivable" : "Bank", "Trade receivables", p.confirmedAt?.slice(0, 10) ?? p.at.slice(0, 10),
+        p.fee ?? "",
       ]),
     );
     setExportOpen(false);
@@ -91,6 +94,20 @@ export function PaymentsTable({ lines, openInvoices }: { lines: PaymentLine[]; o
         meta: { label: "Amount", align: "right", mobile: "meta" },
         cell: ({ row }) => <span className="tabular-nums font-medium text-ink">{formatMoney(row.original.amount, row.original.currency)}</span>,
       },
+      {
+        id: "wht",
+        accessorFn: (r) => r.whtCredit,
+        header: "WHT credit",
+        meta: { label: "WHT credit", align: "right", mobile: "hidden" },
+        cell: ({ row }) => <span className="block text-right tabular-nums text-body">{row.original.whtCredit ? formatMoney(row.original.whtCredit, row.original.currency) : "—"}</span>,
+      },
+      {
+        id: "fee",
+        accessorFn: (r) => r.fee ?? 0,
+        header: "Fee",
+        meta: { label: "Fee", align: "right", mobile: "hidden" },
+        cell: ({ row }) => <span className="block text-right tabular-nums text-body">{row.original.fee !== null ? formatMoney(row.original.fee, row.original.currency) : "—"}</span>,
+      },
       { id: "reference", accessorKey: "reference", header: "Reference", meta: { label: "Reference", defaultHidden: true, mobile: "hidden" }, cell: ({ row }) => <span className="font-mono text-xs text-muted">{row.original.reference}</span> },
     ],
     [],
@@ -112,8 +129,8 @@ export function PaymentsTable({ lines, openInvoices }: { lines: PaymentLine[]; o
       run: (rows) =>
         downloadCsv(
           "payments",
-          ["Date", "Payer", "Invoice", "Request", "Method", "Status", "Amount", "Currency", "Reference"],
-          rows.map((p) => [p.at.slice(0, 10), p.payer, p.invoiceNumber ?? "", p.requestNumber ?? "", methodOf(p), p.status, p.amount, p.currency, p.reference]),
+          ["Date", "Payer", "Invoice", "Request", "Method", "Status", "Amount", "WHT credit", "Fee", "Currency", "Reference"],
+          rows.map((p) => [p.at.slice(0, 10), p.payer, p.invoiceNumber ?? "", p.requestNumber ?? "", methodOf(p), p.status, p.amount, p.whtCredit || "", p.fee ?? "", p.currency, p.reference]),
         ),
     },
   ];
@@ -375,6 +392,7 @@ function RecordSheet({ open, onClose, invoices }: { open: boolean; onClose: () =
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
   const [channel, setChannel] = useState("bank_transfer");
   const [note, setNote] = useState("");
+  const [wht, setWht] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const inv = invoices.find((i) => i.id === invoiceId);
@@ -382,7 +400,7 @@ function RecordSheet({ open, onClose, invoices }: { open: boolean; onClose: () =
   const go = async () => {
     setBusy(true);
     setErr(null);
-    const r = await recordManualPaymentAction({ invoiceId, amount: Number(amount), channel, paidAt: date, note });
+    const r = await recordManualPaymentAction({ invoiceId, amount: Number(amount), channel, paidAt: date, note, whtCredit: Number(wht) || 0 });
     setBusy(false);
     if (!r.ok) return setErr(r.error ?? "That did not save.");
     toast.success(`Recorded ${formatMoney(Number(amount), inv?.currency)} against ${inv?.number}.`);
@@ -391,6 +409,7 @@ function RecordSheet({ open, onClose, invoices }: { open: boolean; onClose: () =
     setInvoiceId("");
     setAmount("");
     setNote("");
+    setWht("");
   };
 
   return (
@@ -434,6 +453,11 @@ function RecordSheet({ open, onClose, invoices }: { open: boolean; onClose: () =
             <label className="block">
               <span className="mb-1.5 block font-medium text-ink">Amount received</span>
               <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^\d.]/g, ""))} className={inputCls} />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block font-medium text-ink">WHT withheld (optional)</span>
+              <input inputMode="decimal" value={wht} onChange={(e) => setWht(e.target.value.replace(/[^\d.]/g, ""))} placeholder="0" className={inputCls} />
+              <span className="mt-1 block text-[12px] text-muted">Tax the client kept back for FIRS. It settles the invoice like cash; ask them for the credit note.</span>
             </label>
             <label className="block">
               <span className="mb-1.5 block font-medium text-ink">Date received</span>

@@ -100,6 +100,10 @@ export type PaymentLine = {
   depositDue: number | null;
   requestId: string | null;
   requestNumber: string | null;
+  /** Paystack's fee on this payment (₦), from the stored event; null when unknown. */
+  fee: number | null;
+  /** Tax the client withheld (a "wht" line), else 0. */
+  whtCredit: number;
 };
 
 export async function listPaymentLines(): Promise<PaymentLine[]> {
@@ -114,7 +118,8 @@ export async function listPaymentLines(): Promise<PaymentLine[]> {
     .limit(2000);
   return rows.map(({ p, inv, c, reqId, reqNumber }) => {
     const pending = Boolean(p.proofKey) && !p.confirmedAt && !["rejected", "success"].includes(p.status);
-    const raw = (p.rawEvent ?? null) as { note?: string } | null;
+    const raw = (p.rawEvent ?? null) as { note?: string; fees?: number; data?: { fees?: number } } | null;
+    const feeKobo = typeof raw?.data?.fees === "number" ? raw.data.fees : typeof raw?.fees === "number" ? raw.fees : null;
     return {
       id: p.id,
       reference: p.reference,
@@ -136,6 +141,8 @@ export async function listPaymentLines(): Promise<PaymentLine[]> {
       depositDue: inv?.depositPercent ? Math.round(num(inv.total) * inv.depositPercent) / 100 : null,
       requestId: reqId,
       requestNumber: reqNumber,
+      fee: p.provider === "paystack" && feeKobo !== null ? feeKobo / 100 : null,
+      whtCredit: p.provider === "wht" ? num(p.amountSettled ?? p.amount) : 0,
     };
   });
 }
