@@ -148,7 +148,7 @@ export function SettingsView({
     try {
       const url = await uploadFile(file, "logo");
       set("logoUrl", url);
-      toast.success("Logo uploaded — click Save to apply.");
+      toast.success("Logo uploaded. Save the changes in the bar at the bottom to use it.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed.");
     } finally {
@@ -172,7 +172,7 @@ export function SettingsView({
     try {
       const url = await uploadFile(file, "avatar");
       setProfile((p) => ({ ...p, image: url }));
-      toast.success("Picture uploaded — click Save to apply.");
+      toast.success("Picture uploaded. Press Save my profile to use it.");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload failed.");
     } finally {
@@ -362,7 +362,7 @@ export function SettingsView({
           <Section
             icon={UserCheck}
             title="My profile"
-            description="Your name and picture, as teammates and clients see them."
+            description="Your name and picture, as teammates and clients see them. This part saves on its own, with its own button."
           >
             <div className="flex flex-col gap-6 sm:flex-row sm:items-start">
               <div className="flex flex-col items-center gap-3">
@@ -451,14 +451,14 @@ export function SettingsView({
                   type="button"
                   onClick={saveProfile}
                   disabled={savingProfile || !profile.name.trim()}
-                  className="inline-flex items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
+                  className="keep-brand inline-flex min-h-10 items-center gap-2 rounded-lg bg-brand px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
                 >
                   {savingProfile ? (
                     <Loader2 className="size-4 animate-spin" />
                   ) : (
                     <Save className="size-4" />
                   )}
-                  Save profile
+                  Save my profile
                 </button>
               </div>
             </div>

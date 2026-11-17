@@ -13,7 +13,7 @@ export default async function SettingsLayout({ children }: { children: React.Rea
   await requireArea("settings", "/admin/settings");
   return (
     <div>
-      <PageHead title="Settings" lede="How the firm and the platform run. Changes collect in the bar at the bottom." />
+      <PageHead title="Settings" lede="How the firm and the platform run. Firm and billing changes collect in a bar at the bottom until you save them." />
       <div className="grid gap-5 md:grid-cols-[220px_minmax(0,1fr)]">
         <div data-tour="settings-tabs" className="min-w-0 md:sticky md:top-20 md:self-start">
           <SettingsNav />
