@@ -342,7 +342,7 @@ export function HelpDeskView({
         </div>
       ) : view === "inbox" ? (
         /* ================= INBOX (3-pane) ================= */
-        <div className="grid overflow-hidden rounded-card border border-hairline bg-paper lg:grid-cols-[minmax(0,300px)_1fr] xl:grid-cols-[minmax(0,320px)_1fr_minmax(0,320px)]">
+        <div className="grid grid-cols-1 overflow-hidden rounded-card border border-hairline bg-paper lg:grid-cols-[minmax(0,300px)_1fr] xl:grid-cols-[minmax(0,320px)_1fr_minmax(0,320px)]">
           {/* ---- LEFT: ticket list ---- */}
           <div className={cn("border-hairline lg:border-r", pane !== "list" && "hidden lg:block")}>
             <div className="border-b border-hairline px-3 py-2.5">{StatusTabs}</div>
