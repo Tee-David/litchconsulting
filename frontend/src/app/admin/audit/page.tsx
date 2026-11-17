@@ -3,7 +3,6 @@ import { inArray } from "drizzle-orm";
 import { listAuditLog } from "@/lib/db/queries/audit";
 import { db } from "@/lib/db/client";
 import { user } from "@/lib/db/schema";
-import { PageHead } from "@/components/admin/ui/surface";
 import { AuditView, type AuditItem } from "./audit-view";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +28,6 @@ export default async function AuditPage() {
   }));
   return (
     <div>
-      <PageHead title="Audit log" lede="Every consequential action, who did it and what changed. Newest first; the last 1,000 entries." />
       <AuditView rows={data} />
     </div>
   );

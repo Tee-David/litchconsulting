@@ -38,18 +38,10 @@ const ICONS: Record<string, LucideIcon> = {
 };
 
 const STATE_META: Record<IntegrationState, { label: string; pill: string; dot: string }> = {
-  connected: {
-    label: "Connected",
-    pill: "bg-emerald-500/12 text-emerald-600 dark:text-emerald-400",
-    dot: "bg-emerald-500",
-  },
-  degraded: {
-    label: "Needs attention",
-    pill: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
-    dot: "bg-amber-500",
-  },
-  not_configured: { label: "Not configured", pill: "bg-surface text-muted", dot: "bg-muted" },
-  unknown: { label: "Unknown", pill: "bg-surface text-muted", dot: "bg-muted" },
+  connected: { label: "Connected", pill: "bg-good-soft text-good", dot: "bg-good" },
+  degraded: { label: "Needs attention", pill: "bg-warn-soft text-warn", dot: "bg-warn" },
+  not_configured: { label: "Not configured", pill: "bg-surface text-muted", dot: "bg-faint" },
+  unknown: { label: "Unknown", pill: "bg-surface text-muted", dot: "bg-faint" },
 };
 
 const GROUP_ORDER = ["Payments & scheduling", "Communications", "Storage & data", "LitchAI", "Platform"] as const;
@@ -58,94 +50,46 @@ function StatusPill({ state }: { state: IntegrationState }) {
   const meta = STATE_META[state];
   return (
     <span className={cn("inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium", meta.pill)}>
-      <span className={cn("size-1.5 rounded-full", meta.dot)} />
+      <span className={cn("size-1.5 rounded-full", meta.dot)} aria-hidden />
       {meta.label}
     </span>
   );
 }
 
-function IntegrationCard({ item }: { item: IntegrationStatus }) {
+/**
+ * One service as one row: what it is, why the status says what it says, and one
+ * action (open its settings, or its docs). Env var names (never values) sit in a
+ * tooltip and on wide screens.
+ */
+function IntegrationRow({ item }: { item: IntegrationStatus }) {
   const Icon = ICONS[item.key] ?? Cable;
+  const keys = item.envKeys.map((k) => (k.set ? `${k.using} set` : `${k.names.join(" / ")} not set`)).join(" · ");
   return (
-    <div className="flex flex-col rounded-card border border-hairline bg-paper p-5">
-      <div className="flex items-start justify-between gap-3">
-        <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-brand-tint text-brand">
-          <Icon className="size-5" />
-        </span>
-        <StatusPill state={item.state} />
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:flex-nowrap">
+      <span className="keep-brand grid size-9 shrink-0 place-items-center rounded-xl bg-brand text-white dark:bg-info dark:text-paper" aria-hidden>
+        <Icon className="size-[18px]" strokeWidth={1.75} />
+      </span>
+      <div className="min-w-0 flex-1 basis-[12rem]" title={keys || undefined}>
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm font-semibold text-ink">
+          {item.name}
+          <StatusPill state={item.state} />
+        </p>
+        <p className={cn("mt-0.5 text-[12.5px] leading-snug", item.state === "degraded" ? "font-medium text-warn" : "text-body")}>{item.detail}</p>
+        {keys ? <p className="mt-0.5 hidden truncate font-mono text-[11px] text-muted lg:block">{keys}</p> : null}
       </div>
-
-      <h3 className="mt-4 font-display text-sm font-bold text-ink">{item.name}</h3>
-      <p className="mt-1 text-sm text-body">{item.description}</p>
-
-      {/* The evidence behind the pill — why it says what it says. */}
-      <p
-        className={cn(
-          "mt-3 text-xs leading-relaxed",
-          item.state === "degraded" ? "font-medium text-amber-600 dark:text-amber-400" : "text-muted"
-        )}
-      >
-        {item.detail}
-      </p>
-
-      <div className="mt-auto space-y-3 pt-4">
-        {/* Env var NAMES only — never values. A chip shows the alias actually
-            in use when one is set, otherwise every name that would satisfy it. */}
-        {item.envKeys.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {item.envKeys.map((k) => (
-              <code
-                key={k.names[0]}
-                title={
-                  k.set
-                    ? `${k.using} is set`
-                    : k.names.length > 1
-                      ? `Not set — accepts any of: ${k.names.join(", ")}`
-                      : `${k.names[0]} is not set`
-                }
-                className={cn(
-                  "rounded border px-1.5 py-0.5 font-mono text-[10px]",
-                  k.set
-                    ? "border-hairline bg-surface text-body"
-                    : "border-dashed border-hairline text-muted line-through decoration-muted/50"
-                )}
-              >
-                {k.set ? k.using : k.names.join(" / ")}
-              </code>
-            ))}
-          </div>
-        )}
-
-        <div className="flex items-center justify-between gap-3 border-t border-hairline pt-3 text-xs">
-          <span className="text-muted">
-            {item.probed ? (
-              <>
-                Live check{typeof item.latencyMs === "number" ? ` · ${item.latencyMs}ms` : ""}
-              </>
-            ) : (
-              "Config check"
-            )}
-          </span>
-          <div className="flex items-center gap-3">
-            {item.configHref && (
-              <Link href={item.configHref} className="inline-flex items-center gap-0.5 font-semibold text-brand hover:underline">
-                Open <ArrowRight className="size-3" />
-              </Link>
-            )}
-            {item.docsUrl && (
-              <a
-                href={item.docsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-0.5 font-medium text-muted transition-colors hover:text-ink"
-              >
-                Docs <ExternalLink className="size-3" />
-              </a>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+      <span className="hidden shrink-0 text-xs tabular-nums text-muted md:inline">
+        {item.probed ? `Live check${typeof item.latencyMs === "number" ? ` · ${item.latencyMs} ms` : ""}` : "Config check"}
+      </span>
+      {item.configHref ? (
+        <Link href={item.configHref} className="inline-flex min-h-10 shrink-0 items-center gap-1 rounded-ctl border border-hairline px-3 text-[13px] font-medium text-ink hover:bg-surface">
+          Open <ArrowRight className="size-3.5" aria-hidden />
+        </Link>
+      ) : item.docsUrl ? (
+        <a href={item.docsUrl} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 shrink-0 items-center gap-1 rounded-ctl border border-hairline px-3 text-[13px] font-medium text-ink hover:bg-surface">
+          Docs <ExternalLink className="size-3.5" aria-hidden />
+        </a>
+      ) : null}
+    </li>
   );
 }
 
@@ -168,22 +112,22 @@ export default async function IntegrationsPage() {
       {/* Roll-up. Anything amber is actionable; grey is simply switched off. */}
       <div className="flex flex-wrap items-center gap-2 rounded-card border border-hairline bg-paper px-4 py-3 text-sm">
         <span className="inline-flex items-center gap-1.5 font-medium text-ink">
-          <span className="size-1.5 rounded-full bg-emerald-500" />
+          <span className="size-1.5 rounded-full bg-good" />
           {counts.connected} connected
         </span>
         <span className="text-hairline">·</span>
         <span
           className={cn(
             "inline-flex items-center gap-1.5 font-medium",
-            counts.degraded > 0 ? "text-amber-600 dark:text-amber-400" : "text-muted"
+            counts.degraded > 0 ? "text-warn" : "text-muted"
           )}
         >
-          <span className={cn("size-1.5 rounded-full", counts.degraded > 0 ? "bg-amber-500" : "bg-muted")} />
+          <span className={cn("size-1.5 rounded-full", counts.degraded > 0 ? "bg-warn" : "bg-faint")} />
           {counts.degraded} need{counts.degraded === 1 ? "s" : ""} attention
         </span>
         <span className="text-hairline">·</span>
         <span className="inline-flex items-center gap-1.5 font-medium text-muted">
-          <span className="size-1.5 rounded-full bg-muted" />
+          <span className="size-1.5 rounded-full bg-faint" />
           {counts.missing} not configured
         </span>
         <span className="ml-auto text-xs text-muted">
@@ -192,17 +136,17 @@ export default async function IntegrationsPage() {
       </div>
 
       {groups.map((group, gi) => (
-        <section key={group.name} className="space-y-3">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted">{group.name}</h2>
-          {/* The guided tour spotlights the first grid — one stable anchor. */}
-          <div
+        <section key={group.name} className="space-y-2">
+          <h2 className="text-sm font-semibold text-ink">{group.name}</h2>
+          {/* The guided tour spotlights the first list: one stable anchor. */}
+          <ul
             data-tour={gi === 0 ? "integrations-grid" : undefined}
-            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+            className="divide-y divide-hairline overflow-hidden rounded-card border border-hairline bg-paper"
           >
             {group.items.map((item) => (
-              <IntegrationCard key={item.key} item={item} />
+              <IntegrationRow key={item.key} item={item} />
             ))}
-          </div>
+          </ul>
         </section>
       ))}
     </div>

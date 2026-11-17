@@ -4,7 +4,9 @@ import { useMemo } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Download, ScrollText } from "lucide-react";
 import { Button, DataTable, EmptyState, type BulkAction, type TableFilter, type TableView } from "@/components/kit";
+import Link from "next/link";
 import { downloadCsv } from "@/components/admin/ui/csv";
+import { PageHead } from "@/components/admin/ui/surface";
 
 export type AuditItem = {
   id: string;
@@ -61,18 +63,94 @@ const PHRASE: Record<string, string> = {
   "auth.two_step_disabled": "Turned off two-step sign-in",
   "auth.two_step_reset": "Reset someone's two-step sign-in",
   "expense.deleted": "Deleted expenses",
+  "auth.two_step_exempt": "Made someone's two-step optional",
+  "auth.two_step_required": "Made someone's two-step required",
+  "auth.password_changed": "Changed a password",
+  "auth.password_reset": "Reset a password",
+  "auth.password_set": "Set a password",
+  "auth.sessions_revoked": "Signed someone out everywhere",
+  "auth.session_revoked": "Signed out a device",
+  "user.role_changed": "Changed someone's role",
+  "user.created_admin": "Created an admin",
+  "user.consent": "Recorded a consent choice",
+  "invitation.created": "Invited someone",
+  "invitation.resent": "Resent an invitation",
+  "invitation.revoked": "Withdrew an invitation",
+  "invitation.accepted": "Accepted an invitation",
+  "client.details_updated": "Updated a client's details",
+  "client.merged": "Merged two clients",
+  "client.imported": "Imported clients",
+  "client.invited": "Invited a client",
+  "client.erasure_scheduled": "Scheduled a client erasure",
+  "client.erasure_cancelled": "Cancelled a client erasure",
+  "request.created_by_firm": "Created a request for a client",
+  "request.correction_requested": "Asked for changes to a draft",
+  "request.deliverable_added": "Added a deliverable",
+  "request_item.received": "Received what was asked for",
+  "quote.accepted": "Accepted a quote",
+  "quote.declined": "Declined a quote",
+  "invoice.bulk_deleted": "Deleted invoices",
+  "invoice.bulk_status_changed": "Changed invoices' status",
+  "payment.applied_partial": "Recorded a part payment",
+  "payment.transfer_proof_uploaded": "Uploaded a transfer proof",
+  "workbench.opened": "Opened a workbench",
+  "workbench.practice": "Opened a practice workbook",
+  "workbench.edited": "Edited a workbook",
+  "workbench.restored": "Restored a workbook version",
+  "workbench.file_added": "Added a file to a workbench",
+  "workbench.download": "Downloaded a workbook",
+  "sage.proposal_refused": "Sage refused a change (no permission)",
+  "upload.infected": "Blocked an infected upload",
+  "notification.unsubscribed": "Unsubscribed from emails",
 };
 export const phrase = (a: string) => PHRASE[a] ?? a.replace(/[._]/g, " ").replace(/^\w/, (c) => c.toUpperCase());
 
+/** The change in plain words: "sent → paid · ₦250,000.00 · reason: late". */
+const LABEL: Record<string, string> = { status: "status", role: "role", mode: "mode", aiMode: "AI mode", count: "items", fileName: "file", file: "file", files: "files", reason: "reason", error: "error" };
+const ngn = (v: unknown) =>
+  typeof v === "number" || (typeof v === "string" && /^\d+(\.\d+)?$/.test(v)) ? `₦${Number(v).toLocaleString("en-NG", { minimumFractionDigits: 2 })}` : String(v);
+const words = (v: unknown) => (typeof v === "string" ? v.replace(/_/g, " ") : typeof v === "boolean" ? (v ? "yes" : "no") : Array.isArray(v) ? v.join(", ") : String(v));
 function summary(meta: Record<string, unknown> | null): string {
   if (!meta) return "";
-  if (typeof meta.from === "string" && typeof meta.to === "string") return `${meta.from} → ${meta.to}`;
-  const keys = ["number", "client", "invoice", "amount", "reason", "status", "to", "count", "fileName", "file", "pass", "error"];
-  return keys
-    .filter((k) => meta[k] !== undefined && meta[k] !== null && meta[k] !== "")
-    .map((k) => `${k}: ${Array.isArray(meta[k]) ? (meta[k] as unknown[]).join(", ") : String(meta[k])}`)
-    .join(" · ")
-    .slice(0, 160);
+  const bits: string[] = [];
+  if (meta.from !== undefined && meta.to !== undefined) bits.push(`${words(meta.from)} → ${words(meta.to)}`);
+  if (meta.amount !== undefined && meta.amount !== null) bits.push(ngn(meta.amount));
+  if (typeof meta.pass === "boolean") bits.push(meta.pass ? "passed" : "failed");
+  for (const k of Object.keys(LABEL)) {
+    const v = meta[k];
+    if (v === undefined || v === null || v === "" || (k === "status" && meta.from !== undefined)) continue;
+    bits.push(`${LABEL[k]}: ${words(v)}`);
+  }
+  return bits.join(" · ").slice(0, 200);
+}
+
+/** The record: its kind, a readable name and (where one exists) a link. */
+const KIND: Record<string, string> = {
+  client: "Client", request: "Request", invoice: "Invoice", quote: "Quote", payment: "Payment", user: "Person", expense: "Expense",
+  workbench: "Workbench", backup: "Backup", invitation: "Invitation", ticket: "Ticket", email: "Email", trash: "Trash", line: "Line",
+};
+function record(r: AuditItem): { kind: string; name: string; href: string | null } {
+  const m = r.meta ?? {};
+  const kind = KIND[r.entity] ?? r.entity.replace(/_/g, " ").replace(/^.?/, (c) => c.toUpperCase());
+  const pick = [m.number, m.invoice, m.client, m.title, m.name, m.email].find((v) => typeof v === "string" && v.trim()) as string | undefined;
+  const id = r.entityId ?? "";
+  const name = pick ?? (id ? `…${id.slice(-6)}` : "");
+  const href = !id
+    ? null
+    : r.entity === "client"
+      ? `/admin/clients/${id}`
+      : r.entity === "request"
+        ? `/admin/requests/${id}`
+        : r.entity === "invoice"
+          ? `/admin/billing/invoices/${id}`
+          : r.entity === "quote"
+            ? `/admin/billing/quotes/${id}`
+            : r.entity === "user"
+              ? "/admin/settings/access"
+              : r.entity === "workbench" && id.startsWith("wb-")
+                ? `/admin/analyses/w/${id}`
+                : null;
+  return { kind, name, href };
 }
 
 const exportCsv = (list: AuditItem[]) =>
@@ -94,8 +172,39 @@ export function AuditView({ rows }: { rows: AuditItem[] }) {
       },
       { id: "actor", accessorFn: (r) => r.actorName ?? "System", header: "Who", meta: { label: "Who", mobile: "subtitle" }, cell: ({ row }) => <span className="font-medium text-ink">{row.original.actorName ?? "System"}</span> },
       { id: "action", accessorFn: (r) => phrase(r.action), header: "Action", meta: { label: "Action", mobile: "title", hideable: false }, cell: ({ row }) => <span className="text-ink">{phrase(row.original.action)}</span> },
-      { id: "record", accessorFn: (r) => `${r.entity} ${r.entityId ?? ""}`, header: "Record", meta: { label: "Record", mobile: "hidden" }, cell: ({ row }) => <span className="text-body">{row.original.entity}</span> },
-      { id: "change", accessorFn: (r) => summary(r.meta), header: "Change", meta: { label: "Change", mobile: "meta" }, cell: ({ row }) => <span className="block max-w-[340px] whitespace-normal break-words font-mono text-xs text-body">{summary(row.original.meta)}</span> },
+      {
+        id: "record",
+        accessorFn: (r) => {
+          const x = record(r);
+          return `${x.kind} ${x.name}`;
+        },
+        header: "Record",
+        meta: { label: "Record", mobile: "meta" },
+        cell: ({ row }) => {
+          const x = record(row.original);
+          return (
+            <span className="block min-w-0 text-[13px]">
+              <span className="text-muted">{x.kind}</span>
+              {x.name ? (
+                x.href ? (
+                  <Link href={x.href} className="ml-1.5 font-medium text-accent hover:underline dark:text-info" onClick={(e) => e.stopPropagation()}>
+                    {x.name}
+                  </Link>
+                ) : (
+                  <span className="ml-1.5 text-ink">{x.name}</span>
+                )
+              ) : null}
+            </span>
+          );
+        },
+      },
+      {
+        id: "change",
+        accessorFn: (r) => summary(r.meta),
+        header: "Change",
+        meta: { label: "Change", mobile: "meta" },
+        cell: ({ row }) => <span className="block max-w-[360px] whitespace-normal break-words text-[13px] text-body">{summary(row.original.meta) || <span className="text-faint">None</span>}</span>,
+      },
     ],
     [],
   );
@@ -124,13 +233,17 @@ export function AuditView({ rows }: { rows: AuditItem[] }) {
   ];
   return (
     <>
-      {rows.length > 0 && (
-        <div className="mb-3 flex justify-end">
-          <Button variant="secondary" size="sm" onClick={() => exportCsv(rows)}>
-            <Download className="size-4" /> Export CSV
-          </Button>
-        </div>
-      )}
+      <PageHead
+        title="Audit log"
+        lede="Every consequential action, who did it and what changed. Newest first; the last 1,000 entries."
+        actions={
+          rows.length > 0 ? (
+            <Button variant="secondary" size="sm" onClick={() => exportCsv(rows)}>
+              <Download className="size-4" /> Export CSV
+            </Button>
+          ) : null
+        }
+      />
       <DataTable
       label="Audit log"
       storageKey="admin-audit"
