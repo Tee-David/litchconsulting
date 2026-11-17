@@ -191,7 +191,7 @@ const CLIENT_PAGES: TourDef[] = [
     centerStep("files", "Your files", "Everything you sent us and everything we delivered. Download links work only for your account.", { icon: "fileStack" }),
   ]),
   page("client-support", "client", "/dashboard/support", [
-    t("kb", "support-kb", "Search first", "Most questions about payments, documents and dates have an answer here.", { icon: "search", optional: true }),
+    t("kb", "support-kb", "Help articles", "Most questions about payments, documents and dates have an answer here.", { icon: "search", optional: true }),
     t("contact", "support-contact", "Ask us", "Open a ticket. We reply here and by email.", { icon: "send", optional: true }),
     t("tickets", "support-view", "Your tickets", "Every conversation with its status.", { icon: "lifeBuoy", optional: true }),
   ]),

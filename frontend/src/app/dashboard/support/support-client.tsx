@@ -190,154 +190,7 @@ export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
 
   return (
     <div className="space-y-8">
-      {/* ───────────────── Hero + knowledge-base search ───────────────── */}
-      <section
-        data-tour="support-kb"
-        className="rounded-card border border-hairline bg-gradient-to-b from-brand-tint/60 to-paper px-6 py-10 text-center sm:px-10 sm:py-14"
-      >
-        <div className="mx-auto mb-4 grid size-12 place-items-center rounded-full bg-act text-act-ink">
-          <LifeBuoy className="size-6" />
-        </div>
-        <h1 className="font-display text-2xl font-bold text-ink sm:text-3xl">How can we help?</h1>
-        <p className="mx-auto mt-2 max-w-md text-sm text-body">
-          Search our help articles, or open a ticket and our team will get back to you.
-        </p>
-
-        <div className="relative mx-auto mt-6 max-w-xl">
-          <Search className="pointer-events-none absolute left-4 top-1/2 size-4.5 -translate-y-1/2 text-muted" />
-          <input
-            type="search"
-            value={helpQuery}
-            onChange={(e) => {
-              setHelpQuery(e.target.value);
-              setOpenArticle(null);
-            }}
-            placeholder="Search for an answer — e.g. “how do I pay an invoice?”"
-            aria-label="Search help articles"
-            className="h-12 w-full rounded-full border border-hairline bg-paper pl-11 pr-11 text-sm text-ink shadow-sm outline-none placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20"
-          />
-          {helpQuery && (
-            <button
-              type="button"
-              onClick={() => setHelpQuery("")}
-              aria-label="Clear search"
-              className="absolute right-3 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-full text-muted transition-colors hover:bg-surface hover:text-ink"
-            >
-              <X className="size-4" />
-            </button>
-          )}
-        </div>
-      </section>
-
-      {/* ───────────────── Categories / articles ───────────────── */}
-      <section className="space-y-4">
-        {!showingArticles ? (
-          <>
-            <h2 className="font-display text-lg font-bold text-ink">Browse topics</h2>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {HELP_CATEGORIES.map((c) => {
-                const Icon = CATEGORY_ICONS[c.icon];
-                return (
-                  <button
-                    key={c.key}
-                    type="button"
-                    onClick={() => {
-                      setOpenCategory(c.key);
-                      setOpenArticle(null);
-                    }}
-                    className="group flex flex-col items-start rounded-card border border-hairline bg-paper p-5 text-left transition-all hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-md"
-                  >
-                    <span className="mb-3 grid size-10 place-items-center rounded-xl bg-brand-tint text-brand transition-colors group-hover:bg-act group-hover:text-act-ink">
-                      <Icon className="size-5" />
-                    </span>
-                    <span className="font-display text-sm font-bold text-ink">{c.label}</span>
-                    <span className="mt-1 text-xs leading-relaxed text-body">{c.description}</span>
-                    <span className="mt-3 text-xs font-medium text-muted">
-                      {counts[c.key] ?? 0} article{(counts[c.key] ?? 0) === 1 ? "" : "s"}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                {isSearching ? (
-                  <h2 className="font-display text-lg font-bold text-ink">
-                    {visibleArticles.length} result{visibleArticles.length === 1 ? "" : "s"} for “{helpQuery.trim()}”
-                  </h2>
-                ) : (
-                  <>
-                    <h2 className="font-display text-lg font-bold text-ink">
-                      {categoryMeta(openCategory!)?.label}
-                    </h2>
-                    <p className="mt-0.5 text-sm text-body">{categoryMeta(openCategory!)?.description}</p>
-                  </>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setOpenCategory(null);
-                  setHelpQuery("");
-                  setOpenArticle(null);
-                }}
-                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-body transition-colors hover:bg-surface hover:text-ink"
-              >
-                <ChevronLeft className="size-4" /> All topics
-              </button>
-            </div>
-
-            {visibleArticles.length === 0 ? (
-              <EmptyState
-                icon={Search}
-                title="No articles matched"
-                description="Try a different wording, or open a ticket and we'll answer you directly."
-              />
-            ) : (
-              <div className="divide-y divide-hairline overflow-hidden rounded-card border border-hairline bg-paper">
-                {visibleArticles.map((a) => {
-                  const expanded = openArticle === a.slug;
-                  return (
-                    <div key={a.slug}>
-                      <button
-                        type="button"
-                        onClick={() => setOpenArticle(expanded ? null : a.slug)}
-                        aria-expanded={expanded}
-                        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-surface/60"
-                      >
-                        <span className="min-w-0">
-                          <span className="block text-sm font-semibold text-ink">{a.question}</span>
-                          {isSearching && (
-                            <span className="mt-0.5 block text-xs text-muted">
-                              {categoryMeta(a.category)?.label}
-                            </span>
-                          )}
-                        </span>
-                        <ChevronDown
-                          className={cn(
-                            "size-4 shrink-0 text-muted transition-transform",
-                            expanded && "rotate-180",
-                          )}
-                        />
-                      </button>
-                      {expanded && (
-                        <div className="border-t border-hairline bg-cloud/40 px-5 py-4">
-                          <p className="whitespace-pre-line text-sm leading-relaxed text-body">{a.answer}</p>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </>
-        )}
-      </section>
-
-      {/* ───────────────── Still need help? ───────────────── */}
+      {/* ───────────────── Ask us a question ───────────────── */}
       <section
         data-tour="support-contact"
         className="flex flex-col items-center justify-between gap-4 rounded-card border border-hairline bg-surface px-6 py-6 sm:flex-row"
@@ -347,9 +200,9 @@ export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
             <MessageSquare className="size-5" />
           </span>
           <div>
-            <h3 className="font-display text-sm font-bold text-ink">Still need help?</h3>
+            <h3 className="font-display text-sm font-bold text-ink">Ask us a question</h3>
             <p className="mt-0.5 text-sm text-body">
-              Open a ticket and our team will reply here and by email.
+              Write to the team. We reply here and by email, in the same thread.
             </p>
           </div>
         </div>
@@ -359,14 +212,14 @@ export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
           className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-act px-4 py-2.5 text-sm font-semibold text-act-ink transition-colors hover:bg-act-hover keep-brand"
         >
           <Plus className="size-4" />
-          Contact support
+          New question
         </button>
       </section>
 
       {/* ───────────────── Their tickets ───────────────── */}
       <section data-tour="support-view" className="space-y-4">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="font-display text-lg font-bold text-ink">Your tickets</h2>
+          <h2 className="font-display text-lg font-bold text-ink">Your questions</h2>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative flex-1 sm:w-64">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
@@ -571,6 +424,153 @@ export function SupportClient({ tickets, requests = [] }: SupportClientProps) {
           </div>
         </div>
       )}
+      {/* ───────────────── Help articles: search ───────────────── */}
+      <section
+        data-tour="support-kb"
+        className="rounded-card border border-hairline bg-paper px-6 py-10 text-center sm:px-10 sm:py-14"
+      >
+        <div className="mx-auto mb-4 grid size-12 place-items-center rounded-full bg-act text-act-ink">
+          <LifeBuoy className="size-6" />
+        </div>
+        <h1 className="font-display text-2xl font-bold text-ink sm:text-3xl">How can we help?</h1>
+        <p className="mx-auto mt-2 max-w-md text-sm text-body">
+          Search our help articles, or open a ticket and our team will get back to you.
+        </p>
+
+        <div className="relative mx-auto mt-6 max-w-xl">
+          <Search className="pointer-events-none absolute left-4 top-1/2 size-4.5 -translate-y-1/2 text-muted" />
+          <input
+            type="search"
+            value={helpQuery}
+            onChange={(e) => {
+              setHelpQuery(e.target.value);
+              setOpenArticle(null);
+            }}
+            placeholder="Search for an answer — e.g. “how do I pay an invoice?”"
+            aria-label="Search help articles"
+            className="h-12 w-full rounded-full border border-hairline bg-paper pl-11 pr-11 text-sm text-ink shadow-sm outline-none placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20"
+          />
+          {helpQuery && (
+            <button
+              type="button"
+              onClick={() => setHelpQuery("")}
+              aria-label="Clear search"
+              className="absolute right-3 top-1/2 grid size-7 -translate-y-1/2 place-items-center rounded-full text-muted transition-colors hover:bg-surface hover:text-ink"
+            >
+              <X className="size-4" />
+            </button>
+          )}
+        </div>
+      </section>
+
+      {/* ───────────────── Categories / articles ───────────────── */}
+      <section className="space-y-4">
+        {!showingArticles ? (
+          <>
+            <h2 className="font-display text-lg font-bold text-ink">Browse topics</h2>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {HELP_CATEGORIES.map((c) => {
+                const Icon = CATEGORY_ICONS[c.icon];
+                return (
+                  <button
+                    key={c.key}
+                    type="button"
+                    onClick={() => {
+                      setOpenCategory(c.key);
+                      setOpenArticle(null);
+                    }}
+                    className="group flex flex-col items-start rounded-card border border-hairline bg-paper p-5 text-left transition-all hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-md"
+                  >
+                    <span className="mb-3 grid size-10 place-items-center rounded-xl bg-brand-tint text-brand transition-colors group-hover:bg-act group-hover:text-act-ink">
+                      <Icon className="size-5" />
+                    </span>
+                    <span className="font-display text-sm font-bold text-ink">{c.label}</span>
+                    <span className="mt-1 text-xs leading-relaxed text-body">{c.description}</span>
+                    <span className="mt-3 text-xs font-medium text-muted">
+                      {counts[c.key] ?? 0} article{(counts[c.key] ?? 0) === 1 ? "" : "s"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                {isSearching ? (
+                  <h2 className="font-display text-lg font-bold text-ink">
+                    {visibleArticles.length} result{visibleArticles.length === 1 ? "" : "s"} for “{helpQuery.trim()}”
+                  </h2>
+                ) : (
+                  <>
+                    <h2 className="font-display text-lg font-bold text-ink">
+                      {categoryMeta(openCategory!)?.label}
+                    </h2>
+                    <p className="mt-0.5 text-sm text-body">{categoryMeta(openCategory!)?.description}</p>
+                  </>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setOpenCategory(null);
+                  setHelpQuery("");
+                  setOpenArticle(null);
+                }}
+                className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-sm font-medium text-body transition-colors hover:bg-surface hover:text-ink"
+              >
+                <ChevronLeft className="size-4" /> All topics
+              </button>
+            </div>
+
+            {visibleArticles.length === 0 ? (
+              <EmptyState
+                icon={Search}
+                title="No articles matched"
+                description="Try a different wording, or open a ticket and we'll answer you directly."
+              />
+            ) : (
+              <div className="divide-y divide-hairline overflow-hidden rounded-card border border-hairline bg-paper">
+                {visibleArticles.map((a) => {
+                  const expanded = openArticle === a.slug;
+                  return (
+                    <div key={a.slug}>
+                      <button
+                        type="button"
+                        onClick={() => setOpenArticle(expanded ? null : a.slug)}
+                        aria-expanded={expanded}
+                        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-surface/60"
+                      >
+                        <span className="min-w-0">
+                          <span className="block text-sm font-semibold text-ink">{a.question}</span>
+                          {isSearching && (
+                            <span className="mt-0.5 block text-xs text-muted">
+                              {categoryMeta(a.category)?.label}
+                            </span>
+                          )}
+                        </span>
+                        <ChevronDown
+                          className={cn(
+                            "size-4 shrink-0 text-muted transition-transform",
+                            expanded && "rotate-180",
+                          )}
+                        />
+                      </button>
+                      {expanded && (
+                        <div className="border-t border-hairline bg-cloud/40 px-5 py-4">
+                          <p className="whitespace-pre-line text-sm leading-relaxed text-body">{a.answer}</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
     </div>
   );
 }
