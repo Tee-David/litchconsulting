@@ -21,6 +21,7 @@ import {
   serviceRequestEvent,
   ticket,
   ticketMessage,
+  ticketNote,
   user,
 } from "@/lib/db/schema";
 
@@ -124,6 +125,7 @@ export async function eraseClientData(c: ClientRow): Promise<EraseReport> {
     }
     if (ticketIds.length) {
       await count("Support messages", tx.delete(ticketMessage).where(inArray(ticketMessage.ticketId, ticketIds)).returning({ id: ticketMessage.id }));
+      await count("Support team notes", tx.delete(ticketNote).where(inArray(ticketNote.ticketId, ticketIds)).returning({ id: ticketNote.id }));
       await count("Support tickets", tx.delete(ticket).where(inArray(ticket.id, ticketIds)).returning({ id: ticket.id }));
     }
     if (convIds.length) {

@@ -4,6 +4,7 @@ import { db } from "@/lib/db/client";
 import { user } from "@/lib/db/schema";
 import { listTickets, listAllMessages } from "@/lib/db/queries/tickets";
 import { HelpDeskView } from "@/components/admin/helpdesk/help-desk-view";
+import { listTicketNotes, requestNumbersFor } from "./actions";
 import { PageHead } from "@/components/admin/ui/surface";
 
 export const dynamic = "force-dynamic";
@@ -12,12 +13,14 @@ export const dynamic = "force-dynamic";
 export default async function HelpDeskPage({ searchParams }: { searchParams: Promise<{ ticket?: string }> }) {
   await requireArea("helpDesk", "/admin/help-desk");
   const { ticket } = await searchParams;
-  const [tickets, messages, team] = await Promise.all([
+  const [tickets, messages, team, notes] = await Promise.all([
     listTickets(),
     listAllMessages(),
     // Roster for the assignee picker (Better Auth owns `user`; read-only here).
     db.select({ name: user.name, email: user.email }).from(user).where(inArray(user.role, ["admin", "staff"])),
+    listTicketNotes().catch(() => []),
   ]);
+  const reqNumbers = await requestNumbersFor([...new Set(tickets.map((t) => t.requestId).filter((x): x is string => Boolean(x)))]).catch(() => new Map<string, string>());
   const assignees = Array.from(new Set(team.map((a) => (a.name || a.email || "").trim()).filter(Boolean)));
 
   return (
@@ -27,6 +30,8 @@ export default async function HelpDeskPage({ searchParams }: { searchParams: Pro
         <HelpDeskView
           tickets={tickets}
           messages={messages}
+          notes={notes.map((n) => ({ id: n.id, ticketId: n.ticketId, authorName: n.authorName, body: n.body, createdAt: n.createdAt }))}
+          requestNumbers={Object.fromEntries(reqNumbers)}
           assignees={assignees}
           initialTicketId={ticket && /^[0-9a-f-]{36}$/i.test(ticket) ? ticket : null}
           // env is read here, in the RSC — never in the client component.

@@ -78,7 +78,7 @@ export const ACTIVITIES: Activity[] = [
     processors: ["vercel", "cockroach", "truehost"],
     retention: "6 years after the engagement ends (financial records), then erased.",
     enforcement: "Manual: an Admin reviews closed engagements yearly. Trash is purged automatically 30 days after deletion; erasure requests run after a 30-day hold (nightly sweep).",
-    where: "client, service_request, request_item, review_round, ticket",
+    where: "client, service_request, request_item, review_round, ticket, ticket_note",
   },
   {
     id: "documents",

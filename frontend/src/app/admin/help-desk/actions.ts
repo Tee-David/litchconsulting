@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { asc, eq, inArray } from "drizzle-orm";
 import { db } from "@/lib/db/client";
-import { ticket, ticketMessage } from "@/lib/db/schema";
+import { serviceRequest, ticket, ticketMessage, ticketNote } from "@/lib/db/schema";
 import { isAdmin, getCurrentUserId } from "@/lib/server-user";
 import { nextTicketNumber } from "@/lib/db/queries/tickets";
 
@@ -66,7 +66,7 @@ export async function createTicketAction(input: NewTicketInput): Promise<ActionR
 }
 
 /** Post an agent reply and optionally send it to the requester by email. */
-export async function replyTicketAction(id: string, body: string, notify = true): Promise<ActionResult> {
+export async function replyTicketAction(id: string, body: string, notify = true, markWaiting = false): Promise<ActionResult> {
   if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
   if (!body.trim()) return { ok: false, error: "Write a reply first." };
 
@@ -74,7 +74,9 @@ export async function replyTicketAction(id: string, body: string, notify = true)
   if (!t) return { ok: false, error: "Not found" };
 
   await db.insert(ticketMessage).values({ ticketId: id, authorName: "Litch Consulting", authorRole: "agent", body: body.trim() });
-  await db.update(ticket).set({ status: t.status === "open" ? "pending" : t.status, lastReplyAt: new Date(), updatedAt: new Date() }).where(eq(ticket.id, id));
+  // "Send and mark waiting" moves the ticket to Pending (waiting on the client).
+  const status = markWaiting ? "pending" : t.status === "open" ? "pending" : t.status;
+  await db.update(ticket).set({ status, lastReplyAt: new Date(), updatedAt: new Date() }).where(eq(ticket.id, id));
 
   let note: string | undefined;
   if (notify && t.requesterEmail) {
@@ -210,6 +212,7 @@ export async function deleteTicketAction(id: string): Promise<ActionResult> {
   if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
   await db.transaction(async (tx) => {
     await tx.delete(ticketMessage).where(eq(ticketMessage.ticketId, id));
+    await tx.delete(ticketNote).where(eq(ticketNote.ticketId, id));
     await tx.delete(ticket).where(eq(ticket.id, id));
   });
   revalidate();
@@ -223,6 +226,7 @@ export async function bulkDeleteTicketsAction(ids: string[]): Promise<ActionResu
   try {
     await db.transaction(async (tx) => {
       await tx.delete(ticketMessage).where(inArray(ticketMessage.ticketId, ids));
+      await tx.delete(ticketNote).where(inArray(ticketNote.ticketId, ids));
       await tx.delete(ticket).where(inArray(ticket.id, ids));
     });
     revalidate();
@@ -258,3 +262,30 @@ export async function bulkSetTicketPriorityAction(ids: string[], priority: strin
   }
 }
 
+/** A team note: only the firm sees it; it never reaches the client or an email. */
+export async function addTicketNoteAction(ticketId: string, body: string): Promise<ActionResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "Unauthorized" };
+  const text = (body ?? "").trim().slice(0, 5000);
+  if (!text) return { ok: false, error: "Write the note first." };
+  const [t] = await db.select({ id: ticket.id }).from(ticket).where(eq(ticket.id, ticketId)).limit(1);
+  if (!t) return { ok: false, error: "Not found" };
+  const { getSessionUser } = await import("@/lib/server-user");
+  const me = await getSessionUser();
+  await db.insert(ticketNote).values({ ticketId, authorId: me?.id ?? null, authorName: me?.name || me?.email || "Team", body: text });
+  revalidatePath("/admin/help-desk");
+  return { ok: true };
+}
+
+/** Notes for the help desk view (firm only). */
+export async function listTicketNotes() {
+  if (!(await requireAdmin())) return [];
+  return db.select().from(ticketNote).orderBy(asc(ticketNote.createdAt));
+}
+
+/** Request numbers for tickets that link one (thread header). */
+export async function requestNumbersFor(ids: string[]) {
+  // A server action is a public endpoint: admins only.
+  if (!ids.length || !(await requireAdmin())) return new Map<string, string>();
+  const rows = await db.select({ id: serviceRequest.id, number: serviceRequest.number }).from(serviceRequest).where(inArray(serviceRequest.id, ids));
+  return new Map(rows.map((r) => [r.id, r.number]));
+}

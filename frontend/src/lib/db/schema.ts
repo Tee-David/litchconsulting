@@ -309,6 +309,20 @@ export const ticket = pgTable(
   (t) => [index("ticket_status_idx").on(t.status), index("ticket_created_idx").on(t.createdAt)]
 );
 
+/** A team note on a ticket: only the firm sees it (kept apart from the client thread). */
+export const ticketNote = pgTable(
+  "ticket_note",
+  {
+    id: id(),
+    ticketId: uuid("ticket_id").notNull(), // soft ref → ticket.id
+    authorId: text("author_id"),
+    authorName: text("author_name"),
+    body: text("body").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("ticket_note_ticket_idx").on(t.ticketId)]
+);
+
 /** One message in a ticket thread (from the client or an agent). */
 export const ticketMessage = pgTable(
   "ticket_message",

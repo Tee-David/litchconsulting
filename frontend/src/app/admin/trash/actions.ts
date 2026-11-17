@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, inArray, isNotNull, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
-import { client, invoice, invoiceItem, serviceRequest, ticket, ticketMessage } from "@/lib/db/schema";
+import { client, invoice, invoiceItem, serviceRequest, ticket, ticketMessage, ticketNote } from "@/lib/db/schema";
 import { recordAudit } from "@/lib/audit";
 import { num } from "@/lib/invoice/money";
 import { actor, DENIED } from "../_lib/guard";
@@ -55,6 +55,7 @@ export async function purgeTrashAction(items: z.infer<typeof list>): Promise<Res
     if (t.length) {
       const gone = await tx.delete(ticket).where(and(inArray(ticket.id, t), isNotNull(ticket.deletedAt))).returning({ id: ticket.id });
       if (gone.length) await tx.delete(ticketMessage).where(inArray(ticketMessage.ticketId, gone.map((g) => g.id)));
+      if (gone.length) await tx.delete(ticketNote).where(inArray(ticketNote.ticketId, gone.map((g) => g.id)));
       n += gone.length;
     }
     const iv = group(p, "invoice");

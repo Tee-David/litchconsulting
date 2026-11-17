@@ -2,10 +2,13 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { Segmented } from "@/components/kit";
 import {
   Search,
   Plus,
   Send,
+  StickyNote,
   Loader2,
   Trash2,
   Inbox,
@@ -32,6 +35,7 @@ import {
 import {
   createTicketAction,
   replyTicketAction,
+  addTicketNoteAction,
   setTicketStatusAction,
   setTicketPriorityAction,
   assignTicketAction,
@@ -72,6 +76,8 @@ type Pane = "list" | "thread" | "details";
 export function HelpDeskView({
   tickets,
   messages,
+  notes,
+  requestNumbers,
   assignees = [],
   aiConfigured = false,
   initialTicketId = null,
@@ -80,6 +86,10 @@ export function HelpDeskView({
   initialTicketId?: string | null;
   tickets: TicketRow[];
   messages: TicketMessageRow[];
+  /** Team notes (firm only). */
+  notes?: { id: string; ticketId: string; authorName: string | null; body: string; createdAt: Date | string }[];
+  /** Request number by request id, for tickets that link one. */
+  requestNumbers?: Record<string, string>;
   /** Admin roster for the assignee picker. */
   assignees?: string[];
   /** True when LITCHAI_API_URL is set — resolved server-side, never here. */
@@ -97,6 +107,7 @@ export function HelpDeskView({
     (initialTicketId && tickets.some((t) => t.id === initialTicketId) ? initialTicketId : null) ?? tickets[0]?.id ?? null,
   );
   const [reply, setReply] = useState("");
+  const [mode, setMode] = useState<"reply" | "note">("reply");
   const [notify, setNotify] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [newOpen, setNewOpen] = useState(false);
@@ -159,7 +170,12 @@ export function HelpDeskView({
   }, [tickets, statusTab, priorityFilter, categoryFilter, q]);
 
   const selected = useMemo(() => tickets.find((t) => t.id === selectedId) ?? null, [tickets, selectedId]);
-  const thread = selected ? msgByTicket.get(selected.id) || [] : [];
+  // The client's thread and the team's notes, in time order. Notes never leave the firm.
+  const thread = useMemo(() => {
+    if (!selected) return [] as Array<TicketMessageRow & { note?: boolean }>;
+    const own = (notes ?? []).filter((n) => n.ticketId === selected.id).map((n) => ({ id: n.id, ticketId: n.ticketId, authorName: n.authorName, authorRole: "note", body: n.body, createdAt: new Date(n.createdAt), note: true }) as TicketMessageRow & { note?: boolean });
+    return [...(msgByTicket.get(selected.id) || []), ...own].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  }, [selected, msgByTicket, notes]);
 
   function pick(id: string) {
     setSelectedId(id);
@@ -178,13 +194,13 @@ export function HelpDeskView({
     } else toast.error(res.error || "Action failed.");
   }
 
-  async function sendReply() {
+  async function sendReply(markWaiting = false) {
     if (!selected || !reply.trim()) return;
-    setBusy("reply");
-    const res = await replyTicketAction(selected.id, reply, notify);
+    setBusy(markWaiting ? "wait" : "reply");
+    const res = mode === "note" ? await addTicketNoteAction(selected.id, reply) : await replyTicketAction(selected.id, reply, notify, markWaiting);
     setBusy(null);
     if (res.ok) {
-      toast.success(res.error || "Reply sent.");
+      toast.success(mode === "note" ? "Note added. Only the team sees it." : res.error || (markWaiting ? "Reply sent. The ticket waits on the client." : "Reply sent."));
       setReply("");
       router.refresh();
     } else toast.error(res.error || "Could not send.");
@@ -396,6 +412,14 @@ export function HelpDeskView({
                       <p className="mt-0.5 text-xs text-muted">
                         {selected.number} · {selected.requesterName || selected.requesterEmail || "Unknown"} ·
                         Created {ago(selected.createdAt)}
+                        {selected.requestId ? (
+                          <>
+                            {" · "}
+                            <Link href={`/admin/requests/${selected.requestId}`} className="font-medium text-accent hover:underline dark:text-info">
+                              {requestNumbers?.[selected.requestId] ?? "Linked request"}
+                            </Link>
+                          </>
+                        ) : null}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-1">
@@ -438,6 +462,16 @@ export function HelpDeskView({
                 <div className="flex-1 space-y-4 overflow-y-auto bg-cloud/40 px-5 py-5" style={{ maxHeight: "48vh" }}>
                   {thread.length === 0 && <p className="text-center text-sm text-muted">No messages yet.</p>}
                   {thread.map((m) => {
+                    if (m.authorRole === "note") {
+                      return (
+                        <div key={m.id} className="mx-auto max-w-[88%] rounded-xl border border-dashed border-warn/40 bg-warn-soft px-4 py-2.5 text-sm text-ink">
+                          <p className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold text-warn">
+                            <StickyNote className="size-3.5" aria-hidden /> Team note · {m.authorName || "Team"} · {formatDateTime(m.createdAt)} · only the team sees this
+                          </p>
+                          <p className="whitespace-pre-line leading-relaxed">{m.body}</p>
+                        </div>
+                      );
+                    }
                     const agent = m.authorRole === "agent";
                     return (
                       <div key={m.id} className={cn("flex gap-2.5", agent && "flex-row-reverse")}>
@@ -467,17 +501,29 @@ export function HelpDeskView({
                 </div>
 
                 {/* Reply composer */}
-                <div className="border-t border-hairline p-3">
+                <div className={cn("border-t border-hairline p-3", mode === "note" && "bg-warn-soft/40")}>
+                  <div className="mb-2">
+                    <Segmented
+                      size="sm"
+                      label="Write"
+                      value={mode}
+                      onChange={(v) => setMode(v as "reply" | "note")}
+                      options={[
+                        { value: "reply", label: "Reply to client" },
+                        { value: "note", label: "Team note" },
+                      ]}
+                    />
+                  </div>
                   <textarea
                     value={reply}
                     onChange={(e) => setReply(e.target.value)}
                     rows={3}
-                    placeholder={`Reply to ${selected.requesterName || "requester"}…`}
-                    aria-label="Reply"
+                    placeholder={mode === "note" ? "A note for the team. The client never sees it." : `Reply to ${selected.requesterName || "requester"}…`}
+                    aria-label={mode === "note" ? "Team note" : "Reply"}
                     className="w-full resize-none rounded-lg border border-hairline bg-paper px-3 py-2.5 text-sm text-ink outline-none focus:border-brand"
                   />
                   <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-                    <label className="flex items-center gap-2 text-xs text-body">
+                    <label className={cn("flex items-center gap-2 text-xs text-body", mode === "note" && "invisible")}>
                       <input
                         type="checkbox"
                         checked={notify}
@@ -498,14 +544,25 @@ export function HelpDeskView({
                           Draft reply with AI
                         </button>
                       )}
+                      {mode === "reply" ? (
+                        <button
+                          type="button"
+                          onClick={() => void sendReply(true)}
+                          disabled={Boolean(busy) || !reply.trim()}
+                          className="inline-flex min-h-10 items-center gap-1.5 rounded-lg border border-hairline bg-paper px-3 py-2 text-sm font-medium text-ink transition-colors hover:bg-surface disabled:opacity-50"
+                          title="Send, then set the ticket to Pending (waiting on the client)"
+                        >
+                          {busy === "wait" ? <Loader2 className="size-4 animate-spin" /> : null} Send and mark waiting
+                        </button>
+                      ) : null}
                       <button
                         type="button"
-                        onClick={sendReply}
-                        disabled={busy === "reply" || !reply.trim()}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
+                        onClick={() => void sendReply(false)}
+                        disabled={Boolean(busy) || !reply.trim()}
+                        className="keep-brand inline-flex min-h-10 items-center gap-1.5 rounded-lg bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
                       >
-                        {busy === "reply" ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />} Send
-                        reply
+                        {busy === "reply" ? <Loader2 className="size-4 animate-spin" /> : mode === "note" ? <StickyNote className="size-4" /> : <Send className="size-4" />}
+                        {mode === "note" ? "Add note" : "Send reply"}
                       </button>
                     </div>
                   </div>

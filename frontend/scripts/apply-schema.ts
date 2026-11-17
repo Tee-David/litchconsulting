@@ -438,6 +438,15 @@ export const STATEMENTS = [
     "created_at" timestamp with time zone DEFAULT now() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT now() NOT NULL)`,
   `CREATE INDEX IF NOT EXISTS "workbench_conversation_request_idx" ON "workbench_conversation" ("request_id")`,
+  // Help desk team notes: only the firm sees them.
+  `CREATE TABLE IF NOT EXISTS "ticket_note" (
+    "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+    "ticket_id" uuid NOT NULL,
+    "author_id" text,
+    "author_name" text,
+    "body" text NOT NULL,
+    "created_at" timestamp with time zone DEFAULT now() NOT NULL)`,
+  `CREATE INDEX IF NOT EXISTS "ticket_note_ticket_idx" ON "ticket_note" ("ticket_id")`,
   // Two-step exemption: an Admin made two-step optional for this admin or staff member.
   `CREATE TABLE IF NOT EXISTS "two_step_exemption" (
     "user_id" text PRIMARY KEY NOT NULL,
