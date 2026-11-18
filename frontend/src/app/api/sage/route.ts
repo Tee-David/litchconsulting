@@ -59,6 +59,7 @@ export async function POST(req: Request) {
     const opts = {
       localOnly,
       conversationId: typeof body.conversationId === "string" ? body.conversationId : undefined,
+      model: typeof body.model === "string" && /^[a-z0-9:._-]{1,80}$/.test(body.model) ? body.model : undefined,
       caller: { role: caller.role, requestIds: caller.requestIds, workbenchIds: caller.workbenchIds },
     };
     let result: AssistantResponse = await assistantChat(message, history, scope, clientId, { tools: true }, opts);

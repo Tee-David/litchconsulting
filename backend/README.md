@@ -189,6 +189,7 @@ backend/
 
 | Order | Provider | Model | Env |
 | --- | --- | --- | --- |
+| 0 | DeepSeek (paid; leads the chain once its key is set) | `deepseek-chat` (`LITCHAI_DEEPSEEK_MODEL` overrides) | `DEEPSEEK_API_KEY` |
 | 1 | Groq, model by model (each model has its own free daily quota) | `openai/gpt-oss-120b`, `openai/gpt-oss-20b`, `qwen/qwen3.8-27b`, `llama-3.3-70b-versatile`, `llama-3.1-8b-instant` (`LITCHAI_GROQ_MODELS` overrides) | `GROQ_API_KEY` |
 | 2 | Cloudflare Workers AI | `@cf/openai/gpt-oss-120b` | `CLOUDFLARE_ACCOUNT_ID` + `CLOUDFLARE_API_TOKEN` (or `LITCHAI_CF_AI_TOKEN`) |
 | 3 | SambaNova | `Meta-Llama-3.3-70B-Instruct` | `SAMBANOVA_API_KEY` |
@@ -247,6 +248,7 @@ frontend (Vercel)  ──CF-Access-Client-Id/Secret──▶  ai.litchconsulting
 | `LITCHAI_DATABASE_URL` | Postgres (needs the `vector` and `pg_trgm` extensions) |
 | `LITCHAI_PRIVATE_KEY_PATH` | Blind-relay decrypt key on disk |
 | `R2_BUCKET` | Private R2 bucket for backups |
+| `DEEPSEEK_API_KEY`, `LITCHAI_DEFAULT_PROVIDER` (moves one provider to the front), `LITCHAI_EXTRA_PROVIDERS` + `LITCHAI_EXTRA_<NAME>_URL/_KEY/_MODEL` (any OpenAI-compatible provider) | Model choice. A person can also pick the model per workbench and in Sage chat |
 | `GROQ_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `CEREBRAS_API_KEY`, `SAMBANOVA_API_KEY`, `OPENROUTER_API_KEY` | Cloud model providers (see AI models) |
 | `LITCHAI_LLAMA_SERVER_URL`, `LITCHAI_LOCAL_MODEL`, `LITCHAI_OLLAMA_HOST` | Local model and embeddings |
 | `LITCHAI_PROVIDER_CHAIN` | Optional chain override |

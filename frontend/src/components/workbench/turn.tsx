@@ -9,6 +9,7 @@ import { FAILURE, failureKind, modelName, slotLabel } from "@/lib/ai-words";
 
 export const PROVIDER_LABEL: Record<string, string> = {
   groq: "Groq",
+  deepseek: "DeepSeek",
   cerebras: "Cerebras",
   sambanova: "SambaNova",
   cloudflare: "Cloudflare",

@@ -21,6 +21,7 @@ import {
   wbSheetAction,
   wbNewThread,
   wbSetInstructions,
+  wbPatch,
   wbOpenThread,
   wbFeedback,
   wbListByDocument,
@@ -139,6 +140,19 @@ export async function setInstructionsAction(conversationId: string, text: string
     const res = await wbSetInstructions(conversationId, t.data);
     await touch(conversationId);
     return { ok: true, message: t.data.trim() ? "Instructions saved. Sage uses them in every answer." : "Instructions cleared.", conversation: res.conversation };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** The model Sage uses first in this workbench ("" = the firm's default chain). */
+export async function setModelAction(conversationId: string, model: string): Promise<Res<{ conversation: WbConversation }>> {
+  if (!(await guard(conversationId))) return DENIED;
+  const m = z.string().max(80).regex(/^[a-z0-9:._-]*$/).safeParse(model);
+  if (!m.success) return { ok: false, error: "Pick a model from the list." };
+  try {
+    const res = await wbPatch(conversationId, { model: m.data });
+    return { ok: true, conversation: res.conversation };
   } catch (e) {
     return fail(e);
   }

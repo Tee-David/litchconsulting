@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { ChevronRight, Cloud, Cpu, Loader2, Lock, RefreshCw, Sparkles, Zap } from "lucide-react";
 import type { WbProvider } from "@/lib/litchai/workbench";
-import { providersAction } from "@/lib/workbench/actions";
+import type { WbConversation } from "@/lib/litchai/workbench";
+import { providersAction, setModelAction } from "@/lib/workbench/actions";
 import { Button, Sheet } from "@/components/kit";
 import { PROVIDER_LABEL } from "./turn";
 import { cn } from "@/lib/utils";
@@ -21,13 +22,29 @@ export function EngineSheet({
   local,
   provider,
   clientHref,
+  conversationId,
+  model,
+  onConversation,
 }: {
   open: boolean;
   onClose: () => void;
   local: boolean;
   provider: string | null;
   clientHref: string | null;
+  conversationId: string;
+  /** The chosen model ("" = the firm's default chain). */
+  model: string;
+  onConversation: (c: WbConversation) => void;
 }) {
+  const [saving, setSaving] = useState<string | null>(null);
+  const choose = async (name: string) => {
+    if (name === model || saving) return;
+    setSaving(name);
+    const res = await setModelAction(conversationId, name);
+    setSaving(null);
+    if (res.ok) onConversation(res.conversation);
+    else setError(res.error);
+  };
   const [chain, setChain] = useState<WbProvider[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [probing, setProbing] = useState(false);
@@ -100,6 +117,42 @@ export function EngineSheet({
             </ol>
           )}
         </div>
+
+        {!local && chain ? (
+          <div>
+            <p className="text-sm font-semibold text-ink">Model for this workbench</p>
+            <p className="mb-1.5 text-[12.5px] text-muted">Sage tries this model first. If it is busy or down, the chain above takes over.</p>
+            <div role="radiogroup" aria-label="Model for this workbench" className="grid gap-1 sm:grid-cols-2">
+              {[{ name: "", label: "Default", sub: `The firm's chain (${PROVIDER_LABEL[chain.find((p) => p.configured)?.name.split(":")[0] ?? ""] ?? "first available"} first)`, usable: true },
+                ...chain.filter((p) => p.kind === "cloud" && p.configured).map((p) => ({
+                  name: p.name,
+                  label: PROVIDER_LABEL[p.name.split(":")[0]] ?? slotLabel(p.name),
+                  sub: p.model,
+                  usable: p.ok !== false && !p.exhausted_until,
+                }))].map((o) => {
+                const on = (model || "") === o.name;
+                return (
+                  <button
+                    key={o.name || "default"}
+                    type="button"
+                    role="radio"
+                    aria-checked={on}
+                    onClick={() => void choose(o.name)}
+                    disabled={Boolean(saving)}
+                    className={cn("flex min-h-11 items-center gap-2 rounded-ctl border px-2.5 py-1.5 text-left text-[12.5px] focus-visible:outline-2 focus-visible:outline-accent", on ? "border-good bg-good-soft" : "border-hairline bg-surface hover:bg-cloud")}
+                  >
+                    <span className={cn("grid size-4 shrink-0 place-items-center rounded-full border", on ? "border-good" : "border-hairline")}>{on ? <span className="size-2 rounded-full bg-good" /> : null}</span>
+                    <span className="min-w-0">
+                      <span className="block font-semibold text-ink">{o.label}{o.usable ? "" : " · busy now"}</span>
+                      <span className="block truncate text-[11px] text-muted" title={o.sub}>{o.sub}</span>
+                    </span>
+                    {saving === o.name ? <Loader2 className="ml-auto size-3.5 animate-spin text-muted" /> : null}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
 
         <div className={cn("rounded-card border px-3 py-2.5 text-[12.5px]", local ? "border-violet/30 bg-violet-soft" : "border-hairline bg-surface")}>
           <p className="flex items-center gap-1.5 font-semibold text-ink">

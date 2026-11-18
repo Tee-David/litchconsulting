@@ -72,6 +72,9 @@ class MessageFeedback(BaseModel):
 
 class UpdateConversation(BaseModel):
     ai_mode: str | None = None
+    # A provider name from GET /ai/providers ("deepseek", "groq:gpt-oss-20b", ...);
+    # "" = the firm's default chain.
+    model: str | None = Field(default=None, max_length=80)
     title: str | None = None
     period_label: str | None = None
     client_name: str | None = None
@@ -286,6 +289,11 @@ def register_workbench_routes(app: FastAPI) -> None:
                 if body.ai_mode not in AI_MODES:
                     raise HTTPException(422, f"ai_mode must be one of {AI_MODES}")
                 conv.ai_mode = body.ai_mode
+            if body.model is not None:
+                names = {s.name for s in _router().chain()}
+                if body.model and body.model not in names:
+                    raise HTTPException(422, f"model must be one of {sorted(names)} or empty")
+                conv.model = body.model
             for k in ("title", "period_label", "client_name"):
                 v = getattr(body, k)
                 if v is not None:

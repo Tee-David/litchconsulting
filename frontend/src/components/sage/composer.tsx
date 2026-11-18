@@ -1,5 +1,6 @@
 "use client";
 
+import { ModelPicker } from "@/components/sage-ui/model-picker";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useVoice } from "@/components/workbench/voice";
 import { PromptBox } from "@/components/sage-ui/prompt-box";
@@ -114,7 +115,7 @@ export function SageComposer({
         disabled={disabled}
         maxLength={MAX}
         autoFocus={autoFocus}
-        extra={mic}
+        extra={<>{mic}<ModelPicker /></>}
         footnote={footnote}
       />
     </div>

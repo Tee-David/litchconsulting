@@ -1,5 +1,6 @@
 "use client";
 
+import { readSageModel } from "@/components/sage-ui/model-picker";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useToast } from "@/components/admin/ui/toaster";
 import { failureKind } from "@/lib/ai-words";
@@ -193,7 +194,7 @@ export function useSageChat({ role, basePath, syncUrl = false, enabled = true }:
           method: "POST",
           signal: ctrl.signal,
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: q, history, scope, clientId: scope === "client" ? clientId : undefined, conversationId: activeId ?? undefined }),
+          body: JSON.stringify({ message: q, history, scope, clientId: scope === "client" ? clientId : undefined, conversationId: activeId ?? undefined, model: readSageModel() || undefined }),
         });
         if (res.status === 401) throw new Error("auth");
         const data = (await res.json().catch(() => ({}))) as EngineReply;

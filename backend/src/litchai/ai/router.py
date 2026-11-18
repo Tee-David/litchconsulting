@@ -223,6 +223,34 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
         daily_tokens=_int_env("LITCHAI_HETZNER_DAILY_TOKENS"),
         zero_retention=True,
     )
+    # DeepSeek (paid, OpenAI-compatible). When DEEPSEEK_API_KEY is set it leads the
+    # chain (the firm's default model) and Groq's free models become the fallback.
+    ds_key = e.get("DEEPSEEK_API_KEY") or None
+    specs["deepseek"] = ProviderSpec(
+        name="deepseek", kind="cloud",
+        model=e.get("LITCHAI_DEEPSEEK_MODEL") or "deepseek-chat",
+        base_url=(e.get("LITCHAI_DEEPSEEK_BASE_URL") or "https://api.deepseek.com/v1").rstrip("/"),
+        api_key=ds_key, params={"_prompt_json": True},
+        daily_requests=_int_env("LITCHAI_DEEPSEEK_DAILY_REQUESTS"),
+        daily_tokens=_int_env("LITCHAI_DEEPSEEK_DAILY_TOKENS"),
+    )
+    # Any other OpenAI-compatible provider, with no code change:
+    # LITCHAI_EXTRA_PROVIDERS=mistral,together and, for each name,
+    # LITCHAI_EXTRA_<NAME>_URL, LITCHAI_EXTRA_<NAME>_KEY, LITCHAI_EXTRA_<NAME>_MODEL.
+    extras = []
+    for raw in (e.get("LITCHAI_EXTRA_PROVIDERS") or "").split(","):
+        name = re.sub(r"[^a-z0-9_-]", "", raw.strip().lower())
+        if not name or name in specs:
+            continue
+        up = name.upper().replace("-", "_")
+        url, model = e.get(f"LITCHAI_EXTRA_{up}_URL") or "", e.get(f"LITCHAI_EXTRA_{up}_MODEL") or ""
+        if not url or not model:
+            continue
+        specs[name] = ProviderSpec(
+            name=name, kind="cloud", model=model, base_url=url.rstrip("/"),
+            api_key=e.get(f"LITCHAI_EXTRA_{up}_KEY") or None, params={"_prompt_json": True},
+            daily_requests=_int_env(f"LITCHAI_EXTRA_{up}_DAILY_REQUESTS"))
+        extras.append(name)
     llama_url = e.get("LITCHAI_LLAMA_SERVER_URL", "").rstrip("/")
     if llama_url:
         specs["local"] = ProviderSpec(
@@ -252,8 +280,13 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
     if not order:
         # Cerebras and SambaNova are out of the default order (their free tiers now
         # answer 402 without a card); LITCHAI_PROVIDER_CHAIN can still name them.
-        order = ["groq", *(["hetzner"] if hz_key else []), "cloudflare", *(["openrouter"] if or_key else []),
+        order = [*(["deepseek"] if ds_key else []), "groq", *(["hetzner"] if hz_key else []),
+                 "cloudflare", *extras, *(["openrouter"] if or_key else []),
                  *(["chat"] if "chat" in specs else []), "local"]
+    # LITCHAI_DEFAULT_PROVIDER moves one provider to the front (the firm's default).
+    lead = (e.get("LITCHAI_DEFAULT_PROVIDER") or "").strip().lower()
+    if lead and lead in specs:
+        order = [lead, *[n for n in order if n != lead]]
     # "groq" in a chain means every Groq model in turn, unless models are named.
     if "groq" in order and not any(n.startswith("groq:") for n in order):
         i = order.index("groq")

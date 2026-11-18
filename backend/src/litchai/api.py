@@ -21,7 +21,7 @@ from contextlib import asynccontextmanager, contextmanager
 from typing import Any, ContextManager, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from litchai.categorize.memory_store import MemoryStore
 from litchai.db.repo import Repository
@@ -125,6 +125,8 @@ class AssistantChatRequest(BaseModel):
     role: Literal["admin", "staff"] = "admin"
     request_ids: list[str] | None = None
     workbench_ids: list[str] | None = None
+    # The model the person chose (a provider name from /ai/providers); None = default.
+    model: str | None = Field(default=None, max_length=80)
 
 
 class CreateEngagementRequest(BaseModel):
@@ -820,6 +822,10 @@ def create_app(
 
             return asdict(replace(busy_result(failure_reason(exc)), scope_applied=True))
         model_router = _sage_router(local_only=body.local_only)
+        if (body.model and model_router is not None and body.conversation_id
+                and not body.local_only
+                and body.model in {sp.name for sp in model_router.chain()}):
+            model_router.pin(body.conversation_id, body.model)
         # Reuse the harness cache + ai_calls telemetry when we're on Postgres.
         conn = getattr(repo, "conn", None)
         cache = telemetry = None

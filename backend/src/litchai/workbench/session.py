@@ -107,6 +107,8 @@ class Conversation:
     threads: list[dict[str, Any]] = field(default_factory=list)
     thread_id: str = field(default_factory=lambda: f"t-{uuid.uuid4().hex[:8]}")
     provider: str | None = None
+    # The model the person chose for this workbench ("" = the firm's default chain).
+    model: str = ""
     mask_state: dict[str, Any] = field(default_factory=dict)
     created_at: str = field(default_factory=_now)
     updated_at: str = field(default_factory=_now)
@@ -136,6 +138,7 @@ class Conversation:
             "id": self.id, "client_id": self.client_id, "ai_mode": self.ai_mode,
             "title": self.title, "client_name": self.client_name,
             "period_label": self.period_label, "provider": self.provider,
+            "model": self.model,
             "created_at": self.created_at, "updated_at": self.updated_at,
             "new_seq": self.new_seq,
             "instructions": self.instructions,
@@ -198,7 +201,7 @@ class Conversation:
                    ) -> Conversation:
         c = cls(id=state["id"])
         for k in ("client_id", "ai_mode", "title", "client_name", "period_label", "provider",
-                  "created_at", "updated_at", "new_seq", "instructions"):
+                  "model", "created_at", "updated_at", "new_seq", "instructions"):
             if k in state:
                 setattr(c, k, state[k])
         c.workbooks = [WorkbookRef(**w) for w in state.get("workbooks", [])]

@@ -2262,6 +2262,9 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         onClose={() => setSheetOpen(null)}
         local={local}
         provider={conv.provider}
+        conversationId={conv.id}
+        model={conv.model ?? ""}
+        onConversation={setConv}
         clientHref={request?.href.startsWith("/admin") && conv.client_id ? `/admin/clients/${conv.client_id}` : null}
       />
     </div>

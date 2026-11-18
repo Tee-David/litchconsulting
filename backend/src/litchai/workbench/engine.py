@@ -350,6 +350,9 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
     history = [{"role": m["role"], "content": m["content"]} for m in conv.messages[:-1]
                if m.get("role") in ("user", "assistant")]
     events: list[dict[str, Any]] = []
+    if conv.model and not conv.local_only and hasattr(deps.router, "pin"):
+        # The person's chosen model goes first; the chain stays as the fallback.
+        deps.router.pin(conv.id, conv.model)
     for ev in run_agent_loop(system=system, user=user, tools=tools, execute=execute,
                              router=deps.router, history=history, conversation_id=conv.id,
                              local_only=conv.local_only, masker=masker, max_steps=max_steps,

@@ -90,6 +90,8 @@ export type WbConversation = {
   client_name: string;
   period_label: string;
   provider: string | null;
+  /** The model chosen for this workbench ("" = the firm's default chain). */
+  model?: string;
   created_at: string;
   updated_at: string;
   workbooks: WbWorkbookRef[];
@@ -224,7 +226,7 @@ export function wbStart(body: {
 
 export const wbGet = (id: string) => call<{ conversation: WbConversation }>(`/workbench/conversations/${enc(id)}`);
 
-export const wbPatch = (id: string, body: { ai_mode?: string; title?: string }) =>
+export const wbPatch = (id: string, body: { ai_mode?: string; title?: string; model?: string }) =>
   call<{ conversation: WbConversation }>(`/workbench/conversations/${enc(id)}`, { ...json(body), method: "PATCH" });
 
 export const wbFirstLook = (id: string) => call<WbFirstLook>(`/workbench/conversations/${enc(id)}/first-look`);

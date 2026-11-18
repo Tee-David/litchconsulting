@@ -350,7 +350,7 @@ export function assistantChat(
   scope: "firm" | "client" = "firm",
   clientId?: string,
   app?: { tools: boolean; data?: { tool: string; data: Record<string, unknown> } },
-  opts?: { localOnly?: boolean; conversationId?: string; caller?: SageCaller },
+  opts?: { localOnly?: boolean; conversationId?: string; caller?: SageCaller; model?: string },
 ): Promise<AssistantResponse> {
   const caller = opts?.caller ?? { role: "admin" as const, requestIds: null, workbenchIds: null };
   return litchai("/assistant/chat", {
@@ -365,6 +365,7 @@ export function assistantChat(
       app_data: app?.data ?? null,
       local_only: opts?.localOnly ?? false,
       conversation_id: opts?.conversationId ?? null,
+      model: opts?.model ?? null,
       role: caller.role,
       request_ids: caller.requestIds,
       workbench_ids: caller.workbenchIds,
