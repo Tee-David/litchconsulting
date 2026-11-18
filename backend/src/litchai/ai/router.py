@@ -225,15 +225,23 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
     )
     # DeepSeek (paid, OpenAI-compatible). When DEEPSEEK_API_KEY is set it leads the
     # chain (the firm's default model) and Groq's free models become the fallback.
+    # Models (api.deepseek.com/models, 2026-11-18): deepseek-flash (V4.1 Flash, the
+    # default) and deepseek-v4-pro (stronger, dearer: last in the auto chain, or picked).
     ds_key = e.get("DEEPSEEK_API_KEY") or None
-    specs["deepseek"] = ProviderSpec(
-        name="deepseek", kind="cloud",
-        model=e.get("LITCHAI_DEEPSEEK_MODEL") or "deepseek-chat",
-        base_url=(e.get("LITCHAI_DEEPSEEK_BASE_URL") or "https://api.deepseek.com/v1").rstrip("/"),
-        api_key=ds_key, params={"_prompt_json": True},
-        daily_requests=_int_env("LITCHAI_DEEPSEEK_DAILY_REQUESTS"),
-        daily_tokens=_int_env("LITCHAI_DEEPSEEK_DAILY_TOKENS"),
-    )
+    ds_url = (e.get("LITCHAI_DEEPSEEK_BASE_URL") or "https://api.deepseek.com/v1").rstrip("/")
+    ds_models = [m.strip() for m in (e.get("LITCHAI_DEEPSEEK_MODELS") or "").split(",")
+                 if m.strip()] or [e.get("LITCHAI_DEEPSEEK_MODEL") or "deepseek-flash",
+                                   "deepseek-v4-pro"]
+    ds_names = []
+    for i, model in enumerate(dict.fromkeys(ds_models)):
+        name = "deepseek" if i == 0 else f"deepseek:{model.removeprefix('deepseek-')}"
+        specs[name] = ProviderSpec(
+            name=name, kind="cloud", model=model, base_url=ds_url, api_key=ds_key,
+            params={"_prompt_json": True},
+            daily_requests=_int_env("LITCHAI_DEEPSEEK_DAILY_REQUESTS") if i == 0 else None,
+            daily_tokens=_int_env("LITCHAI_DEEPSEEK_DAILY_TOKENS") if i == 0 else None,
+        )
+        ds_names.append(name)
     # Any other OpenAI-compatible provider, with no code change:
     # LITCHAI_EXTRA_PROVIDERS=mistral,together and, for each name,
     # LITCHAI_EXTRA_<NAME>_URL, LITCHAI_EXTRA_<NAME>_KEY, LITCHAI_EXTRA_<NAME>_MODEL.
@@ -282,7 +290,8 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
         # answer 402 without a card); LITCHAI_PROVIDER_CHAIN can still name them.
         order = [*(["deepseek"] if ds_key else []), "groq", *(["hetzner"] if hz_key else []),
                  "cloudflare", *extras, *(["openrouter"] if or_key else []),
-                 *(["chat"] if "chat" in specs else []), "local"]
+                 *(["chat"] if "chat" in specs else []), *(ds_names[1:] if ds_key else []),
+                 "local"]
     # LITCHAI_DEFAULT_PROVIDER moves one provider to the front (the firm's default).
     lead = (e.get("LITCHAI_DEFAULT_PROVIDER") or "").strip().lower()
     if lead and lead in specs:
