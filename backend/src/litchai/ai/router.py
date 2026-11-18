@@ -236,8 +236,10 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
     for i, model in enumerate(dict.fromkeys(ds_models)):
         name = "deepseek" if i == 0 else f"deepseek:{model.removeprefix('deepseek-')}"
         specs[name] = ProviderSpec(
+            # JSON mode (response_format json_object): fewer malformed steps, so
+            # fewer paid retries. No strict json_schema on DeepSeek.
             name=name, kind="cloud", model=model, base_url=ds_url, api_key=ds_key,
-            params={"_prompt_json": True},
+            params={},
             daily_requests=_int_env("LITCHAI_DEEPSEEK_DAILY_REQUESTS") if i == 0 else None,
             daily_tokens=_int_env("LITCHAI_DEEPSEEK_DAILY_TOKENS") if i == 0 else None,
         )
