@@ -253,6 +253,13 @@ CREATE INDEX IF NOT EXISTS ai_provider_calls_conv_idx ON ai_provider_calls (conv
 
 -- Per-provider daily usage (UTC day) + "exhausted until" when a provider reports
 -- its daily allowance is gone. Survives API restarts.
+-- Firm AI settings (for example the daily DeepSeek spending cap). Key/value.
+CREATE TABLE IF NOT EXISTS ai_setting (
+    key        text PRIMARY KEY,
+    value      jsonb NOT NULL,
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS ai_provider_quota (
     provider        text NOT NULL,
     day             date NOT NULL,

@@ -182,6 +182,8 @@ export type WbProvider = {
   daily_requests: number | null;
   daily_tokens: number | null;
   exhausted_until: string | null;
+  /** DeepSeek only: today's spend against the daily cap, and % of the last top-up used. */
+  budget?: { spent_today: number | null; cap: number; over: boolean; credit_used_pct: number | null } | null;
 };
 
 export class WorkbenchError extends Error {
@@ -291,6 +293,9 @@ export const wbRestore = (id: string, wbId: string, version: number, author: str
 
 export const wbChartPreview = (id: string, spec: Record<string, unknown>, workbookId?: string) =>
   call<Record<string, unknown>>(`/workbench/conversations/${enc(id)}/charts/preview`, json({ spec, workbook_id: workbookId ?? null }));
+
+export const wbSetLimits = (deepseekDailyUsd: number) =>
+  call<{ budget: NonNullable<WbProvider["budget"]> }>("/ai/limits", { ...json({ deepseek_daily_usd: deepseekDailyUsd }), method: "PUT" });
 
 export const wbProviders = (probe = false) =>
   call<{ chain: WbProvider[]; local_only_chain: string[] }>(`/ai/providers${probe ? "?probe=true" : ""}`);

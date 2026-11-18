@@ -70,6 +70,10 @@ class MessageFeedback(BaseModel):
     author: str = Field(default="you", min_length=1, max_length=80)
 
 
+class AiLimits(BaseModel):
+    deepseek_daily_usd: float = Field(ge=0, le=1000)
+
+
 class UpdateConversation(BaseModel):
     ai_mode: str | None = None
     # A provider name from GET /ai/providers ("deepseek", "groq:gpt-oss-20b", ...);
@@ -238,6 +242,16 @@ def register_workbench_routes(app: FastAPI) -> None:
         router = _router()
         return {"chain": router.status(probe=probe),
                 "local_only_chain": [s.name for s in router.chain(local_only=True)]}
+
+    @app.put("/ai/limits")
+    def set_ai_limits(body: AiLimits) -> dict[str, Any]:
+        """The daily DeepSeek spending cap (USD). The relay allows admins only."""
+        router = _router()
+        cap = getattr(router, "spend_cap", None)
+        if cap is None:
+            raise HTTPException(409, "DeepSeek is not set up (no DEEPSEEK_API_KEY)")
+        cap.set_cap(body.deepseek_daily_usd)
+        return {"budget": cap.public(force=True)}
 
     # --- conversations -----------------------------------------------------------
     @app.post("/workbench/conversations", status_code=201)

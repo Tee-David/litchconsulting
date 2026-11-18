@@ -5,6 +5,7 @@ import { ChevronRight, Cloud, Cpu, Loader2, Lock, RefreshCw, Sparkles, Zap } fro
 import type { WbProvider } from "@/lib/litchai/workbench";
 import type { WbConversation } from "@/lib/litchai/workbench";
 import { providersAction, setModelAction } from "@/lib/workbench/actions";
+import { AiUsage } from "./ai-usage";
 import { Button, Sheet } from "@/components/kit";
 import { PROVIDER_LABEL } from "./turn";
 import { cn } from "@/lib/utils";
@@ -117,6 +118,10 @@ export function EngineSheet({
             </ol>
           )}
         </div>
+
+        {!local && chain && chain.some((p) => p.name === "deepseek" && p.configured) ? (
+          <AiUsage canEdit={false} initial={chain.find((p) => p.name === "deepseek")?.budget ?? null} />
+        ) : null}
 
         {!local && chain ? (
           <div>

@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { getIntegrationStatuses, type IntegrationState, type IntegrationStatus } from "@/lib/integrations/status";
 import { cn } from "@/lib/utils";
+import { AiUsage } from "@/components/workbench/ai-usage";
 
 export const dynamic = "force-dynamic";
 
@@ -134,6 +135,13 @@ export default async function IntegrationsPage() {
           Managed through environment config (repo-root <code className="font-mono">.env</code> + Doppler → Vercel).
         </span>
       </div>
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold text-ink">AI model usage</h2>
+        <div className="max-w-xl">
+          <AiUsage canEdit />
+        </div>
+      </section>
 
       {groups.map((group, gi) => (
         <section key={group.name} className="space-y-2">

@@ -22,6 +22,7 @@ import {
   wbNewThread,
   wbSetInstructions,
   wbPatch,
+  wbSetLimits,
   wbOpenThread,
   wbFeedback,
   wbListByDocument,
@@ -194,6 +195,21 @@ export async function feedbackAction(input: z.input<typeof feedbackSchema>): Pro
   try {
     const res = await wbFeedback(d.conversationId, d.index, { vote: d.vote, note: d.note, author: (u?.name || u?.email || "a team member").slice(0, 80) });
     return { ok: true, conversation: res.conversation };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+/** Admins only: the daily DeepSeek spending cap in USD (0 = DeepSeek off for the day). */
+export async function setAiCapAction(usd: number): Promise<Res<{ budget: NonNullable<WbProvider["budget"]> }>> {
+  const u = await getSessionUser();
+  if (!u || u.banned || roleOf(u) !== "admin") return { ok: false, error: "Only an admin can change the cap." };
+  const v = z.number().min(0).max(1000).safeParse(usd);
+  if (!v.success) return { ok: false, error: "Give an amount from $0 to $1,000." };
+  try {
+    const res = await wbSetLimits(Math.round(v.data * 100) / 100);
+    await recordAudit({ action: "ai.cap.update", entity: "ai_setting", entityId: "deepseek_daily_usd", actorId: u.id, actorName: u.name ?? u.email, meta: { usd: v.data } });
+    return { ok: true, budget: res.budget };
   } catch (e) {
     return fail(e);
   }

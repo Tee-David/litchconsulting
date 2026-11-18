@@ -20,6 +20,7 @@ export const PROVIDER_LABEL: Record<string, string> = {
 };
 const REASON: Record<string, string> = {
   quota: "reached its daily limit",
+  budget: "reached today's spending cap",
   rate_limit: "is busy (rate limit for this minute)",
   timeout: "timed out",
   unavailable: "could not be reached",

@@ -682,6 +682,9 @@ class ProviderRouter:
         ]
 
     def _available(self, spec: ProviderSpec) -> tuple[bool, str]:
+        cap = getattr(self, "spend_cap", None)
+        if cap is not None and spec.name.split(":")[0] == "deepseek" and cap.over():
+            return False, "budget"  # today's spending cap reached: the free chain answers
         until = self.quota.exhausted_until(spec.name)
         if until is not None:
             return False, "quota"
@@ -943,8 +946,12 @@ class ProviderRouter:
             slow = self._slow.get(spec.name)
             if slow and now < slow and ok:
                 detail = "slow: skipped for a few minutes"
+            cap = getattr(self, "spend_cap", None)
+            budget = cap.public() if cap is not None and spec.name == "deepseek" else None
+            if budget and budget["over"]:
+                detail = "daily spending cap reached: the free models answer until tomorrow"
             out.append({
-                **spec.public(), "ok": ok, "detail": detail, "age_sec": age,
+                **spec.public(), "ok": ok, "detail": detail, "age_sec": age, "budget": budget,
                 "used_requests": req, "used_tokens": tok,
                 "exhausted_until": datetime.fromtimestamp(until, UTC).isoformat()
                 if until else None,
@@ -952,8 +959,14 @@ class ProviderRouter:
         return out
 
 
-def build_router(**kw: Any) -> ProviderRouter:
-    return ProviderRouter(default_specs(), **kw)
+def build_router(*, settings: Any = None, **kw: Any) -> ProviderRouter:
+    router = ProviderRouter(default_specs(), **kw)
+    ds = next((s for s in router.specs if s.name == "deepseek" and s.configured), None)
+    if ds is not None:
+        from litchai.ai.budget import SpendCap
+
+        router.spend_cap = SpendCap(base_url=ds.base_url, api_key=ds.api_key, settings=settings)
+    return router
 
 
 @dataclass
