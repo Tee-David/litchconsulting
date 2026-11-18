@@ -20,10 +20,10 @@ from typing import Any
 
 from openpyxl import Workbook as XlWorkbook
 from openpyxl import load_workbook
-
-from litchai.workbench.styles import apply_style, read_style
 from openpyxl.utils import get_column_letter
 from openpyxl.utils.cell import column_index_from_string, coordinate_from_string
+
+from litchai.workbench.styles import apply_style, read_style
 
 MAX_CELLS = 2_000_000  # guard: refuse absurd sheets rather than OOM the VM
 
@@ -94,6 +94,8 @@ class Sheet:
     color: str | None = None     # tab colour, "RRGGBB"
     hidden: bool = False
     merged: list[str] = field(default_factory=list)   # S5: merged ranges, e.g. "A1:D1"
+    # E3: conditional formats, [{"range": "B5:B9", "rules": [...]}] (condfmt.py).
+    cond_formats: list[dict] = field(default_factory=list)
 
     @property
     def max_row(self) -> int:
@@ -166,6 +168,9 @@ def load_xlsx(data: bytes, *, wb_id: str, name: str, document_id: int | None = N
         sheet.color = rgb[-6:] if isinstance(rgb, str) and len(rgb) >= 6 else None
         sheet.hidden = ws.sheet_state != "visible"
         sheet.merged = [str(m) for m in ws.merged_cells.ranges][:500]
+        from litchai.workbench.condfmt import read_rules
+
+        sheet.cond_formats = read_rules(ws)
         styled_empty = 0
         for row in ws.iter_rows():
             for c in row:

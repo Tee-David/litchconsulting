@@ -314,6 +314,42 @@ class FinancialAnalysisArgs(_Args):
     period_label: str | None = None
 
 
+class CondRule(_Args):
+    when: Literal["equal", "not_equal", "greater", "less", "between", "contains"]
+    value: Any
+    value2: Any = None
+    bg: str | None = Field(None, description="fill colour, e.g. C6EFCE")
+    fc: str | None = Field(None, description="text colour, e.g. 006100")
+    b: bool = False
+
+
+class CondFormatArgs(_Args):
+    sheet: str
+    range: str = Field(description="e.g. B5:B20")
+    rules: list[CondRule] = Field(min_length=1, max_length=10)
+    workbook_id: str | None = None
+
+
+def _cond_format(ctx: ToolContext, a: CondFormatArgs) -> ToolOutput:
+    from litchai.workbench.condfmt import CondFormatError
+
+    wb = ctx.workbook(a.workbook_id) if a.workbook_id else next(iter(ctx.workbooks.values()))
+    sh = next((s for s in wb.sheets.values() if s.name.lower() == a.sheet.lower()), None)
+    if sh is None:
+        raise ToolError(f"there is no sheet {a.sheet!r}")
+    b = OpBuilder(wb, "conditional_format")
+    try:
+        op = b.cond_format(sh.name, a.range, [r.model_dump(exclude_none=True) for r in a.rules],
+                           reason="conditional format")
+    except CondFormatError as exc:
+        raise ToolError(str(exc)) from exc
+    batch = finish_batch(ctx, b, f"Conditional format on {sh.name}!{op.cell}",
+                         f"{len(a.rules)} rule(s)")
+    return ToolOutput(data={"sheet": sh.name, "range": op.cell, "rules": len(a.rules)},
+                      batch=batch, summary=f"Proposed {len(a.rules)} colour rule(s) on "
+                                           f"{sh.name}!{op.cell}.")
+
+
 class AnnualReportArgs(_Args):
     standard: Literal["ias1", "ifrs18"] | None = None
     contract: dict[str, Any] = Field(description="The annual-report inputs: period_label, "
@@ -570,6 +606,13 @@ TOOLS: tuple[WorkbenchTool, ...] = (
                   ("financial analysis", "ratio analysis", "liquidity ratios",
                    "gross margin and net margin", "working capital and current ratio",
                    "debt to equity", "analyse the trial balance")),
+    WorkbenchTool("conditional_format", "write",
+                  "Colour cells by their value (conditional formatting, live in Excel): "
+                  "rules like when=equal value=PASS bg=C6EFCE fc=006100, or when=less "
+                  "value=0 fc=9C0006. Use it for PASS/FAIL, negatives in red, thresholds.",
+                  CondFormatArgs, _cond_format,
+                  ("conditional formatting", "make negative numbers red",
+                   "colour pass green and fail red", "highlight values over 1m")),
     WorkbenchTool("tb_lines", "read",
                   "List trial balance accounts with their IFRS line and exact debit/credit "
                   "cells, so formulas can point at real TB cells. Filter by line or name.",

@@ -237,6 +237,12 @@ def financial_analysis(ctx: ToolContext, *, sheet: str | None = None,
     row("Unmapped TB accounts", None, f"={len(unmapped)}", "0",
         ", ".join(a.name for a in unmapped[:8]) or "None: every account has a line")
 
+    # PASS in green, FAIL in red (Excel's Good and Bad styles), live in the file.
+    from litchai.workbench.condfmt import FAIL_RULE, PASS_RULE
+
+    checks_from = int(keys["chk_tb"][1:])
+    b.cond_format(name, f"B{checks_from}:B{checks_from + 3}", [PASS_RULE, FAIL_RULE],
+                  reason=f"{reason} · PASS green, FAIL red")
     batch = finish_batch(ctx, b, "Financial analysis from the trial balance",
                          f"{name} · ratios, liquidity, solvency, checks")
     previews = {op.cell: op.preview_value for op in batch.ops

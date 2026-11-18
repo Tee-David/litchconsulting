@@ -30,7 +30,7 @@ from litchai.workbench.model import Cell, Sheet, Workbook, a1, parse_a1
 OP_KINDS = ("set_cell", "create_sheet", "delete_sheet", "create_workbook", "add_chart",
             "remove_chart", "rename_sheet", "move_sheet", "sheet_props", "copy_sheet",
             "restore_sheet", "insert_rows", "delete_rows", "insert_cols", "delete_cols",
-            "merge_cells", "unmerge_cells")
+            "merge_cells", "unmerge_cells", "cond_format", "clear_cond_format")
 SHEET_OPS = ("rename_sheet", "move_sheet", "sheet_props", "copy_sheet", "restore_sheet")
 
 
@@ -208,6 +208,21 @@ class OpBuilder:
         self._ops.append(op)
         return op
 
+    def cond_format(self, sheet: str, rng: str, rules: list[dict[str, Any]],
+                    reason: str) -> Operation:
+        """E3: colour cells in ``rng`` by their value (rules checked by condfmt)."""
+        from litchai.workbench.condfmt import clean_rules
+
+        rng, rules = clean_rules(rng, rules)
+        sh = self.model.sheets.get(sheet)
+        prev = next((cf["rules"] for cf in (sh.cond_formats if sh else []) if cf["range"] == rng),
+                    None)
+        op = Operation("cond_format", self.model.id, sheet=sheet, cell=rng,
+                       meta={"range": rng, "rules": rules, "previous": prev}, reason=reason,
+                       tool=self.tool, kind="new")
+        self._ops.append(op)
+        return op
+
     def chart(self, sheet: str, spec: dict[str, Any], reason: str) -> Operation:
         op = Operation("add_chart", self.model.id, sheet=sheet, cell=spec.get("anchor"),
                        chart=spec, reason=reason, tool=self.tool, kind="new")
@@ -244,6 +259,12 @@ def overlay(model: Workbook, ops: list[Operation]) -> None:
             sh = model.sheets.pop(op.sheet)
             sh.name = to
             model.sheets[to] = sh
+        elif op.op in ("cond_format", "clear_cond_format") and op.sheet in model.sheets:
+            m = op.meta or {}
+            sh = model.sheets[op.sheet]
+            sh.cond_formats = [cf for cf in sh.cond_formats if cf["range"] != m.get("range")]
+            if op.op == "cond_format":
+                sh.cond_formats.append({"range": m.get("range"), "rules": m.get("rules", [])})
         elif op.op == "set_cell" and op.sheet and op.cell:
             sheet = model.sheets.setdefault(op.sheet, Sheet(op.sheet))
             r, c = parse_a1(op.cell)
@@ -326,6 +347,16 @@ def apply_ops(xlsx: bytes, ops: list[Operation], *, check_conflicts: bool = True
             conflicts.extend(apply_struct(wb, op))
         elif op.op in ("merge_cells", "unmerge_cells"):
             conflicts.extend(_apply_merge(wb, op))
+        elif op.op in ("cond_format", "clear_cond_format"):
+            from litchai.workbench.condfmt import clear_rules, write_rules
+
+            m = op.meta or {}
+            if op.sheet not in wb.sheetnames:
+                conflicts.append(f"there is no sheet {op.sheet!r}")
+                continue
+            clear_rules(wb[op.sheet], str(m.get("range")))
+            if op.op == "cond_format":
+                write_rules(wb[op.sheet], str(m.get("range")), m.get("rules", []))
         elif op.op == "remove_chart":
             if op.sheet in wb.sheetnames:
                 ws = wb[op.sheet]
@@ -490,6 +521,13 @@ def inverse_ops(ops: list[Operation]) -> list[Operation]:
                                  reason=f"undo: {op.reason}", tool=op.tool))
         elif op.op == "delete_sheet" and op.meta and "cells" in op.meta:
             inv.append(Operation("restore_sheet", op.workbook_id, sheet=op.sheet, meta=op.meta,
+                                 reason=f"undo: {op.reason}", tool=op.tool))
+        elif op.op in ("cond_format", "clear_cond_format"):
+            m = op.meta or {}
+            prev = m.get("previous")  # the rules this op replaced, if any
+            inv.append(Operation("cond_format" if prev else "clear_cond_format", op.workbook_id,
+                                 sheet=op.sheet, cell=op.cell,
+                                 meta={"range": m.get("range"), "rules": prev or []},
                                  reason=f"undo: {op.reason}", tool=op.tool))
         elif op.op in ("merge_cells", "unmerge_cells"):
             m = op.meta or {}

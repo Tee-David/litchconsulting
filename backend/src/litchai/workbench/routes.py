@@ -832,14 +832,18 @@ def register_workbench_routes(app: FastAPI) -> None:
 
             r1, c1 = min(r1, r0 + 2000), min(c1, c0 + 200)
             cells = []
+            from litchai.workbench.condfmt import style_for
+
             for (r, c), cell in sh.cells.items():
                 if not (r0 <= r <= r1 and c0 <= c <= c1):
                     continue
                 ref = a1(r, c)
                 v = cell.display
+                cf = style_for(sh.cond_formats, r, c, v) if sh.cond_formats else None
                 cells.append({"ref": ref, "r": r, "c": c,
                               "v": v.isoformat() if hasattr(v, "isoformat") else v,
-                              "f": cell.formula, "nf": cell.number_format, "s": cell.style,
+                              "f": cell.formula, "nf": cell.number_format,
+                              "s": {**(cell.style or {}), **cf} if cf else cell.style,
                               "pending": pending.get((sh.name, ref)),
                               "page": sh.source_pages.get(r)})
             return {"sheet": sh.name, "max_row": sh.max_row, "max_col": sh.max_col, "merged": sh.merged,
