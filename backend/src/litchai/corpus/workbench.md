@@ -175,3 +175,20 @@ server, and real values are restored only in what you see. For a client on local
 only, nothing leaves the analysis server; Sage uses the local model, which is slower.
 The engine panel shows which model answered, whether a fallback happened, and how
 much of each provider's daily free quota is used.
+
+## Year-end work: journals, adjusted trial balance, loan and depreciation
+
+Sage can post adjusting journals as a proposal. Each journal must balance, or Sage
+refuses it. All journals go on a "Journals" sheet (number, date, account, debit,
+credit, reason and source), and an "Adjusted TB" sheet shows, for every account, the
+bookkeeper's balance plus the adjustments, which gives the final debit or credit.
+Every figure there is a formula, and the sheet shows PASS when debits equal credits.
+A journal can use a new account by giving its code and name (for example "1240 Cash
+in transit"). After the adjusted TB exists, the statements, the financial analysis
+and the tax computation use it instead of the original TB. Sage can also build a loan
+schedule from the loan terms (monthly interest on the opening principal, fixed
+principal repayments, interest accrued to the year end by days, and the fee) and a
+depreciation schedule from the fixed asset register plus new assets (straight line,
+a full month in the month bought). Colour rules (conditional formatting) can mark
+PASS in green and FAIL in red, or negatives in red.
+

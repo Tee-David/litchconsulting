@@ -155,18 +155,30 @@ def _tb_of(wb: Workbook, sheet: Sheet) -> TrialBalance | None:
         else:
             b = to_number(sheet.value(r, balance)) or 0.0
             d, c = (b, 0.0) if b >= 0 else (0.0, -b)
-        if d == 0 and c == 0 and not label:
-            continue
+        if d == 0 and c == 0 and (not label or (code and not code_v)):
+            continue  # a blank line, or a check/label row with no code in a coded TB
         tb.accounts.append(TbAccount(r, code_v, label, d, c))
     return tb if len(tb.accounts) >= 3 else None
 
 
 def detect_trial_balance(ctx: ToolContext, sheet: str | None = None,
-                         workbook_id: str | None = None) -> TrialBalance | None:
+                         workbook_id: str | None = None, *,
+                         skip_adjusted: bool = False) -> TrialBalance | None:
+    """The TB to work from. An "Adjusted TB" (post_journals) comes first: statements
+    and ratios use the corrected balances. ``skip_adjusted`` gives the original."""
     books = [ctx.workbook(workbook_id)] if workbook_id else list(ctx.workbooks.values())
+    if not sheet and not skip_adjusted:
+        for wb in books:
+            for name, sh in wb.sheets.items():
+                if name.lower().startswith("adjusted tb"):
+                    tb = _tb_of(wb, sh)
+                    if tb is not None:
+                        return tb
     for wb in books:
         for name, sh in wb.sheets.items():
             if sheet and name.lower() != sheet.lower():
+                continue
+            if skip_adjusted and name.lower().startswith("adjusted tb"):
                 continue
             tb = _tb_of(wb, sh)
             if tb is not None:

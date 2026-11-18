@@ -13,7 +13,14 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from litchai.workbench import analysis, builders, compiler_tools, fin_analysis, trial_balance
+from litchai.workbench import (
+    analysis,
+    builders,
+    compiler_tools,
+    fin_analysis,
+    journals,
+    trial_balance,
+)
 from litchai.workbench.charts import ChartError, preview, validate_spec
 from litchai.workbench.context import ToolContext, ToolError, ToolOutput, finish_batch
 from litchai.workbench.ops import OpBuilder
@@ -350,6 +357,56 @@ def _cond_format(ctx: ToolContext, a: CondFormatArgs) -> ToolOutput:
                                            f"{sh.name}!{op.cell}.")
 
 
+class JournalLine(_Args):
+    account: str = Field(description="TB code or name, or a new account as '1240 Cash in transit'")
+    debit: float = 0
+    credit: float = 0
+
+
+class Journal(_Args):
+    no: str | None = Field(None, description="J1, J2 ... (default: next number)")
+    date: str | None = None
+    reason: str = Field(description="one line: why, citing the file and line")
+    source: str | None = Field(None, description="file and line, e.g. GTBank CSV line 88")
+    lines: list[JournalLine] = Field(min_length=2, max_length=20)
+
+
+class PostJournalsArgs(_Args):
+    journals: list[Journal] = Field(min_length=1, max_length=40)
+    sheet: str | None = Field(None, description="the original TB sheet; omitted = first TB")
+    workbook_id: str | None = None
+    replace: bool = Field(False, description="true = drop journals posted earlier")
+
+
+class LoanArgs(_Args):
+    principal: float
+    disbursed: str = Field(description="YYYY-MM-DD")
+    monthly_rate_pct: float | None = Field(None, description="e.g. 2 for 2% a month")
+    annual_rate_pct: float | None = None
+    principal_repayment: float = Field(description="fixed principal paid each month")
+    first_repayment: str = Field(description="YYYY-MM-DD")
+    year_end: str = Field(description="YYYY-MM-DD")
+    fee_pct: float = 0
+    new_sheet_name: str | None = None
+    workbook_id: str | None = None
+
+
+class Addition(_Args):
+    name: str
+    date: str
+    cost: float
+    rate: float = Field(description="annual straight-line rate, 0.25 or 25")
+
+
+class DepreciationArgs(_Args):
+    year_end: str = Field(description="YYYY-MM-DD")
+    sheet: str | None = Field(None, description="fixed asset register sheet; omitted = found by name")
+    additions: list[Addition] | None = None
+    full_month_in_month_bought: bool = True
+    new_sheet_name: str | None = None
+    workbook_id: str | None = None
+
+
 class AnnualReportArgs(_Args):
     standard: Literal["ias1", "ifrs18"] | None = None
     contract: dict[str, Any] = Field(description="The annual-report inputs: period_label, "
@@ -613,6 +670,34 @@ TOOLS: tuple[WorkbenchTool, ...] = (
                   CondFormatArgs, _cond_format,
                   ("conditional formatting", "make negative numbers red",
                    "colour pass green and fail red", "highlight values over 1m")),
+    WorkbenchTool("post_journals", "write",
+                  "Post adjusting journals: each journal balances (checked), all go on a "
+                  "'Journals' sheet, and an 'Adjusted TB' sheet shows bookkeeper balance + "
+                  "adjustments = final debit/credit, all formulas. Later calls add journals. "
+                  "Statements, ratios and tax then use the adjusted TB.",
+                  PostJournalsArgs, lambda c, a: journals.post_journals(
+                      c, journals=[j.model_dump() for j in a.journals], sheet=a.sheet,
+                      workbook_id=a.workbook_id, replace=a.replace),
+                  ("post the adjusting journals", "make an adjusted trial balance",
+                   "reclassify the loan out of other income", "journal for closing stock")),
+    WorkbenchTool("loan_schedule", "write",
+                  "Loan schedule from the loan terms: interest on the opening principal each "
+                  "month, fixed principal repayments, interest accrued to the year end by "
+                  "days, the fee; returns interest paid, principal repaid and the balance.",
+                  LoanArgs, lambda c, a: journals.loan_schedule(c, **_kw(a)),
+                  ("make a loan schedule", "split the loan repayments into interest and principal",
+                   "accrue loan interest to year end")),
+    WorkbenchTool("depreciation_schedule", "write",
+                  "Straight-line depreciation for the year from the fixed asset register "
+                  "(cost, rate, date bought, accumulated b/f) plus additions (e.g. a new van), "
+                  "full month in the month bought; never below zero NBV.",
+                  DepreciationArgs, lambda c, a: journals.depreciation_schedule(
+                      c, year_end=a.year_end, sheet=a.sheet,
+                      additions=[x.model_dump() for x in a.additions or []],
+                      full_month_in_month_bought=a.full_month_in_month_bought,
+                      new_sheet_name=a.new_sheet_name, workbook_id=a.workbook_id),
+                  ("calculate depreciation for the year", "complete the fixed asset register",
+                   "depreciate the new van")),
     WorkbenchTool("tb_lines", "read",
                   "List trial balance accounts with their IFRS line and exact debit/credit "
                   "cells, so formulas can point at real TB cells. Filter by line or name.",
