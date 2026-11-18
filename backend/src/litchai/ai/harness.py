@@ -419,6 +419,7 @@ def run_agent_loop(
     fallback_plan: Callable[[str], list[tuple[str, dict[str, Any]]]] | None = None,
     max_tools: int = MAX_OFFERED_TOOLS,
     turn_budget: float | None = None,
+    more_tools: list[AgentTool] | None = None,
 ) -> Iterator[dict[str, Any]]:
     """Generator of step events; the last event is ``final`` (or ``error``).
 
@@ -427,11 +428,22 @@ def run_agent_loop(
     then the compacted history, then the question."""
     from litchai.ai.router import AllProvidersFailed
 
-    tools = tools[:max(1, min(max_tools, MAX_OFFERED_TOOLS))]
-    offered = {t.name for t in tools}
-    reads = {t.name for t in tools if t.kind == "read"}
+    cap = max(1, min(max_tools, MAX_OFFERED_TOOLS))
+    more_tools = [*tools[cap:], *(more_tools or [])]
+    tools = tools[:cap]
+    # The open menu: the ranked tools in full, every other tool as one short line.
+    # A model that picks one of the others is not refused (report: 4 turns lost to
+    # "tool must be one of" when the right tool was simply not ranked).
+    shown = {t.name for t in tools}
+    extra_tools = [t for t in (more_tools or []) if t.name not in shown]
+    offered = shown | {t.name for t in extra_tools}
+    reads = {t.name for t in [*tools, *extra_tools] if t.kind == "read"}
     recent, summary = compact_history(history)
-    sys_msg = system.replace("{tool_menu}", _tool_menu(tools))
+    menu = _tool_menu(tools)
+    if extra_tools:
+        menu += "\nAlso available (same JSON form; ask for them by name):\n" + "\n".join(
+            f"- {t.name} [{t.kind}] - {t.description.split('.')[0][:90]}" for t in extra_tools)
+    sys_msg = system.replace("{tool_menu}", menu)
     if summary:
         sys_msg += "\n\nEarlier in this conversation (summary):\n" + summary
     base: list[dict[str, str]] = [{"role": "system", "content": sys_msg}]

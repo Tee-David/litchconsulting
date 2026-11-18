@@ -212,6 +212,37 @@ def selection_preview(ctx: ToolContext, selection: str, *, max_rows: int = 15,
     return ""
 
 
+_PASTED_NOTE = re.compile(r"Files I added: [^)]*Pasted text", re.IGNORECASE)
+_THIN_ASK = re.compile(r"^\s*(read the files i added\.?|see the pasted text\.?|)\s*$", re.IGNORECASE)
+
+
+def with_pasted_text(message: str, workbooks: dict[str, Any]) -> str:
+    """A question that only points at pasted text (the browser turned a long paste
+    into a .txt file) carries that text as the request, so the model reads the
+    instructions instead of treating them as data."""
+    if not _PASTED_NOTE.search(message):
+        return message
+    question = message.split("(Files I added:")[0]
+    if not _THIN_ASK.match(question.strip()):
+        return message
+    pasted = [wb for wb in workbooks.values() if str(getattr(wb, "name", "")).lower().startswith("pasted text")]
+    if not pasted:
+        return message
+    wb = pasted[-1]
+    lines: list[str] = []
+    for sheet in wb.sheets.values():
+        rows: dict[int, list[tuple[int, Any]]] = {}
+        for (r, c), cell in sheet.cells.items():
+            if cell.value not in (None, ""):
+                rows.setdefault(r, []).append((c, cell.value))
+        for r in sorted(rows):
+            lines.append(" ".join(str(v) for _, v in sorted(rows[r])))
+    text = "\n".join(lines).strip()
+    if not text:
+        return message
+    return f"{text[:6000]}\n\n(The person pasted these instructions; follow them. {message.strip()})"
+
+
 def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
              selection: str | None = None, max_steps: int = 8,
              replace_last: bool = False) -> Iterator[dict[str, Any]]:
@@ -220,6 +251,8 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
     decision = deps.decision or HeuristicDecisionLayer()
     ctx = wbench.context(conv, taxonomy=deps.taxonomy, categoriser=deps.categoriser)
     masker = _masker_for(conv, ctx)
+    shown_message = message  # the bubble shows what the person typed
+    message = with_pasted_text(message, ctx.workbooks)
     route = decision.decide("tool_route", message, [t.name for t in TOOLS])
     confident = route.confidence >= CONFIDENT_ROUTE
     offered = decision.select_tools(message, list(TOOLS),
@@ -228,12 +261,13 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
 
     has_tb = looks_like_tb(ctx.workbooks)
     if has_tb and "trial_balance_statements" not in offered:
-        # A TB is open: its statements tool goes first, replacing the last pick.
-        offered = ["trial_balance_statements", *offered][:max(len(offered), 1)]
+        # A TB is open: its statements tool goes first, added to the picks (not
+        # replacing one: that left a TB analysis request with no sheet tools).
+        offered = ["trial_balance_statements", *offered]
     tools = [AgentTool(t.name, t.description, t.schema(), t.kind)
              for t in (TOOLS_BY_NAME[n] for n in offered)]
     branches = pop_last_turn(conv) if replace_last else []
-    conv.messages.append({"role": "user", "content": message, "at": _now(),
+    conv.messages.append({"role": "user", "content": shown_message, "at": _now(),
                           "selection": selection, **({"branches": branches} if branches else {})})
 
     results: dict[str, Any] = {}  # tool name → its latest data, for "$tool.path" references
@@ -314,7 +348,9 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
                              router=deps.router, history=history, conversation_id=conv.id,
                              local_only=conv.local_only, masker=masker, max_steps=max_steps,
                              check_args=check_args, check_citation=citation_checker(ctx),
-                             fallback_plan=_plan_for(has_tb), max_tools=len(tools)):
+                             fallback_plan=_plan_for(has_tb), max_tools=len(tools),
+                             more_tools=[AgentTool(t.name, t.description, t.schema(), t.kind)
+                                         for t in TOOLS if t.name not in offered]):
         if ev["type"] == "provider":
             conv.provider = ev["provider"]
         # Elapsed time, so the page can say "Worked in 4 steps · 6 s".

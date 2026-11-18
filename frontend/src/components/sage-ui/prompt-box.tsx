@@ -19,7 +19,22 @@ export type Attachment = {
 };
 
 /** Text longer than this is sent as a .txt file instead of filling the box. */
-export const LONG_TEXT = { chars: 1500, lines: 30 };
+export const LONG_TEXT = { chars: 1500, lines: 30, maxInline: 6000 };
+
+/**
+ * Pasted rows of data (tab- or comma-separated lines) go to Sage as a .txt file;
+ * pasted instructions (prose, numbered steps) stay in the question, so the model
+ * reads them as the request and not as data. Very long text is a file either way.
+ */
+export function pastedAsFile(text: string): boolean {
+  if (text.length > LONG_TEXT.maxInline) return true;
+  if (text.length <= LONG_TEXT.chars && text.split("\n").length <= LONG_TEXT.lines) return false;
+  const lines = text.split("\n").filter((l) => l.trim());
+  if (lines.length < 3) return false;
+  const tabbed = lines.filter((l) => l.includes("\t")).length;
+  const csv = lines.filter((l) => (l.match(/,/g) ?? []).length >= 3).length;
+  return tabbed / lines.length > 0.6 || csv / lines.length > 0.6;
+}
 
 /**
  * The Sage message bar, the same everywhere (workbench, widget, Sage page):
@@ -220,7 +235,7 @@ export function PromptBox({
               return;
             }
             const text = e.clipboardData?.getData("text") ?? "";
-            if (onLongText && (text.length > LONG_TEXT.chars || text.split("\n").length > LONG_TEXT.lines)) {
+            if (onLongText && pastedAsFile(text)) {
               e.preventDefault();
               onLongText(text);
             }
