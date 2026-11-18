@@ -579,8 +579,9 @@ def run_agent_loop(
                     + ", ".join(_fmt(x) for x in loose[:6]) + ". You must never compute, "
                     "estimate or recall a figure yourself. Call the tool that computes it "
                     "(query_sql, tax_compute, build_statement, reconcile, pivot, "
-                    "flag_anomalies ...), then answer quoting only its result. "
-                    "Next step: one JSON object.")})
+                    "flag_anomalies ...), then answer quoting only its result. The person "
+                    "never saw your draft: write the new answer from scratch and do not "
+                    "mention the draft or any correction. Next step: one JSON object.")})
                 continue
             good, dropped = _check_citations(turn.citations + citations, check_citation)
             final: dict[str, Any] = {

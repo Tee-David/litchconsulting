@@ -470,10 +470,12 @@ def _analysis_fast_path(message: str, ctx: ToolContext, execute: Any
     answer = "\n".join([
         (f"I built the sheet {d.get('sheet', 'Financial Analysis')} from "
          f"{d.get('source', 'the TB')}. Every figure is a live formula over the TB cells."),
-        (f"- Profitability: revenue {n('rev')}, gross profit {n('gp')}, operating profit "
-         f"{n('op')}, profit before tax {n('pbt')}."),
+        (f"- Profitability: revenue {n('rev')}, gross profit {n('gp')} (gross margin "
+         f"{n('gm', pct=True)}), operating profit {n('op')} (operating margin "
+         f"{n('om', pct=True)}), profit before tax {n('pbt')}, net margin {n('nm', pct=True)}."),
         (f"- Liquidity: current assets {n('ca')}, current liabilities {n('cl')}, working "
-         f"capital {n('wc')}, current ratio {n('cr', x=True)}."),
+         f"capital {n('wc')}, current ratio {n('cr', x=True)}, quick ratio "
+         f"{n('qr', x=True)}, cash ratio {n('cashr', x=True)}."),
         (f"- Assets: PPE cost {n('ppe')}, accumulated depreciation {n('dep')}, net book "
          f"value {n('nbv')}, total assets {n('ta')}, total liabilities {n('tl')}."),
         "- Checks: " + ", ".join(f"{names[k]} {v}" for k, v in checks.items() if k in names) + ".",
@@ -567,7 +569,10 @@ def _tb_answer(outs: list[tuple[str, Any]], only_check: bool, proposed: bool) ->
         turnover = (d.get("profit_source") or {}).get("total_revenue")
         lines.append(f"CIT at {d['rate_pct']}% is ₦{d['cit']:,.2f} and the development levy at "
                      f"{cfg['cit']['developmentLevy']['ratePct']}% is "
-                     f"₦{d['development_levy']:,.2f}: total ₦{d['total_tax']:,.2f}.")
+                     f"₦{d['development_levy']:,.2f}: total ₦{d['total_tax']:,.2f}"
+                     + (f", an effective rate of {d['total_tax'] / pbt_:.1%} of profit before "
+                        f"tax." if (pbt_ := (d.get("profit_source") or {}).get("net_profit"))
+                        else "."))
         if d["small_company"]:
             lines.append("The company is a small company (0% CIT, no levy).")
         elif turnover is not None and turnover > sc["maxTurnover"]:

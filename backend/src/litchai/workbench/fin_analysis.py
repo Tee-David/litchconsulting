@@ -143,13 +143,13 @@ def financial_analysis(ctx: ToolContext, *, sheet: str | None = None,
     row("Revenue", "rev", acc("revenue"), how="TB revenue accounts (credit − debit)")
     row("Cost of sales", "cos", acc("cost_of_sales"), how="TB cost of sales accounts")
     row("Gross profit", "gp", "={rev}-{cos}", total=True, how="Revenue − cost of sales")
-    row("Gross margin", None, ratio("{gp}", "{rev}"), PCT, "Gross profit ÷ revenue")
+    row("Gross margin", "gm", ratio("{gp}", "{rev}"), PCT, "Gross profit ÷ revenue")
     row("Other income", "oi", acc("other_income"))
     row("Operating expenses", "opex", acc("distribution_costs", "administrative_expenses"),
         how="Distribution + administrative (no cost of sales, no interest)")
     row("Operating profit", "op", "={gp}+{oi}-{opex}", total=True,
         how="Gross profit + other income − operating expenses")
-    row("Operating margin", None, ratio("{op}", "{rev}"), PCT, "Operating profit ÷ revenue")
+    row("Operating margin", "om", ratio("{op}", "{rev}"), PCT, "Operating profit ÷ revenue")
     row("Finance income", "fi", acc("finance_income"))
     row("Finance costs (interest)", "fc", acc("finance_costs"))
     row("Profit before tax", "pbt", "={op}+{fi}-{fc}", total=True,
@@ -170,7 +170,7 @@ def financial_analysis(ctx: ToolContext, *, sheet: str | None = None,
                     "TB). Run tax_compute kind=cit for the full computation.")
     row("Profit after tax" if has_tax_line else "Profit after estimated tax", "pat",
         "={pbt}-{tax}", total=True)
-    row("Net margin", None, ratio("{pat}", "{rev}"), PCT, "Profit after tax ÷ revenue")
+    row("Net margin", "nm", ratio("{pat}", "{rev}"), PCT, "Profit after tax ÷ revenue")
 
     # Liquidity --------------------------------------------------------------------
     head("Liquidity Analysis")
@@ -184,9 +184,9 @@ def financial_analysis(ctx: ToolContext, *, sheet: str | None = None,
         how="Payables + VAT, WHT and other tax payables in the TB")
     row("Working capital", "wc", "={ca}-{cl}", total=True, how="Current assets − current liabilities")
     row("Current ratio", "cr", ratio("{ca}", "{cl}"), TIMES, "Current assets ÷ current liabilities")
-    row("Quick ratio", None, ratio("({ca}-{inv})", "{cl}"), TIMES,
+    row("Quick ratio", "qr", ratio("({ca}-{inv})", "{cl}"), TIMES,
         "(Current assets − inventories) ÷ current liabilities")
-    row("Cash ratio", None, ratio("{cash}", "{cl}"), TIMES, "Cash ÷ current liabilities")
+    row("Cash ratio", "cashr", ratio("{cash}", "{cl}"), TIMES, "Cash ÷ current liabilities")
 
     # Assets and solvency ----------------------------------------------------------
     head("Asset Analysis")
@@ -202,9 +202,9 @@ def financial_analysis(ctx: ToolContext, *, sheet: str | None = None,
         acc("share_capital", "retained_earnings", "other_reserves")
         + ("+{pat}" if has_tax_line else "+{pbt}"), total=True,
         how="" if has_tax_line else "Profit before tax: the tax estimate is not booked")
-    row("Debt to equity", None, ratio("{debt}", "{eq}"), TIMES, "Borrowings ÷ equity")
+    row("Debt to equity", "de", ratio("{debt}", "{eq}"), TIMES, "Borrowings ÷ equity")
     row("Gearing", None, ratio("{debt}", "({debt}+{eq})"), PCT, "Borrowings ÷ (borrowings + equity)")
-    row("Interest cover", None, ratio("{op}", "{fc}"), TIMES, "Operating profit ÷ finance costs")
+    row("Interest cover", "ic", ratio("{op}", "{fc}"), TIMES, "Operating profit ÷ finance costs")
 
     # Returns and efficiency -------------------------------------------------------
     head("Returns and efficiency")
