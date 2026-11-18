@@ -215,3 +215,11 @@ borders), set column widths, freeze panes, add a filter, and add a drop-down lis
 1, sort by date and show column D in naira": Sage makes one proposal for all of them.
 Undo restores the cells and the layout.
 
+## Tracing a figure and goal seek
+
+Ask Sage "where does this number come from" or "what uses this cell". Sage shows the
+cell's formula, the cells it reads with their values (a few levels deep), and every
+formula on any sheet that uses the cell. Ask Sage to goal seek, for example "what
+revenue gives a profit before tax of 50 million": Sage recomputes the whole chain and
+proposes the one input value that reaches the target.
+

@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from litchai.workbench import (
     analysis,
+    audit_tools,
     builders,
     compiler_tools,
     fin_analysis,
@@ -458,6 +459,22 @@ class RangeActionsArgs(_Args):
     workbook_id: str | None = None
 
 
+class TraceArgs(_Args):
+    cell: str = Field(description="e.g. B13")
+    sheet: str | None = None
+    depth: int = Field(2, ge=1, le=4)
+    workbook_id: str | None = None
+
+
+class GoalSeekArgs(_Args):
+    target_cell: str = Field(description="the formula cell to reach the target, e.g. B13")
+    target_value: float
+    changing_cell: str = Field(description="the input (value) cell to change, e.g. B4")
+    sheet: str | None = None
+    changing_sheet: str | None = None
+    workbook_id: str | None = None
+
+
 class SheetActionsArgs(_Args):
     actions: list[SheetAction] = Field(min_length=1, max_length=20)
     workbook_id: str | None = None
@@ -742,6 +759,19 @@ TOOLS: tuple[WorkbenchTool, ...] = (
                    "clear the range", "copy this table to another sheet",
                    "format column D as naira", "freeze the header row", "make column B wider",
                    "add a drop-down list", "add a filter to the table")),
+    WorkbenchTool("trace_formula", "read",
+                  "Trace a cell: its formula, the cells it reads (with values, a few levels "
+                  "deep) and every formula cell that uses it. Use it for 'where does this "
+                  "figure come from' and before changing or deleting a cell.",
+                  TraceArgs, lambda c, a: audit_tools.trace_formula(c, **_kw(a)),
+                  ("where does this number come from", "trace this formula",
+                   "what uses this cell", "show the precedents")),
+    WorkbenchTool("goal_seek", "write",
+                  "Goal seek: the input value that makes a formula cell reach a target "
+                  "(e.g. the sales needed for PBT of 50m); proposes that input.",
+                  GoalSeekArgs, lambda c, a: audit_tools.goal_seek(c, **_kw(a)),
+                  ("goal seek", "what revenue gives a profit of 50m",
+                   "what price makes the margin 30%", "break-even sales")),
     WorkbenchTool("sheet_actions", "write",
                   "Sheet and structure changes in one proposal: delete, rename, copy, move, "
                   "hide/unhide, tab colour, insert/delete rows or columns, merge/unmerge, "
