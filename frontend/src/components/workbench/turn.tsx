@@ -264,6 +264,10 @@ export function TurnView({
   const planEv = events.find((e) => e.type === "plan");
   const planTotal = Math.max(Array.isArray(planEv?.steps) ? (planEv!.steps as unknown[]).length : 0, calls);
   const doneMs = typeof final?.ms === "number" ? (final.ms as number) : null;
+  // Tokens the models used for this answer (none on the model-free paths).
+  const tk = (final?.tokens ?? null) as { input_tokens?: number; output_tokens?: number; calls?: number } | null;
+  const tokenTotal = tk ? (tk.input_tokens ?? 0) + (tk.output_tokens ?? 0) : 0;
+  const tokenText = tokenTotal ? `${tokenTotal >= 1000 ? `${(tokenTotal / 1000).toFixed(1)}k` : tokenTotal} tokens` : null;
 
   return (
     <div className="space-y-2.5">
@@ -285,7 +289,7 @@ export function TurnView({
           meta={
             live
               ? [planTotal > 1 ? `step ${Math.min(calls + (current ? 0 : 1), planTotal)} of ${planTotal}` : null, elapsed > 1 ? `${elapsed} s` : null].filter(Boolean).join(" · ") || null
-              : seconds(doneMs)
+              : [seconds(doneMs), tokenText].filter(Boolean).join(" · ") || null
           }
         >
           <div className="space-y-0.5 pt-0.5">

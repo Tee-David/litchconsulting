@@ -1578,7 +1578,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     const am = bv < n - 1 ? prev!.branches![bv].assistant : m;
     if (!am) return <p key={i} className="text-[12.5px] text-muted">No answer was saved for that version.</p>;
     const steps = (am.steps ?? []) as WbEvent[];
-    const final: WbEvent = { type: "final", answer: am.content, citations: am.citations ?? [], attribution: am.attribution ?? null, unverified_figures: am.unverified_figures ?? [], ms: (am as { ms?: number | null }).ms ?? null };
+    const final: WbEvent = { type: "final", answer: am.content, citations: am.citations ?? [], attribution: am.attribution ?? null, unverified_figures: am.unverified_figures ?? [], ms: (am as { ms?: number | null }).ms ?? null, tokens: (am as { tokens?: unknown }).tokens ?? null };
     const latest = bv === n - 1;
     return (
       <div key={i} className="space-y-2">

@@ -350,6 +350,7 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
     history = [{"role": m["role"], "content": m["content"]} for m in conv.messages[:-1]
                if m.get("role") in ("user", "assistant")]
     events: list[dict[str, Any]] = []
+    used = {"input_tokens": 0, "output_tokens": 0, "calls": 0}
     if hasattr(deps.router, "pin"):
         # Each turn starts on the chosen model, else on the firm's default (the head
         # of the chain). A fallback in one turn must not move later turns to Groq.
@@ -366,6 +367,13 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
                                          for t in TOOLS if t.name not in offered]):
         if ev["type"] == "provider":
             conv.provider = ev["provider"]
+        if ev["type"] == "usage":
+            for k in ("input_tokens", "output_tokens"):
+                used[k] += ev.get(k) or 0
+            used["calls"] += 1
+            continue  # kept as a total on the answer, not as a step
+        if ev["type"] in ("final", "error"):
+            ev["tokens"] = dict(used)
         # Elapsed time, so the page can say "Worked in 4 steps · 6 s".
         ev.setdefault("ms", int((time.monotonic() - t0) * 1000))
         events.append(ev)
@@ -386,6 +394,7 @@ def _finish(wbench: Workbench, conv: Conversation, masker: Masker,
         "attribution": (final or {}).get("attribution"),
         "unverified_figures": (final or {}).get("unverified_figures") or [],
         "ms": (final or {}).get("ms"),
+        "tokens": (final or {}).get("tokens"),
         "steps": [e for e in events if e["type"] in ("plan", "tool_call", "tool_result",
                                                       "fallback", "provider", "retry")][:60],
     })

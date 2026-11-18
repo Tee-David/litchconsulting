@@ -523,6 +523,10 @@ def run_agent_loop(
                 provider_seen = routed.provider
                 yield {"type": "provider", "provider": routed.provider, "model": routed.model,
                        "kind": routed.kind, "masked": routed.masked}
+            # Tokens of every model call, so the page can show what a turn cost.
+            yield {"type": "usage", "provider": routed.provider,
+                   "input_tokens": int(routed.response.input_tokens or 0),
+                   "output_tokens": int(routed.response.output_tokens or 0)}
             turn, last_err = parse_turn(routed.text, offered, check_args, reads)
             if turn is not None:
                 break

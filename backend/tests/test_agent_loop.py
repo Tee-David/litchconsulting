@@ -72,8 +72,9 @@ def test_loop_plans_calls_a_tool_then_answers():
     events = list(run_agent_loop(system="S {tool_menu}", user="go", tools=[ECHO],
                                  execute=_execute, router=router, conversation_id="c1",
                                  check_citation=lambda c: c.startswith("Ledger!")))
-    kinds = [e["type"] for e in events]
+    kinds = [e["type"] for e in events if e["type"] != "usage"]  # usage: tokens per call
     assert kinds == ["start", "provider", "plan", "tool_call", "tool_result", "final"]
+    assert sum(1 for e in events if e["type"] == "usage") == 2  # one per model call
     final = events[-1]
     assert final["answer"] == "Done." and final["citations"] == ["Ledger!E2"]
     assert final["dropped_citations"] == ["Nope!ZZ9999999"]
