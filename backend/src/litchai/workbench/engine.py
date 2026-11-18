@@ -398,7 +398,7 @@ _TB_INTENT = re.compile(
     r"development levy|small company)", re.IGNORECASE)
 _TB_OTHER_JOB = re.compile(
     r"\b(reconcil|bank statement|cash book|vat return|wht|withholding|payroll|paye|aging|"
-    r"ageing|chart|plot|pivot|categori[sz]e|anomal|duplicate)", re.IGNORECASE)
+    r"ageing|chart|plot|pivot|categori[sz]e|anomal|duplicate|journal|adjust|post\b|reclass|accru|depreciat|loan|schedule|prepay)", re.IGNORECASE)
 _TB_TAX = re.compile(r"\b(cit|company income tax|development levy|small company|tax on)",
                      re.IGNORECASE)
 # An edit request is never a question for the fast path, even on a trial balance.

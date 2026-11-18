@@ -757,16 +757,54 @@ TOOLS: tuple[WorkbenchTool, ...] = (
 TOOLS_BY_NAME = {t.name: t for t in TOOLS}
 
 
+_SYNONYM = {"percent": "pct", "percentage": "pct", "instalment": "repayment",
+            "installment": "repayment", "amount": "", "value": ""}
+
+
+def _norm(key: str) -> str:
+    parts = [_SYNONYM.get(w, w) for w in str(key).lower().replace("-", "_").split("_")]
+    return "_".join(w for w in parts if w)
+
+
+def _align_args(model: type[BaseModel], args: dict[str, Any]) -> dict[str, Any]:
+    """Map near-miss argument names to the real ones (fee_percent -> fee_pct,
+    principal_instalment -> principal_repayment, annual_rate -> annual_rate_pct). Only
+    when exactly one field fits and it is not given already, so nothing is guessed."""
+    fields = set(model.model_fields)
+    out = dict(args)
+    for key in list(args):
+        if key in fields:
+            continue
+        nk = _norm(key)
+        cands = [f for f in fields if f not in out and (
+            _norm(f) == nk or _norm(f) == f"{nk}_pct" or _norm(f).startswith(nk + "_"))]
+        if len(cands) == 1:
+            out[cands[0]] = out.pop(key)
+    return out
+
+
+def signature(tool: WorkbenchTool) -> str:
+    """Compact argument list for an error message: name* (required) and type."""
+    parts = []
+    for fname, f in tool.args.model_fields.items():
+        t = getattr(f.annotation, "__name__", None) or str(f.annotation).replace("typing.", "")
+        parts.append(f"{fname}{'*' if f.is_required() else ''}:{t[:24]}")
+    return ", ".join(parts)[:600]
+
+
 def validate_call(name: str, args: dict[str, Any] | None) -> tuple[WorkbenchTool, BaseModel]:
     tool = TOOLS_BY_NAME.get(name)
     if tool is None:
         raise ToolError(f"unknown tool {name!r} (tools: {sorted(TOOLS_BY_NAME)})")
     try:
-        return tool, tool.args.model_validate(args or {})
+        return tool, tool.args.model_validate(_align_args(tool.args, args or {}))
     except ValidationError as exc:
         msgs = "; ".join(f"{'.'.join(str(x) for x in e['loc'])}: {e['msg']}"
                          for e in exc.errors()[:5])
-        raise ToolError(f"invalid arguments for {name}: {msgs}") from exc
+        # The exact arguments, so the next step is right (a tool offered by name
+        # only has no schema in the prompt; live test 2026-11-18 lost 2 paid steps).
+        raise ToolError(f"invalid arguments for {name}: {msgs}. Arguments (* = required): "
+                        f"{signature(tool)}") from exc
 
 
 def run_tool(ctx: ToolContext, name: str, args: dict[str, Any] | None) -> ToolOutput:

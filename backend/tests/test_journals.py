@@ -68,3 +68,15 @@ def test_cit_sets_off_wht_credits():
         "net_profit_per_accounts": 100_000_000, "turnover": 500_000_000,
         "wht_credits": 5_000_000}}).data
     assert d["net_tax_payable"] == round(d["total_tax"] - 5_000_000, 2)
+
+
+def test_near_miss_argument_names_are_mapped_and_errors_list_the_arguments():
+    from litchai.workbench.tools import validate_call
+
+    _, a = validate_call("loan_schedule", {
+        "principal": 1, "disbursed": "2025-03-03", "first_repayment": "2025-04-03",
+        "year_end": "2025-12-31", "fee_percent": 1, "principal_instalment": 2,
+        "monthly_rate": 2})
+    assert (a.fee_pct, a.principal_repayment, a.monthly_rate_pct) == (1, 2, 2)
+    with pytest.raises(ToolError, match=r"Arguments \(\* = required\): principal\*"):
+        validate_call("loan_schedule", {"principal": 1})
