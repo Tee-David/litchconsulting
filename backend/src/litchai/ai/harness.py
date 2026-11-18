@@ -441,8 +441,9 @@ def run_agent_loop(
     recent, summary = compact_history(history)
     menu = _tool_menu(tools)
     if extra_tools:
-        menu += "\nAlso available (same JSON form; ask for them by name):\n" + "\n".join(
-            f"- {t.name} [{t.kind}] - {t.description.split('.')[0][:90]}" for t in extra_tools)
+        # Names only: the first prompt must stay small (Groq: 8,000 tokens a minute).
+        menu += ("\nAlso available by name (same JSON form): "
+                 + ", ".join(t.name for t in extra_tools) + ".")
     sys_msg = system.replace("{tool_menu}", menu)
     if summary:
         sys_msg += "\n\nEarlier in this conversation (summary):\n" + summary

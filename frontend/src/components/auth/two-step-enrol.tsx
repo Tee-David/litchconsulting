@@ -46,6 +46,7 @@ export function TwoStepEnrol({ required, needsPassword, email, done }: { require
     const { data, error: err } = await authClient.twoFactor.enable(needsPassword ? { password } : ({} as { password: string }));
     setBusy(false);
     if (err || !data) return setError(authErrorText(err, "We could not start two-step setup. Try again."));
+    if (!("totpURI" in data)) return setError("We could not start two-step setup. Try again.");
     setUri(data.totpURI);
     setCodes(data.backupCodes ?? []);
     setStep("scan");

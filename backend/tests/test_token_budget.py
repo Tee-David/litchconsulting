@@ -131,7 +131,11 @@ def test_two_malformed_steps_run_the_deterministic_plan():
     events = list(run_agent_loop(
         system="S {tool_menu}", user="go", tools=[ECHO], execute=_execute, router=router,
         fallback_plan=lambda msg: [("echo", {"x": "plan"})]))
-    assert len(t.calls) == 2  # no third prompt is sent
+    names = [n for n, _ in t.calls]
+    # Two prompts to Groq, then ONE try on the next vendor (Cerebras here; it has no
+    # reply, so the router's own fallback ends the chain), then the plan answers.
+    assert names[:2] == ["groq", "groq"] and names.count("groq") == 2
+    assert "cerebras" in names and len(names) <= 4
     final = events[-1]
     assert final["type"] == "final" and final["degraded"]
     assert final["answer"].startswith("The AI model's steps could not be used")
@@ -142,5 +146,6 @@ def test_the_first_prompt_stays_small():
     from litchai.evals.prompt_size import measure
 
     rows = measure()
-    assert max(r["tokens_est"] for r in rows) <= 1300
-    assert sum(r["tokens_est"] for r in rows) / len(rows) <= 1150
+    # +100 for the names-only "Also available" line (the open menu, slice 1).
+    assert max(r["tokens_est"] for r in rows) <= 1400
+    assert sum(r["tokens_est"] for r in rows) / len(rows) <= 1250

@@ -8,8 +8,9 @@ import { defineConfig } from "vitest/config";
  */
 export default defineConfig({
   resolve: {
-    tsconfigPaths: true,
     alias: {
+      // Same as tsconfig "paths" (works on every Vite version vitest may resolve).
+      "@": fileURLToPath(new URL("./src", import.meta.url)),
       // Next-only build guard; no runtime behaviour to reproduce here.
       "server-only": fileURLToPath(new URL("./test/stubs/server-only.ts", import.meta.url)),
     },
