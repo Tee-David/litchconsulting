@@ -30,7 +30,8 @@ from litchai.workbench.model import Cell, Sheet, Workbook, a1, parse_a1
 OP_KINDS = ("set_cell", "create_sheet", "delete_sheet", "create_workbook", "add_chart",
             "remove_chart", "rename_sheet", "move_sheet", "sheet_props", "copy_sheet",
             "restore_sheet", "insert_rows", "delete_rows", "insert_cols", "delete_cols",
-            "merge_cells", "unmerge_cells", "cond_format", "clear_cond_format")
+            "merge_cells", "unmerge_cells", "cond_format", "clear_cond_format",
+            "sheet_layout")
 SHEET_OPS = ("rename_sheet", "move_sheet", "sheet_props", "copy_sheet", "restore_sheet")
 
 
@@ -347,6 +348,14 @@ def apply_ops(xlsx: bytes, ops: list[Operation], *, check_conflicts: bool = True
             conflicts.extend(apply_struct(wb, op))
         elif op.op in ("merge_cells", "unmerge_cells"):
             conflicts.extend(_apply_merge(wb, op))
+        elif op.op == "sheet_layout":
+            if op.sheet not in wb.sheetnames:
+                conflicts.append(f"there is no sheet {op.sheet!r}")
+                continue
+            # Keep what was there, for the undo (filled once, at first apply).
+            if op.meta is not None and "old" not in op.meta:
+                op.meta["old"] = read_layout(wb[op.sheet], op.meta)
+            apply_layout(wb[op.sheet], op.meta or {})
         elif op.op in ("cond_format", "clear_cond_format"):
             from litchai.workbench.condfmt import clear_rules, write_rules
 
@@ -367,6 +376,39 @@ def apply_ops(xlsx: bytes, ops: list[Operation], *, check_conflicts: bool = True
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
+
+
+def read_layout(ws: Any, want: dict[str, Any]) -> dict[str, Any]:
+    old: dict[str, Any] = {}
+    if "widths" in want:
+        old["widths"] = {c: ws.column_dimensions[c].width for c in want["widths"]}
+    if "freeze" in want:
+        old["freeze"] = ws.freeze_panes
+    if "filter" in want:
+        old["filter"] = ws.auto_filter.ref
+    return old
+
+
+def apply_layout(ws: Any, m: dict[str, Any]) -> None:
+    """Column widths, freeze panes, autofilter and list validations (sheet_layout)."""
+    from openpyxl.worksheet.datavalidation import DataValidation
+
+    for col, w in (m.get("widths") or {}).items():
+        ws.column_dimensions[col].width = w
+    if "freeze" in m:
+        ws.freeze_panes = m["freeze"]
+    if "filter" in m:
+        ws.auto_filter.ref = m["filter"]
+    drop = set(m.get("validations_remove") or [])
+    if drop:
+        keep = [dv for dv in ws.data_validations.dataValidation
+                if str(dv.sqref).upper() not in drop]
+        ws.data_validations.dataValidation = keep
+    for v in m.get("validations") or []:
+        items = ",".join(str(x).replace('"', "") for x in v["items"])
+        dv = DataValidation(type="list", formula1=f'"{items}"', allow_blank=True)
+        dv.add(v["range"])
+        ws.add_data_validation(dv)
 
 
 def _apply_merge(wb: Any, op: Operation) -> list[str]:
@@ -522,6 +564,13 @@ def inverse_ops(ops: list[Operation]) -> list[Operation]:
         elif op.op == "delete_sheet" and op.meta and "cells" in op.meta:
             inv.append(Operation("restore_sheet", op.workbook_id, sheet=op.sheet, meta=op.meta,
                                  reason=f"undo: {op.reason}", tool=op.tool))
+        elif op.op == "sheet_layout":
+            m = op.meta or {}
+            old = dict(m.get("old") or {})
+            old["validations_remove"] = [v["range"] for v in m.get("validations", [])]
+            inv.append(Operation("sheet_layout", op.workbook_id, sheet=op.sheet,
+                                 meta={**old, "old": {}}, reason=f"undo: {op.reason}",
+                                 tool=op.tool))
         elif op.op in ("cond_format", "clear_cond_format"):
             m = op.meta or {}
             prev = m.get("previous")  # the rules this op replaced, if any

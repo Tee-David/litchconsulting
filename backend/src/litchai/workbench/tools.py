@@ -19,6 +19,7 @@ from litchai.workbench import (
     compiler_tools,
     fin_analysis,
     journals,
+    range_tools,
     sheet_tools,
     trial_balance,
 )
@@ -426,6 +427,37 @@ class SheetAction(_Args):
     chart_title: str | None = None
 
 
+class RangeAction(_Args):
+    action: Literal["sort", "find_replace", "clear", "copy", "move", "number_format", "style",
+                    "column_width", "freeze", "filter", "validation"]
+    sheet: str | None = None
+    range: str | None = Field(None, description="A1:F40, D:D or 2:2; omitted = used range")
+    by: str | None = Field(None, description="sort: column letter or header name")
+    descending: bool = False
+    header: bool | None = None
+    find: str | None = None
+    replace: str | None = None
+    match_case: bool = False
+    whole_cell: bool = False
+    in_formulas: bool = False
+    to: str | None = Field(None, description="copy/move: top-left target cell")
+    to_sheet: str | None = None
+    format: str | None = Field(None, description="naira, number, integer, percent, date, text "
+                                                 "or an Excel code")
+    style: dict[str, Any] | None = Field(None, description="b, i, u, fc, bg, ha, wrap, border")
+    columns: str | None = Field(None, description="column_width: B or B:D")
+    width: float | None = None
+    cell: str | None = Field(None, description="freeze: first unfrozen cell, e.g. A2; "
+                                               "empty = unfreeze")
+    off: bool = False
+    items: list[str] | None = Field(None, description="validation: the drop-down choices")
+
+
+class RangeActionsArgs(_Args):
+    actions: list[RangeAction] = Field(min_length=1, max_length=20)
+    workbook_id: str | None = None
+
+
 class SheetActionsArgs(_Args):
     actions: list[SheetAction] = Field(min_length=1, max_length=20)
     workbook_id: str | None = None
@@ -698,6 +730,18 @@ TOOLS: tuple[WorkbenchTool, ...] = (
                   CondFormatArgs, _cond_format,
                   ("conditional formatting", "make negative numbers red",
                    "colour pass green and fail red", "highlight values over 1m")),
+    WorkbenchTool("range_actions", "write",
+                  "Range changes in one proposal (send several at once): sort (keeps rows "
+                  "together, header and total rows stay), find_replace, clear, copy or move "
+                  "(formulas follow), number_format (naira, percent, date...), style on a "
+                  "range, column_width, freeze panes, filter, validation (drop-down list).",
+                  RangeActionsArgs, lambda c, a: range_tools.range_actions(
+                      c, actions=[x.model_dump(exclude_none=True) for x in a.actions],
+                      workbook_id=a.workbook_id),
+                  ("sort by date", "sort the table by amount descending", "replace X with Y",
+                   "clear the range", "copy this table to another sheet",
+                   "format column D as naira", "freeze the header row", "make column B wider",
+                   "add a drop-down list", "add a filter to the table")),
     WorkbenchTool("sheet_actions", "write",
                   "Sheet and structure changes in one proposal: delete, rename, copy, move, "
                   "hide/unhide, tab colour, insert/delete rows or columns, merge/unmerge, "

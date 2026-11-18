@@ -204,3 +204,14 @@ never deletes the last visible sheet. A delete is always a high-risk proposal, a
 the proposal names any sheet that came from an uploaded file. Undo brings a deleted
 sheet back with its values, formulas, formats and position.
 
+## Range actions Sage can do
+
+Sage can sort a table (rows stay together; the header and total rows stay in place),
+find and replace text (it says how many cells change, and it refuses when nothing
+matches), clear a range, copy or move a range (formulas follow, as in Excel), set a
+number format on a range (naira, number, percent, date), style a range (bold, fill,
+borders), set column widths, freeze panes, add a filter, and add a drop-down list
+(data validation). Ask for several at once, for example "bold the header, freeze row
+1, sort by date and show column D in naira": Sage makes one proposal for all of them.
+Undo restores the cells and the layout.
+
