@@ -876,7 +876,44 @@ def signature(tool: WorkbenchTool) -> str:
     return ", ".join(parts)[:600]
 
 
+_SHEET_ACTS = {"delete", "rename", "copy", "move", "hide", "unhide", "color", "insert_rows",
+               "delete_rows", "insert_cols", "delete_cols", "merge", "unmerge", "remove_chart"}
+_RANGE_ACTS = {"sort", "find_replace", "clear", "copy_range", "move_range", "number_format",
+               "style", "column_width", "freeze", "filter", "validation"}
+_TOP_LEVEL = {"workbook_id", "values_first", "allow_broken_refs"}
+
+
+def _route_actions(name: str, args: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """Forgive the two common slips on the action tools (live test 2026-11-18): one
+    action sent without the ``actions`` list, and an action sent to the other tool
+    (freeze panes to sheet_actions). The request still runs as the person meant."""
+    if name not in ("sheet_actions", "range_actions"):
+        return name, args
+    args = dict(args)
+    if "actions" not in args and "action" in args:
+        args = {**{k: v for k, v in args.items() if k in _TOP_LEVEL},
+                "actions": [{k: v for k, v in args.items() if k not in _TOP_LEVEL}]}
+    acts = []
+    for a in args.get("actions") or []:
+        if isinstance(a, dict):
+            a = dict(a)
+            if a.get("action") == "freeze" and "cell" not in a:
+                n = a.pop("freeze_rows", a.pop("rows", None))
+                if n is not None:
+                    a["cell"] = f"A{int(n) + 1}"
+            acts.append(a)
+    args["actions"] = acts
+    kinds = {str(a.get("action")) for a in acts}
+    if name == "sheet_actions" and kinds and kinds <= _RANGE_ACTS and not kinds & _SHEET_ACTS:
+        name = "range_actions"
+        args = {k: v for k, v in args.items() if k in ("actions", "workbook_id")}
+    elif name == "range_actions" and kinds and kinds <= _SHEET_ACTS and not kinds & _RANGE_ACTS:
+        name = "sheet_actions"
+    return name, args
+
+
 def validate_call(name: str, args: dict[str, Any] | None) -> tuple[WorkbenchTool, BaseModel]:
+    name, args = _route_actions(name, args or {})
     tool = TOOLS_BY_NAME.get(name)
     if tool is None:
         raise ToolError(f"unknown tool {name!r} (tools: {sorted(TOOLS_BY_NAME)})")

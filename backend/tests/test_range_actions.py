@@ -78,3 +78,13 @@ def test_layout_undo_restores_the_old_layout():
     wb.undo(conv, out.batch.id)
     ws = load_workbook(io.BytesIO(wb.blobs.get(conv.workbooks[0].versions[-1]["sha"])))["Trial balance"]
     assert ws.freeze_panes in (None, "A1") and not ws.data_validations.dataValidation
+
+
+def test_slips_on_the_action_tools_are_forgiven():
+    from litchai.workbench.tools import validate_call
+
+    tool, a = validate_call("sheet_actions", {"action": "freeze", "sheet": "Trial balance",
+                                              "freeze_rows": 1})
+    assert tool.name == "range_actions" and a.actions[0].cell == "A2"
+    tool, _ = validate_call("range_actions", {"actions": [{"action": "delete", "sheet": "X"}]})
+    assert tool.name == "sheet_actions"

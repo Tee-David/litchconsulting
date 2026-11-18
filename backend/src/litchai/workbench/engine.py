@@ -339,7 +339,7 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
         system += ("\n\nStanding instructions for this workbench (follow them in every answer "
                    "unless the person says otherwise in this message):\n" + conv.instructions.strip())
     hints = routing_hints(message)
-    if has_tb:
+    if has_tb and _TB_INTENT.search(_TB_NAME.sub(" ", message)):
         hints = [("This workbook has a trial balance: use trial_balance_statements for "
                  "profit, P&L, balance sheet and balancing questions, then tax_compute "
                  "kind=cit (it takes the PBT from the TB). Use financial_analysis for "
@@ -350,9 +350,13 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
     history = [{"role": m["role"], "content": m["content"]} for m in conv.messages[:-1]
                if m.get("role") in ("user", "assistant")]
     events: list[dict[str, Any]] = []
-    if conv.model and not conv.local_only and hasattr(deps.router, "pin"):
-        # The person's chosen model goes first; the chain stays as the fallback.
-        deps.router.pin(conv.id, conv.model)
+    if hasattr(deps.router, "pin"):
+        # Each turn starts on the chosen model, else on the firm's default (the head
+        # of the chain). A fallback in one turn must not move later turns to Groq.
+        if conv.model and not conv.local_only:
+            deps.router.pin(conv.id, conv.model)
+        elif hasattr(deps.router, "unpin"):
+            deps.router.unpin(conv.id)
     for ev in run_agent_loop(system=system, user=user, tools=tools, execute=execute,
                              router=deps.router, history=history, conversation_id=conv.id,
                              local_only=conv.local_only, masker=masker, max_steps=max_steps,
