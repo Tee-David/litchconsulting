@@ -19,6 +19,7 @@ from litchai.workbench import (
     compiler_tools,
     fin_analysis,
     journals,
+    sheet_tools,
     trial_balance,
 )
 from litchai.workbench.charts import ChartError, preview, validate_spec
@@ -407,6 +408,32 @@ class DepreciationArgs(_Args):
     workbook_id: str | None = None
 
 
+class SheetAction(_Args):
+    action: Literal["delete", "rename", "copy", "move", "hide", "unhide", "color",
+                    "insert_rows", "delete_rows", "insert_cols", "delete_cols", "merge",
+                    "unmerge", "remove_chart"]
+    sheet: str | None = None
+    sheets: list[str] | None = None
+    which: Literal["all_except", "sage_made", "empty", "hidden"] | None = Field(
+        None, description="a set instead of names; all_except needs keep")
+    keep: list[str] | None = None
+    name: str | None = Field(None, description="new name (rename, copy)")
+    index: int | None = Field(None, description="new position, 0 = first (move)")
+    color: str | None = Field(None, description="tab colour like 1F3A8A")
+    at: int | str | None = Field(None, description="first row number or column letter")
+    count: int | None = None
+    range: str | None = Field(None, description="merge range like A1:D1")
+    chart_title: str | None = None
+
+
+class SheetActionsArgs(_Args):
+    actions: list[SheetAction] = Field(min_length=1, max_length=20)
+    workbook_id: str | None = None
+    values_first: bool = Field(False, description="before a delete, keep formulas that point "
+                                                   "at it as values")
+    allow_broken_refs: bool = False
+
+
 class AnnualReportArgs(_Args):
     standard: Literal["ias1", "ifrs18"] | None = None
     contract: dict[str, Any] = Field(description="The annual-report inputs: period_label, "
@@ -671,6 +698,19 @@ TOOLS: tuple[WorkbenchTool, ...] = (
                   CondFormatArgs, _cond_format,
                   ("conditional formatting", "make negative numbers red",
                    "colour pass green and fail red", "highlight values over 1m")),
+    WorkbenchTool("sheet_actions", "write",
+                  "Sheet and structure changes in one proposal: delete, rename, copy, move, "
+                  "hide/unhide, tab colour, insert/delete rows or columns, merge/unmerge, "
+                  "remove a chart. Name sheets, or use which=all_except (with keep), "
+                  "sage_made, empty or hidden. A delete is refused when formulas elsewhere "
+                  "point at the sheet, unless values_first or allow_broken_refs.",
+                  SheetActionsArgs, lambda c, a: sheet_tools.sheet_actions(
+                      c, actions=[x.model_dump(exclude_none=True) for x in a.actions],
+                      workbook_id=a.workbook_id, values_first=a.values_first,
+                      allow_broken_refs=a.allow_broken_refs),
+                  ("delete all the other sheets", "delete the sheet", "rename the sheet",
+                   "remove the empty sheets", "insert two rows above row 5", "hide the sheet",
+                   "duplicate this sheet", "delete column C", "merge A1 to D1")),
     WorkbenchTool("post_journals", "write",
                   "Post adjusting journals: each journal balances (checked), all go on a "
                   "'Journals' sheet, and an 'Adjusted TB' sheet shows bookkeeper balance + "

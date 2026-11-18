@@ -192,3 +192,15 @@ depreciation schedule from the fixed asset register plus new assets (straight li
 a full month in the month bought). Colour rules (conditional formatting) can mark
 PASS in green and FAIL in red, or negatives in red.
 
+## Sheet actions Sage can do
+
+Ask Sage to delete, rename, copy, move, hide or show sheets, change a tab colour,
+insert or delete rows and columns, merge cells or remove a chart. Several changes go
+in one proposal. Sage understands sets such as "all the other sheets", "the sheets
+Sage made", "the empty sheets" and "the hidden sheets". Before a delete, Sage checks
+for formulas on the other sheets that point at the sheet. If there are some, Sage asks
+first: keep those figures as values, or delete anyway (they then show #REF!). Sage
+never deletes the last visible sheet. A delete is always a high-risk proposal, and
+the proposal names any sheet that came from an uploaded file. Undo brings a deleted
+sheet back with its values, formulas, formats and position.
+

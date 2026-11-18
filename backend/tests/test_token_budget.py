@@ -145,6 +145,6 @@ def test_the_first_prompt_stays_small():
     from litchai.evals.prompt_size import measure
 
     rows = measure()
-    # +100 for the names-only "Also available" line (the open menu, slice 1).
-    assert max(r["tokens_est"] for r in rows) <= 1400
-    assert sum(r["tokens_est"] for r in rows) / len(rows) <= 1250
+    # +100 for the names-only "Also available" line (open menu), +50 for the v5 tools.
+    assert max(r["tokens_est"] for r in rows) <= 1450
+    assert sum(r["tokens_est"] for r in rows) / len(rows) <= 1300
