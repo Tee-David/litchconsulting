@@ -55,13 +55,13 @@ def tb_lines(ctx: ToolContext, *, sheet: str | None = None, workbook_id: str | N
             continue
         if name_contains and name_contains.lower() not in a.name.lower():
             continue
-        rows.append({
-            "code": a.code, "name": a.name, "line": a.line, "row": a.row,
-            "debit": a.debit, "credit": a.credit,
-            "debit_cell": qualify(s, a1(a.row, tb.debit_col)) if tb.debit_col else None,
-            "credit_cell": qualify(s, a1(a.row, tb.credit_col)) if tb.credit_col else None,
-            "balance_cell": qualify(s, a1(a.row, tb.balance_col)) if tb.balance_col else None,
-        })
+        row = {"code": a.code, "name": a.name, "line": a.line, "row": a.row,
+               "debit": a.debit, "credit": a.credit}
+        if tb.debit_col:  # cells as A1 on the TB sheet (named once in "sheet")
+            row["dr"], row["cr"] = a1(a.row, tb.debit_col), a1(a.row, tb.credit_col)
+        else:
+            row["bal"] = a1(a.row, tb.balance_col)
+        rows.append(row)
     lines = sorted({a.line for a in tb.accounts if a.line})
     data = {"sheet": s, "workbook_id": tb.workbook.id, "accounts": rows[:80],
             "total_accounts": len(rows), "lines": lines,

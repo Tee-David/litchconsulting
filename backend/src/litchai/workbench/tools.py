@@ -784,7 +784,7 @@ TOOLS: tuple[WorkbenchTool, ...] = (
                   ("calculate depreciation for the year", "complete the fixed asset register",
                    "depreciate the new van")),
     WorkbenchTool("tb_lines", "read",
-                  "List trial balance accounts with their IFRS line and exact debit/credit "
+                  "List trial balance accounts with their IFRS line and debit/credit cells (dr, cr) "
                   "cells, so formulas can point at real TB cells. Filter by line or name.",
                   TbLinesArgs, lambda c, a: fin_analysis.tb_lines(c, **_kw(a)),
                   ("which cell holds trade receivables", "list the tb accounts",

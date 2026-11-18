@@ -293,8 +293,8 @@ def trial_balance_statements(ctx: ToolContext, *, sheet: str | None = None,
         "income_statement": pnl, "balance_sheet": bs,
         "unmapped": [{"code": a.code, "name": a.name, "debit": a.debit, "credit": a.credit,
                       "cell": qualify(src, a1(a.row, tb.name_col))} for a in unmapped],
-        "mapping": [{"code": a.code, "name": a.name, "line": a.line, "by": a.mapped_by}
-                    for a in tb.accounts][:40],
+        # Compact (it goes back to the model on every step): code → line; names via tb_lines.
+        "mapping": {(a.code or a.name): a.line for a in tb.accounts[:60]},
         "basis": basis(
             "Each account maps to an IFRS (IAS 1) line by its name, then by its code range "
             "(1 assets, 2 liabilities, 3 equity, 4 revenue, 5 cost of sales, 6 admin, 7 finance "

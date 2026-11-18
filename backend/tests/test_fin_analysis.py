@@ -39,7 +39,7 @@ def test_financial_analysis_builds_live_formulas_that_match_the_hand_check():
 def test_tb_lines_gives_the_exact_cells():
     _, _, ctx = _ctx()
     rows = run_tool(ctx, "tb_lines", {"line": "cash"}).data["accounts"]
-    assert rows and rows[0]["debit_cell"] == "'Trial balance'!C6"
+    assert rows and rows[0]["dr"] == "C6"
 
 
 def test_the_analysis_request_routes_to_the_tool_without_a_model():
