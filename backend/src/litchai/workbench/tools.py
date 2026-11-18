@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from litchai.workbench import analysis, builders, compiler_tools, trial_balance
+from litchai.workbench import analysis, builders, compiler_tools, fin_analysis, trial_balance
 from litchai.workbench.charts import ChartError, preview, validate_spec
 from litchai.workbench.context import ToolContext, ToolError, ToolOutput, finish_batch
 from litchai.workbench.ops import OpBuilder
@@ -300,6 +300,20 @@ class TrialBalanceArgs(_Args):
     period_label: str | None = None
 
 
+class TbLinesArgs(_Args):
+    sheet: str | None = Field(None, description="TB sheet; omitted = the first TB found")
+    workbook_id: str | None = None
+    line: str | None = Field(None, description="only this IFRS line, e.g. trade_receivables")
+    name_contains: str | None = Field(None, description="only accounts whose name has this text")
+
+
+class FinancialAnalysisArgs(_Args):
+    sheet: str | None = Field(None, description="TB sheet; omitted = the first TB found")
+    workbook_id: str | None = None
+    new_sheet_name: str | None = Field(None, description='default "Financial Analysis"')
+    period_label: str | None = None
+
+
 class AnnualReportArgs(_Args):
     standard: Literal["ias1", "ifrs18"] | None = None
     contract: dict[str, Any] = Field(description="The annual-report inputs: period_label, "
@@ -544,6 +558,24 @@ TOOLS: tuple[WorkbenchTool, ...] = (
                   lambda c, a: trial_balance.trial_balance_statements(c, **_kw(a)),
                   ("does the trial balance balance", "profit before tax from the tb",
                    "income statement from the trial balance", "gross profit")),
+    WorkbenchTool("financial_analysis", "write",
+                  "From a trial balance: one new sheet of live formulas over the TB cells: "
+                  "profitability (gross, operating, net margin), liquidity (working capital, "
+                  "current, quick, cash ratios), assets and solvency (PPE, NBV, debt to equity, "
+                  "gearing, interest cover), returns and efficiency (ROA, ROE, receivable, "
+                  "payable and inventory days) and PASS/FAIL checks. Use it for any ratio, "
+                  "margin, liquidity or financial analysis request.",
+                  FinancialAnalysisArgs,
+                  lambda c, a: fin_analysis.financial_analysis(c, **_kw(a)),
+                  ("financial analysis", "ratio analysis", "liquidity ratios",
+                   "gross margin and net margin", "working capital and current ratio",
+                   "debt to equity", "analyse the trial balance")),
+    WorkbenchTool("tb_lines", "read",
+                  "List trial balance accounts with their IFRS line and exact debit/credit "
+                  "cells, so formulas can point at real TB cells. Filter by line or name.",
+                  TbLinesArgs, lambda c, a: fin_analysis.tb_lines(c, **_kw(a)),
+                  ("which cell holds trade receivables", "list the tb accounts",
+                   "where is cash in the trial balance")),
     # The seven template compilers. Each computes in Python, returns a basis block
     # (rule, rates, config version) and proposes the formula schedule as a new sheet.
     WorkbenchTool("ar_ap_aging", "write",

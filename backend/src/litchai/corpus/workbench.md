@@ -46,6 +46,24 @@ statement linked to the source rows by formulas, pivot tables, formula columns,
 native Excel charts, bank-to-ledger reconciliation, converting text dates and text
 numbers to real values, and new sheets or new workbooks.
 
+## Financial analysis from a trial balance
+
+When a trial balance is open, ask for a "financial analysis" (or ratios, margins,
+liquidity, working capital, gearing). Sage builds one new sheet, named "Financial
+Analysis" unless you name it, with four sections: Profitability Analysis (revenue,
+cost of sales, gross profit and margin, operating expenses, operating profit and
+margin, interest, profit before tax, net margin), Liquidity Analysis (current assets
+and liabilities, working capital, current, quick and cash ratios), Asset Analysis
+(PPE cost, accumulated depreciation, net book value, total assets and liabilities,
+debt to equity, gearing, interest cover), returns and efficiency (ROA, ROE, asset
+turnover, receivable, payable and inventory days) and Validation Checks (debits equal
+credits, the balance sheet balances, working capital positive, current ratio at least
+1.0, each PASS or FAIL). Every figure is a live formula over the trial balance cells,
+so a change in the TB flows through. If the TB has no tax account, the tax line is an
+estimate from the tax config. Sage can also list the TB accounts with their exact
+cells (tb_lines) before it writes a formula. The job runs without an AI model, so it
+works even when the models are busy.
+
 ## Proposals: accept, edit, reject, undo
 
 Nothing Sage does changes the file until you accept it. (Your own typed edits, pastes and

@@ -127,15 +127,14 @@ def test_strict_schema_refusal_falls_back_to_the_prompt(monkeypatch):
 
 
 def test_two_malformed_steps_run_the_deterministic_plan():
-    router, t = _router({"groq": ["garbage", '{"action": "final", "answer": ""}', "never"]})
+    router, t = _router({"groq": ["garbage", '{"action": "final", "answer": ""}', "never"],
+                         "cerebras": ["still garbage"]})
     events = list(run_agent_loop(
         system="S {tool_menu}", user="go", tools=[ECHO], execute=_execute, router=router,
         fallback_plan=lambda msg: [("echo", {"x": "plan"})]))
     names = [n for n, _ in t.calls]
-    # Two prompts to Groq, then ONE try on the next vendor (Cerebras here; it has no
-    # reply, so the router's own fallback ends the chain), then the plan answers.
-    assert names[:2] == ["groq", "groq"] and names.count("groq") == 2
-    assert "cerebras" in names and len(names) <= 4
+    # Two prompts to Groq, then ONE try on the next vendor, then the plan answers.
+    assert names == ["groq", "groq", "cerebras"]
     final = events[-1]
     assert final["type"] == "final" and final["degraded"]
     assert final["answer"].startswith("The AI model's steps could not be used")

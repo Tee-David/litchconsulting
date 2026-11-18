@@ -264,6 +264,8 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
         # A TB is open: its statements tool goes first, added to the picks (not
         # replacing one: that left a TB analysis request with no sheet tools).
         offered = ["trial_balance_statements", *offered]
+    if has_tb and _TB_ANALYSIS.search(message) and "financial_analysis" not in offered:
+        offered = ["financial_analysis", "tb_lines", *offered]
     tools = [AgentTool(t.name, t.description, t.schema(), t.kind)
              for t in (TOOLS_BY_NAME[n] for n in offered)]
     branches = pop_last_turn(conv) if replace_last else []
@@ -306,6 +308,8 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
     pointed = selection_matters(message, selection)
     fast = _fast_path(message, route, ctx, execute) if not pointed else None
     if fast is None and has_tb and not pointed:
+        fast = _analysis_fast_path(message, ctx, execute)
+    if fast is None and has_tb and not pointed:
         fast = _tb_fast_path(message, ctx, execute)
     if fast is not None:
         for ev in fast:
@@ -338,7 +342,9 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
     if has_tb:
         hints = [("This workbook has a trial balance: use trial_balance_statements for "
                  "profit, P&L, balance sheet and balancing questions, then tax_compute "
-                 "kind=cit (it takes the PBT from the TB).")]
+                 "kind=cit (it takes the PBT from the TB). Use financial_analysis for "
+                 "ratios, margins, liquidity and solvency, and tb_lines to find the exact "
+                 "TB cell of an account before you write a formula.")]
     if hints:
         user += "\n(Routing notes from the decision layer: " + " ".join(hints) + ")"
     history = [{"role": m["role"], "content": m["content"]} for m in conv.messages[:-1]
@@ -397,6 +403,80 @@ _TB_EDIT_JOB = re.compile(
     r"\b(add|insert|create|columns?|rows?|formulas?|fill|sort|filter|format|rename|"
     r"delete|remove|highlight|copy|move|merge|bold|colou?r|clear)\b", re.IGNORECASE)
 _TB_NAME = re.compile(r"\btrial[\s_-]*balances?\b", re.IGNORECASE)
+_TB_ANALYSIS = re.compile(
+    r"\b(financial (analysis|calculation)|ratio analysis|ratios?|liquidity|solvency|gearing|"
+    r"working capital|current ratio|quick ratio|cash ratio|margins?|debt[\s-]to[\s-]equity|"
+    r"interest cover|return on (assets|equity|capital)|roa|roe)\b", re.IGNORECASE)
+_SHEET_NAME = re.compile(r"\b(?:sheet|worksheet|tab)\s+(?:called|named)\s+[\"'\u201c]([^\"'\u201d]{1,31})",
+                         re.IGNORECASE)
+
+
+_STRONG_ANALYSIS = re.compile(r"\b(financial (analysis|calculation)|ratio analysis|"
+                              r"liquidity analysis|analy[sz]e the (trial balance|tb))\b",
+                              re.IGNORECASE)
+
+
+def _wants_analysis(message: str) -> bool:
+    """A financial-analysis job. With edit words ("add a margin column") only a
+    clear analysis request counts, so a small edit is never swapped for a sheet."""
+    if not _TB_ANALYSIS.search(message) or _TB_OTHER_JOB.search(message):
+        return False
+    return not _TB_EDIT_JOB.search(message) or bool(_STRONG_ANALYSIS.search(message))
+
+
+def _analysis_fast_path(message: str, ctx: ToolContext, execute: Any
+                        ) -> list[dict[str, Any]] | None:
+    """A trial balance is open and the request is a financial analysis (ratios,
+    margins, liquidity, solvency): the pipeline builds the whole sheet with no model
+    step. A weak or rate-limited model can no longer lose this job."""
+    if not _wants_analysis(message):
+        return None
+    args: dict[str, Any] = {}
+    m = _SHEET_NAME.search(message)
+    if m:
+        args["new_sheet_name"] = m.group(1).strip()
+    events: list[dict[str, Any]] = [
+        {"type": "start", "tools": ["financial_analysis"], "max_steps": 1, "fast_path": True},
+        {"type": "plan", "steps": ["financial_analysis"], "layer": "decision", "fast_path": True},
+        {"type": "tool_call", "step": 1, "tool": "financial_analysis", "args": args,
+         "layer": "pipeline"}]
+    obs = execute("financial_analysis", args, 1)
+    events.append({"type": "tool_result", "step": 1, "tool": "financial_analysis", "ok": obs.ok,
+                   "summary": obs.summary, "error": obs.error, "proposal": obs.proposal,
+                   "citations": (obs.citations or [])[:20], "data": obs.data})
+    if not obs.ok:
+        return None
+    d = obs.data or {}
+    f = d.get("figures") or {}
+
+    def n(k: str, pct: bool = False, x: bool = False) -> str:
+        v = f.get(k)
+        if not isinstance(v, (int, float)):
+            return "?"
+        return f"{v:.1%}" if pct else (f"{v:.2f}x" if x else f"₦{v:,.2f}")
+
+    checks = d.get("checks") or {}
+    names = {"chk_tb": "debits equal credits", "chk_bs": "balance sheet balances",
+             "chk_wc": "working capital positive", "chk_cr": "current ratio at least 1.0"}
+    answer = "\n".join([
+        (f"I built the sheet {d.get('sheet', 'Financial Analysis')} from "
+         f"{d.get('source', 'the TB')}. Every figure is a live formula over the TB cells."),
+        (f"- Profitability: revenue {n('rev')}, gross profit {n('gp')}, operating profit "
+         f"{n('op')}, profit before tax {n('pbt')}."),
+        (f"- Liquidity: current assets {n('ca')}, current liabilities {n('cl')}, working "
+         f"capital {n('wc')}, current ratio {n('cr', x=True)}."),
+        (f"- Assets: PPE cost {n('ppe')}, accumulated depreciation {n('dep')}, net book "
+         f"value {n('nbv')}, total assets {n('ta')}, total liabilities {n('tl')}."),
+        "- Checks: " + ", ".join(f"{names[k]} {v}" for k, v in checks.items() if k in names) + ".",
+        *[f"- Note: {x}" for x in d.get("notes") or []],
+        "Accept the proposal to add the sheet.",
+    ])
+    events.append({"type": "final", "answer": answer, "citations": (obs.citations or [])[:20],
+                   "dropped_citations": [], "proposals": [obs.proposal] if obs.proposal else [],
+                   "steps": 1, "fast_path": True,
+                   "attribution": {"pipeline": ["financial_analysis"], "model": None,
+                                   "decision": "heuristic"}})
+    return events
 
 
 def _tb_question(message: str) -> bool:
@@ -561,6 +641,8 @@ def _plan_for(has_tb: bool) -> Any:
     def plan(message: str) -> list[tuple[str, dict[str, Any]]]:
         # An edit request is never answered with unrelated statements or tax: only a
         # step that does what was asked, or nothing (the person is told to try again).
+        if has_tb and _wants_analysis(message):
+            return [("financial_analysis", {})]
         if _TB_EDIT_JOB.search(message):
             if re.search(r"\b(classif|categor|account type)", message, re.IGNORECASE):
                 return [("categorise_rows", {})]
