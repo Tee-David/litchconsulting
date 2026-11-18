@@ -52,3 +52,12 @@ def test_the_analysis_request_routes_to_the_tool_without_a_model():
     # a small edit is never swapped for a whole analysis sheet
     assert not _wants_analysis("add a gross margin column next to revenue")
     assert not _wants_analysis("reconcile the bank and show the margins")
+
+
+def test_a_specific_tb_question_goes_to_the_model_not_the_canned_answer():
+    from litchai.workbench.engine import _tb_question
+
+    assert not _tb_question("Which three expense accounts are the largest, and what share "
+                            "of revenue is each?")
+    assert _tb_question("what is the profit before tax")
+    assert _tb_question("does the trial balance balance")

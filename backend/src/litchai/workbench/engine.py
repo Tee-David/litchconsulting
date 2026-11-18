@@ -405,6 +405,12 @@ _TB_TAX = re.compile(r"\b(cit|company income tax|development levy|small company|
 _TB_EDIT_JOB = re.compile(
     r"\b(add|insert|create|columns?|rows?|formulas?|fill|sort|filter|format|rename|"
     r"delete|remove|highlight|copy|move|merge|bold|colou?r|clear)\b", re.IGNORECASE)
+# A specific question about the TB ("which three expenses are largest", "share of
+# revenue") needs the model and tb_lines, not the canned statements answer (live
+# test 2026-11-18: it got the PBT summary instead of an answer).
+_TB_SPECIFIC = re.compile(
+    r"\b(which|largest|biggest|smallest|highest|lowest|top\s+\w+|share|percent(age)?|"
+    r"proportion|list|compare|why|explain|each|trend|rank)\b|%", re.IGNORECASE)
 _TB_NAME = re.compile(r"\btrial[\s_-]*balances?\b", re.IGNORECASE)
 _TB_ANALYSIS = re.compile(
     r"\b(financial (analysis|calculation)|ratio analysis|ratios?|liquidity|solvency|gearing|"
@@ -487,7 +493,7 @@ def _tb_question(message: str) -> bool:
     name, not the intent, so it is taken out before the intent is looked for."""
     text = _TB_NAME.sub(" ", message)
     return (bool(_TB_INTENT.search(text)) and not _TB_OTHER_JOB.search(message)
-            and not _TB_EDIT_JOB.search(message))
+            and not _TB_EDIT_JOB.search(message) and not _TB_SPECIFIC.search(text))
 
 
 def _tb_fast_path(message: str, ctx: ToolContext, execute: Any
