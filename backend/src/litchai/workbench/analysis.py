@@ -375,7 +375,7 @@ def paye_annual(cfg: dict, chargeable: float) -> tuple[float, list[dict[str, Any
 TAX_INPUT_KEYS: dict[str, set[str]] = {
     "cit": {"net_profit_per_accounts", "profit_before_tax", "disallowable_addbacks", "addbacks",
             "other_deductions", "deductions", "capital_allowance_assets", "capital_allowances",
-            "turnover", "total_fixed_assets", "professional_services"},
+            "turnover", "total_fixed_assets", "professional_services", "wht_credits"},
     "vat": {"standard_rated_sales", "standard_rated_purchases", "vat_credit_brought_forward",
             "amounts_include_vat"},
     "wht": {"deductions", "vendor", "category", "payee_type", "gross_amount"},
@@ -502,6 +502,12 @@ def tax_compute(ctx: ToolContext, *, kind: str, inputs: dict[str, Any] | None = 
                      "capital_allowances": round(ca, 2), "total_profit": round(total_profit, 2),
                      "rate_pct": rate, "cit": cit, "development_levy": levy,
                      "total_tax": round(cit + levy, 2)})
+        wht = num("wht_credits")
+        if wht:
+            # WHT credit notes from customers are set off against the tax.
+            data.update({"wht_credits": round(wht, 2),
+                         "net_tax_payable": round(max(0.0, cit + levy - wht), 2),
+                         "wht_credit_carried_forward": round(max(0.0, wht - cit - levy), 2)})
         if write:
             from litchai.compilers.cit import compile_cit
             from litchai.contracts.cit import CitContract

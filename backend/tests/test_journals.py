@@ -60,3 +60,11 @@ def test_depreciation_full_month_in_the_month_bought():
     d = run_tool(ctx, "depreciation_schedule", {"year_end": "2025-12-31", "additions": [
         {"name": "Delivery van", "date": "2025-06-12", "cost": 28_000_000, "rate": 25}]}).data
     assert d["by_asset"][-1]["months"] == 7 and d["charge"] == pytest.approx(4_083_333.33)
+
+
+def test_cit_sets_off_wht_credits():
+    _, _, ctx = _ctx()
+    d = run_tool(ctx, "tax_compute", {"kind": "cit", "inputs": {
+        "net_profit_per_accounts": 100_000_000, "turnover": 500_000_000,
+        "wht_credits": 5_000_000}}).data
+    assert d["net_tax_payable"] == round(d["total_tax"] - 5_000_000, 2)
