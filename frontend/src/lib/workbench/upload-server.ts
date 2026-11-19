@@ -98,6 +98,7 @@ export async function placeDocuments(
   t: UploadTarget,
   docIds: number[],
   title: string,
+  group?: string | null,
 ): Promise<Placed | { error: string }> {
   const pending: number[] = [];
   let conv: WbConversation | undefined;
@@ -106,11 +107,11 @@ export async function placeDocuments(
   for (const d of docIds) {
     try {
       if (id) {
-        const res = await wbAttach(id, [d]);
+        const res = await wbAttach(id, [d], group);
         conv = res.conversation;
         firstLook = res.first_look ?? firstLook;
       } else {
-        const res = await wbStart({ client_id: t.clientId, document_ids: [d], ai_mode: t.aiMode, client_name: t.clientName, title });
+        const res = await wbStart({ client_id: t.clientId, document_ids: [d], ai_mode: t.aiMode, client_name: t.clientName, title, group });
         id = res.conversation.id;
         conv = res.conversation;
         await db.insert(workbenchConversation).values({ id, requestId: t.linkedRequest, clientId: t.linkedRequest ? t.clientId : null, title, createdBy: u.id });

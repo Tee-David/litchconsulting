@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { FileSpreadsheet, FileText, FolderOpen, Loader2, Table2, Upload } from "lucide-react";
 import { Button, EmptyState } from "@/components/kit";
 import { startWorkbenchAction } from "@/lib/workbench/actions";
-import { uploadToWorkbench, WORKBENCH_UPLOAD_ACCEPT } from "@/lib/workbench/upload-client";
+import { handOffFiles, uploadToWorkbench, WORKBENCH_UPLOAD_ACCEPT } from "@/lib/workbench/upload-client";
 import { usePasswordAsk } from "./password-ask";
 import type { FileOption } from "./sheets";
 import { cn } from "@/lib/utils";
@@ -28,7 +28,7 @@ export function StartForm({
   // "files" = from this request · "blank" = new workbook · "upload" = from this computer
   const [mode, setMode] = useState<"files" | "blank" | "upload">(requestId && files.length ? "files" : "upload");
   const useBlank = mode === "blank";
-  const [upload, setUpload] = useState<File | null>(null);
+  const [uploads, setUploads] = useState<File[]>([]);
   const [askPassword, passwordSheet] = usePasswordAsk();
   const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -38,13 +38,14 @@ export function StartForm({
     setBusy(true);
     setError(null);
     if (mode === "upload") {
-      if (!upload) return setBusy(false);
-      const up = await uploadToWorkbench(upload, { requestId }, { askPassword });
+      if (!uploads.length) return setBusy(false);
+      const up = await uploadToWorkbench(uploads[0], { requestId }, { askPassword });
       if (!up.ok) {
         setBusy(false);
         setError(up.error);
         return;
       }
+      handOffFiles(up.id, uploads.slice(1)); // the workbench adds the rest, each with its status
       router.push(`${base}/analyses/w/${up.id}`);
       return;
     }
@@ -57,7 +58,7 @@ export function StartForm({
     router.push(`${base}/analyses/w/${res.id}`);
   };
 
-  const ready = mode === "upload" ? Boolean(upload) : useBlank ? blank.trim().length > 0 : picked.length > 0;
+  const ready = mode === "upload" ? uploads.length > 0 : useBlank ? blank.trim().length > 0 : picked.length > 0;
 
   return (
     <section className="mt-4">
@@ -87,21 +88,21 @@ export function StartForm({
 
       {mode === "upload" ? (
         <div className="mt-4">
-          <input ref={fileRef} type="file" accept={WORKBENCH_UPLOAD_ACCEPT} className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => setUpload(e.target.files?.[0] ?? null)} />
+          <input ref={fileRef} type="file" multiple accept={WORKBENCH_UPLOAD_ACCEPT} className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => setUploads(Array.from(e.target.files ?? []).slice(0, 12))} />
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault();
-              const f = e.dataTransfer.files?.[0];
-              if (f) setUpload(f);
+              const list = Array.from(e.dataTransfer.files ?? []).slice(0, 12);
+              if (list.length) setUploads(list);
             }}
             className="flex w-full flex-col items-center gap-1 rounded-ctl border border-dashed border-line-strong px-4 py-6 text-center text-sm text-body outline-none hover:bg-cloud focus-visible:ring-2 focus-visible:ring-act/30"
           >
             <Upload className="size-5 text-muted" aria-hidden />
-            {upload ? <b className="text-ink">{upload.name}</b> : <b className="text-ink">Choose a file, or drop it here</b>}
-            <span className="text-[12px] text-muted">XLSX, XLS, ODS, CSV, TSV, TXT, JSON, DOCX, PDF, PNG or JPG, or a ZIP, RAR or 7z of them (with or without a password) · up to 20 MB · encrypted before it reaches the analysis server</span>
+            {uploads.length === 1 ? <b className="text-ink">{uploads[0].name}</b> : uploads.length > 1 ? <b className="text-ink">{uploads.length} files: {uploads.map((f) => f.name).join(", ")}</b> : <b className="text-ink">Choose files, or drop them here</b>}
+            <span className="text-[12px] text-muted">XLSX, XLS, ODS, CSV, TSV, TXT, JSON, DOCX, PDF, PNG or JPG, or a ZIP, RAR or 7z of them (with or without a password) · up to 12 files, 20 MB each · encrypted before it reaches the analysis server</span>
           </button>
         </div>
       ) : !useBlank ? (

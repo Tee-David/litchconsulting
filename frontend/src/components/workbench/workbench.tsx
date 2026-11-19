@@ -51,10 +51,11 @@ import { FirstLookCard } from "./first-look";
 import { Proposals } from "./proposals";
 import { CitePeekContext, TurnView, type CellPeek } from "./turn";
 import { WhyPopover } from "./why";
-import { uploadToWorkbench } from "@/lib/workbench/upload-client";
+import { takeHandedOffFiles, uploadToWorkbench } from "@/lib/workbench/upload-client";
 import { AttachSheet, DeliverSheet, EditBatchSheet, HistorySheet, RangeSheet, versionLabel, type FileOption } from "./sheets";
 import { colLetter, parseRef, quoteSheet, rangeLabel, rangeRef, type Range } from "./refs";
 import { ChartCard, type ChartProposal } from "./chart-card";
+import { FilesSheet } from "./files-sheet";
 import { EngineSheet } from "./engine-sheet";
 import { useVoice } from "./voice";
 import { Select } from "@/components/ui/select";
@@ -155,7 +156,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const [why, setWhy] = useState<{ cell: WbCell | null; ref: string; rect: DOMRect | null } | null>(null);
   const [view, setView] = useState<"sheet" | "sage">("sheet");
   const [busyBatch, setBusyBatch] = useState<string | null>(null);
-  const [sheetOpen, setSheetOpen] = useState<null | "attach" | "range" | "deliver" | "history" | "engine">(null);
+  const [sheetOpen, setSheetOpen] = useState<null | "attach" | "range" | "deliver" | "history" | "engine" | "files">(null);
   const [editing, setEditing] = useState<WbBatch | null>(null);
   const [pdfOpen, setPdfOpen] = useState(false);
   const [pdfPage, setPdfPage] = useState(1);
@@ -843,7 +844,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   // D1: paste or drop screenshots and files; long pasted text becomes a .txt file.
   const addFiles = useCallback(
     (files: File[]) => {
-      for (const file of files.slice(0, 6)) {
+      for (const file of files.slice(0, 12)) {
         const id = `att-${++attSeq}`;
         const image = file.type.startsWith("image/");
         const isText = file.type === "text/plain" && file.name.startsWith("Pasted text");
@@ -885,7 +886,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
             await new Promise((r) => setTimeout(r, 8000));
             const still: number[] = [];
             for (const d of left) {
-              const a = await attachDocumentAction(conv.id, d);
+              const a = await attachDocumentAction(conv.id, d, /\.(zip|rar|7z)$/i.test(name) ? name : null);
               if (a.ok) {
                 setConv(a.conversation);
                 setGridVersion((v) => v + 1);
@@ -900,6 +901,13 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     },
     [conv.id, askPassword],
   );
+
+  // Files picked on the start form after the first one arrive here once.
+  useEffect(() => {
+    const rest = takeHandedOffFiles(conv.id);
+    if (rest.length) addFiles(rest);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conv.id]);
   const addLongText = useCallback(
     (t: string) => {
       const lines = t.split("\n").length;
@@ -1051,6 +1059,9 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
                   <FileText className="size-4 text-muted" /> {pdfOpen ? "Hide the PDF" : "PDF side by side"}
                 </button>
               ) : null}
+              <button type="button" role="menuitem" className={menuItem} onClick={() => setSheetOpen("files")}>
+                <FolderOpen className="size-4 text-muted" /> Files in this job ({conv.workbooks.length})
+              </button>
               <div className="my-1 border-t border-hairline" />
               <button type="button" role="menuitem" className={menuItem} onClick={() => setSheetOpen("engine")}>
                 {local ? <Lock className="size-4 text-muted" /> : <Cloud className="size-4 text-muted" />} What powers Sage: {engineLabel(local ? "local" : "cloud").toLowerCase()}
@@ -2072,19 +2083,11 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           toast.success(res.message ?? "Added.");
           return true;
         }}
-        onUpload={async (file) => {
-          const res = await uploadToWorkbench(file, { conversationId: conv.id }, { askPassword });
-          if (!res.ok || !res.conversation || !res.firstLook) {
-            toast.error(res.ok ? "The file was added, but the view did not refresh. Reload the page." : res.error);
-            return false;
-          }
-          const look = res.firstLook;
-          setConv(res.conversation);
-          setLook(look);
-          setSheetsBy((p) => ({ ...p, ...Object.fromEntries(look.workbooks.map((w) => [w.workbook_id, w.sheet_names])) }));
-          const added = res.conversation.workbooks[res.conversation.workbooks.length - 1];
-          if (added) setWbId(added.id);
-          toast.success("Added. Sage has read the new file.");
+        onUpload={async (files) => {
+          // The same path as files dropped on the chat: each file (or archive) shows its
+          // own status, PDFs and scans are read in the background, archives stay grouped.
+          addFiles(files);
+          toast.success(files.length === 1 ? "Adding the file. Its status shows above the chat box." : `Adding ${files.length} files. Their status shows above the chat box.`);
           return true;
         }}
         onNewSheet={async (workbookId, name) => {
@@ -2257,6 +2260,13 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           ))}
         </div>
       </Sheet>
+      <FilesSheet
+        open={sheetOpen === "files"}
+        onClose={() => setSheetOpen(null)}
+        conv={conv}
+        onConversation={setConv}
+        onAdd={() => setSheetOpen("attach")}
+      />
       <EngineSheet
         open={sheetOpen === "engine"}
         onClose={() => setSheetOpen(null)}

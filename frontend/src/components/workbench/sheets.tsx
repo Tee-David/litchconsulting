@@ -35,12 +35,12 @@ export function AttachSheet({
   requestHref: string | null;
   onAttach: (fileIds: string[]) => Promise<boolean>;
   /** Add a file from this computer (encrypted on the server). */
-  onUpload: (file: File) => Promise<boolean>;
+  onUpload: (files: File[]) => Promise<boolean>;
   onNewSheet: (workbookId: string, name: string) => Promise<boolean>;
   onNewWorkbook: (name: string) => Promise<boolean>;
 }) {
   const [mode, setMode] = useState<"upload" | "file" | "sheet" | "book">(files.length ? "file" : "upload");
-  const [upload, setUpload] = useState<File | null>(null);
+  const [uploads, setUploads] = useState<File[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
   const [wb, setWb] = useState(workbooks[0]?.id ?? "");
   const [name, setName] = useState("");
@@ -50,7 +50,7 @@ export function AttachSheet({
   const go = async () => {
     setBusy(true);
     const ok =
-      mode === "upload" ? (upload ? await onUpload(upload) : false)
+      mode === "upload" ? (uploads.length ? await onUpload(uploads) : false)
       : mode === "file" ? await onAttach(picked)
       : mode === "sheet" ? await onNewSheet(wb, name.trim())
       : await onNewWorkbook(name.trim());
@@ -58,11 +58,11 @@ export function AttachSheet({
     if (ok) {
       setPicked([]);
       setName("");
-      setUpload(null);
+      setUploads([]);
       onClose();
     }
   };
-  const ready = mode === "upload" ? Boolean(upload) : mode === "file" ? picked.length > 0 : name.trim().length > 0 && (mode === "book" || wb);
+  const ready = mode === "upload" ? uploads.length > 0 : mode === "file" ? picked.length > 0 : name.trim().length > 0 && (mode === "book" || wb);
 
   return (
     <Sheet
@@ -76,7 +76,7 @@ export function AttachSheet({
           <Button onClick={onClose} disabled={busy}>Cancel</Button>
           <Button variant="primary" onClick={go} disabled={!ready || busy}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-            {mode === "upload" ? "Add file" : mode === "file" ? `Add ${picked.length || ""} file${picked.length === 1 ? "" : "s"}` : mode === "sheet" ? "Propose sheet" : "Propose workbook"}
+            {mode === "upload" ? (uploads.length > 1 ? `Add ${uploads.length} files` : "Add file") : mode === "file" ? `Add ${picked.length || ""} file${picked.length === 1 ? "" : "s"}` : mode === "sheet" ? "Propose sheet" : "Propose workbook"}
           </Button>
         </>
       }
@@ -84,13 +84,13 @@ export function AttachSheet({
       <div className="space-y-2" role="radiogroup" aria-label="What to add">
         <label className={radio}>
           <input type="radio" name="att" checked={mode === "upload"} onChange={() => setMode("upload")} className="mt-1" />
-          <span><b className="block text-sm text-ink">A file from your computer</b><span className="text-[12.5px] text-muted">XLSX, XLS, ODS, CSV, TSV, TXT, JSON, DOCX, PDF or images, or a ZIP, RAR or 7z of them, up to 20 MB</span></span>
+          <span><b className="block text-sm text-ink">Files from your computer</b><span className="text-[12.5px] text-muted">One or several (up to 12): XLSX, XLS, ODS, CSV, TSV, TXT, JSON, DOCX, PDF or images, or a ZIP, RAR or 7z of them, up to 20 MB each</span></span>
         </label>
         {mode === "upload" && (
           <label className="ml-6 flex min-h-[44px] cursor-pointer items-center gap-2 rounded-ctl border border-dashed border-line-strong px-3 py-2 text-[13px] text-body hover:bg-cloud">
             <Upload className="size-4 text-muted" aria-hidden />
-            <span className="min-w-0 flex-1 truncate">{upload ? upload.name : "Choose a file"}</span>
-            <input type="file" accept={WORKBENCH_UPLOAD_ACCEPT} className="sr-only" onChange={(e) => setUpload(e.target.files?.[0] ?? null)} />
+            <span className="min-w-0 flex-1 truncate">{uploads.length === 0 ? "Choose files" : uploads.length === 1 ? uploads[0].name : `${uploads.length} files: ${uploads.map((f) => f.name).join(", ")}`}</span>
+            <input type="file" multiple accept={WORKBENCH_UPLOAD_ACCEPT} className="sr-only" onChange={(e) => setUploads(Array.from(e.target.files ?? []).slice(0, 12))} />
           </label>
         )}
         <label className={radio}>

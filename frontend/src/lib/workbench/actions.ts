@@ -23,6 +23,7 @@ import {
   wbSetInstructions,
   wbPatch,
   wbSetLimits,
+  wbFileContext,
   wbOpenThread,
   wbFeedback,
   wbListByDocument,
@@ -194,6 +195,23 @@ export async function feedbackAction(input: z.input<typeof feedbackSchema>): Pro
   const u = await getSessionUser();
   try {
     const res = await wbFeedback(d.conversationId, d.index, { vote: d.vote, note: d.note, author: (u?.name || u?.email || "a team member").slice(0, 80) });
+    return { ok: true, conversation: res.conversation };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+const FILE_ROLES = ["trial_balance", "bank_statement", "ledger", "invoices", "payroll", "asset_register", "sales_report", "document", "books", "other"] as const;
+
+/** The person's label and note for one file in the workbench (job context for Sage). */
+export async function setFileContextAction(conversationId: string, workbookId: string, input: { role?: string; note?: string }): Promise<Res<{ conversation: WbConversation }>> {
+  if (!(await guard(conversationId))) return DENIED;
+  const p = z
+    .object({ role: z.enum(FILE_ROLES).or(z.literal("")).optional(), note: z.string().max(300).optional() })
+    .safeParse(input);
+  if (!p.success || !/^[\w.-]{1,80}$/.test(workbookId)) return { ok: false, error: "That label or note is not valid." };
+  try {
+    const res = await wbFileContext(conversationId, workbookId, p.data);
     return { ok: true, conversation: res.conversation };
   } catch (e) {
     return fail(e);
@@ -475,10 +493,10 @@ export async function attachFilesAction(conversationId: string, fileIds: string[
 
 /** Attach a document uploaded here once the pipeline has read it (PDFs, screenshots).
  *  The engine refuses a document of another client. 409 = still being read. */
-export async function attachDocumentAction(conversationId: string, documentId: number): Promise<Res<{ conversation: WbConversation; firstLook: WbFirstLook; waiting: boolean }>> {
+export async function attachDocumentAction(conversationId: string, documentId: number, group?: string | null): Promise<Res<{ conversation: WbConversation; firstLook: WbFirstLook; waiting: boolean }>> {
   if (!(await guard(conversationId)) || !Number.isInteger(documentId) || documentId < 1) return DENIED;
   try {
-    const res = await wbAttach(conversationId, [documentId]);
+    const res = await wbAttach(conversationId, [documentId], typeof group === "string" ? group.slice(0, 120) : null);
     await touch(conversationId);
     return { ok: true, conversation: res.conversation, firstLook: res.first_look, waiting: false };
   } catch (e) {

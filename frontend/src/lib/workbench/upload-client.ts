@@ -98,3 +98,17 @@ async function direct(file: File, target: { conversationId?: string; requestId?:
     return { ok: false, error: NETWORK };
   }
 }
+
+// Files picked on the start form after the first one: the first file opens the
+// workbench, the page then adds these with their own status line (same tab only).
+let handoff: { conversationId: string; files: File[] } | null = null;
+export function handOffFiles(conversationId: string, files: File[]): void {
+  handoff = files.length ? { conversationId, files } : null;
+}
+export function takeHandedOffFiles(conversationId: string): File[] {
+  if (!handoff || handoff.conversationId !== conversationId) return [];
+  const files = handoff.files;
+  handoff = null;
+  return files;
+}
+

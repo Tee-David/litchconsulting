@@ -58,6 +58,11 @@ export type WbWorkbookRef = {
   document_id: number | null;
   versions: WbVersion[];
   source?: { filename: string; format: string; converted: boolean; notes: string[] } | null;
+  /** Job context: the engine's label and facts, the person's label and note, the archive. */
+  facts?: { role: string; label: string; rows: number; period?: [string, string]; bank?: string; sheets?: string[] } | null;
+  role?: string | null;
+  note?: string;
+  group?: string | null;
 };
 
 /** One harness event (SSE frame). `type` drives the UI. */
@@ -215,6 +220,7 @@ const json = (body: unknown): RequestInit => ({
 });
 
 export function wbStart(body: {
+  group?: string | null;
   client_id: string | null;
   document_ids: number[];
   ai_mode: "cloud_masked" | "local_only";
@@ -233,8 +239,12 @@ export const wbPatch = (id: string, body: { ai_mode?: string; title?: string; mo
 
 export const wbFirstLook = (id: string) => call<WbFirstLook>(`/workbench/conversations/${enc(id)}/first-look`);
 
-export const wbAttach = (id: string, documentIds: number[]) =>
-  call<{ conversation: WbConversation; first_look: WbFirstLook }>(`/workbench/conversations/${enc(id)}/documents`, json({ document_ids: documentIds }));
+export const wbAttach = (id: string, documentIds: number[], group?: string | null) =>
+  call<{ conversation: WbConversation; first_look: WbFirstLook }>(`/workbench/conversations/${enc(id)}/documents`, json({ document_ids: documentIds, group: group ?? null }));
+
+/** What a file is and what it is for (the person's label and note). */
+export const wbFileContext = (id: string, workbookId: string, body: { role?: string; note?: string }) =>
+  call<{ conversation: WbConversation }>(`/workbench/conversations/${enc(id)}/workbooks/${enc(workbookId)}/context`, { ...json(body), method: "PATCH" });
 
 export const wbDecide = (id: string, batchId: string, action: "accept" | "reject" | "undo", edits?: Record<number, { new_value?: unknown; new_formula?: string }>) =>
   call<{ batch: WbBatch; conversation: WbConversation }>(

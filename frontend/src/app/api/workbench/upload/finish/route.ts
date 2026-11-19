@@ -66,7 +66,7 @@ export async function POST(req: Request) {
       added = [name];
     }
     await deletePrivateObject(key).catch(() => {});
-    const placed = await placeDocuments(u, t, docIds, title);
+    const placed = await placeDocuments(u, t, docIds, title, ARCHIVE_EXT.has(ext) ? name : null);
     if ("error" in placed) return bad(placed.error, 422);
     await recordAudit({
       action: "workbench.file_added",
