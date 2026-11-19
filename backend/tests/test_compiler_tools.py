@@ -86,8 +86,10 @@ def test_unknown_inputs_are_refused_never_guessed():
     _, _, rctx = _ctx("receivables")
     with pytest.raises(ToolError, match="no column 'Balance due'"):
         run_tool(rctx, "ar_ap_aging", {"as_at": "2026-03-31", "amount_column": "Balance due"})
+    # An extra key is dropped (tolerant arguments, v6); a missing value still errors.
+    assert run_tool(rctx, "ar_ap_aging", {"as_at": "2026-03-31", "bogus": 1}).data is not None
     with pytest.raises(ToolError, match="invalid arguments"):
-        run_tool(rctx, "ar_ap_aging", {"as_at": "2026-03-31", "bogus": 1})
+        run_tool(rctx, "ar_ap_aging", {"bogus": 1})
     with pytest.raises(ToolError, match="annual-report inputs are incomplete"):
         run_tool(ctx, "annual_report_pack", {"contract": {"period_label": "FY"}})
 

@@ -816,11 +816,15 @@ def _plan_for(has_tb: bool) -> Any:
         # step that does what was asked, or nothing (the person is told to try again).
         if has_tb and _wants_analysis(message):
             return [("financial_analysis", {})]
-        checks = [s for s in fallback_plan(message) if s[0] in CHECK_TOOLS]
+        keyword = fallback_plan(message)
+        if not has_tb:  # the year-end review needs a trial balance
+            keyword = [s for s in keyword if s[0] != "review_points"]
+        checks = [s for s in keyword if s[0] in CHECK_TOOLS]
         if checks and not _TB_EDIT_JOB.search(message):
             # The standard checks answer "what is wrong" better than the statements
-            # (19 Nov: an NGO review got only the TB statements).
-            return checks
+            # (19 Nov: an NGO review got only the TB statements). Other steps the
+            # request names (a reconciliation) still run.
+            return keyword
         if _TB_EDIT_JOB.search(message):
             if re.search(r"\b(classif|categor|account type)", message, re.IGNORECASE):
                 return [("categorise_rows", {})]
@@ -830,5 +834,5 @@ def _plan_for(has_tb: bool) -> Any:
             if _TB_TAX.search(message):
                 steps.append(("tax_compute", {"kind": "cit"}))
             return steps
-        return fallback_plan(message)
+        return keyword
     return plan
