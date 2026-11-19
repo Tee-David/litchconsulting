@@ -251,6 +251,7 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
     decision = deps.decision or HeuristicDecisionLayer()
     ctx = wbench.context(conv, taxonomy=deps.taxonomy, categoriser=deps.categoriser)
     masker = _masker_for(conv, ctx)
+    ctx.memory["refs"] = conv.workbooks  # the files and their labels, for the recipes
     shown_message = message  # the bubble shows what the person typed
     message = with_pasted_text(message, ctx.workbooks)
     route = decision.decide("tool_route", message, [t.name for t in TOOLS])
@@ -307,6 +308,8 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
 
     pointed = selection_matters(message, selection)
     fast = _fast_path(message, route, ctx, execute) if not pointed else None
+    if fast is None and has_tb and not pointed:
+        fast = _year_end_fast_path(message, ctx, execute, conv)
     if fast is None and has_tb and not pointed:
         fast = _analysis_fast_path(message, ctx, execute)
     if fast is None and has_tb and not pointed:
@@ -451,6 +454,58 @@ def _wants_analysis(message: str) -> bool:
     if not _TB_ANALYSIS.search(message) or _TB_OTHER_JOB.search(message):
         return False
     return not _TB_EDIT_JOB.search(message) or bool(_STRONG_ANALYSIS.search(message))
+
+
+def _year_end_fast_path(message: str, ctx: ToolContext, execute: Any, conv: Conversation
+                        ) -> list[dict[str, Any]] | None:
+    """A year-end review on a trial balance: the fixed recipe (sources, bank recs,
+    depreciation, review points, statements, tax), each step visible, no model."""
+    from litchai.workbench.recipes import wants_year_end, year_end_steps
+
+    if not wants_year_end(message):
+        return None
+    steps = year_end_steps(ctx, conv.workbooks)
+    events: list[dict[str, Any]] = [
+        {"type": "start", "tools": [t for t, _ in steps], "max_steps": len(steps),
+         "fast_path": True},
+        {"type": "plan", "steps": [t for t, _ in steps], "layer": "decision", "fast_path": True}]
+    done: list[tuple[str, Any]] = []
+    cites: list[str] = []
+    proposals: list[Any] = []
+    for i, (name, args) in enumerate(steps, start=1):
+        events.append({"type": "tool_call", "step": i, "tool": name, "args": args,
+                       "layer": "pipeline"})
+        obs = execute(name, args, i)
+        events.append({"type": "tool_result", "step": i, "tool": name, "ok": obs.ok,
+                       "summary": obs.summary, "error": obs.error, "proposal": obs.proposal,
+                       "citations": (obs.citations or [])[:20], "data": obs.data})
+        done.append((name, obs))
+        cites += obs.citations or []
+        if obs.proposal:
+            proposals.append(obs.proposal)
+    lines = ["I ran the year-end review in a fixed order. Every change is a proposal for you "
+             "to accept."]
+    for name, obs in done:
+        if not obs.ok:
+            lines.append(f"- {name.replace('_', ' ')}: could not run ({obs.error}).")
+        elif name == "review_points":
+            pts = (obs.data or {}).get("points") or []
+            lines.append(f"- Review points ({len(pts)}):" if pts else "- Review points: none found by the rules.")
+            lines += [f"  - {p['what']}: {p['fix']} ({p['source']})" for p in pts[:12]]
+        elif name in ("trial_balance_statements", "tax_compute") and not str(
+                (obs.data or {}).get("sheet", "")).lower().startswith("adjusted"):
+            lines.append(f"- Before adjustments: {obs.summary}")
+        else:
+            lines.append(f"- {obs.summary}")
+    lines.append("Next: tell me which review points to post as adjusting journals (one "
+                 "proposal, with an adjusted TB), or give me the facts I need, for example "
+                 "the loan terms.")
+    events.append({"type": "final", "answer": "\n".join(lines),
+                   "citations": list(dict.fromkeys(cites))[:40], "dropped_citations": [],
+                   "proposals": proposals, "steps": len(steps), "fast_path": True,
+                   "attribution": {"pipeline": [t for t, _ in steps], "model": None,
+                                   "decision": "heuristic"}})
+    return events
 
 
 def _analysis_fast_path(message: str, ctx: ToolContext, execute: Any

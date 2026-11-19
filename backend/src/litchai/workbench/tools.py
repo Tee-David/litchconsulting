@@ -23,6 +23,7 @@ from litchai.workbench import (
     fin_analysis,
     journals,
     range_tools,
+    recipes,
     sheet_tools,
     trial_balance,
 )
@@ -461,6 +462,10 @@ class RangeActionsArgs(_Args):
     workbook_id: str | None = None
 
 
+class NoArgs(_Args):
+    pass
+
+
 class BankRecArgs(_Args):
     statement: str | None = Field(None, description="part of the statement file name, e.g. GTBank")
     account: str | None = Field(None, description="the TB account code or name for this bank")
@@ -773,6 +778,18 @@ TOOLS: tuple[WorkbenchTool, ...] = (
                    "clear the range", "copy this table to another sheet",
                    "format column D as naira", "freeze the header row", "make column B wider",
                    "add a drop-down list", "add a filter to the table")),
+    WorkbenchTool("review_points", "read",
+                  "Year-end review points found by rules, each with its source and the fix: "
+                  "suspense, other income, a VAT account in debit, capital items in repairs, "
+                  "personal items, a loan booked as income, missing depreciation, stock not "
+                  "moved. Use it to decide the adjusting journals.",
+                  NoArgs, lambda c, a: recipes.review_points_tool(c),
+                  ("what adjustments are needed", "review the trial balance",
+                   "what is wrong with the books")),
+    WorkbenchTool("sources_sheet", "write",
+                  "A 'Sources' sheet listing every file in this job: what it is, period, "
+                  "rows and the note.", NoArgs, lambda c, a: recipes.sources_sheet(c),
+                  ("list the files", "make a sources sheet")),
     WorkbenchTool("bank_rec", "write",
                   "Bank reconciliation at balance level, across files: the statement's "
                   "closing balance vs the TB bank account; unpresented cheques from a cheque "

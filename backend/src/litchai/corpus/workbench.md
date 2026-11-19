@@ -246,3 +246,15 @@ statement (unpresented), and bank charges on the statement that are not in the b
 Anything left is shown as "not explained", never forced to zero. The reconciliation
 is a proposal on a new sheet, with the source of each figure.
 
+## Year-end review
+
+Ask "do the year-end review" (or "identify the adjustments required before the final
+accounts"). Sage runs a fixed plan, step by step, with no AI model needed: a Sources
+sheet of every file, a bank reconciliation for each bank statement, depreciation from
+the fixed asset register, review points found by rules (suspense, other income, a VAT
+account in debit, capital items paid from the bank, personal items such as school
+fees, a loan booked as income, missing depreciation, stock not moved), and the
+statements and tax before adjustments. Each review point names its source and the
+fix. Then tell Sage which points to post: it makes one journals proposal with an
+adjusted trial balance.
+
