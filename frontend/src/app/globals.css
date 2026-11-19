@@ -443,6 +443,12 @@ body {
 }
 
 /* Kit: Sheet entrance (bottom sheet on phones, side panel on ≥ sm). */
+/* Sidebar hover peek: the full sidebar slides over the icon rail. */
+@keyframes peek-in {
+  from { opacity: 0; transform: translateX(-8px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 @keyframes sheet-in {
   from { transform: translateY(14px); opacity: 0; }
   to { transform: none; opacity: 1; }

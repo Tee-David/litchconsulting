@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
@@ -57,7 +57,28 @@ export function AdminShell({
   useEffect(() => {
     setMobileOpen(false);
     setRailOpen(false);
+    setPeek(false);
   }, [pathname]);
+
+  /** Hover "peek": resting the pointer on the icon rail shows the full sidebar as
+   * an overlay (no layout jump); leaving closes it. Mouse and trackpad only; touch
+   * keeps the toggle. Keyboard focus inside the rail opens it too. */
+  const [peek, setPeek] = useState(false);
+  const peekTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const canHover = useRef(false);
+  useEffect(() => {
+    canHover.current = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+  }, []);
+  const railShown = () => !window.matchMedia("(min-width: 1280px)").matches || pinnedCollapsed;
+  const peekIn = (delay = 220) => {
+    if (!canHover.current || !railShown()) return;
+    if (peekTimer.current) clearTimeout(peekTimer.current);
+    peekTimer.current = setTimeout(() => setPeek(true), delay);
+  };
+  const peekOut = () => {
+    if (peekTimer.current) clearTimeout(peekTimer.current);
+    peekTimer.current = setTimeout(() => setPeek(false), 180);
+  };
   useEffect(() => {
     if (!mobileOpen && !railOpen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -124,7 +145,30 @@ export function AdminShell({
 
         {/* Rail / sidebar (≥ lg). lg–xl: icon rail whose toggle opens the full
             sidebar as an overlay; ≥ xl: full sidebar that can be pinned to the rail. */}
-        <aside className="sticky top-0 z-40 hidden h-dvh border-r border-hairline bg-paper lg:block">
+        <aside
+          className="sticky top-0 z-40 hidden h-dvh border-r border-hairline bg-paper lg:block"
+          onMouseEnter={() => peekIn()}
+          onMouseLeave={peekOut}
+          onFocusCapture={() => { if (!window.matchMedia("(hover: none)").matches) peekIn(0); }}
+          onBlurCapture={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) peekOut(); }}
+        >
+          {peek && !railOpen ? (
+            <div className="absolute inset-y-0 left-0 z-50 w-[236px] border-r border-hairline bg-paper shadow-xl motion-safe:animate-[peek-in_160ms_ease-out]">
+              <SidebarNav
+                items={items}
+                counts={counts}
+                user={shellUser}
+                sageOnline={sageOnline}
+                collapsed={false}
+                pinnedCollapsed={pinnedCollapsed}
+                onTogglePin={() => {
+                  setPeek(false);
+                  if (window.matchMedia("(min-width: 1280px)").matches) togglePin();
+                  else setRailOpen(true);
+                }}
+              />
+            </div>
+          ) : null}
           <div className="h-full xl:hidden">
             <SidebarNav
               items={items}

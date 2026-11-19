@@ -7,7 +7,7 @@ import { KeyRound, Mail } from "lucide-react";
 import { authClient, signIn } from "@/lib/auth-client";
 import { continueUrl } from "@/lib/post-auth";
 import { useToast } from "@/components/admin/ui/toaster";
-import { Turnstile, turnstileHeaders, type TurnstileHandle } from "@/components/ui/turnstile";
+import { Turnstile, turnstileConfigured, turnstileHeaders, type TurnstileHandle } from "@/components/ui/turnstile";
 import { AuthHeading, Callout, Check, Field, GoogleButton, OrDivider, SubmitButton, authErrorText, maskEmail } from "./ui";
 
 type Stage = "form" | "code";
@@ -46,19 +46,26 @@ export function LoginForm({ googleEnabled }: { googleEnabled: boolean }) {
   const [trust, setTrust] = useState(true);
   const codeRef = useRef<HTMLInputElement>(null);
   const ts = useRef<TurnstileHandle>(null);
-  const [token, setToken] = useState<string | null>(null);
+  const [, setToken] = useState<string | null>(null); // the token itself comes from ensureToken() on submit
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setUnverified(false);
     setBusy(true);
+    // Wait for the security check instead of failing when the click came first.
+    const humanToken = turnstileConfigured ? ((await ts.current?.ensureToken()) ?? null) : null;
+    if (turnstileConfigured && !humanToken) {
+      setBusy(false);
+      setError("The security check did not finish. Tick the box above, then press Sign in again.");
+      return;
+    }
     const { data, error: err } = await signIn.email({
       email: email.trim(),
       password,
       rememberMe: remember,
       callbackURL: next,
-      fetchOptions: { headers: turnstileHeaders(token) },
+      fetchOptions: { headers: turnstileHeaders(humanToken) },
     });
     setBusy(false);
     if (err) {

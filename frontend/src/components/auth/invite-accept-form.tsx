@@ -5,7 +5,7 @@ import { UserPlus } from "lucide-react";
 import { signIn } from "@/lib/auth-client";
 import { continueUrl } from "@/lib/post-auth";
 import { useToast } from "@/components/admin/ui/toaster";
-import { Turnstile, turnstileHeaders, type TurnstileHandle } from "@/components/ui/turnstile";
+import { Turnstile, turnstileConfigured, turnstileHeaders, type TurnstileHandle } from "@/components/ui/turnstile";
 import { acceptInvitationAction, prepareInviteGoogleAction } from "@/app/invite/[token]/actions";
 import { PasswordStrength, passwordIssue } from "./password-strength";
 import { AuthHeading, Callout, Field, GoogleButton, OrDivider, SubmitButton, authErrorText } from "./ui";
@@ -69,7 +69,8 @@ export function InviteAcceptForm({
       else setErrors({ form: r.error });
       return;
     }
-    const { error } = await signIn.email({ email, password, callbackURL: next, fetchOptions: { headers: turnstileHeaders(tsToken) } });
+    const humanToken = turnstileConfigured ? ((await ts.current?.ensureToken()) ?? tsToken) : null;
+    const { error } = await signIn.email({ email, password, callbackURL: next, fetchOptions: { headers: turnstileHeaders(humanToken) } });
     if (error) {
       setBusy(false);
       toast.toast("Your account is ready. Sign in to continue.");

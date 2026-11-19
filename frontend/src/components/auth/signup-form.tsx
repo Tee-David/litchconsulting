@@ -8,7 +8,7 @@ import { authClient, signIn, signUp } from "@/lib/auth-client";
 import { isDisposableEmail } from "@/lib/block-disposable-email";
 import { continueUrl } from "@/lib/post-auth";
 import { useToast } from "@/components/admin/ui/toaster";
-import { Turnstile, turnstileHeaders, type TurnstileHandle } from "@/components/ui/turnstile";
+import { Turnstile, turnstileConfigured, turnstileHeaders, type TurnstileHandle } from "@/components/ui/turnstile";
 import { prepareSignupAction } from "@/app/get-started/actions";
 import { PasswordStrength, passwordIssue } from "./password-strength";
 import { AuthHeading, Callout, Check, Field, GoogleButton, OrDivider, SubmitButton, authErrorText } from "./ui";
@@ -61,13 +61,20 @@ export function SignupForm({ draftId: initialDraft, serviceName, priceLabel = nu
       return;
     }
     setDraftId(prep.draftId);
+    // Wait for the security check instead of failing when the click came first.
+    const humanToken = turnstileConfigured ? ((await ts.current?.ensureToken()) ?? null) : null;
+    if (turnstileConfigured && !humanToken) {
+      setBusy(false);
+      setErrors({ form: "The security check did not finish. Tick the box above, then press the button again." });
+      return;
+    }
     // role is never sent: the server always makes a client.
     const { error } = await signUp.email({
       name: name.trim(),
       email: email.trim(),
       password,
       callbackURL: callbackFor(prep.draftId),
-      fetchOptions: { headers: turnstileHeaders(token) },
+      fetchOptions: { headers: turnstileHeaders(humanToken) },
     });
     setBusy(false);
     if (error) {
