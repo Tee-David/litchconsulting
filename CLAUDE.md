@@ -151,7 +151,7 @@ All mail is nodemailer/SMTP (`lib/email.ts`) — there is **no** Resend integrat
 - **Dark mode:** brand navy (`text-brand`) is invisible on dark surfaces → `globals.css`
   flips `text-brand` to white in dark mode, except elements marked `keep-brand` (white pills).
 - **Tables:** the `DataTable` scroll container clips absolute menus — render row-action
-  dropdowns in a **portal** (see `invoice-list.tsx`).
+  dropdowns in a **portal** (see `invoice-view-actions.tsx`).
 - **Lint:** the experimental React-Compiler rules (`set-state-in-effect`, `purity`,
   `immutability`) are relaxed in `eslint.config.mjs` (false positives on RSC time reads,
   one-shot init effects, tanstack `getState()`).

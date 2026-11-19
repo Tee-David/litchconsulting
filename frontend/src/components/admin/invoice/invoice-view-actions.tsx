@@ -41,7 +41,7 @@ export function InvoiceViewActions({
 
   // Portal "More" menu — the detail chrome can sit in a scroll/overflow
   // container that clips an absolutely-positioned menu, so render it in a
-  // portal positioned against the trigger (same pattern as invoice-list.tsx).
+  // portal positioned against the trigger (the pattern for row menus in a scrolling table).
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
   const btnRef = useRef<HTMLButtonElement>(null);

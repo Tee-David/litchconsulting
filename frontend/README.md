@@ -322,7 +322,7 @@ immediately**, no redeploy.
 - **Dark mode.** Brand navy (`text-brand`) is invisible on dark surfaces, so `globals.css` flips
   it to white in dark mode, except elements marked `keep-brand` (white pills).
 - **Tables.** The `DataTable` scroll container clips absolute menus, render row-action dropdowns
-  in a **portal** (see `invoice-list.tsx`).
+  in a **portal** (see `invoice-view-actions.tsx`).
 - **Charts across the RSC boundary.** Pass the serializable `format` token, not a formatter
   function.
 - **Don't sync `BETTER_AUTH_URL` to Vercel**, Better Auth infers the URL from the request host in

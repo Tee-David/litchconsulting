@@ -3,7 +3,7 @@
  * Curated finance copy — single source of truth for every section.
  */
 
-// Self-hosted images on Cloudflare R2 (migrated from stock; see scripts/migrate-images.mjs).
+// Self-hosted images on Cloudflare R2 (migrated from stock).
 const R2_ASSETS = "https://pub-f833c8f2eac548fea544f812455f9ba3.r2.dev/assets";
 const U = (id: string, _w = 1200) => `${R2_ASSETS}/${id}.jpg`;
 
