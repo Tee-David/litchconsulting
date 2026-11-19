@@ -266,6 +266,37 @@ def _turn_object(text: str) -> dict[str, Any] | None:
     return found
 
 
+# Names models use for our tools (edge-case runs on gpt-oss, 19 Nov).
+TOOL_ALIASES = {
+    "sql": "query_sql", "run_sql": "query_sql", "sql_query": "query_sql", "query": "query_sql",
+    "execute_sql": "query_sql", "read_file": "read_document", "open_document": "read_document",
+    "read_text": "read_document", "get_document": "read_document", "profile": "profile_workbook",
+    "describe_workbook": "profile_workbook", "inspect_workbook": "profile_workbook",
+    "anomalies": "flag_anomalies", "detect_anomalies": "flag_anomalies",
+    "journal": "post_journals", "post_journal": "post_journals", "journals": "post_journals",
+    "write_cell": "write_cells", "update_cells": "write_cells", "set_cells": "write_cells",
+    "tax": "tax_compute", "compute_tax": "tax_compute", "statements": "trial_balance_statements",
+    "bank_reconciliation": "bank_rec", "reconcile_bank": "bank_rec",
+}
+
+
+def closest_tool(name: str, offered: set[str]) -> str | None:
+    """The tool a near-miss name means: an alias, a plural, or a close spelling."""
+    import difflib
+
+    key = name.strip().lower().replace("-", "_").replace(" ", "_")
+    if key in offered:
+        return key
+    alias = TOOL_ALIASES.get(key)
+    if alias in offered:
+        return alias
+    for cand in (key.rstrip("s"), key + "s"):
+        if cand in offered:
+            return cand
+    hit = difflib.get_close_matches(key, sorted(offered), n=1, cutoff=0.75)
+    return hit[0] if hit else None
+
+
 def parse_turn(text: str, offered: set[str],
                check_args: Callable[[str, dict[str, Any]], str | None] | None = None,
                reads: set[str] | None = None,
@@ -323,8 +354,11 @@ def parse_turn(text: str, offered: set[str],
             return None, "args_json must be a JSON object"
         turn.args = parsed
     if turn.action == "tool":
+        if turn.tool and turn.tool not in offered:
+            turn.tool = closest_tool(turn.tool, offered) or turn.tool
         if not turn.tool or turn.tool not in offered:
-            return None, f"tool must be one of {sorted(offered)} (got {turn.tool!r})"
+            return None, (f"there is no tool {turn.tool!r}; use one of: "
+                          + ", ".join(sorted(offered)))
         if check_args is not None:
             err = check_args(turn.tool, turn.args)
             if err:

@@ -58,7 +58,7 @@ def _execute(name, args, step):
 
 def test_parse_turn_validation():
     assert parse_turn("not json", {"echo"})[1].startswith("reply was not valid JSON")
-    assert "tool must be one of" in parse_turn('{"action":"tool","tool":"rm"}', {"echo"})[1]
+    assert "there is no tool" in parse_turn('{"action":"tool","tool":"rm"}', {"echo"})[1]
     turn, err = parse_turn('```json\n{"action":"final","answer":"ok"}\n```', set())
     assert err is None and turn.answer == "ok"
     assert parse_turn('{"action":"final","answer":"  "}', set())[1]
@@ -367,3 +367,18 @@ def test_openai_function_shape_and_derived_figures_are_accepted():
     # 301,778,600 - 293,161,900 = 8,616,700 is arithmetic on two tool figures
     assert ungrounded_figures("The gap is ₦8,616,700.", [301_778_600, 293_161_900]) == []
     assert ungrounded_figures("The gap is ₦9,999,999.", [301_778_600, 293_161_900]) == [9_999_999]
+
+
+def test_near_miss_tool_and_argument_names_are_mapped():
+    from litchai.ai.harness import closest_tool
+    from litchai.workbench.tools import TOOLS_BY_NAME, validate_call
+
+    offered = set(TOOLS_BY_NAME)
+    assert closest_tool("sql", offered) == "query_sql"
+    assert closest_tool("read_file", offered) == "read_document"
+    assert closest_tool("post_journal", offered) == "post_journals"
+    assert closest_tool("make_coffee", offered) is None
+    _, a = validate_call("read_document", {"doc_id": "doc-3"})
+    assert a.workbook == "doc-3"
+    _, a = validate_call("query_sql", {"query": "SELECT 1"})
+    assert a.sql == "SELECT 1"

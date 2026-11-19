@@ -103,3 +103,36 @@ def test_sales_checks_find_the_planted_revenue_problems():
     assert got["processor_fees"] == pytest.approx(f["card_fees"])
     assert got["cut_off"] == pytest.approx(f["dec31_gross"])
     assert got["banked_without_sales"] == pytest.approx(f["unrecorded_gross"])
+
+
+def _findings(slug, tool):
+    case, w, conv = _job(slug)
+    return case, run_tool(w.context(conv), tool, {}).data["findings"]
+
+
+def test_receivables_checks_find_the_contractor_problems_exactly():
+    case, fs = _findings("contractor", "receivables_checks")
+    got = {f["check"]: f["amount"] for f in fs}
+    f = case.figures
+    assert got["advance_as_revenue"] == f["advance"]
+    assert got["retention_not_recorded"] == pytest.approx(f["retention"])
+    assert got["wht_rate_differs"] == pytest.approx(f["over_wht"])
+    assert got["wht_no_credit_note"] == pytest.approx(f["wht_without_credit_note"])
+    assert got["over_billing"] == pytest.approx(f["over_billed"])
+    assert got["vat_not_charged"] == pytest.approx(f["villa_vat"])
+    assert got["materials_on_site"] == f["materials_on_site"]
+    assert "duplicate_invoices" in got
+    assert sum(1 for x in fs if x["check"] == "wht_rate_differs") == 1  # no false alarm
+
+
+def test_grant_checks_find_the_ngo_problems_exactly():
+    case, fs = _findings("ngo", "grant_checks")
+    got = {x["check"]: x["amount"] for x in fs}
+    f = case.figures
+    assert got["ineligible_costs"] == f["ineligible"]
+    assert got["wrong_grant"] == f["misallocated"]
+    assert got["staff_cost_over_timesheet"] == pytest.approx(f["salary_over"])
+    assert got["later_year_tranche"] == f["gb_deferred"]
+    assert got["fx_rate"] == pytest.approx(f["fx_understated"])
+    assert got["restricted_unspent"] == pytest.approx(f["deferred_ga"])
+    assert sum(1 for x in fs if x["check"] == "staff_cost_over_timesheet") == 1

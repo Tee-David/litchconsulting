@@ -109,6 +109,9 @@ _TOOL_KEYWORDS: dict[str, tuple[str, ...]] = {
                       "move the"),
     "conditional_format": ("conditional", "highlight", "in red", "in green", "colour the",
                            "color the", "pass", "fail"),
+    "receivables_checks": ("receivable", "invoice", "contract", "retention", "wht credit",
+                           "credit note", "billing", "certified", "auditor"),
+    "grant_checks": ("grant", "donor", "ngo", "restricted", "funder", "project fund"),
     "sales_checks": ("sales", "revenue", "pos", "till", "takings", "looks wrong", "look wrong",
                      "wrong", "shops", "branches", "what is wrong"),
     "trace_formula": ("where does", "come from", "trace", "precedent", "what uses"),
@@ -122,6 +125,10 @@ JOB_GROUPS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "year_end": (("year-end", "year end", "adjusting", "adjusted trial balance", "final accounts",
                   "journals"), ("review_points", "post_journals", "tb_lines", "bank_rec",
                                 "loan_schedule", "depreciation_schedule")),
+    "receivables": (("invoice", "receivable", "contract", "retention", "wht credit"),
+                    ("receivables_checks", "query_sql", "tax_compute")),
+    "grants": (("grant", "donor", "ngo", "restricted fund"), ("grant_checks", "read_document",
+                                                             "query_sql")),
     "sales_review": (("sales", "revenue", "pos", "till", "takings", "shop"),
                      ("sales_checks", "query_sql", "tax_compute")),
     "bank_rec": (("bank rec", "reconcil", "bank statement"), ("bank_rec", "reconcile",
@@ -350,7 +357,11 @@ def fallback_plan(message: str) -> list[tuple[str, dict[str, Any]]]:
     if any(w in m for w in ("anomal", "unusual", "duplicate", "outlier", "check")):
         plan.append(("flag_anomalies", {}))
     if any(w in m for w in ("sales", "revenue", "pos ", "takings", "till")):
-        plan.insert(0, ("sales_checks", {}))  # the standard revenue checks need no model
+        plan.insert(0, ("sales_checks", {}))  # the standard checks need no model
+    if any(w in m for w in ("invoice", "receivable", "contract", "retention", "wht")):
+        plan.insert(0, ("receivables_checks", {}))
+    if any(w in m for w in ("grant", "donor", "ngo")):
+        plan.insert(0, ("grant_checks", {}))
     if not plan:
         plan.append(("profile_workbook", {"level": 3}))
     return plan[:4]

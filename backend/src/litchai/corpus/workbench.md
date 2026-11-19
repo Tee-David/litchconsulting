@@ -268,3 +268,15 @@ banked with no sales recorded, missing trading days, processor fees (missing whe
 sales are booked at the net payout), and sales dated after the books were closed.
 Each finding gives the amount, the source and the fix.
 
+## Checking invoices, contracts and donor grants
+
+Ask Sage to check invoices, receivables or contracts: it looks for invoice numbers
+posted twice, invoices with no VAT, advances or mobilisation billed as revenue, a
+client whose WHT rate differs from the others, WHT with no credit note, retention not
+recorded, billing ahead of certified work, and materials on site at the year end. For
+an NGO or a donor project, ask Sage to review the books against the grant agreement:
+it finds costs the donor does not allow, costs of another grant's purpose, staff costs
+above the timesheet share, unspent restricted funds to defer, tranches meant for a
+later year, and receipts not translated at the official rate on the day. The trial
+balance review also flags bank charges on a statement that are not in the books.
+

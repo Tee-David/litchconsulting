@@ -21,8 +21,10 @@ from litchai.workbench import (
     builders,
     compiler_tools,
     fin_analysis,
+    grant_checks,
     journals,
     range_tools,
+    receivables_checks,
     recipes,
     revenue_checks,
     sheet_tools,
@@ -787,6 +789,23 @@ TOOLS: tuple[WorkbenchTool, ...] = (
                   NoArgs, lambda c, a: revenue_checks.sales_checks(c),
                   ("sales look wrong", "check our sales", "revenue looks off",
                    "is our pos data right", "check the takings")),
+    WorkbenchTool("receivables_checks", "read",
+                  "Standard receivables and contract checks: invoice numbers posted twice, "
+                  "invoices with no VAT, advances billed as revenue, a client's WHT rate "
+                  "that differs, WHT without credit notes, retention not recorded, billing "
+                  "ahead of certified work, materials on site. Run it when invoices, receipts "
+                  "or contracts look wrong.",
+                  NoArgs, lambda c, a: receivables_checks.receivables_checks(c),
+                  ("receivables don't make sense", "check our invoices",
+                   "is our revenue right for the contracts", "wht credits")),
+    WorkbenchTool("grant_checks", "read",
+                  "Standard donor-grant checks against the grant agreement: costs the donor "
+                  "does not allow, costs of another grant's purpose, staff costs above the "
+                  "timesheet share, unspent restricted funds, later-year tranches, the "
+                  "official FX rate on the receipt date. Run it for NGO or donor books.",
+                  NoArgs, lambda c, a: grant_checks.grant_checks(c),
+                  ("review our grant books", "grant report", "restricted funds",
+                   "donor rules")),
     WorkbenchTool("review_points", "read",
                   "Year-end review points found by rules, each with its source and the fix: "
                   "suspense, other income, a VAT account in debit, capital items in repairs, "
@@ -936,6 +955,17 @@ def _norm(key: str) -> str:
     return "_".join(w for w in parts if w)
 
 
+# Argument names models use for ours (edge-case runs on gpt-oss, 19 Nov).
+_FIELD_ALIASES = {
+    "workbook": {"id", "doc_id", "document_id", "file", "file_id", "file_name", "filename",
+                 "document", "doc", "name", "workbook_id"},
+    "workbook_id": {"doc_id", "document_id", "file_id", "workbook"},
+    "sql": {"query", "statement", "sql_query"},
+    "sheet": {"sheet_name", "tab", "worksheet"},
+    "new_sheet_name": {"sheet_name", "name", "title"},
+}
+
+
 def _align_args(model: type[BaseModel], args: dict[str, Any]) -> dict[str, Any]:
     """Map near-miss argument names to the real ones (fee_percent -> fee_pct,
     principal_instalment -> principal_repayment, annual_rate -> annual_rate_pct). Only
@@ -944,6 +974,11 @@ def _align_args(model: type[BaseModel], args: dict[str, Any]) -> dict[str, Any]:
     out = dict(args)
     for key in list(args):
         if key in fields:
+            continue
+        target = next((f for f, names in _FIELD_ALIASES.items()
+                       if f in fields and f not in out and key.lower() in names), None)
+        if target:
+            out[target] = out.pop(key)
             continue
         nk = _norm(key)
         cands = [f for f in fields if f not in out and (

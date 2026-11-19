@@ -175,10 +175,10 @@ def build(seed: int = 2025) -> Case:
                 [r"fee|commission|charge", r"card|settle|processor"], fees_total,
                 "Card settlement report, Processor fee"),
         Problem("P6", "31 December sales left out (books closed on 30 Dec)",
-                [r"31(st)?\s*(dec|/12)|cut.?off|30(th)?\s*(dec|/12)"], dec31_gross,
+                [r"31(st)?\s*(dec|/12)|12-31|cut.?off|30(th)?\s*(dec|/12)|12-30"], dec31_gross,
                 "POS export, 31/12/2025"),
         Problem("P7", "Ikeja sales on 24 Dec not recorded (POS down, cash banked)",
-                [r"ikeja", r"24(th)?\s*(dec|/12)|unrecorded|not recorded|no (pos|sales)"],
+                [r"ikeja", r"24(th)?\s*(dec|/12)|12-24|unrecorded|not recorded|no (pos|sales)"],
                 unrecorded_gross, "Cash banking 24/12 Ikeja, no POS lines"),
     ]
     return Case(

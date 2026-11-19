@@ -150,6 +150,28 @@ def review_points(ctx: ToolContext) -> list[dict[str, str]]:
                     pts.append({"what": f"{text[:50]}: {inn:,.2f} received", "source": where,
                                 "fix": "A loan is a liability, not income: recognise it and "
                                        "make a loan schedule."})
+    # Bank charges on a statement, but no bank-charges account in the books.
+    if not any(re.search(r"bank charge|charges", a.name, re.IGNORECASE) for a in tb.accounts):
+        from litchai.workbench.bankrec import CHARGE
+
+        for w in ctx.workbooks.values():
+            for sh in w.sheets.values():
+                t = detect_table(sh)
+                if t is None or t.col("balance") is None:
+                    continue
+                d, desc = t.col("debit"), t.col("description")
+                if not (d and desc):
+                    continue
+                tot = sum(to_number(sh.value(r, d.index)) or 0 for r in range(t.first_row, t.last_row + 1)
+                          if CHARGE.search(str(sh.value(r, desc.index) or "")))
+                if tot:
+                    cur = "USD " if re.search(r"usd|dollar", w.name + " ".join(
+                        c.name for c in t.columns), re.IGNORECASE) else ""
+                    pts.append({"what": f"Bank charges of {cur}{tot:,.2f} on {w.name} are not "
+                                        "in the books (no bank charges account)",
+                                "source": w.name,
+                                "fix": "Post them as bank charges (translate foreign-currency "
+                                       "charges at the rate on the day)."})
     return pts[:30]
 
 
