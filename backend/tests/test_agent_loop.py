@@ -307,7 +307,8 @@ def test_a_write_tool_is_never_run_in_parallel():
     turn, err = parse_turn(json.dumps({"action": "tool", "tool": "echo", "args": {},
                                        "parallel": [{"tool": "make", "args": {}}]}),
                            {"echo", "make"}, None, {"echo"})
-    assert turn is None and "read tools" in err
+    # The write is dropped (never run in parallel); the lead read call still runs.
+    assert err is None and turn.tool == "echo" and not turn.parallel
     assert write.kind == "write"
 
 
@@ -382,3 +383,15 @@ def test_near_miss_tool_and_argument_names_are_mapped():
     assert a.workbook == "doc-3"
     _, a = validate_call("query_sql", {"query": "SELECT 1"})
     assert a.sql == "SELECT 1"
+
+
+def test_namespaced_tool_names_and_extra_calls_beside_a_write():
+    from litchai.ai.harness import parse_turn
+
+    turn, err = parse_turn(json.dumps({"action": "tool", "tool": "repo_browser.echo",
+                                       "args": {"x": "1"}}), {"echo"}, None, {"echo"})
+    assert err is None and turn.tool == "echo"
+    turn, err = parse_turn(json.dumps({"action": "tool", "tool": "write_it", "args": {},
+                                       "parallel": [{"tool": "echo", "args": {}}]}),
+                           {"echo", "write_it"}, None, {"echo"})
+    assert err is None and turn.tool == "write_it" and not turn.parallel

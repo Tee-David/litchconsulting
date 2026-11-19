@@ -280,6 +280,12 @@ TOOL_ALIASES = {
 }
 
 
+def _bare_tool(name: str) -> str:
+    """'repo_browser.query_sql', 'functions.query_sql', 'tool_query_sql' -> 'query_sql'."""
+    name = name.strip().rsplit(".", 1)[-1]
+    return re.sub(r"^(functions?_|tools?_)", "", name)
+
+
 def closest_tool(name: str, offered: set[str]) -> str | None:
     """The tool a near-miss name means: an alias, a plural, or a close spelling."""
     import difflib
@@ -312,15 +318,14 @@ def parse_turn(text: str, offered: set[str],
     if isinstance(payload, dict) and payload.get("name") and "arguments" in payload \
             and not payload.get("tool"):
         # The OpenAI function-call shape ({"name": "tool_query_sql", "arguments": {...}}).
-        name = re.sub(r"^(functions?[._]|tool[._]|tools[._])", "", str(payload["name"]))
+        name = _bare_tool(str(payload["name"]))
         args = payload["arguments"]
         if isinstance(args, str):
             payload = {"action": "tool", "tool": name, "args_json": args}
         else:
             payload = {"action": "tool", "tool": name, "args": args}
     if isinstance(payload, dict) and isinstance(payload.get("tool"), str):
-        payload = {**payload, "tool": re.sub(r"^(functions?[._]|tool[._]|tools[._])", "",
-                                             payload["tool"])}
+        payload = {**payload, "tool": _bare_tool(payload["tool"])}
     if isinstance(payload, dict) and not payload.get("action"):
         # gpt-oss often leaves out "action": the intent is plain from the other keys.
         if payload.get("tool") or payload.get("args") is not None or payload.get("args_json"):
@@ -380,8 +385,11 @@ def parse_turn(text: str, offered: set[str],
                         return None, "a parallel call's args_json was not valid JSON"
                 if not isinstance(args, dict):
                     args = {}
+                name = closest_tool(_bare_tool(str(name or "")), offered) or name
                 if name not in offered or (reads is not None and (name not in reads or turn.tool not in reads)):
-                    return None, "parallel calls must be read tools, next to a read tool"
+                    # Extra calls beside a write, or unknown ones, are dropped; the lead
+                    # call still runs (edge-case run 2026-11-19 lost whole steps to this).
+                    continue
                 if check_args is not None:
                     err = check_args(name, args)
                     if err:
