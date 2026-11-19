@@ -722,7 +722,7 @@ export type RenderOptions = {
   to?: string | null;
 };
 
-export type RenderedEmail = { subject: string; html: string; text: string; fromName?: string };
+export type RenderedEmail = { subject: string; html: string; text: string; fromName?: string; unsubscribe?: string | null };
 
 export function renderTemplate<K extends TemplateKey>(key: K, data: TemplateData<K>, opts: RenderOptions = {}): RenderedEmail {
   const def = EMAIL_TEMPLATES[key] as unknown as Def<TemplateData<K>>;
@@ -821,7 +821,7 @@ ${muted(legal, 0)}
     `${site.legalName} · ${site.location}`,
   ].join("\n");
 
-  return { subject: b.subject, html, text, fromName: b.fromName };
+  return { subject: b.subject, html, text, fromName: b.fromName, unsubscribe: unsub };
 }
 
 /** Rendered subject + html for `notifyUsers({ email })`. */
@@ -840,5 +840,9 @@ export async function sendTemplate<K extends TemplateKey>(
   opts: RenderOptions & { to: string; dedupeKey?: string; replyTo?: string; attachments?: MailAttachment[] },
 ) {
   const r = renderTemplate(key, data, opts);
-  return sendEmail({ to: opts.to, subject: r.subject, html: r.html, text: r.text, dedupeKey: opts.dedupeKey, replyTo: opts.replyTo, attachments: opts.attachments });
+  // One-click unsubscribe (RFC 8058), required by Gmail and Yahoo for this kind of mail.
+  const headers = r.unsubscribe
+    ? { "List-Unsubscribe": `<${r.unsubscribe.replace("/unsubscribe?", "/api/unsubscribe?")}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" }
+    : undefined;
+  return sendEmail({ to: opts.to, subject: r.subject, html: r.html, text: r.text, dedupeKey: opts.dedupeKey, replyTo: opts.replyTo, attachments: opts.attachments, headers });
 }

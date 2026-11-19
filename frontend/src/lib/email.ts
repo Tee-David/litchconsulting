@@ -63,9 +63,21 @@ export type EmailMessage = {
    * still in flight. Omit for genuinely one-off mail; a random key is used.
    */
   dedupeKey?: string;
+  /** Extra headers, e.g. List-Unsubscribe for one-click unsubscribe (Gmail/Yahoo). */
+  headers?: Record<string, string>;
 };
 
 const MAX_ATTEMPTS = 5;
+
+/** A failure worth one quick retry: a timeout, a dropped connection, or a 4xx
+ * "try again later" from the server (19 Nov: a sign-up confirmation timed out and
+ * then waited for the daily retry). A 5xx refusal is final and is not retried. */
+function transient(e: unknown): boolean {
+  const err = e as { code?: string; responseCode?: number; message?: string };
+  if (err?.responseCode && err.responseCode >= 400 && err.responseCode < 500) return true;
+  if (["ETIMEDOUT", "ECONNECTION", "ECONNRESET", "ESOCKET", "EDNS"].includes(String(err?.code))) return true;
+  return /timeout|timed out|connection closed|socket/i.test(String(err?.message ?? ""));
+}
 /** A queued row older than this is assumed dead (function killed mid-send). */
 const IN_FLIGHT_MS = 10 * 60_000;
 
@@ -165,7 +177,16 @@ export async function sendEmail(opts: EmailMessage): Promise<{ delivered: boolea
 
   const started = Date.now();
   try {
-    await t.sendMail({ from: FROM, ...mail });
+    try {
+      await t.sendMail({ from: FROM, ...mail });
+    } catch (first) {
+      if (!transient(first)) throw first;
+      transporter = null; // a fresh connection: the old one may be half-dead
+      await new Promise((r) => setTimeout(r, 1500));
+      const again = getTransport();
+      if (!again) throw first;
+      await again.sendMail({ from: FROM, ...mail });
+    }
     if (rowId) await settleRow(rowId, "sent", { durationMs: Date.now() - started });
     return { delivered: true };
   } catch (e) {

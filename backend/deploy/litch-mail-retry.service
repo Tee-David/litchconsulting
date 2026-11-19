@@ -1,0 +1,10 @@
+[Unit]
+Description=Retry failed platform emails (calls the site's outbox job; Vercel's own cron runs only once a day)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=litch
+Group=litch
+# CRON_SECRET comes from Doppler through litch-run; it never appears on the command line.
+ExecStart=/usr/local/bin/litch-run /bin/sh -c 'curl -fsS -m 120 -H "Authorization: Bearer $CRON_SECRET" https://www.litchconsulting.com/api/cron/outbox > /dev/null'
