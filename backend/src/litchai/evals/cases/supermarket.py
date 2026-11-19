@@ -55,7 +55,9 @@ def build(seed: int = 2025) -> Case:
                              "category": cat, "gross": gross,
                              "vat": _vat_in(gross),  # P3: the POS taxes basic food too
                              "status": "OK"})
-    voids = rnd.sample([r for r in rows if r["date"].month in (10, 11)], 9)
+    dup_week = (date(2025, 11, 3), date(2025, 11, 9))
+    voids = rnd.sample([r for r in rows if r["date"].month in (10, 11) and not (
+        r["branch"] == "Lekki" and dup_week[0] <= r["date"] <= dup_week[1])], 9)  # independent of P1
     for v in voids:
         v["status"] = "VOID"  # P2
     dup = [dict(r) for r in rows if r["branch"] == "Lekki"

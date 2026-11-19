@@ -2036,7 +2036,7 @@
    "oracle": {
     "tool": "query_sql",
     "args": {
-     "sql": "SELECT sum(cost_ngn) AS total_cost FROM table_1"
+     "sql": "SELECT sum(cost_ngn) AS total_cost FROM kanem_fixed_asset_register_2025"
     }
    },
    "checks": [
@@ -2060,7 +2060,7 @@
    "oracle": {
     "tool": "query_sql",
     "args": {
-     "sql": "SELECT sum(amount) AS total, sum(litres) AS litres FROM sheet1"
+     "sql": "SELECT sum(amount) AS total, sum(litres) AS litres FROM kanem_fuel_card_march2025"
     }
    },
    "checks": [
@@ -2087,7 +2087,7 @@
    "oracle": {
     "tool": "query_sql",
     "args": {
-     "sql": "SELECT truck, sum(amount) AS total FROM sheet1 GROUP BY truck ORDER BY total DESC LIMIT 1"
+     "sql": "SELECT truck, sum(amount) AS total FROM kanem_fuel_card_march2025 GROUP BY truck ORDER BY total DESC LIMIT 1"
     }
    },
    "checks": [

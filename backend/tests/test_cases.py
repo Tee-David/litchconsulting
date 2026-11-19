@@ -2,7 +2,10 @@
 prove each planted problem. Live runs: python -m litchai.evals.run_cases."""
 from __future__ import annotations
 
+import io
+
 import pytest
+from openpyxl import load_workbook
 
 from litchai.evals.cases import found, registry, score
 from litchai.evals.workbench import passing_gate
@@ -24,7 +27,16 @@ def _job(slug):
 def test_cases_build_the_same_every_time():
     for slug, build in registry().items():
         a, b = build(), build()
-        assert a.files == b.files and a.figures == b.figures, slug
+        assert a.figures == b.figures and list(a.files) == list(b.files), slug
+        for name in a.files:  # xlsx files carry a save time, so compare their cells
+            if name.endswith(".xlsx"):
+                va = [[c.value for c in r] for ws in load_workbook(io.BytesIO(a.files[name]))
+                      for r in ws.iter_rows()]
+                vb = [[c.value for c in r] for ws in load_workbook(io.BytesIO(b.files[name]))
+                      for r in ws.iter_rows()]
+                assert va == vb, name
+            else:
+                assert a.files[name] == b.files[name], name
         assert a.problems and a.prompts
 
 
