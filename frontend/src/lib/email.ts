@@ -72,6 +72,11 @@ const MAX_ATTEMPTS = 5;
 /** A failure worth one quick retry: a timeout, a dropped connection, or a 4xx
  * "try again later" from the server (19 Nov: a sign-up confirmation timed out and
  * then waited for the daily retry). A 5xx refusal is final and is not retried. */
+function permanent(e: unknown): boolean {
+  const code = (e as { responseCode?: number })?.responseCode;
+  return typeof code === "number" && code >= 500;
+}
+
 function transient(e: unknown): boolean {
   const err = e as { code?: string; responseCode?: number; message?: string };
   if (err?.responseCode && err.responseCode >= 400 && err.responseCode < 500) return true;
@@ -136,7 +141,7 @@ async function openRow(msg: EmailMessage, dedupeKey: string): Promise<Opened> {
 async function settleRow(
   id: string,
   status: "sent" | "failed" | "skipped",
-  fields: { error?: string; durationMs?: number } = {},
+  fields: { error?: string; durationMs?: number; retryable?: boolean } = {},
 ) {
   try {
     await db
@@ -148,6 +153,9 @@ async function settleRow(
         sentAt: status === "sent" ? new Date() : null,
         // The body is kept only while the row may need a resend.
         ...(status === "sent" ? { payload: null } : {}),
+        // A permanent refusal (5xx, e.g. "550 ... spam") is never resent: resending
+        // refused mail hurts the sender's reputation.
+        ...(fields.retryable === false ? { retryable: false } : {}),
         updatedAt: new Date(),
       })
       .where(eq(emailOutbox.id, id));
@@ -190,7 +198,8 @@ export async function sendEmail(opts: EmailMessage): Promise<{ delivered: boolea
     if (rowId) await settleRow(rowId, "sent", { durationMs: Date.now() - started });
     return { delivered: true };
   } catch (e) {
-    if (rowId) await settleRow(rowId, "failed", { error: errText(e), durationMs: Date.now() - started });
+    if (rowId) await settleRow(rowId, "failed", { error: errText(e), durationMs: Date.now() - started,
+      retryable: permanent(e) ? false : undefined });
     throw e;
   }
 }
@@ -236,7 +245,8 @@ export async function retryFailedEmails(limit = 20): Promise<{ tried: number; se
       await settleRow(row.id, "sent", { durationMs: Date.now() - started });
       sent++;
     } catch (e) {
-      await settleRow(row.id, "failed", { error: errText(e), durationMs: Date.now() - started });
+      await settleRow(row.id, "failed", { error: errText(e), durationMs: Date.now() - started,
+        retryable: permanent(e) ? false : undefined });
       failed++;
     }
   }
