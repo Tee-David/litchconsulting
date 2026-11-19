@@ -23,6 +23,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+engines = ["ironcalc>=0.9"]  # IronCalc shadow beside LibreOffice in the recompute gate
 dev = [
   "pytest>=8",
   "ruff>=0.4",

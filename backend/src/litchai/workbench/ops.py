@@ -14,6 +14,7 @@ Conflicts: when a cell's current content no longer matches the recorded ``old``
 from __future__ import annotations
 
 import io
+import os
 import shutil
 import tempfile
 import uuid
@@ -647,9 +648,50 @@ def libreoffice_gate(xlsx: bytes) -> GateResult:
             grids, recomputed = _recompute_keep(path)
         except (RecomputeError, OSError) as exc:
             return GateResult("unverified", formulas=formulas, detail=str(exc)[:200])
-    errors = [f"{s}!{_col(c)}{r + 1}: {tok}" for (s, r, c, tok) in find_workbook_errors(grids)]
+        errors = [f"{s}!{_col(c)}{r + 1}: {tok}" for (s, r, c, tok) in find_workbook_errors(grids)]
+        _ironcalc_shadow(path, errors)
     return GateResult("blocked" if errors else "passed", errors=errors, formulas=formulas,
                       recomputed=recomputed)
+
+
+_ERR_TOKENS = ("#DIV/0!", "#REF!", "#NAME?", "#VALUE!", "#N/A", "#NUM!", "#NULL!")
+
+
+def _ironcalc_shadow(path: Path, lo_errors: list[str]) -> None:
+    """Plan v5 slice F: IronCalc (Rust) recomputes the same file beside LibreOffice and
+    the two error lists are compared in the log. LibreOffice stays the authority;
+    this never changes a gate result. Switch only after weeks with no disagreement."""
+    import logging
+    import time as _time
+
+    if os.environ.get("LITCHAI_IRONCALC_SHADOW", "1") != "1":
+        return
+    log = logging.getLogger("litchai.ironcalc_shadow")
+    try:
+        import ironcalc
+    except ImportError:
+        return
+    try:
+        t0 = _time.monotonic()
+        model = ironcalc.load_from_xlsx(str(path), "en", "UTC")
+        model.evaluate()
+        wb = load_workbook(path)
+        ic_errors = []
+        for i, ws in enumerate(wb.worksheets):
+            for row in ws.iter_rows():
+                for c in row:
+                    if isinstance(c.value, str) and c.value.startswith("="):
+                        v = str(model.get_formatted_cell_value(i, c.row, c.column))
+                        if v.startswith(_ERR_TOKENS):
+                            ic_errors.append(f"{ws.title}!{c.coordinate}: {v}")
+        lo = {e.split(":")[0] for e in lo_errors}
+        ic = {e.split(":")[0] for e in ic_errors}
+        level = logging.INFO if lo == ic else logging.WARNING
+        log.log(level, "ironcalc shadow %s in %.2fs: libreoffice %d errors, ironcalc %d, only "
+                "libreoffice %s, only ironcalc %s", "agrees" if lo == ic else "DISAGREES",
+                _time.monotonic() - t0, len(lo), len(ic), sorted(lo - ic)[:5], sorted(ic - lo)[:5])
+    except Exception as exc:  # noqa: BLE001 — the shadow must never break a gate
+        log.warning("ironcalc shadow failed: %s", str(exc)[:200])
 
 
 def _col(c: int) -> str:
