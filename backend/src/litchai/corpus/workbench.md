@@ -258,3 +258,13 @@ statements and tax before adjustments. Each review point names its source and th
 fix. Then tell Sage which points to post: it makes one journals proposal with an
 adjusted trial balance.
 
+## Checking sales data
+
+When sales look wrong, ask Sage to check them. Sage runs the standard revenue checks
+on POS exports, invoices, card settlements and cash banking sheets: duplicate lines
+(for example an upload done twice), voided or reversed lines still in the totals, VAT
+charged on exempt items such as basic food, cash banked below the till figure, cash
+banked with no sales recorded, missing trading days, processor fees (missing when
+sales are booked at the net payout), and sales dated after the books were closed.
+Each finding gives the amount, the source and the fix.
+

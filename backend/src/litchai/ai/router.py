@@ -308,7 +308,9 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
 # --- errors -----------------------------------------------------------------
 # A per-minute 429 that clears within this many seconds is waited out on the same
 # model instead of dropping to a weaker provider.
-SHORT_RATE_WAIT = 6.0
+# Tests on Groq's free tier set LITCHAI_RATE_WAIT (e.g. 40): waiting out the minute
+# beats a busy answer when there is no paid model behind it.
+SHORT_RATE_WAIT = float(os.environ.get("LITCHAI_RATE_WAIT") or 6.0)
 
 
 class ProviderError(RuntimeError):

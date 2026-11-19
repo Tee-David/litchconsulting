@@ -72,3 +72,34 @@ def test_supermarket_problems_are_provable_with_the_tools():
                "WHERE branch = 'Surulere'") == pytest.approx(f["cash_short"])
     assert one(f"SELECT count(*) FROM {pos} WHERE branch = 'Ikeja' AND "
                f"CAST(date AS VARCHAR) LIKE '%2025-12-24%'") == 0
+
+
+def test_contractor_problems_are_provable_with_the_tools():
+    pytest.importorskip("duckdb")
+    case, w, conv = _job("contractor")
+    ctx = w.context(conv)
+    f = case.figures
+
+    def one(sql):
+        return run_tool(ctx, "query_sql", {"sql": sql}).data["rows"][0][0]
+
+    assert one("SELECT round(sum(retention_held), 2) FROM customer_receipts_2025")         == pytest.approx(f["retention"])
+    assert one("SELECT count(*) - count(DISTINCT invoice_no) FROM invoices") == 1
+    wht = one("SELECT round(sum(wht_deducted - invoice_total / 1.075 * 0.05), 2) "
+              "FROM customer_receipts_2025 WHERE client = 'Abeokuta Water Board'")
+    assert wht == pytest.approx(f["over_wht"])
+
+
+
+def test_sales_checks_find_the_planted_revenue_problems():
+    case, w, conv = _job("supermarket")
+    got = {f["check"]: f["amount"] for f in run_tool(w.context(conv), "sales_checks", {})
+           .data["findings"]}
+    f = case.figures
+    assert got["duplicates"] == pytest.approx(f["duplicates_gross"])
+    assert got["voids_in_totals"] == pytest.approx(f["voids_gross"])
+    assert got["vat_on_exempt"] == pytest.approx(f["vat_on_basic_food"])
+    assert got["cash_short"] == pytest.approx(f["cash_short"])
+    assert got["processor_fees"] == pytest.approx(f["card_fees"])
+    assert got["cut_off"] == pytest.approx(f["dec31_gross"])
+    assert got["banked_without_sales"] == pytest.approx(f["unrecorded_gross"])

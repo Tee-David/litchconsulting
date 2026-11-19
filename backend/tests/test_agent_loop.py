@@ -346,3 +346,13 @@ def test_deepseek_parallel_spellings_are_accepted():
         turn, err = parse_turn(json.dumps(payload), offered, None, reads)
         assert err is None and turn.tool == "query_sql" and turn.args == {"sql": "select 1"}
         assert turn.parallel == [{"tool": "echo", "args": {"x": "y"}}]
+
+
+def test_missing_action_is_inferred_and_years_are_not_money():
+    from litchai.ai.harness import parse_turn, ungrounded_figures
+
+    turn, err = parse_turn(json.dumps({"tool": "echo", "args": {"x": "1"}}), {"echo"}, None, {"echo"})
+    assert err is None and turn.action == "tool"
+    turn, err = parse_turn(json.dumps({"answer": "Done."}), {"echo"}, None, {"echo"})
+    assert err is None and turn.action == "final"
+    assert ungrounded_figures("Output VAT for Q4 2025 is 1,500,000.", [1_500_000]) == []

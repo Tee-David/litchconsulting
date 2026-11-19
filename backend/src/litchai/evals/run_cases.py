@@ -19,6 +19,8 @@ from typing import Any
 
 def run(slug: str, chain: str = "groq", seed: int = 2025, wait: int = 75) -> dict[str, Any]:
     os.environ["LITCHAI_PROVIDER_CHAIN"] = chain
+    os.environ.setdefault("LITCHAI_RATE_WAIT", "40")  # free tier: wait out the minute
+    os.environ.setdefault("LITCHAI_TURN_BUDGET", "420")
     from litchai.ai.router import build_router
     from litchai.evals.cases import registry, score
     from litchai.evals.fixtures import scripted_categoriser

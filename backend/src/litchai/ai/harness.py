@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 import time
 from collections.abc import Callable, Iterator
@@ -159,7 +160,7 @@ SHORT_OBSERVATION_CHARS = 600  # older ones: summary + this much of the result
 # and moves down the chain on a timeout; the whole turn has a time budget.
 AGENT_CALL_TIMEOUT = 40.0    # seconds per cloud call
 LOCAL_CALL_TIMEOUT = 150.0   # seconds per call for a local-only client (CPU model)
-AGENT_TURN_BUDGET = 120.0    # seconds of model time for one cloud turn
+AGENT_TURN_BUDGET = float(os.environ.get("LITCHAI_TURN_BUDGET") or 120.0)  # s per cloud turn
 LOCAL_TURN_BUDGET = 240.0    # ... for a local-only turn
 HISTORY_FULL_MESSAGES = 4    # the last 2 turns (user + assistant) go in full
 HISTORY_MESSAGE_CHARS = 1500
@@ -277,6 +278,12 @@ def parse_turn(text: str, offered: set[str],
         payload = _turn_object(text or "")
         if payload is None:
             return None, f"reply was not valid JSON ({exc.msg if hasattr(exc, 'msg') else exc})"
+    if isinstance(payload, dict) and not payload.get("action"):
+        # gpt-oss often leaves out "action": the intent is plain from the other keys.
+        if payload.get("tool") or payload.get("args") is not None or payload.get("args_json"):
+            payload = {**payload, "action": "tool"}
+        elif payload.get("answer"):
+            payload = {**payload, "action": "final"}
     if isinstance(payload, dict) and payload.get("parallel") and \
             payload.get("action") in (None, "", "parallel", "tools"):
         # DeepSeek's spelling of several calls in one step (live run 2026-11-19).
@@ -693,6 +700,8 @@ def ungrounded_figures(answer: str, grounded: list[float]) -> list[float]:
     for x in figures_in(answer):
         if abs(x) < GROUNDING_MIN or x in loose:
             continue
+        if x == int(x) and 1990 <= x <= 2100:
+            continue  # a year ("Q4 2025"), not money (edge-case run 2026-11-19)
         if not any(abs(x - g) <= max(abs(g) * GROUNDING_TOLERANCE, 0.01) for g in grounded):
             loose.append(x)
     return loose

@@ -24,6 +24,7 @@ from litchai.workbench import (
     journals,
     range_tools,
     recipes,
+    revenue_checks,
     sheet_tools,
     trial_balance,
 )
@@ -778,6 +779,14 @@ TOOLS: tuple[WorkbenchTool, ...] = (
                    "clear the range", "copy this table to another sheet",
                    "format column D as naira", "freeze the header row", "make column B wider",
                    "add a drop-down list", "add a filter to the table")),
+    WorkbenchTool("sales_checks", "read",
+                  "Standard revenue checks on sales data (POS, invoices, settlements, cash "
+                  "banking): duplicate lines, voided or reversed lines still in, VAT on exempt "
+                  "items, cash banked short or with no sales, missing trading days, processor "
+                  "fees, sales after the books closed. Run it first when sales look wrong.",
+                  NoArgs, lambda c, a: revenue_checks.sales_checks(c),
+                  ("sales look wrong", "check our sales", "revenue looks off",
+                   "is our pos data right", "check the takings")),
     WorkbenchTool("review_points", "read",
                   "Year-end review points found by rules, each with its source and the fix: "
                   "suspense, other income, a VAT account in debit, capital items in repairs, "

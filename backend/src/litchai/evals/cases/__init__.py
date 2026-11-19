@@ -69,6 +69,6 @@ def score(case: Case, answers: list[str], extra_text: str = "") -> dict[str, Any
 
 
 def registry() -> dict[str, Any]:
-    from litchai.evals.cases import supermarket
+    from litchai.evals.cases import contractor, supermarket
 
-    return {"supermarket": supermarket.build}
+    return {"supermarket": supermarket.build, "contractor": contractor.build}
