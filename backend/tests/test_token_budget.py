@@ -137,7 +137,7 @@ def test_two_malformed_steps_run_the_deterministic_plan():
     assert names == ["groq", "groq", "cerebras"]
     final = events[-1]
     assert final["type"] == "final" and final["degraded"]
-    assert final["answer"].startswith("The AI model's steps could not be used")
+    assert final["answer"].startswith("Here is what I found.")  # v6: plain answer, no blame
     assert [e["tool"] for e in events if e["type"] == "tool_call"] == ["echo"]
 
 

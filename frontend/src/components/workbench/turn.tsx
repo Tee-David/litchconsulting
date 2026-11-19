@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, createContext, useContext, useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, ArrowRightLeft, Lightbulb, ListTree, RefreshCw, Table2 } from "lucide-react";
+import { AlertTriangle, Lightbulb, ListTree, RefreshCw, Table2 } from "lucide-react";
 import { Trace, TraceOutput, seconds, useElapsed, type TraceStatus } from "@/components/sage-ui/trace";
 import type { WbEvent } from "@/lib/litchai/workbench";
 import { REF_IN_TEXT } from "./refs";
@@ -26,7 +26,7 @@ const REASON: Record<string, string> = {
   unavailable: "could not be reached",
   error: "returned an error",
   auth: "rejected our key",
-  invalid: "sent steps Sage could not use",
+  invalid: "gave a reply that could not be used",
   unhealthy: "is not answering",
   slow: "is slow right now",
 };
@@ -198,8 +198,11 @@ function stepsOf(events: WbEvent[], running: boolean): Step[] {
       });
     } else if (e.type === "fallback" && s(e.detail) !== "skipped") {
       out.push({
-        t: e.from === "all" ? "No model could be used" : `${slotLabel(s(e.from))} ${REASON[s(e.reason)] ?? "failed"}`,
-        d: e.to ? `Moved to ${slotLabel(s(e.to))}. Steps already done were kept.` : e.from === "all" ? "The pipeline ran what it could without one." : undefined,
+        // Calm, plain words (v6): the switch is a detail, not news.
+        t: e.to ? "Switched to the backup model" : e.from === "all" ? "Used the built-in checks" : "Model step skipped",
+        d: e.from === "all"
+          ? "No AI model was available, so Sage ran its built-in checks."
+          : `${slotLabel(s(e.from))} ${REASON[s(e.reason)] ?? "did not answer"}.${e.to ? ` ${slotLabel(s(e.to))} continued; the work done so far was kept.` : ""}`,
         s: "switch",
       });
     }
@@ -255,7 +258,6 @@ export function TurnView({
   const retries = events.filter((e) => e.type === "retry").length;
   const live = running && !final && !error;
   const current = steps.find((x) => x.s === "run");
-  const lastSwitch = [...events].reverse().find((e) => e.type === "fallback" && s(e.detail) !== "skipped" && e.from !== "all");
   const calls = steps.filter((x) => x.tool).length;
   const failed = steps.filter((x) => x.s === "fail").length;
   const thoughts = events.map((e) => (e.type === "tool_call" ? s(e.thought).trim() : "")).filter(Boolean);
@@ -318,12 +320,6 @@ export function TurnView({
         </Trace>
       ) : null}
 
-      {live && lastSwitch ? (
-        <p className="flex items-start gap-2 rounded-ctl bg-warn-soft px-2.5 py-2 text-[12.5px] text-body" role="status">
-          <ArrowRightLeft className="mt-0.5 size-3.5 shrink-0 text-warn" aria-hidden />
-          {slotLabel(s(lastSwitch.from))} {REASON[s(lastSwitch.reason)] ?? "failed"}.{lastSwitch.to ? ` Moving to ${slotLabel(s(lastSwitch.to))}.` : ""}
-        </p>
-      ) : null}
 
       {final ? (
         <div className="space-y-2">

@@ -478,10 +478,23 @@ def _tool_menu(tools: list[AgentTool]) -> str:
 
 # Plain words for a turn the model chain could not finish (report U6).
 FAILURE_WORDS = {
-    "quota": "Today's free AI allowance is used up on every cloud model.",
-    "timeout": "The AI model is busy and did not answer in time.",
-    "unavailable": "Sage cannot reach an AI model right now.",
+    "quota": ("I have reached today's AI limit, so I could not finish this. Nothing was "
+              "changed. The built-in checks still work: ask me to check the books, sales, "
+              "invoices, payroll or grants."),
+    "timeout": ("This took too long, so I stopped. Nothing was changed. Please ask again, "
+                "or ask for one step at a time."),
+    "unavailable": ("I could not finish this just now. Nothing was changed. Please try again "
+                    "in a minute."),
 }
+
+# Tools whose output is a description of the files, not an answer: never printed as
+# the answer (v6: a raw sheet profile was shown to the person).
+_DESCRIBE_ONLY = {"profile_workbook", "profile_range"}
+_ASK_WHAT = ("I have read the files. What would you like me to do with them? For example:\n"
+             "- Check the books for errors and the adjustments needed\n"
+             "- Reconcile a bank statement to the trial balance\n"
+             "- Check the sales, invoices, payroll or grants\n"
+             "- Prepare the financial statements and the tax")
 
 
 def failure_kind(exc: Any) -> str:
@@ -853,10 +866,10 @@ def _degraded(user: str, execute: Callable[[str, dict[str, Any], int], Observati
     pipeline runs it. The answer is the tools' own summaries."""
     plan = plan_fn(user)
     if not plan:
-        # Nothing the pipeline can do faithfully without a model: change nothing.
+        # Nothing the built-in checks can do faithfully for this request: change nothing.
         yield {"type": "final", "answer": (
-            "The AI models are busy or sent steps I could not use, so I changed nothing. "
-            "Try again in a minute, or ask in a shorter step."),
+            "I could not finish this request just now. Nothing was changed. Please try "
+            "again in a minute, or ask for one step at a time."),
             "citations": [], "proposals": proposals, "degraded": True,
             "attribution": {"pipeline": [], "model": None, "decision": "heuristic"}}
         return
@@ -872,12 +885,19 @@ def _degraded(user: str, execute: Callable[[str, dict[str, Any], int], Observati
         yield {"type": "tool_result", "step": i, "tool": name, "ok": obs.ok,
                "summary": obs.summary, "error": obs.error, "proposal": obs.proposal,
                "citations": (obs.citations or [])[:20], "data": obs.data}
-        summaries.append(obs.summary if obs.ok else f"{name}: {obs.error}")
+        if name in _DESCRIBE_ONLY:
+            continue  # a description of the files is not an answer
+        summaries.append(obs.summary if obs.ok else
+                         f"I could not run the {name.replace('_', ' ')}: {obs.error}")
     good, dropped = _check_citations(citations, check)
-    lead = ("The AI model's steps could not be used, so I ran the pipeline directly:"
-            if reason == "invalid" else
-            "No language model is reachable, so I ran the pipeline directly:")
-    yield {"type": "final", "answer": lead + "\n" + "\n".join(f"- {s}" for s in summaries),
+    # One answer style for every reply (v6): what was found first, then the next step.
+    # The technical trace stays in the details panel.
+    if summaries:
+        answer = ("Here is what I found.\n\n" + "\n\n".join(summaries) + "\n\nNext: tell me "
+                  "which points to correct, and I will prepare the entries as a proposal.")
+    else:
+        answer = _ASK_WHAT
+    yield {"type": "final", "answer": answer,
            "citations": good,
            "dropped_citations": dropped, "proposals": proposals, "steps": len(plan),
            "degraded": True,
