@@ -111,6 +111,7 @@ _TOOL_KEYWORDS: dict[str, tuple[str, ...]] = {
                            "color the", "pass", "fail"),
     "receivables_checks": ("receivable", "invoice", "contract", "retention", "wht credit",
                            "credit note", "billing", "certified", "auditor"),
+    "payroll_checks": ("payroll", "salar", "paye", "pension", "staff", "ghost", "wages"),
     "grant_checks": ("grant", "donor", "ngo", "restricted", "funder", "project fund"),
     "sales_checks": ("sales", "revenue", "pos", "till", "takings", "looks wrong", "look wrong",
                      "wrong", "shops", "branches", "what is wrong"),
@@ -127,6 +128,8 @@ JOB_GROUPS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
                                 "loan_schedule", "depreciation_schedule")),
     "receivables": (("invoice", "receivable", "contract", "retention", "wht credit"),
                     ("receivables_checks", "query_sql", "tax_compute")),
+    "payroll_audit": (("payroll", "salar", "paye", "staff", "wages"),
+                      ("payroll_checks", "tax_compute", "query_sql")),
     "grants": (("grant", "donor", "ngo", "restricted fund"), ("grant_checks", "read_document",
                                                              "query_sql")),
     "sales_review": (("sales", "revenue", "pos", "till", "takings", "shop"),
@@ -362,6 +365,8 @@ def fallback_plan(message: str) -> list[tuple[str, dict[str, Any]]]:
         plan.insert(0, ("receivables_checks", {}))
     if any(w in m for w in ("grant", "donor", "ngo")):
         plan.insert(0, ("grant_checks", {}))
+    if any(w in m for w in ("payroll", "salar", "paye", "wages")):
+        plan.insert(0, ("payroll_checks", {}))
     wants_review = any(w in m for w in ("review", "books", "trial balance", "what is wrong"))
     if wants_review and ("review_points", {}) not in plan:
         plan.append(("review_points", {}))

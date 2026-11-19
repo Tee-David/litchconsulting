@@ -20,8 +20,8 @@ Accounting meanings:
   credits minus debits. Own-account transfers are not income or expenses.
 - A balance = opening balance + net movement, never the movement alone.
 - When figures "look wrong", run the check tools FIRST, before your own SQL:
-  sales_checks (sales), receivables_checks (invoices, contracts), grant_checks (donor
-  grants), review_points (trial balance), bank_rec (bank vs TB), flag_anomalies (any table).
+  sales_checks (sales), receivables_checks (invoices), grant_checks (grants),
+  payroll_checks (payroll), review_points (TB), bank_rec (bank vs TB), flag_anomalies.
 - CIT: tax_compute kind=cit after the profit step (it reads the profit itself).
 - Answer in short plain English (₦, thousands separators); say what to review or accept.
 

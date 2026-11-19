@@ -280,3 +280,11 @@ above the timesheet share, unspent restricted funds to defer, tranches meant for
 later year, and receipts not translated at the official rate on the day. The trial
 balance review also flags bank charges on a statement that are not in the books.
 
+## Payroll audit
+
+Ask Sage to check the payroll. It looks for names paid that are not in the staff master
+(ghost employees), one bank account paid for more than one name, pay after an exit
+date, the same person paid twice in a month, pension not deducted, PAYE that differs
+from the NTA 2025 bands in the firm's tax config, and payroll gross that does not match
+salaries in the trial balance.
+

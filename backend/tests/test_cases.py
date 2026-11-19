@@ -147,8 +147,22 @@ def test_sales_checks_give_the_corrected_sales_and_vat():
 
 def test_check_summaries_are_sentences_a_person_can_read():
     for slug, tool, need in (("supermarket", "sales_checks", 7), ("contractor",
-                             "receivables_checks", 8), ("ngo", "grant_checks", 6)):
+                             "receivables_checks", 8), ("ngo", "grant_checks", 6),
+                            ("payroll", "payroll_checks", 6)):
         case, w, conv = _job(slug)
         out = run_tool(w.context(conv), tool, {})
         assert score(case, [out.summary])["found"] >= need, slug
 
+
+
+def test_payroll_checks_find_the_payroll_problems_exactly():
+    case, fs = _findings("payroll", "payroll_checks")
+    got = {x["check"]: x["amount"] for x in fs}
+    f = case.figures
+    assert got["not_in_staff_master"] == f["ghost_paid"]
+    assert got["paid_after_exit"] == f["leaver_paid"]
+    assert got["paid_twice"] == f["duplicate_paid"]
+    assert got["pension_not_deducted"] == pytest.approx(f["pension_missing"])
+    assert got["paye_wrong_rules"] == pytest.approx(abs(f["paye_gap"]))
+    assert got["payroll_vs_books"] == pytest.approx(f["december_gross"])
+    assert "shared_bank_account" in got

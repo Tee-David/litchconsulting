@@ -23,6 +23,7 @@ from litchai.workbench import (
     fin_analysis,
     grant_checks,
     journals,
+    payroll_checks,
     range_tools,
     receivables_checks,
     recipes,
@@ -818,6 +819,14 @@ TOOLS: tuple[WorkbenchTool, ...] = (
                   NoArgs, lambda c, a: receivables_checks.receivables_checks(c),
                   ("receivables don't make sense", "check our invoices",
                    "is our revenue right for the contracts", "wht credits")),
+    WorkbenchTool("payroll_checks", "read",
+                  "Standard payroll-audit checks: names not in the staff master (ghosts), one "
+                  "bank account for several names, pay after the exit date, paid twice in a "
+                  "month, pension not deducted, PAYE recomputed on the NTA 2025 bands, payroll "
+                  "gross vs salaries in the books. Run it for any payroll review.",
+                  NoArgs, lambda c, a: payroll_checks.payroll_checks(c),
+                  ("payroll audit", "check our payroll", "is our paye right",
+                   "ghost workers")),
     WorkbenchTool("grant_checks", "read",
                   "Standard donor-grant checks against the grant agreement: costs the donor "
                   "does not allow, costs of another grant's purpose, staff costs above the "

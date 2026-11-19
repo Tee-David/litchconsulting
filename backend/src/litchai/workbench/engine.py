@@ -723,7 +723,8 @@ def first_look(deps: TurnDeps, conv: Conversation) -> dict[str, Any]:
             "conversions": conversions, "layer": "pipeline"}
 
 
-CHECK_TOOLS = {"sales_checks", "receivables_checks", "grant_checks", "review_points"}
+CHECK_TOOLS = {"sales_checks", "receivables_checks", "grant_checks", "payroll_checks",
+               "review_points"}
 
 
 def _plan_for(has_tb: bool) -> Any:
