@@ -136,3 +136,19 @@ def test_grant_checks_find_the_ngo_problems_exactly():
     assert got["fx_rate"] == pytest.approx(f["fx_understated"])
     assert got["restricted_unspent"] == pytest.approx(f["deferred_ga"])
     assert sum(1 for x in fs if x["check"] == "staff_cost_over_timesheet") == 1
+
+
+def test_sales_checks_give_the_corrected_sales_and_vat():
+    case, w, conv = _job("supermarket")
+    c = run_tool(w.context(conv), "sales_checks", {}).data["corrected"]
+    assert c["net_sales"] == pytest.approx(case.figures["true_revenue"])
+    assert c["output_vat"] == pytest.approx(case.figures["true_output_vat"])
+
+
+def test_check_summaries_are_sentences_a_person_can_read():
+    for slug, tool, need in (("supermarket", "sales_checks", 7), ("contractor",
+                             "receivables_checks", 8), ("ngo", "grant_checks", 6)):
+        case, w, conv = _job(slug)
+        out = run_tool(w.context(conv), tool, {})
+        assert score(case, [out.summary])["found"] >= need, slug
+

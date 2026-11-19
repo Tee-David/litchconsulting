@@ -362,6 +362,9 @@ def fallback_plan(message: str) -> list[tuple[str, dict[str, Any]]]:
         plan.insert(0, ("receivables_checks", {}))
     if any(w in m for w in ("grant", "donor", "ngo")):
         plan.insert(0, ("grant_checks", {}))
+    wants_review = any(w in m for w in ("review", "books", "trial balance", "what is wrong"))
+    if wants_review and ("review_points", {}) not in plan:
+        plan.append(("review_points", {}))
     if not plan:
         plan.append(("profile_workbook", {"level": 3}))
     return plan[:4]

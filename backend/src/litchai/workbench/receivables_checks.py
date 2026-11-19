@@ -199,7 +199,8 @@ def receivables_checks(ctx: ToolContext) -> ToolOutput:
                                      f"work is {c['certified']:.0%} ({_m(earned)})",
                              "fix": "The excess is a contract liability (billing ahead of work), "
                                     "not revenue.", "source": "contracts register"})
-    summary = (f"{len(findings)} receivables finding(s): "
-               + "; ".join(f"{f['check']} {_m(f['amount'])}" for f in findings)) if findings \
+    # Plain sentences (what a person reads, also in the model-free fallback answer).
+    summary = (f"{len(findings)} receivables finding(s):\n"
+               + "\n".join(f"- {f['what']}. Fix: {f['fix']}" for f in findings)) if findings \
         else "No receivables findings from the standard checks."
     return ToolOutput(data={"findings": findings}, summary=summary)

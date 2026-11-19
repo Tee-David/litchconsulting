@@ -64,6 +64,10 @@ def _money(x: float) -> str:
 
 def sales_checks(ctx: ToolContext) -> ToolOutput:
     findings: list[dict[str, Any]] = []
+    from litchai.taxconfig import load_tax_config
+
+    vat_rate = load_tax_config()["vat"]["standardRatePct"] / 100
+    corrected = {"gross": 0.0, "vat": 0.0, "have": False}  # sales after the checks
     closed: date | None = None
     for wb in ctx.workbooks.values():
         for sh in wb.sheets.values():
@@ -175,6 +179,15 @@ def sales_checks(ctx: ToolContext) -> ToolOutput:
                                              f"line(s) worth {_money(extra)}: {where}",
                                      "fix": "Remove the second copies (an upload done twice).",
                                      "source": src})
+            # corrected figures: voids and second copies out, no VAT on exempt items
+            if vat_i:
+                corrected["have"] = True
+                for r in rows:
+                    if r in skip:
+                        continue
+                    corrected["gross"] += to_number(sh.value(r, amt_i)) or 0.0
+                    if not (cat_i and EXEMPT.search(str(sh.value(r, cat_i) or ""))):
+                        corrected["vat"] += to_number(sh.value(r, vat_i)) or 0.0
             # VAT on exempt items
             if vat_i and cat_i:
                 ex = [(r, to_number(sh.value(r, vat_i)) or 0) for r in rows
@@ -227,9 +240,25 @@ def sales_checks(ctx: ToolContext) -> ToolOutput:
                                  "what": f"{b}: no sales lines on {', '.join(map(str, missing))}",
                                  "fix": "Confirm the shop was closed, or find the sales.",
                                  "source": "sales"})
-    summary = (f"{len(findings)} revenue finding(s): "
-               + "; ".join(f"{f['check']} {_money(f['amount'])}" if f["amount"] is not None
-                           else f["check"] for f in findings)) if findings else \
+    data: dict[str, Any] = {"findings": findings,
+                            "books_closed_on": str(closed) if closed else None}
+    if corrected["have"]:
+        extra = sum(f["amount"] for f in findings if f["check"] == "banked_without_sales")
+        vat = corrected["vat"] + extra * vat_rate / (1 + vat_rate)  # unrecorded: standard rate
+        gross = corrected["gross"] + extra
+        data["corrected"] = {"gross_sales": round(gross, 2), "output_vat": round(vat, 2),
+                             "net_sales": round(gross - vat, 2),
+                             "basis": "valid lines only (no voids, no second copies), no VAT on "
+                                      "exempt items, unrecorded banked sales added at the "
+                                      f"standard rate ({vat_rate:.1%})"}
+    # Plain sentences, not codes: the summary is what a person reads (also in the
+    # model-free fallback answer).
+    lines = [f"- {f['what']}. Fix: {f['fix']}" for f in findings]
+    if "corrected" in data:
+        c = data["corrected"]
+        lines.append(f"- Corrected for the period: net sales {_money(c['net_sales'])}, output "
+                     f"VAT {_money(c['output_vat'])} (gross {_money(c['gross_sales'])}; "
+                     f"{c['basis']}).")
+    summary = (f"{len(findings)} revenue finding(s):\n" + "\n".join(lines)) if findings else \
         "No revenue findings from the standard checks."
-    return ToolOutput(data={"findings": findings, "books_closed_on": str(closed) if closed else None},
-                      summary=summary)
+    return ToolOutput(data=data, summary=summary)

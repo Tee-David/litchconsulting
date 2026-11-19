@@ -215,8 +215,9 @@ def grant_checks(ctx: ToolContext) -> ToolOutput:
                                          "fix": "Show only the eligible spend as income this "
                                                 "year; defer the unspent balance.",
                                          "source": "agreement, spend ledger"})
-    summary = (f"{len(findings)} grant finding(s): "
-               + "; ".join(f"{f['check']} {_m(f['amount'])}" for f in findings)) if findings \
+    # Plain sentences (what a person reads, also in the model-free fallback answer).
+    summary = (f"{len(findings)} grant finding(s):\n"
+               + "\n".join(f"- {f['what']}. Fix: {f['fix']}" for f in findings)) if findings \
         else "No grant findings from the standard checks."
     return ToolOutput(data={"findings": findings, "grants": {k: v["domain"] for k, v in grants.items()}},
                       summary=summary)
