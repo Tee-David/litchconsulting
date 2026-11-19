@@ -37,6 +37,7 @@ const workbenchSteps: TourStep[] = [
   t("toolbar", "wb-undo", "The toolbar", "Undo and redo, number formats, bold, colours, borders and merge. A pressed button shows the format of the selected cell.", { icon: "settings", optional: true }),
   t("namebox", "wb-namebox", "Name box", "It shows the selected cell. Type a cell or a range, for example D14, and press Enter to go there.", { icon: "search", optional: true }),
   t("sage-tab", "wb-sage-tab", "Sheet or Sage", "On a phone, switch between the sheet and Sage here. Both keep their place.", { icon: "panelLeft", mobileOnly: true }),
+  t("overview", "wb-overview", "Job overview", "When files are added, Sage says what each file is, runs the first checks and asks what to do next. Pick a button, or type your own request.", { icon: "fileStack", optional: true, placement: "left" }),
   t("sage", "wb-sage", "Sage for this workbook", "Ask about the sheet. Sage reads your selection, shows its steps, and proposes changes. Nothing changes until you accept.", { icon: "sparkles", placement: "left" }),
   t("rules", "wb-instructions", "Instructions", "Rules Sage follows in every answer in this workbook, for example \"Show amounts in naira thousands\".", { icon: "penSquare", optional: true }),
   t("proposals", "wb-proposal", "Proposed changes", "Sage's changes wait here. Accept keeps them as a new version. Reject drops them.", { icon: "badgeCheck", optional: true, placement: "top" }),
@@ -74,7 +75,7 @@ const ADMIN_PAGES: TourDef[] = [
     t("recent", "analyses-recent", "Recent workbenches", "Go back to a workbench where you stopped. Every version is kept.", { icon: "clock", optional: true }),
     t("studio", "analyses-studio", "Files Sage has read", "Documents the pipeline has read, with their status.", { icon: "fileStack", optional: true }),
   ]),
-  page("admin-workbench", "admin", "/admin/analyses/w/[id]", workbenchSteps),
+  page("admin-workbench", "admin", "/admin/analyses/w/[id]", workbenchSteps, 4),
   page("admin-billing", "admin", "/admin/billing", [
     t("tabs", "finance-tabs", "Billing", "Quotes and invoices, payments to confirm, expenses, and the tools. The same tabs are on every billing page.", { icon: "wallet" }),
     t("stats", "invoice-stats", "The money", "Billed, paid and owed. Late amounts show first.", { icon: "gauge", optional: true }),
@@ -143,7 +144,7 @@ const STAFF_PAGES: TourDef[] = [
     t("threads", "threads-list", "Conversations", "One thread per request. Messages reach the client by email too.", { icon: "send" }),
   ]),
   page("staff-sage", "staff", "/work/sage", sageSteps("staff")),
-  page("staff-workbench", "staff", "/work/analyses/w/[id]", workbenchSteps),
+  page("staff-workbench", "staff", "/work/analyses/w/[id]", workbenchSteps, 4),
   page("staff-notifications", "staff", "/work/notifications", [
     t("list", "notif-list", "Notifications", "Everything that happened on your work, newest first.", { icon: "bell", optional: true }),
     t("prefs", "notif-prefs", "How you hear", "Choose email, push or only here, for each kind of event.", { icon: "settings", optional: true }),

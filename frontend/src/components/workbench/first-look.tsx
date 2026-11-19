@@ -70,7 +70,7 @@ export function FirstLookCard({
   );
 
   return (
-    <section className="space-y-2 rounded-card border border-hairline bg-paper px-3 py-2.5" aria-label="First look">
+    <section className="space-y-2 rounded-card border border-hairline bg-paper px-3 py-2.5" aria-label="Job overview" data-tour="wb-overview">
       <p className="flex items-center gap-2 text-[13px] font-semibold text-ink">
         <Eye className="size-4 text-muted" aria-hidden /> Job overview
         <span className="font-normal text-muted">
