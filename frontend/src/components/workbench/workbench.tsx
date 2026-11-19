@@ -116,7 +116,21 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const toast = useToast();
   const [conv, setConv] = useState(initial);
   const [look, setLook] = useState(firstLook);
-  const [wbId, setWbId] = useState(initial.workbooks[0]?.id ?? "");
+  // v6 C2: open the most useful file first (books or TB, then bank, ledgers, the rest).
+  const [wbId, setWbId] = useState(
+    (firstLook?.primary_workbook_id && initial.workbooks.some((w) => w.id === firstLook.primary_workbook_id)
+      ? firstLook.primary_workbook_id
+      : initial.workbooks[0]?.id) ?? "",
+  );
+  // Files added before the first message refresh the job overview (v6 C1).
+  const msgCount = useRef(initial.messages.length);
+  msgCount.current = conv.messages.length;
+  const showLook = useCallback((next: WbFirstLook | undefined) => {
+    if (!next || msgCount.current > 0) return;
+    setLook(next);
+    setSheetsBy((p) => ({ ...p, ...Object.fromEntries(next.workbooks.map((w) => [w.workbook_id, w.sheet_names])) }));
+    if (next.primary_workbook_id) setWbId(next.primary_workbook_id);
+  }, []);
   const [sheetBy, setSheetBy] = useState<Record<string, string>>({});
   const [sheetsBy, setSheetsBy] = useState<Record<string, string[]>>(() =>
     Object.fromEntries((firstLook?.workbooks ?? []).map((w) => [w.workbook_id, w.sheet_names])),
@@ -871,6 +885,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
             return;
           }
           if (res.conversation) setConv(res.conversation);
+          showLook(res.firstLook);
           const many = (res.added?.length ?? 1) > 1;
           if (/\.(zip|rar|7z)$/i.test(name) && res.added?.length) set({ contents: res.added });
           const skippedNote = res.skipped?.length ? ` · ${res.skipped.length} skipped` : "";
@@ -889,6 +904,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
               const a = await attachDocumentAction(conv.id, d, /\.(zip|rar|7z)$/i.test(name) ? name : null);
               if (a.ok) {
                 setConv(a.conversation);
+                showLook(a.firstLook);
                 setGridVersion((v) => v + 1);
               } else if (a.error === "waiting") still.push(d);
             }
@@ -899,7 +915,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         });
       }
     },
-    [conv.id, askPassword],
+    [conv.id, askPassword, showLook],
   );
 
   // Files picked on the start form after the first one arrive here once.
@@ -1004,8 +1020,8 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const header = (
     <div className="flex items-center gap-2 border-b border-hairline py-2 pl-3 pr-2 sm:pl-4">
       <div className="min-w-0 flex-1">
-        <h1 className="truncate font-display text-[15px] font-semibold text-ink" title={conv.workbooks.map((w) => w.name).join(" + ")}>
-          {conv.workbooks.map((w) => w.name).join(" + ") || conv.title}
+        <h1 className="truncate font-display text-[15px] font-semibold text-ink" title={conv.workbooks.map((w) => w.name).join(", ")}>
+          {jobTitle(conv)}
         </h1>
         <p className="flex min-w-0 items-center gap-1.5 truncate text-[12px] text-muted" aria-live="polite">
           <span className={cn("size-1.5 shrink-0 rounded-full", saveState === "offline" || queued ? "bg-warn" : saveState === "saving" ? "bg-accent" : "bg-good")} aria-hidden />
@@ -2281,3 +2297,11 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   );
 }
 
+/** One clear title: the job's name, or the main file plus a count (v6: names were joined with "+"). */
+function jobTitle(conv: WbConversation): string {
+  const books = conv.workbooks;
+  if (books.length <= 1) return books[0]?.name ?? conv.title;
+  const group = books.find((w) => w.group)?.group;
+  if (group && books.every((w) => w.group === group)) return `${group} · ${books.length} files`;
+  return `${books[0].name} and ${books.length - 1} more file${books.length === 2 ? "" : "s"}`;
+}

@@ -49,6 +49,9 @@ export function FirstLookCard({
   const warnKinds = new Set(["duplicate", "outlier", "balance_break", "text_date", "text_number"]);
 
   const notesBy = new Map((look.conversions ?? []).map((c) => [c.workbook_id, c]));
+  const factsBy = new Map((look.files ?? []).map((f) => [f.workbook_id, f]));
+  const areas = (look.findings ?? []).filter((a) => a.count > 0);
+  const clean = (look.findings ?? []).filter((a) => a.count === 0).map((a) => a.area.toLowerCase());
   const tables = sheets.length;
   const checks = byKind.map(([kind, n]) => ({ kind, n, refs: findings.filter((f) => f.kind === kind).slice(0, 3), warn: warnKinds.has(kind) }));
   // The most serious first: warnings, then the larger counts.
@@ -69,7 +72,7 @@ export function FirstLookCard({
   return (
     <section className="space-y-2 rounded-card border border-hairline bg-paper px-3 py-2.5" aria-label="First look">
       <p className="flex items-center gap-2 text-[13px] font-semibold text-ink">
-        <Eye className="size-4 text-muted" aria-hidden /> First look
+        <Eye className="size-4 text-muted" aria-hidden /> Job overview
         <span className="font-normal text-muted">
           · {files} file{files === 1 ? "" : "s"}, {tables} table{tables === 1 ? "" : "s"}
         </span>
@@ -88,6 +91,7 @@ export function FirstLookCard({
                   <span className="min-w-0 truncate" title={conv?.filename ?? w.name}>{conv?.filename ?? w.name}</span>
                   {conv ? <span className="ml-auto shrink-0 rounded bg-paper px-1.5 text-[10.5px] font-semibold uppercase text-muted">{conv.format}</span> : null}
                 </p>
+                {factsBy.get(w.workbook_id) ? <p className="mt-0.5 text-body">{factLine(factsBy.get(w.workbook_id)!)}</p> : null}
                 {tabs.map((sh) => (
                   <p key={sh.sheet} className="mt-0.5 text-body">
                     {sh.sheet}: {sh.table!.rows.toLocaleString("en-NG")} rows
@@ -101,6 +105,27 @@ export function FirstLookCard({
           })}
         </ul>
       </Trace>
+
+      {areas.length > 0 ? (
+        <div className="space-y-1.5" aria-label="First checks">
+          {areas.map((a) => (
+            <div key={a.area} className="text-[12.5px]">
+              <p className="flex items-start gap-2 text-body">
+                <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-warn" aria-hidden />
+                <span><b className="font-semibold text-ink">{a.area}:</b> {a.count} point{a.count === 1 ? "" : "s"} to review</span>
+              </p>
+              <ul className="ml-5.5 list-disc space-y-0.5 pl-4 text-body">
+                {a.top.map((t) => <li key={t}>{t}</li>)}
+              </ul>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      {clean.length ? (
+        <p className="flex items-center gap-2 text-[12.5px] text-good">
+          <CheckCircle2 className="size-3.5" aria-hidden /> No points found in the {clean.join(", ")} checks.
+        </p>
+      ) : null}
 
       {checks.length === 0 ? (
         <p className="flex min-h-8 items-center gap-2 text-[12.5px] text-good">
@@ -121,6 +146,9 @@ export function FirstLookCard({
         </>
       )}
 
+      {look.suggestions.length > 0 && look.question ? (
+        <p className="text-[13px] font-medium text-ink">{look.question}</p>
+      ) : null}
       {look.suggestions.length > 0 && (
         <div className="-mx-3 flex gap-1.5 overflow-x-auto px-3 pb-0.5 [mask-image:linear-gradient(90deg,transparent,#000_12px,#000_calc(100%-12px),transparent)] [scrollbar-width:none] sm:flex-wrap sm:overflow-visible sm:[mask-image:none]">
           {look.suggestions.map((sg) => (
@@ -136,9 +164,18 @@ export function FirstLookCard({
           ))}
         </div>
       )}
-      <p className="text-[11px] text-muted">Computed by the pipeline from every row. No model was used.</p>
+      <p className="text-[11px] text-muted">Sage read every row with its built-in checks. No AI model was used, and nothing was changed.</p>
     </section>
   );
+}
+
+function factLine(f: NonNullable<WbFirstLook["files"]>[number]): string {
+  const label = f.label.charAt(0).toUpperCase() + f.label.slice(1);
+  const bits = [label + (f.bank ? ` (${f.bank})` : "")];
+  if (f.period?.length) bits.push(f.period.join(" to "));
+  if (f.group) bits.push(`from ${f.group}`);
+  if (f.note) bits.push(`use: ${f.note}`);
+  return bits.join(" · ");
 }
 
 function qualify(cell: string) {

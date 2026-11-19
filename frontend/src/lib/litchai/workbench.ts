@@ -127,6 +127,17 @@ export type WbFirstLook = {
   suggestions: string[];
   /** Files that became an xlsx working copy (the original is kept and cited). */
   conversions?: WbConversion[];
+  /** v6 job overview: each file's label, the first checks, and the next step. */
+  files?: WbJobFile[];
+  findings?: { area: string; tool: string; count: number; top: string[] }[];
+  actions?: string[];
+  primary_workbook_id?: string | null;
+  question?: string | null;
+};
+
+export type WbJobFile = {
+  workbook_id: string; name: string; role: string; label: string;
+  bank?: string | null; period?: string[] | null; rows?: number | null; group?: string | null; note?: string;
 };
 
 export type WbConversion = { workbook_id: string; filename: string; format: string; converted: boolean; notes: string[] };

@@ -719,8 +719,88 @@ def first_look(deps: TurnDeps, conv: Conversation) -> dict[str, Any]:
     # Files that became an xlsx working copy: say so, with what was lost.
     conversions = [{"workbook_id": ref.id, **ref.source} for ref in conv.workbooks
                    if ref.source and ref.source.get("converted")]
+    overview = job_overview(ctx, conv)
+    if overview["actions"]:
+        # The job's own actions come first; the generic ones fill the rest.
+        suggestions = list(overview["actions"]) + [
+            s for s in suggestions if s not in overview["actions"]]
     return {"workbooks": profiles, "anomalies": anomalies, "suggestions": suggestions[:5],
-            "conversions": conversions, "layer": "pipeline"}
+            "conversions": conversions, "layer": "pipeline", **overview}
+
+
+# Most useful file first (v6 C2): books and TB, then bank, ledgers, the rest.
+_ROLE_RANK = {"trial_balance": 0, "books": 1, "bank_statement": 2, "ledger": 3,
+              "sales_report": 4, "invoices": 5, "payroll": 6, "asset_register": 7,
+              "other": 8, "document": 9}
+_GRANT = re.compile(r"grant|donor|restricted fund", re.IGNORECASE)
+_OVERVIEW_BUDGET_S = 8.0
+
+
+def job_overview(ctx: ToolContext, conv: Conversation) -> dict[str, Any]:
+    """What the job holds, what the first checks found, and what to do next (v6 C1).
+
+    No model. Each file: its label, period and rows. Then the standard checks that
+    fit the files run quietly (read only). Sage then asks what to do; it does not
+    start a task by itself (C3)."""
+    files: list[dict[str, Any]] = []
+    for ref in conv.workbooks:
+        f = ref.facts or {}
+        role = ref.role or f.get("role") or "other"
+        files.append({"workbook_id": ref.id, "name": ref.name, "role": role,
+                      "label": f.get("label") or role.replace("_", " "),
+                      "bank": f.get("bank"), "period": f.get("period"),
+                      "rows": f.get("rows"), "group": ref.group, "note": ref.note or ""})
+    roles = {f["role"] for f in files}
+    names = " ".join([f["name"] for f in files] + [
+        s for w in ctx.workbooks.values() for s in w.sheets])
+    has_tb = bool(roles & {"trial_balance", "books"})
+    banks = [f for f in files if f["role"] == "bank_statement"]
+
+    checks: list[tuple[str, str]] = []  # (tool, plain title)
+    if has_tb:
+        checks.append(("review_points", "Books"))
+    if "sales_report" in roles:
+        checks.append(("sales_checks", "Sales"))
+    if "invoices" in roles:
+        checks.append(("receivables_checks", "Invoices"))
+    if "payroll" in roles:
+        checks.append(("payroll_checks", "Payroll"))
+    if _GRANT.search(names):
+        checks.append(("grant_checks", "Grants"))
+
+    findings: list[dict[str, Any]] = []
+    start = time.monotonic()
+    for tool, title in checks:
+        if time.monotonic() - start > _OVERVIEW_BUDGET_S:
+            break  # a large job: the rest run when the person asks
+        try:
+            data = run_tool(ctx, tool, {}).data or {}
+        except Exception:  # noqa: BLE001, S112 - a first look never fails on one check
+            continue
+        items = data.get("points") or data.get("findings") or []
+        findings.append({"area": title, "tool": tool, "count": len(items),
+                         "top": [str(i.get("what", ""))[:160] for i in items[:3]]})
+
+    actions: list[str] = []
+    if has_tb:
+        actions.append("Check the books and list the adjustments needed")
+    for b in banks[:2]:
+        what = b["bank"] or "the bank"
+        if has_tb or "ledger" in roles:
+            actions.append(f"Reconcile the {what} statement to the books")
+    for tool, title in checks:
+        if tool != "review_points":
+            actions.append(f"Explain the {title.lower()} findings")
+    if has_tb:
+        actions.append("Prepare the financial statements and the tax")
+    seen: set[str] = set()
+    actions = [a for a in actions if not (a in seen or seen.add(a))][:4]
+
+    primary = min(files, key=lambda f: _ROLE_RANK.get(f["role"], 8))["workbook_id"] \
+        if files else None
+    return {"files": files, "findings": findings, "actions": actions,
+            "primary_workbook_id": primary,
+            "question": "What would you like me to do?" if files else None}
 
 
 CHECK_TOOLS = {"sales_checks", "receivables_checks", "grant_checks", "payroll_checks",

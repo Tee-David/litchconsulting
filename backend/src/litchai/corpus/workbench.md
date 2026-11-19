@@ -20,10 +20,15 @@ the browser's speech recognition sends audio to an outside service.
 The workbench reads the whole workbook, every sheet of every attached file, so you
 never need to select a range first. Spreadsheets (xlsx and csv) open as they are. A
 PDF bank statement or ledger opens as a sheet built from its extracted rows, with
-the source page kept for each row. When files open, Sage shows a first look: what
-each sheet holds, how many rows, date span, totals, duplicates, dates typed as text,
-and suggested next steps such as "Reconcile bank to ledger" or "Build the P&L". The
-first look needs no AI model; it is computed directly from the file.
+the source page kept for each row. When files open, Sage shows a job overview: what
+each file is (trial balance, bank statement and which bank, ledger, invoices,
+payroll), its period, rows and totals, then the first checks that fit the files (the
+books, sales, invoices, payroll or grant checks) with the top points found. The
+workbench opens the most useful file first: the trial balance or books, then the bank
+statements, then the ledgers. Sage then asks "What would you like me to do?" with
+buttons such as "Check the books and list the adjustments needed", "Reconcile the
+GTBank statement to the books" or "Prepare the financial statements and the tax". Sage
+does not start a task by itself. The overview needs no AI model and changes nothing.
 
 ## How Sage works in the workbench
 
@@ -32,8 +37,11 @@ answer. Every number comes from a tool, never from the model's own arithmetic, a
 the answer cites the cells it came from (for example Ledger!E2 or 'P&L'!C24). The
 steps are shown live as Sage works: the plan, each tool it ran, and the result. Sage
 uses at most eight steps for one request. If no AI model is reachable, the workbench
-still runs the deterministic steps for common requests (reconcile, categorise,
-statements, anomaly checks) and says so.
+still runs its built-in checks for common requests (reconcile, categorise,
+statements, anomaly checks). Every answer has one style: the answer first in one or
+two sentences, then the figures with their source cells, then the next step. When a
+request is not clear, Sage asks one short question with a few choices. When Sage
+cannot finish, it says so plainly and says that nothing was changed.
 
 ## Tools the workbench can use
 

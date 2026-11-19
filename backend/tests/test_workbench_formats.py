@@ -220,6 +220,12 @@ def test_attach_a_csv_and_a_json_document_through_the_api(tmp_path):
         assert [w["source"]["format"] for w in refs] == ["csv", "json"]
         conv = body["first_look"]["conversions"]
         assert {x["filename"] for x in conv} == {"bank.csv", "rows.json"}
+        # v6 job overview: each file labelled, the bank opens first, Sage asks.
+        look = body["first_look"]
+        assert len(look["files"]) == 2 and look["question"]
+        bank = next(f for f in look["files"] if f["name"].startswith("bank"))
+        assert bank["role"] == "bank_statement"
+        assert look["primary_workbook_id"] == bank["workbook_id"]
         r = c.post("/workbench/conversations", json={
             "client_id": "c1", "document_ids": [docs["broken.json"].id]})
         assert r.status_code == 422 and "unreadable file" in r.json()["detail"]
