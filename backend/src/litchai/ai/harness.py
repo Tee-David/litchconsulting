@@ -333,7 +333,7 @@ MENU_SKIP_ARGS = {"workbook_id", "new_sheet_name", "period_label", "round_thresh
                   "header", "only_blank", "anchor", "y_format", "date_window_days",
                   "description_column", "category_column", "tin", "rc_number"}
 MENU_MAX_OPTIONAL = 5
-MENU_MAX_DESCRIPTION = 240
+MENU_MAX_DESCRIPTION = 200  # the full text is in the tool; the menu needs the gist
 MENU_FULL_DESCRIPTION = {"tax_compute"}  # its description lists the valid inputs
 
 
