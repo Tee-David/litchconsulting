@@ -693,10 +693,12 @@ def run_agent_loop(
 
         if turn.action == "final":
             answer = (turn.answer or "").strip()
-            # Rule: the model plans, the tools compute. A figure in the answer that
-            # no tool produced (and the user didn't give) is sent back once.
+            # Rule: the model plans, the tools compute. An answer with figures but no
+            # tool run at all is sent back once (that is guessing). After tools ran, an
+            # unsupported figure is marked "not verified" in the answer, never a retry
+            # (a retry cost a call and produced "my earlier figure was wrong"; v6).
             loose = ungrounded_figures(answer, grounded)
-            if loose and grounding_retries < 1 and step < max_steps:
+            if loose and not tools_used and grounding_retries < 1 and step < max_steps:
                 grounding_retries += 1
                 yield {"type": "retry", "step": step + 1, "attempt": 1,
                        "provider": provider_seen, "error": "ungrounded figures: "
@@ -805,8 +807,15 @@ def ungrounded_figures(answer: str, grounded: list[float]) -> list[float]:
     difference of two grounded figures is grounded too (a model may subtract two tool
     totals; live run 2026-11-19 lost a correct answer to that)."""
     big = sorted({round(g, 2) for g in grounded if abs(g) >= GROUNDING_MIN})[:400]
+    allg = sorted({round(g, 4) for g in grounded if g})[:400]
     derived = {round(a + b, 2) for i, a in enumerate(big) for b in big[i + 1:]} | {
         round(abs(a - b), 2) for i, a in enumerate(big) for b in big[i + 1:]}
+    # ratios and percentages of tool figures (a margin, a share, a VAT gross-up)
+    for i, a in enumerate(allg[:150]):
+        for b in allg[:150]:
+            if a != b and b:
+                derived.add(round(a / b, 4))
+                derived.add(round(a / b * 100, 2))
     grounded = [*grounded, *derived]
     loose: list[float] = []
     for x in figures_in(answer):
