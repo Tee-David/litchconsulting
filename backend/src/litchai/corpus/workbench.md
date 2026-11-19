@@ -223,3 +223,16 @@ formula on any sheet that uses the cell. Ask Sage to goal seek, for example "wha
 revenue gives a profit before tax of 50 million": Sage recomputes the whole chain and
 proposes the one input value that reaches the target.
 
+## Files in a job: labels, notes and ZIP files
+
+Add several files at once, or one ZIP, RAR or 7z archive (with or without a
+password). Each file becomes its own workbook, and files from one archive stay
+grouped under the archive's name. The workbench labels each file by itself: bank
+statement (and which bank), trial balance, ledger or cash book, invoices, payroll,
+fixed asset register, sales or settlement report, letter or contract, or books with
+several schedules. It also notes the period and the number of rows. You can correct a
+label and add a short note on what the file is for, for example "use for the bank
+rec". Sage sees one line per file with its label and your note, so you can say "use
+the GTBank statement" or "take the terms from the loan letter". Sage reads the text
+of letters, PDFs and DOCX notes with page numbers.
+

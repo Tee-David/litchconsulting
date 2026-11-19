@@ -85,6 +85,12 @@ class WorkbookRef:
     # The original file when this is a converted working copy:
     # {filename, format, converted, notes}. The original stays untouched.
     source: dict[str, Any] | None = None
+    # Job context (plan v5): the engine's label and facts, the person's own label and
+    # note ("use for the bank rec"), and the archive the file came from.
+    facts: dict[str, Any] | None = None
+    role: str | None = None
+    note: str = ""
+    group: str | None = None
 
     @property
     def current_sha(self) -> str:
@@ -343,11 +349,17 @@ class Workbench:
         wb_id = f"doc-{document_id}" if document_id is not None else f"file-{len(conv.workbooks)+1}"
         if any(w.id == wb_id for w in conv.workbooks):
             return conv.workbook_ref(wb_id)
-        load_xlsx(data, wb_id=wb_id, name=name)  # validate it opens (zip-bomb guard inside)
+        model = load_xlsx(data, wb_id=wb_id, name=name)  # validate it opens (zip-bomb guard)
         sha = self.blobs.put(data)
+        try:
+            from litchai.workbench.file_context import describe
+
+            facts = describe(model, name)
+        except Exception:  # noqa: BLE001 — a label is a help, never a reason to refuse a file
+            facts = None
         ref = WorkbookRef(id=wb_id, name=name, origin=origin, document_id=document_id,
                           versions=[{"n": 1, "sha": sha, "at": _now(), "batch_id": None,
-                                     "gate": None}], source=source)
+                                     "gate": None}], source=source, facts=facts)
         conv.workbooks.append(ref)
         return ref
 

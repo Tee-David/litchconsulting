@@ -43,10 +43,12 @@ class StartConversation(BaseModel):
     period_label: str = ""
     title: str = "Workbench"
     blank_workbook: str | None = None      # name → start with an empty workbook
+    group: str | None = Field(None, max_length=120)  # the archive the files came from
 
 
 class AttachDocuments(BaseModel):
     document_ids: list[int] = Field(min_length=1)
+    group: str | None = Field(None, max_length=120)  # the archive the files came from
 
 
 class UploadWorkbook(BaseModel):
@@ -68,6 +70,12 @@ class MessageFeedback(BaseModel):
     vote: Literal["good", "bad"] | None = None
     note: str = Field(default="", max_length=1000)
     author: str = Field(default="you", min_length=1, max_length=80)
+
+
+class FileContext(BaseModel):
+    role: str | None = Field(None, max_length=40)
+    note: str | None = Field(None, max_length=300)
+    group: str | None = Field(None, max_length=120)
 
 
 class AiLimits(BaseModel):
@@ -180,6 +188,12 @@ def register_workbench_routes(app: FastAPI) -> None:
 
         return get_column_letter(c)
 
+    def _set_group(conv: Conversation, document_id: int, group: str | None) -> None:
+        if group:
+            for ref in conv.workbooks:
+                if ref.document_id == document_id and not ref.group:
+                    ref.group = group.strip()[:120]
+
     def _attach_document(wb: Workbench, conv: Conversation, document_id: int) -> None:
         from litchai.workbench.formats import FormatError, is_workbench_file, to_working_copy
         from litchai.workbench.model import from_line_items
@@ -243,6 +257,28 @@ def register_workbench_routes(app: FastAPI) -> None:
         return {"chain": router.status(probe=probe),
                 "local_only_chain": [s.name for s in router.chain(local_only=True)]}
 
+    @app.patch("/workbench/conversations/{conversation_id}/workbooks/{workbook_id}/context")
+    def set_file_context(conversation_id: str, workbook_id: str, body: FileContext) -> dict[str, Any]:
+        """The person's label and note for a file (what it is, what to use it for)."""
+        from litchai.workbench.file_context import ROLES
+
+        with _workbench() as wb:
+            conv = _get(wb, conversation_id)
+            try:
+                ref = conv.workbook_ref(workbook_id)
+            except KeyError as exc:
+                raise HTTPException(404, "workbook not found") from exc
+            if body.role is not None:
+                if body.role and body.role not in ROLES:
+                    raise HTTPException(422, f"role must be one of {sorted(ROLES)}")
+                ref.role = body.role or None
+            if body.note is not None:
+                ref.note = " ".join(body.note.split())[:300]
+            if body.group is not None:
+                ref.group = body.group.strip()[:120] or None
+            wb.store.save(conv)
+            return {"conversation": conv.public()}
+
     @app.put("/ai/limits")
     def set_ai_limits(body: AiLimits) -> dict[str, Any]:
         """The daily DeepSeek spending cap (USD). The relay allows admins only."""
@@ -268,6 +304,7 @@ def register_workbench_routes(app: FastAPI) -> None:
                              client_name=body.client_name, period_label=body.period_label)
             for doc_id in body.document_ids:
                 _attach_document(wb, conv, doc_id)
+                _set_group(conv, doc_id, body.group)
             if body.blank_workbook:
                 conv.new_seq += 1
                 blank = new_workbook(f"new-{conv.new_seq}", body.blank_workbook)
@@ -323,6 +360,7 @@ def register_workbench_routes(app: FastAPI) -> None:
             conv = _get(wb, conversation_id)
             for doc_id in body.document_ids:
                 _attach_document(wb, conv, doc_id)
+                _set_group(conv, doc_id, body.group)
             look = first_look(_deps(wb, conv), conv)
             wb.store.save(conv)
             return {"conversation": conv.public(), "first_look": look}

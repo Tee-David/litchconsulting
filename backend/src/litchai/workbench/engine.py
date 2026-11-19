@@ -322,6 +322,13 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
                if b.status == "pending"]
     template = (PROMPTS_DIR / "workbench_agent.md").read_text(encoding="utf-8")
     profiles = "\n".join(profile_text(profile_workbook(wb, 3)) for wb in ctx.workbooks.values())
+    if len(conv.workbooks) > 1:
+        # Several files: one line each first (what it is, what it is for), so the model
+        # picks the right file by name or purpose.
+        from litchai.workbench.file_context import manifest
+
+        profiles = ("Files in this job (id, name, what it is, period, rows, note):\n"
+                    + manifest(conv.workbooks, ctx.workbooks) + "\n\n" + profiles)
     system = template.format(profile=profiles or "(no workbook yet)",
                              sql_catalog=catalog_text(ctx) or "(none)",
                              pending="\n".join(pending) or "(none)", max_steps=max_steps,
