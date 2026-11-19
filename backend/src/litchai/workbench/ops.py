@@ -648,7 +648,8 @@ def libreoffice_gate(xlsx: bytes) -> GateResult:
             grids, recomputed = _recompute_keep(path)
         except (RecomputeError, OSError) as exc:
             return GateResult("unverified", formulas=formulas, detail=str(exc)[:200])
-        errors = [f"{s}!{_col(c)}{r + 1}: {tok}" for (s, r, c, tok) in find_workbook_errors(grids)]
+        # find_workbook_errors is 1-indexed (the IronCalc shadow found the old +1 slip).
+        errors = [f"{s}!{_col(c - 1)}{r}: {tok}" for (s, r, c, tok) in find_workbook_errors(grids)]
         _ironcalc_shadow(path, errors)
     return GateResult("blocked" if errors else "passed", errors=errors, formulas=formulas,
                       recomputed=recomputed)
