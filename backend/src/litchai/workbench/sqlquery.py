@@ -60,6 +60,9 @@ class SqlCatalog:
         return "\n".join(lines)
 
 
+_GENERIC = re.compile(r"^(sheet|data|table|export|page)\s*\d*$", re.IGNORECASE)
+
+
 def build_catalog(workbooks: list[Workbook]) -> tuple[SqlCatalog, dict[str, tuple[list[str],
                                                                                  list[list]]]]:
     tables: dict[str, dict[str, Any]] = {}
@@ -68,6 +71,11 @@ def build_catalog(workbooks: list[Workbook]) -> tuple[SqlCatalog, dict[str, tupl
         for sheet_name, table in detect_tables(wb).items():
             sheet = wb.sheets[sheet_name]
             tname = ident(sheet_name)
+            if _GENERIC.match(sheet_name.strip()):
+                # "Sheet1" says nothing: name the table after its file (a CSV's only sheet),
+                # e.g. freshmart_pos_export_q4_2025 (edge-case run 2026-11-19).
+                tname = ident(re.sub(r"\.(csv|tsv|txt|xlsx?|xlsm|ods|json)$", "", wb.name,
+                                     flags=re.IGNORECASE))
             if tname in tables:
                 tname = ident(f"{wb.name}_{sheet_name}")
             n = 2

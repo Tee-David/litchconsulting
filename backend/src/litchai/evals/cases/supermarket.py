@@ -17,7 +17,7 @@ from __future__ import annotations
 import csv
 import io
 import random
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from openpyxl import Workbook
 
@@ -47,7 +47,7 @@ def build(seed: int = 2025) -> Case:
         for b in BRANCHES:
             if b == "Ikeja" and d == date(2025, 12, 24):
                 continue  # P7: POS down all day
-            for cat, std in CATS.items():
+            for cat in CATS:
                 base = {"Basic food": 420_000, "Beverages": 260_000, "Household": 180_000,
                         "Toiletries": 120_000}[cat] * (1.3 if d.month == 12 else 1.0)
                 gross = _r2(round(base * rnd.uniform(0.75, 1.25), -2))
@@ -123,6 +123,7 @@ def build(seed: int = 2025) -> Case:
 
     def xlsx(sheets: dict[str, list[list]]) -> bytes:
         wb = Workbook()
+        wb.properties.created = wb.properties.modified = datetime(2026, 1, 5, 9, 0)  # same bytes
         wb.remove(wb.active)
         for name, data in sheets.items():
             ws = wb.create_sheet(name)
@@ -182,10 +183,10 @@ def build(seed: int = 2025) -> Case:
         slug="supermarket", client="Adaeze FreshMart Ltd", period="Q4 2025 (Oct-Dec)",
         files=files,
         prompts=[
-            "Hi, these are our Q4 files for the three shops: the POS export, the card "
-            "settlement report, the cash banking sheet and our books. Our accountant says the "
-            "sales figure looks wrong. Please go through everything and tell me what is wrong "
-            "and by how much.",
+            ("Hi, these are our Q4 files for the three shops: the POS export, the card "
+             "settlement report, the cash banking sheet and our books. Our accountant says the "
+             "sales figure looks wrong. Please go through everything and tell me what is wrong "
+             "and by how much."),
             "What should our output VAT for the quarter be? Show me how you got it.",
             "Please prepare the correcting entries so the books show the right sales.",
         ],
