@@ -282,6 +282,22 @@ TOOL_ALIASES = {
 }
 
 
+def _native_tool_list(tools: list[Any], extra: list[Any]) -> list[dict[str, Any]]:
+    """OpenAI "tools" entries: full schemas for the ranked tools, light entries
+    (any arguments, checked by our validator) for the rest, so every tool can be
+    called without a large prompt."""
+    out = []
+    for t in tools:
+        params = t.parameters if isinstance(t.parameters, dict) else {"type": "object"}
+        out.append({"type": "function", "function": {
+            "name": t.name, "description": t.description[:400], "parameters": params}})
+    for t in extra:
+        out.append({"type": "function", "function": {
+            "name": t.name, "description": t.description.split(". ")[0][:160],
+            "parameters": {"type": "object", "additionalProperties": True}}})
+    return out
+
+
 def _bare_tool(name: str) -> str:
     """'repo_browser.query_sql', 'functions.query_sql', 'tool_query_sql' -> 'query_sql'."""
     name = name.strip().rsplit(".", 1)[-1]
@@ -326,6 +342,24 @@ def parse_turn(text: str, offered: set[str],
             payload = {"action": "tool", "tool": name, "args_json": args}
         else:
             payload = {"action": "tool", "tool": name, "args": args}
+    if isinstance(payload, dict) and str(payload.get("tool") or "").endswith("parallel"):
+        # A "parallel" pseudo-tool carrying the real calls in its arguments.
+        a = payload.get("args")
+        if a is None and payload.get("args_json"):
+            try:
+                a = json.loads(payload["args_json"], strict=False)
+            except (json.JSONDecodeError, TypeError):
+                a = None
+        calls = next((a[k] for k in ("calls", "tool_uses", "tools", "parallel")
+                      if isinstance(a, dict) and isinstance(a.get(k), list)), None) or (
+            a if isinstance(a, list) else None)
+        if calls and isinstance(calls[0], dict):
+            def norm(c: dict[str, Any]) -> dict[str, Any]:
+                return {"tool": c.get("tool") or c.get("name") or c.get("recipient_name"),
+                        "args": c.get("args") or c.get("arguments") or c.get("parameters") or {}}
+            first, *rest = [norm(c) for c in calls]
+            payload = {**payload, "action": "tool", "tool": first["tool"],
+                       "args": first["args"], "args_json": None, "parallel": rest or None}
     if isinstance(payload, dict) and isinstance(payload.get("tool"), str):
         payload = {**payload, "tool": _bare_tool(payload["tool"])}
     if isinstance(payload, dict) and not payload.get("action"):
@@ -366,7 +400,12 @@ def parse_turn(text: str, offered: set[str],
         if (not turn.tool or turn.tool not in offered) and turn.args and check_args is not None:
             # No name, or a made-up one ("commentary", "exec", "run"): take the one tool
             # whose arguments fit, e.g. {"sql": ...} can only be query_sql (19 Nov runs).
-            fits = [n for n in sorted(offered) if check_args(n, turn.args) is None]
+            def fits_strictly(n: str) -> bool:
+                try:  # strict: a tool that would only accept after dropping keys does not fit
+                    return check_args(n, turn.args, strict=True) is None  # type: ignore[call-arg]
+                except TypeError:
+                    return check_args(n, turn.args) is None
+            fits = [n for n in sorted(offered) if fits_strictly(n)]
             if reads is not None and len(fits) > 1:
                 fits = [n for n in fits if n in reads] or fits
             if len(fits) == 1:
@@ -568,6 +607,8 @@ def run_agent_loop(
     budget = turn_budget or (LOCAL_TURN_BUDGET if local_only else AGENT_TURN_BUDGET)
     deadline = time.monotonic() + budget
 
+    native_tools = _native_tool_list(tools, extra_tools)
+
     def call(extra: list[dict[str, str]], start_after: str | None = None) -> Any:
         return router.complete(base + transcript + extra, schema=AGENT_TURN_SCHEMA,
                                conversation_id=conversation_id, local_only=local_only,
@@ -576,7 +617,8 @@ def run_agent_loop(
                                params={"temperature": 0.1, "max_tokens": 1200,
                                        "timeout": LOCAL_CALL_TIMEOUT if local_only
                                        else AGENT_CALL_TIMEOUT,
-                                       "strict_schema": AGENT_TURN_STRICT_SCHEMA})
+                                       "strict_schema": AGENT_TURN_STRICT_SCHEMA,
+                                       "tools": native_tools})
 
     step = 0
     while True:

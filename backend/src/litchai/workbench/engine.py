@@ -299,9 +299,9 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
             obs.data = {**(obs.data or {}), "chart_preview": out.chart_preview}
         return obs
 
-    def check_args(name: str, args: dict[str, Any]) -> str | None:
+    def check_args(name: str, args: dict[str, Any], strict: bool = False) -> str | None:
         try:
-            validate_call(name, resolve_refs(args, results))
+            validate_call(name, resolve_refs(args, results), strict=strict)
         except ToolError as exc:
             return str(exc)
         return None

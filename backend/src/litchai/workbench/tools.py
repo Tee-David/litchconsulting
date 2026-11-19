@@ -17,9 +17,9 @@ from litchai.workbench import (
     analysis,
     audit_tools,
     bankrec,
-    file_context,
     builders,
     compiler_tools,
+    file_context,
     fin_analysis,
     grant_checks,
     journals,
@@ -617,7 +617,7 @@ def _write_cells(ctx: ToolContext, a: WriteCellsArgs) -> ToolOutput:
         ref = w.cell.replace("$", "").strip().upper()
         try:
             parse_a1(ref)
-        except Exception as exc:  # noqa: BLE001 - any parse failure is the model's input
+        except Exception as exc:
             raise ToolError(f"{w.cell!r} is not a cell reference") from exc
         # Models often put a formula in value: a value that starts with = is one.
         if not w.formula and isinstance(w.value, str) and w.value.strip().startswith("="):
@@ -992,6 +992,13 @@ _FIELD_ALIASES = {
     "sql": {"query", "statement", "sql_query"},
     "sheet": {"sheet_name", "tab", "worksheet"},
     "new_sheet_name": {"sheet_name", "name", "title"},
+    # from the DeepSeek and gpt-oss runs (19 Nov)
+    "journals": {"entries", "journal_entries", "adjustments", "adjusting_journals"},
+    "reason": {"narration", "description", "memo", "explanation", "note", "notes", "why"},
+    "source": {"reference", "ref", "evidence", "document"},
+    "lines": {"entries", "legs", "postings"},
+    "account": {"account_name", "account_code", "code", "gl", "ledger"},
+    "actions": {"steps", "changes", "operations"},
 }
 
 
@@ -1014,6 +1021,43 @@ def _align_args(model: type[BaseModel], args: dict[str, Any]) -> dict[str, Any]:
             _norm(f) == nk or _norm(f) == f"{nk}_pct" or _norm(f).startswith(nk + "_"))]
         if len(cands) == 1:
             out[cands[0]] = out.pop(key)
+    # The same inside lists of objects (journals[].lines[], cells[], actions[]).
+    for fname, finfo in model.model_fields.items():
+        sub = _list_model(finfo.annotation)
+        if sub is not None and isinstance(out.get(fname), list):
+            out[fname] = [_align_args(sub, x) if isinstance(x, dict) else x for x in out[fname]]
+    return out
+
+
+def _list_model(annotation: Any) -> type[BaseModel] | None:
+    """The model inside list[Model] (or list[Model] | None), if any."""
+    import typing
+
+    for arg in typing.get_args(annotation) or ():
+        found = _list_model(arg)
+        if found is not None:
+            return found
+    if typing.get_origin(annotation) is list:
+        inner = typing.get_args(annotation)
+        if inner and isinstance(inner[0], type) and issubclass(inner[0], BaseModel):
+            return inner[0]
+    return None
+
+
+def _drop_extras(args: dict[str, Any], errors: list[Any]) -> dict[str, Any] | None:
+    """Remove the keys a validation error calls extra; None when other errors remain."""
+    if not errors or any(e["type"] != "extra_forbidden" for e in errors):
+        return None
+    out = __import__("copy").deepcopy(args)
+    for e in errors:
+        *path, last = e["loc"]
+        node: Any = out
+        for part in path:
+            node = node[part] if isinstance(node, (dict, list)) else None
+            if node is None:
+                break
+        if isinstance(node, dict):
+            node.pop(last, None)
     return out
 
 
@@ -1062,14 +1106,23 @@ def _route_actions(name: str, args: dict[str, Any]) -> tuple[str, dict[str, Any]
     return name, args
 
 
-def validate_call(name: str, args: dict[str, Any] | None) -> tuple[WorkbenchTool, BaseModel]:
+def validate_call(name: str, args: dict[str, Any] | None, strict: bool = False
+                  ) -> tuple[WorkbenchTool, BaseModel]:
     name, args = _route_actions(name, args or {})
     tool = TOOLS_BY_NAME.get(name)
     if tool is None:
         raise ToolError(f"unknown tool {name!r} (tools: {sorted(TOOLS_BY_NAME)})")
+    aligned = _align_args(tool.args, args or {})
     try:
-        return tool, tool.args.model_validate(_align_args(tool.args, args or {}))
+        return tool, tool.args.model_validate(aligned)
     except ValidationError as exc:
+        # Only extra keys wrong: drop them and run (a missing value still errors).
+        trimmed = None if strict else _drop_extras(aligned, exc.errors())
+        if trimmed is not None:
+            try:
+                return tool, tool.args.model_validate(trimmed)
+            except ValidationError:
+                pass
         msgs = "; ".join(f"{'.'.join(str(x) for x in e['loc'])}: {e['msg']}"
                          for e in exc.errors()[:5])
         # The exact arguments, so the next step is right (a tool offered by name

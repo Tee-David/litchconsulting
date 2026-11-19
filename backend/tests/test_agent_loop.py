@@ -403,9 +403,9 @@ def test_missing_or_made_up_tool_name_is_inferred_from_the_arguments():
 
     offered = set(TOOLS_BY_NAME)
 
-    def check(name, args):
+    def check(name, args, strict=False):
         try:
-            validate_call(name, args)
+            validate_call(name, args, strict=strict)
         except Exception as exc:  # noqa: BLE001
             return str(exc)
         return None
@@ -426,3 +426,36 @@ def test_fallback_runs_the_checks_before_the_tb_shortcut():
     q = ("Please review our books against the grant agreements and the 2025 trial balance "
          "and tell me what is wrong.")
     assert [t for t, _ in _plan_for(True)(q)] == ["grant_checks", "review_points"]
+
+
+def test_native_tool_calls_become_harness_steps():
+    from litchai.ai.harness import parse_turn
+    from litchai.ai.router import _from_native
+
+    msg = {"content": "Checking the sales first.", "tool_calls": [
+        {"function": {"name": "query_sql", "arguments": "{\"sql\": \"SELECT 1\"}"}},
+        {"function": {"name": "echo", "arguments": "{\"x\": \"y\"}"}}]}
+    turn, err = parse_turn(_from_native(msg, msg["content"]), {"query_sql", "echo"}, None,
+                           {"query_sql", "echo"})
+    assert err is None and turn.tool == "query_sql" and turn.args == {"sql": "SELECT 1"}
+    assert turn.parallel == [{"tool": "echo", "args": {"x": "y"}}]
+    turn, err = parse_turn(_from_native({"content": "Revenue is up."}, "Revenue is up."),
+                           {"echo"}, None, {"echo"})
+    assert err is None and turn.action == "final" and turn.answer == "Revenue is up."
+
+
+def test_tolerant_arguments_from_real_failures():
+    from litchai.ai.harness import parse_turn
+    from litchai.workbench.tools import validate_call
+
+    _, a = validate_call("post_journals", {"entries": [
+        {"narration": "closing stock", "reference": "stock count", "lines": [
+            {"account": "1100", "debit": 5}, {"account": "5000", "credit": 5}]}]})
+    j = a.journals[0]
+    assert j.reason == "closing stock" and j.source == "stock count"
+    _, a = validate_call("review_points", {"sheet": "Trial balance"})  # extra key dropped
+    assert a is not None
+    turn, err = parse_turn(json.dumps({"action": "tool", "tool": "parallel", "args": {
+        "tool_uses": [{"recipient_name": "echo", "parameters": {"x": "1"}}]}}),
+        {"echo"}, None, {"echo"})
+    assert err is None and turn.tool == "echo" and turn.args == {"x": "1"}

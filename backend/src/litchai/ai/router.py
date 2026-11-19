@@ -131,7 +131,7 @@ def groq_specs(e: dict[str, str], key: str | None, legacy_model: str | None
         # Groq's JSON mode rejects gpt-oss replies at random (json_validate_failed),
         # so JSON mode stays off: the prompt asks for JSON and the harness checks it.
         # The strict agent-turn schema is used only where Groq supports it.
-        params: dict[str, Any] = {"_prompt_json": True,
+        params: dict[str, Any] = {"_prompt_json": True, "_native_tools": True,
                                   "_strict_schema": strict_on and model in GROQ_STRICT_MODELS}
         if "gpt-oss" in model:
             params["reasoning_effort"] = "medium"
@@ -239,7 +239,7 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
             # JSON mode (response_format json_object): fewer malformed steps, so
             # fewer paid retries. No strict json_schema on DeepSeek.
             name=name, kind="cloud", model=model, base_url=ds_url, api_key=ds_key,
-            params={"_min_max_tokens": 8000},  # reasoning counts: 2,400 left empty replies (19 Nov)
+            params={"_min_max_tokens": 8000, "_native_tools": True},  # reasoning counts: 2,400 left empty replies (19 Nov)
             daily_requests=_int_env("LITCHAI_DEEPSEEK_DAILY_REQUESTS") if i == 0 else None,
             daily_tokens=_int_env("LITCHAI_DEEPSEEK_DAILY_TOKENS") if i == 0 else None,
         )
@@ -412,6 +412,32 @@ def _failed_generation(resp: Any) -> str | None:
 
 
 
+# Providers that refused native tools once in this process: plain prompting after.
+_NATIVE_OFF: set[str] = set()
+
+
+def _from_native(msg: dict[str, Any], text: str) -> str:
+    """A native reply as the step JSON the harness reads: tool calls become
+    {"action": "tool", ...} (the first leads, the rest go in "parallel"); plain text
+    is the final answer unless it already is a step object."""
+    calls = msg.get("tool_calls") or []
+    thought = (text or "").strip()[:600]
+    if calls:
+        def one(c: dict[str, Any]) -> dict[str, Any]:
+            fn = c.get("function") or {}
+            return {"tool": fn.get("name"), "args_json": fn.get("arguments") or "{}"}
+        first, *rest = [one(c) for c in calls]
+        return json.dumps({"thought": thought, "action": "tool", "tool": first["tool"],
+                           "args_json": first["args_json"],
+                           "parallel": rest or None})
+    stripped = (text or "").strip()
+    if stripped.startswith("{") and '"action"' in stripped:
+        return stripped  # the model followed the JSON format itself
+    if not stripped:
+        return text
+    return json.dumps({"thought": "", "action": "final", "answer": stripped})
+
+
 # Providers whose strict json_schema request was refused once in this process:
 # later calls use the prompt + tolerant parser instead.
 _STRICT_OFF: set[str] = set()
@@ -461,10 +487,20 @@ def http_transport(
             if not k.startswith("_"):  # "_"-prefixed keys are local switches, never sent
                 body.setdefault(k, v)
         strict = params.get("strict_schema")
-        use_strict = (schema is not None and isinstance(strict, dict)
+        # Native tool calling (OpenAI "tools" API): the provider passes the schemas and
+        # the model returns structured calls it was trained to make. Far fewer broken
+        # steps than a hand-made JSON format (Sage v6, 19 Nov).
+        native = bool(params.get("tools")) and bool(spec.params.get("_native_tools")) \
+            and spec.name not in _NATIVE_OFF
+        if native:
+            body["tools"] = params["tools"]
+            body["tool_choice"] = "auto"
+        use_strict = (not native and schema is not None and isinstance(strict, dict)
                       and bool(spec.params.get("_strict_schema"))
                       and spec.name not in _STRICT_OFF)
-        if use_strict:
+        if native:
+            pass  # no response_format with tools: the reply is a tool call or plain text
+        elif use_strict:
             body["response_format"] = {"type": "json_schema", "json_schema": {
                 "name": "turn", "schema": strict, "strict": True}}
         elif schema is not None and not spec.params.get("_prompt_json"):
@@ -491,6 +527,10 @@ def http_transport(
                 _STRICT_OFF.add(spec.name)
                 return http_transport(spec, messages, schema,
                                       {**params, "strict_schema": None, "timeout": timeout})
+        if native and resp.status_code == 400 and "tool" in resp.text.lower():
+            # This model or endpoint refuses tools: plain prompting from now on.
+            _NATIVE_OFF.add(spec.name)
+            return http_transport(spec, messages, schema, {**params, "tools": None, "timeout": timeout})
         if resp.status_code >= 400:
             raise classify_http_error(resp.status_code, resp.text, dict(resp.headers))
         data = resp.json()
@@ -498,6 +538,8 @@ def http_transport(
         usage = data.get("usage") or {}
         msg = choice.get("message") or {}
         text = msg.get("content") or ""
+        if native:
+            text = _from_native(msg, text)
         if not text.strip() and schema is not None:
             # gpt-oss sometimes puts the whole answer in the reasoning channel.
             text = _json_tail(msg.get("reasoning") or msg.get("reasoning_content") or "") or ""
