@@ -236,3 +236,13 @@ rec". Sage sees one line per file with its label and your note, so you can say "
 the GTBank statement" or "take the terms from the loan letter". Sage reads the text
 of letters, PDFs and DOCX notes with page numbers.
 
+## Year-end bank reconciliation against the trial balance
+
+Add the bank statement (CSV, Excel or PDF) and the books with the trial balance, then
+ask Sage to reconcile, for example "reconcile the GTBank statement to the trial
+balance". Sage takes the statement's closing balance and the TB bank account, and
+explains the difference: cheques in the cheque register that are not on the
+statement (unpresented), and bank charges on the statement that are not in the books.
+Anything left is shown as "not explained", never forced to zero. The reconciliation
+is a proposal on a new sheet, with the source of each figure.
+

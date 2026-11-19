@@ -16,6 +16,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from litchai.workbench import (
     analysis,
     audit_tools,
+    bankrec,
     file_context,
     builders,
     compiler_tools,
@@ -460,6 +461,13 @@ class RangeActionsArgs(_Args):
     workbook_id: str | None = None
 
 
+class BankRecArgs(_Args):
+    statement: str | None = Field(None, description="part of the statement file name, e.g. GTBank")
+    account: str | None = Field(None, description="the TB account code or name for this bank")
+    statement_balance: float | None = Field(None, description="only if the file has none")
+    write: bool = True
+
+
 class ReadDocumentArgs(_Args):
     workbook: str = Field(description="the file id (doc-3) or file name")
     max_chars: int = Field(8000, ge=500, le=20000)
@@ -765,6 +773,15 @@ TOOLS: tuple[WorkbenchTool, ...] = (
                    "clear the range", "copy this table to another sheet",
                    "format column D as naira", "freeze the header row", "make column B wider",
                    "add a drop-down list", "add a filter to the table")),
+    WorkbenchTool("bank_rec", "write",
+                  "Bank reconciliation at balance level, across files: the statement's "
+                  "closing balance vs the TB bank account; unpresented cheques from a cheque "
+                  "register; charges on the statement not in the books; what is not "
+                  "explained. Use it for a year-end bank rec against a trial balance.",
+                  BankRecArgs, lambda c, a: bankrec.bank_rec(c, **_kw(a)),
+                  ("reconcile the gtbank statement to the trial balance",
+                   "bank reconciliation at year end", "why does the bank balance differ from the tb",
+                   "unpresented cheques")),
     WorkbenchTool("read_document", "read",
                   "Read the text of a document file in this job (a letter, contract, PDF "
                   "or DOCX notes), with page numbers. Use it for terms in a letter (loan "
