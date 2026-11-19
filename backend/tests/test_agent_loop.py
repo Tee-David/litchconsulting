@@ -395,3 +395,34 @@ def test_namespaced_tool_names_and_extra_calls_beside_a_write():
                                        "parallel": [{"tool": "echo", "args": {}}]}),
                            {"echo", "write_it"}, None, {"echo"})
     assert err is None and turn.tool == "write_it" and not turn.parallel
+
+
+def test_missing_or_made_up_tool_name_is_inferred_from_the_arguments():
+    from litchai.ai.harness import parse_turn
+    from litchai.workbench.tools import TOOLS_BY_NAME, validate_call
+
+    offered = set(TOOLS_BY_NAME)
+
+    def check(name, args):
+        try:
+            validate_call(name, args)
+        except Exception as exc:  # noqa: BLE001
+            return str(exc)
+        return None
+
+    for name in (None, "commentary", "exec"):
+        turn, err = parse_turn(json.dumps({"action": "tool", "tool": name,
+                                           "args": {"sql": "SELECT 1"}}), offered, check)
+        assert err is None and turn.tool == "query_sql", name
+    _, a = validate_call("write_cells", {"cells": [
+        {"sheet": "S", "cell": "A1", "value": 1, "reason": "x"},
+        {"sheet": "S", "cell": "A2", "value": 2}]})
+    assert a.sheet == "S" and len(a.cells) == 2
+
+
+def test_fallback_runs_the_checks_before_the_tb_shortcut():
+    from litchai.workbench.engine import _plan_for
+
+    q = ("Please review our books against the grant agreements and the 2025 trial balance "
+         "and tell me what is wrong.")
+    assert [t for t, _ in _plan_for(True)(q)] == ["grant_checks", "review_points"]

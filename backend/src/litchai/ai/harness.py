@@ -277,6 +277,8 @@ TOOL_ALIASES = {
     "write_cell": "write_cells", "update_cells": "write_cells", "set_cells": "write_cells",
     "tax": "tax_compute", "compute_tax": "tax_compute", "statements": "trial_balance_statements",
     "bank_reconciliation": "bank_rec", "reconcile_bank": "bank_rec",
+    "open_file": "read_document", "read_doc": "read_document", "run_query": "query_sql",
+    "exec_sql": "query_sql", "sql_tool": "query_sql", "duckdb": "query_sql",
 }
 
 
@@ -361,6 +363,14 @@ def parse_turn(text: str, offered: set[str],
     if turn.action == "tool":
         if turn.tool and turn.tool not in offered:
             turn.tool = closest_tool(turn.tool, offered) or turn.tool
+        if (not turn.tool or turn.tool not in offered) and turn.args and check_args is not None:
+            # No name, or a made-up one ("commentary", "exec", "run"): take the one tool
+            # whose arguments fit, e.g. {"sql": ...} can only be query_sql (19 Nov runs).
+            fits = [n for n in sorted(offered) if check_args(n, turn.args) is None]
+            if reads is not None and len(fits) > 1:
+                fits = [n for n in fits if n in reads] or fits
+            if len(fits) == 1:
+                turn.tool = fits[0]
         if not turn.tool or turn.tool not in offered:
             return None, (f"there is no tool {turn.tool!r}; use one of: "
                           + ", ".join(sorted(offered)))

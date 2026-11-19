@@ -11,7 +11,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from litchai.workbench import (
     analysis,
@@ -156,6 +156,26 @@ class WriteCellsArgs(_Args):
     workbook_id: str | None = None
     cells: list[CellWrite] = Field(min_length=1, max_length=400)
     reason: str = Field("", max_length=200, description="why, shown on each cell")
+
+    @model_validator(mode="before")
+    @classmethod
+    def _lift_cell_keys(cls, v: Any) -> Any:
+        """A sheet named in every cell goes to the top; a per-cell reason is dropped
+        (gpt-oss writes them per cell; 19 Nov runs)."""
+        if not isinstance(v, dict) or not isinstance(v.get("cells"), list):
+            return v
+        cells = [dict(c) if isinstance(c, dict) else c for c in v["cells"]]
+        sheets = {c.get("sheet") for c in cells if isinstance(c, dict) and c.get("sheet")}
+        out = dict(v)
+        if not out.get("sheet") and len(sheets) == 1:
+            out["sheet"] = sheets.pop()
+        for c in cells:
+            if isinstance(c, dict):
+                if c.get("sheet") in (None, out.get("sheet")):
+                    c.pop("sheet", None)
+                c.pop("reason", None)
+        out["cells"] = cells
+        return out
 
 
 class SheetArgs(_Args):

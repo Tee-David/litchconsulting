@@ -723,6 +723,9 @@ def first_look(deps: TurnDeps, conv: Conversation) -> dict[str, Any]:
             "conversions": conversions, "layer": "pipeline"}
 
 
+CHECK_TOOLS = {"sales_checks", "receivables_checks", "grant_checks", "review_points"}
+
+
 def _plan_for(has_tb: bool) -> Any:
     """The deterministic plan when the model is down or keeps sending malformed
     steps: on a trial balance, its statements (and CIT when asked); else the
@@ -732,6 +735,11 @@ def _plan_for(has_tb: bool) -> Any:
         # step that does what was asked, or nothing (the person is told to try again).
         if has_tb and _wants_analysis(message):
             return [("financial_analysis", {})]
+        checks = [s for s in fallback_plan(message) if s[0] in CHECK_TOOLS]
+        if checks and not _TB_EDIT_JOB.search(message):
+            # The standard checks answer "what is wrong" better than the statements
+            # (19 Nov: an NGO review got only the TB statements).
+            return checks
         if _TB_EDIT_JOB.search(message):
             if re.search(r"\b(classif|categor|account type)", message, re.IGNORECASE):
                 return [("categorise_rows", {})]
