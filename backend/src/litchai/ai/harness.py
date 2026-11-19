@@ -278,6 +278,18 @@ def parse_turn(text: str, offered: set[str],
         payload = _turn_object(text or "")
         if payload is None:
             return None, f"reply was not valid JSON ({exc.msg if hasattr(exc, 'msg') else exc})"
+    if isinstance(payload, dict) and payload.get("name") and "arguments" in payload \
+            and not payload.get("tool"):
+        # The OpenAI function-call shape ({"name": "tool_query_sql", "arguments": {...}}).
+        name = re.sub(r"^(functions?[._]|tool[._]|tools[._])", "", str(payload["name"]))
+        args = payload["arguments"]
+        if isinstance(args, str):
+            payload = {"action": "tool", "tool": name, "args_json": args}
+        else:
+            payload = {"action": "tool", "tool": name, "args": args}
+    if isinstance(payload, dict) and isinstance(payload.get("tool"), str):
+        payload = {**payload, "tool": re.sub(r"^(functions?[._]|tool[._]|tools[._])", "",
+                                             payload["tool"])}
     if isinstance(payload, dict) and not payload.get("action"):
         # gpt-oss often leaves out "action": the intent is plain from the other keys.
         if payload.get("tool") or payload.get("args") is not None or payload.get("args_json"):
@@ -695,7 +707,13 @@ def figures_in(text: str) -> list[float]:
 
 
 def ungrounded_figures(answer: str, grounded: list[float]) -> list[float]:
-    """Money-sized figures in ``answer`` that match nothing in ``grounded``."""
+    """Money-sized figures in ``answer`` that match nothing in ``grounded``. A sum or a
+    difference of two grounded figures is grounded too (a model may subtract two tool
+    totals; live run 2026-11-19 lost a correct answer to that)."""
+    big = sorted({round(g, 2) for g in grounded if abs(g) >= GROUNDING_MIN})[:400]
+    derived = {round(a + b, 2) for i, a in enumerate(big) for b in big[i + 1:]} | {
+        round(abs(a - b), 2) for i, a in enumerate(big) for b in big[i + 1:]}
+    grounded = [*grounded, *derived]
     loose: list[float] = []
     for x in figures_in(answer):
         if abs(x) < GROUNDING_MIN or x in loose:

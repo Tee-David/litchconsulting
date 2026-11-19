@@ -356,3 +356,14 @@ def test_missing_action_is_inferred_and_years_are_not_money():
     turn, err = parse_turn(json.dumps({"answer": "Done."}), {"echo"}, None, {"echo"})
     assert err is None and turn.action == "final"
     assert ungrounded_figures("Output VAT for Q4 2025 is 1,500,000.", [1_500_000]) == []
+
+
+def test_openai_function_shape_and_derived_figures_are_accepted():
+    from litchai.ai.harness import parse_turn, ungrounded_figures
+
+    turn, err = parse_turn(json.dumps({"name": "tool_echo", "arguments": {"x": "1"}}),
+                           {"echo"}, None, {"echo"})
+    assert err is None and turn.tool == "echo" and turn.args == {"x": "1"}
+    # 301,778,600 - 293,161,900 = 8,616,700 is arithmetic on two tool figures
+    assert ungrounded_figures("The gap is ₦8,616,700.", [301_778_600, 293_161_900]) == []
+    assert ungrounded_figures("The gap is ₦9,999,999.", [301_778_600, 293_161_900]) == [9_999_999]

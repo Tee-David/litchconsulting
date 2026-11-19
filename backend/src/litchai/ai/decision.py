@@ -349,6 +349,8 @@ def fallback_plan(message: str) -> list[tuple[str, dict[str, Any]]]:
         plan.append(("clean_values", {}))
     if any(w in m for w in ("anomal", "unusual", "duplicate", "outlier", "check")):
         plan.append(("flag_anomalies", {}))
+    if any(w in m for w in ("sales", "revenue", "pos ", "takings", "till")):
+        plan.insert(0, ("sales_checks", {}))  # the standard revenue checks need no model
     if not plan:
         plan.append(("profile_workbook", {"level": 3}))
     return plan[:4]

@@ -100,7 +100,7 @@ def _sheet_role(wb: Workbook, sh: Sheet, filename: str = "") -> str:
     roles = {c.role for c in t.columns} if t else set()
     if {"date", "balance"} <= roles and ({"debit", "credit"} <= roles or "amount" in roles):
         return "bank_statement"
-    if "gross pay" in head or "paye" in head or "net pay" in head:
+    if "gross pay" in head or re.search(r"\bpaye\b", head) or "net pay" in head:
         return "payroll"
     if "cost" in head and ("depreciation" in head or "rate" in head) and "asset" in (head + name):
         return "asset_register"
