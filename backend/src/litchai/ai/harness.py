@@ -321,6 +321,13 @@ def closest_tool(name: str, offered: set[str]) -> str | None:
     return hit[0] if hit else None
 
 
+# Other words models use for the two actions ("tools" and "parallel" are handled below).
+_TOOL_ACTIONS = {"tool_call", "call", "call_tool", "use_tool", "function", "function_call",
+                 "run", "run_tool", "action", "tool_use"}
+_FINAL_ACTIONS = {"answer", "final_answer", "respond", "response", "reply", "done", "finish",
+                  "end", "message"}
+
+
 def parse_turn(text: str, offered: set[str],
                check_args: Callable[[str, dict[str, Any]], str | None] | None = None,
                reads: set[str] | None = None,
@@ -362,6 +369,14 @@ def parse_turn(text: str, offered: set[str],
                        "args": first["args"], "args_json": None, "parallel": rest or None}
     if isinstance(payload, dict) and isinstance(payload.get("tool"), str):
         payload = {**payload, "tool": _bare_tool(payload["tool"])}
+    if isinstance(payload, dict) and isinstance(payload.get("action"), str) and \
+            payload["action"] not in ("tool", "final"):
+        # Other spellings of the two actions (qwen: "tool_call", "answer"; Groq run 19 Nov).
+        a = payload["action"].strip().lower().replace("-", "_")
+        if a in _TOOL_ACTIONS or (a not in _FINAL_ACTIONS and payload.get("tool")):
+            payload = {**payload, "action": "tool"}
+        elif a in _FINAL_ACTIONS or payload.get("answer"):
+            payload = {**payload, "action": "final"}
     if isinstance(payload, dict) and not payload.get("action"):
         # gpt-oss often leaves out "action": the intent is plain from the other keys.
         if payload.get("tool") or payload.get("args") is not None or payload.get("args_json"):

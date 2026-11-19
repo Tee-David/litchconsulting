@@ -273,6 +273,11 @@ def test_parse_turn_tolerates_prose_extra_objects_and_raw_newlines():
     turn, err = parse_turn('{"action":"final","answer":"line1\nline2"}', set())
     assert err is None and "line2" in turn.answer
     assert parse_turn("no json at all", set())[0] is None
+    # Other spellings of the two actions (qwen on Groq, 19 Nov).
+    turn, err = parse_turn('{"action":"answer","answer":"done"}', set())
+    assert err is None and turn.action == "final" and turn.answer == "done"
+    turn, err = parse_turn('{"action":"tool_call","tool":"echo","args":{"x":"1"}}', {"echo"})
+    assert err is None and turn.action == "tool" and turn.tool == "echo"
 
 
 def test_independent_reads_run_in_parallel():
