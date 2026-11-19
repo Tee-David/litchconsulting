@@ -152,16 +152,52 @@ class Workbook:
 
 
 # --- loaders --------------------------------------------------------------------
+class _CachedValues:
+    """The cached results of formulas. python-calamine (Rust) reads them in one fast
+    pass (plan v5, slice F); openpyxl's second full parse is the fallback. Nothing is
+    read for a workbook without formulas."""
+
+    def __init__(self, data: bytes) -> None:
+        self.data = data
+        self._rows: dict[str, list[list[Any]]] | None = None
+        self._xl: Any = None
+
+    def _load(self) -> None:
+        try:
+            from python_calamine import CalamineWorkbook
+
+            wb = CalamineWorkbook.from_filelike(io.BytesIO(self.data))
+            self._rows = {n: wb.get_sheet_by_name(n).to_python(skip_empty_area=False)
+                          for n in wb.sheet_names}
+        except Exception:  # noqa: BLE001 — not installed, or a file it cannot read
+            self._rows = {}
+            self._xl = load_workbook(io.BytesIO(self.data), data_only=True)
+
+    def get(self, sheet: str, row: int, col: int) -> Any:
+        if self._rows is None:
+            self._load()
+        if self._xl is not None:
+            return self._xl[sheet].cell(row=row, column=col).value
+        rows = (self._rows or {}).get(sheet) or []
+        if row - 1 >= len(rows) or col - 1 >= len(rows[row - 1]):
+            return None
+        v = rows[row - 1][col - 1]
+        if v == "":
+            return None
+        if isinstance(v, float) and v.is_integer() and abs(v) < 2**53:
+            return int(v)  # as openpyxl gives whole numbers
+        return v
+
+
 def load_xlsx(data: bytes, *, wb_id: str, name: str, document_id: int | None = None) -> Workbook:
     from litchai.extraction.sandbox import check_zip_safety
 
     check_zip_safety(data)
     formulas = load_workbook(io.BytesIO(data), data_only=False)
-    values = load_workbook(io.BytesIO(data), data_only=True)
+    cached = _CachedValues(data)  # formula results, read only if a sheet has formulas
     out = Workbook(id=wb_id, name=name, document_id=document_id, origin="xlsx")
     total = 0
     for ws in formulas.worksheets:
-        vs = values[ws.title]
         sheet = Sheet(ws.title)
         tab = getattr(ws.sheet_properties, "tabColor", None)
         rgb = getattr(tab, "rgb", None) if tab is not None else None
@@ -188,7 +224,7 @@ def load_xlsx(data: bytes, *, wb_id: str, name: str, document_id: int | None = N
                 raw = c.value
                 if isinstance(raw, str) and raw.startswith("="):
                     sheet.set(c.row, c.column, Cell(
-                        value=vs.cell(row=c.row, column=c.column).value, formula=raw,
+                        value=cached.get(ws.title, c.row, c.column), formula=raw,
                         number_format=c.number_format, style=read_style(c) if c.has_style else None,
                     ))
                 else:
