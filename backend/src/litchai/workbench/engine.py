@@ -785,9 +785,8 @@ def job_overview(ctx: ToolContext, conv: Conversation) -> dict[str, Any]:
     if has_tb:
         actions.append("Check the books and list the adjustments needed")
     for b in banks[:2]:
-        what = b["bank"] or "the bank"
         if has_tb or "ledger" in roles:
-            actions.append(f"Reconcile the {what} statement to the books")
+            actions.append(f"Reconcile the {b['bank'] or 'bank'} statement to the books")
     for tool, title in checks:
         if tool != "review_points":
             actions.append(f"Explain the {title.lower()} findings")

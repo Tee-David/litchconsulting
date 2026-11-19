@@ -16,6 +16,7 @@ export const FILE_LABELS: Record<string, string> = {
   payroll: "Payroll",
   asset_register: "Fixed asset register",
   sales_report: "Sales or settlement report",
+  register: "Register or schedule",
   document: "Letter, contract or notes",
   books: "Books (several schedules)",
   other: "Other data",

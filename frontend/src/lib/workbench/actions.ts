@@ -201,7 +201,7 @@ export async function feedbackAction(input: z.input<typeof feedbackSchema>): Pro
   }
 }
 
-const FILE_ROLES = ["trial_balance", "bank_statement", "ledger", "invoices", "payroll", "asset_register", "sales_report", "document", "books", "other"] as const;
+const FILE_ROLES = ["trial_balance", "bank_statement", "ledger", "invoices", "payroll", "asset_register", "sales_report", "register", "document", "books", "other"] as const;
 
 /** The person's label and note for one file in the workbench (job context for Sage). */
 export async function setFileContextAction(conversationId: string, workbookId: string, input: { role?: string; note?: string }): Promise<Res<{ conversation: WbConversation }>> {

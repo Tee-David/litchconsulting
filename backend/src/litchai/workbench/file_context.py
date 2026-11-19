@@ -27,6 +27,7 @@ ROLES = {
     "payroll": "payroll",
     "asset_register": "fixed asset register",
     "sales_report": "sales or settlement report",
+    "register": "register or schedule",
     "document": "letter, contract or notes",
     "books": "books (several schedules)",
     "other": "other data",
@@ -44,6 +45,7 @@ _NAME_RULES: list[tuple[str, str]] = [
     (r"payroll|salar|paye|wages", "payroll"),
     (r"asset[\s_-]*register|fixed[\s_-]*asset|\bfar\b", "asset_register"),
     (r"\bpos\b|paystack|flutterwave|settlement|sales|returns|takings", "sales_report"),
+    (r"register|schedule|master", "register"),
     (r"letter|offer|agreement|contract|memo|note|policy|minutes|engagement", "document"),
 ]
 
@@ -89,6 +91,10 @@ def _period(sh: Sheet) -> tuple[str | None, str | None]:
     return min(days).isoformat(), max(days).isoformat()
 
 
+_ROLE_ORDER = ["trial_balance", "books", "bank_statement", "payroll", "invoices",
+               "asset_register", "sales_report", "ledger", "register", "document", "other"]
+
+
 def _sheet_role(wb: Workbook, sh: Sheet, filename: str = "") -> str:
     from litchai.workbench.trial_balance import _tb_of
 
@@ -108,6 +114,8 @@ def _sheet_role(wb: Workbook, sh: Sheet, filename: str = "") -> str:
         return "invoices"
     for pat, role in _NAME_RULES:  # the file or sheet name says what it is
         if re.search(pat, name):
+            if role == "document" and t is not None and len(t.columns) >= 2:
+                continue  # a table is not a letter, whatever its name ("Contracts register")
             return role
     if {"date"} <= roles and ({"debit", "credit"} <= roles or "amount" in roles):
         return "ledger"
@@ -132,7 +140,8 @@ def describe(wb: Workbook, filename: str | None = None) -> dict[str, Any]:
         if len(useful) >= 2 and len(per_sheet) >= 3:
             role = "books"
         else:
-            role = next(iter(useful), None) or next(
+            # A fixed order, so a TB with a Notes sheet is the TB, not a letter.
+            role = min(useful, key=_ROLE_ORDER.index, default=None) or next(
                 (r for pat, r in _NAME_RULES if re.search(pat, low)), "other")
     starts, ends, rows = [], [], 0
     totals: dict[str, float] = {}
