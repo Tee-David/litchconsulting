@@ -74,7 +74,7 @@ def build_catalog(workbooks: list[Workbook]) -> tuple[SqlCatalog, dict[str, tupl
             if _GENERIC.match(sheet_name.strip()):
                 # "Sheet1" says nothing: name the table after its file (a CSV's only sheet),
                 # e.g. freshmart_pos_export_q4_2025 (edge-case run 2026-11-19).
-                tname = ident(re.sub(r"\.(csv|tsv|txt|xlsx?|xlsm|ods|json)$", "", wb.name,
+                tname = ident(re.sub(r"\.(csv|tsv|txt|xlsx?|xlsm|ods|json|docx|pdf)$", "", wb.name,
                                      flags=re.IGNORECASE))
             if tname in tables:
                 tname = ident(f"{wb.name}_{sheet_name}")
