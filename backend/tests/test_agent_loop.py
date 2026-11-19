@@ -331,3 +331,18 @@ def test_unusable_steps_from_one_vendor_try_the_next_vendor_before_the_plan():
     hop = [e for e in events if e["type"] == "fallback" and e["reason"] == "invalid"]
     assert hop and hop[0]["to"] == "cloudflare"
     assert "cloudflare" in [name for name, _ in t.calls]
+
+
+def test_deepseek_parallel_spellings_are_accepted():
+    from litchai.ai.harness import parse_turn
+
+    offered, reads = {"echo", "query_sql"}, {"echo", "query_sql"}
+    for action in (None, "parallel"):
+        payload = {"thought": "t", "parallel": [
+            {"tool": "query_sql", "args_json": "{\"sql\": \"select 1\"}"},
+            {"tool": "echo", "args": {"x": "y"}}]}
+        if action:
+            payload["action"] = action
+        turn, err = parse_turn(json.dumps(payload), offered, None, reads)
+        assert err is None and turn.tool == "query_sql" and turn.args == {"sql": "select 1"}
+        assert turn.parallel == [{"tool": "echo", "args": {"x": "y"}}]

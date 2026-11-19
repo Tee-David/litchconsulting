@@ -239,7 +239,7 @@ def default_specs(env: dict[str, str] | None = None) -> list[ProviderSpec]:
             # JSON mode (response_format json_object): fewer malformed steps, so
             # fewer paid retries. No strict json_schema on DeepSeek.
             name=name, kind="cloud", model=model, base_url=ds_url, api_key=ds_key,
-            params={"_min_max_tokens": 2400},  # a long multi-action step was cut at 1,200
+            params={"_min_max_tokens": 8000},  # reasoning counts: 2,400 left empty replies (19 Nov)
             daily_requests=_int_env("LITCHAI_DEEPSEEK_DAILY_REQUESTS") if i == 0 else None,
             daily_tokens=_int_env("LITCHAI_DEEPSEEK_DAILY_TOKENS") if i == 0 else None,
         )
