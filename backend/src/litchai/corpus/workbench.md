@@ -296,3 +296,28 @@ date, the same person paid twice in a month, pension not deducted, PAYE that dif
 from the NTA 2025 bands in the firm's tax config, and payroll gross that does not match
 salaries in the trial balance.
 
+
+## Checks for imports, property, stock, settlements, groups and purchases
+
+Sage has standard checks for more kinds of business. Ask in plain words, for example
+"check our stock", "is our rent income right" or "review the purchases for fraud".
+Each check names the problem, the amount, the file it came from and the fix.
+
+- Imports: duty, freight and clearing expensed (they belong in the cost of stock),
+  USD supplier balances not revalued at the 31 December rate, letter of credit
+  charges in cost of sales, goods in transit at the year end.
+- Property: rent received for later years taken as income, refundable tenant
+  deposits taken as income, no 10% WHT on rent paid to a company, service charge
+  mixed with rent.
+- Stock: the count against the stock ledger, stock above its net realisable value,
+  the weighted-average cost recomputed from the year's purchases, raw materials
+  and finished goods in one account.
+- Settlements (fintech, POS, agency banking): a batch settled twice, fees netted
+  off income, chargebacks not booked, a day never settled.
+- Group and director: personal costs paid by the company, intercompany balances
+  that do not agree, a loan to the director, intercompany sales not eliminated.
+- Purchases (fraud review): duplicate vendors (same bank account or near-identical
+  names), payments split under the approval limit, round sums paid at weekends,
+  missing payment voucher numbers, vendors with no TIN.
+
+The job overview runs these checks when the files fit, and shows what they found.

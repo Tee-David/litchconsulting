@@ -410,3 +410,171 @@ def settlement_checks(ctx: ToolContext) -> ToolOutput:
             "Book the chargebacks (a reduction of income or a receivable from the agent).",
             txns.file)
     return result("settlement", findings)
+
+
+# ─── case 9: small group and director ──────────────────────────────────────────
+_PERSONAL = re.compile(r"school fees|holiday|vacation|personal|\bwife\b|children|\bhome\b|"
+                       r"household|birthday|wedding|tithe|private|family", re.IGNORECASE)
+
+
+def group_checks(ctx: ToolContext) -> ToolOutput:
+    findings: list[dict[str, Any]] = []
+    tb = tb_accounts(ctx)
+    for t in tabs(ctx):
+        desc, amt = t.col(r"description|narration|details|memo"), t.col(r"amount|debit")
+        if not (desc and amt) or t.col(r"account name") and t.col(r"^credit"):
+            continue
+        hits = [(t.text(r, desc), t.num(r, amt)) for r in t.rows() if _PERSONAL.search(t.text(r, desc))]
+        if hits:
+            tot = sum(a for _, a in hits)
+            add(findings, "personal_costs", tot,
+                f"Personal costs paid by the company: {', '.join(d for d, _ in hits[:4])} "
+                f"({len(hits)} payment(s), {m(tot)})",
+                "Charge them to the director's account (or treat them as pay, with PAYE); they "
+                "are not company expenses and not tax-deductible.", t.file)
+    dues = [(n, v, f) for n, v, f in tb if re.search(r"due (from|to)|intercompany|inter-company|"
+                                                    r"related compan", n, re.IGNORECASE)]
+    if len(dues) >= 2:
+        net = sum(v for _, v, _ in dues)
+        if abs(net) > 1:
+            add(findings, "intercompany_mismatch", abs(net),
+                "Intercompany balances do not agree: "
+                + "; ".join(f"{n} {m(v)} ({f})" for n, v, f in dues)
+                + f"; the difference is {m(abs(net))}",
+                "Reconcile the two ledgers (cash or invoices in transit, a missed entry) and "
+                "agree the balances before consolidation.", "trial balances")
+    loan = [(n, v) for n, v, _ in tb if re.search(r"director", n, re.IGNORECASE)
+            and re.search(r"loan|current account|receivable|advance", n, re.IGNORECASE) and v > 0]
+    if loan:
+        tot = sum(v for _, v in loan)
+        no_interest = not any(re.search(r"interest (income|received)", n, re.IGNORECASE)
+                              for n, _, _ in tb)
+        add(findings, "director_loan", tot,
+            f"Loan to the director of {m(tot)}" + (" with no interest charged" if no_interest else ""),
+            "Get board approval and a written agreement; disclose it as a related-party loan. "
+            "An interest-free loan is a benefit to the director (tax).", "trial balance")
+    sales = [(n, v, f) for n, v, f in tb if v < 0 and re.search(
+        r"sales to|intercompany (sales|revenue)|revenue from (a )?related", n, re.IGNORECASE)]
+    if sales:
+        tot = -sum(v for _, v, _ in sales)
+        add(findings, "intercompany_sales", tot,
+            f"Intercompany sales of {m(tot)} ({', '.join(n for n, _, _ in sales)}) are not "
+            "eliminated",
+            "On consolidation remove the sale and the matching purchase, and any profit still "
+            "in the buyer's stock.", "trial balances")
+    return result("group", findings)
+
+
+# ─── case 10: purchases fraud review ───────────────────────────────────────────
+def _approval_limit(ctx: ToolContext) -> float:
+    for wb in ctx.workbooks.values():
+        for sh in wb.sheets.values():
+            for c in sh.cells.values():
+                s = str(c.value or "")
+                if re.search(r"approval limit|approve.*up to|limit of", s, re.IGNORECASE):
+                    n = re.search(r"([\d,]{5,})", s)
+                    if n:
+                        return float(n[1].replace(",", ""))
+    return 5_000_000.0
+
+
+def purchase_checks(ctx: ToolContext) -> ToolOutput:
+    findings: list[dict[str, Any]] = []
+    vendors = pays = None
+    for t in tabs(ctx):
+        if t.col(r"tin|tax id") or (t.col(r"bank account|account no") and t.col(r"vendor|supplier")
+                                    and not t.col(r"amount")):
+            vendors = t
+        elif t.col(r"amount") and t.col(r"date") and t.col(r"vendor|supplier|payee"):
+            pays = t
+    if pays is None:
+        return result("purchases", findings)
+    pv, pd, pa = pays.col(r"vendor id|supplier id|vendor|supplier|payee"), pays.col(r"date"), pays.col(r"amount")
+    paid: dict[str, float] = defaultdict(float)
+    for r in pays.rows():
+        paid[pays.text(r, pv)] += pays.num(r, pa)
+    if vendors is not None:
+        vid, vn = vendors.col(r"vendor id|supplier id|^id$|code"), vendors.col(r"name")
+        vb, vt = vendors.col(r"bank account|account no"), vendors.col(r"tin|tax id")
+        rows = [(vendors.text(r, vid), vendors.text(r, vn), vendors.text(r, vb), vendors.text(r, vt))
+                for r in vendors.rows()]
+        pairs = []
+        for i, a in enumerate(rows):
+            for b in rows[i + 1:]:
+                same_bank = a[2] and a[2] == b[2]
+                similar = SequenceMatcher(None, re.sub(r"\W|ltd|limited|nig", "", a[1].lower()),
+                                          re.sub(r"\W|ltd|limited|nig", "", b[1].lower())).ratio() > 0.85
+                if same_bank or similar:
+                    pairs.append((a, b, same_bank))
+        if pairs:
+            tot = sum(paid.get(b[0], 0) + paid.get(b[1], 0) for _, b, _ in pairs)
+            add(findings, "duplicate_vendor", tot,
+                "Possible duplicate vendors: " + "; ".join(
+                    f"{a[1]} ({a[0]}) and {b[1]} ({b[0]})" + (" share one bank account" if s else
+                                                              " have near-identical names")
+                    for a, b, s in pairs[:4]) + f"; {m(tot)} paid to the second record",
+                "Confirm each vendor with documents; block the duplicate and review every "
+                "payment to it.", vendors.file)
+        no_tin = [x for x in rows if not x[3] or re.fullmatch(r"(n/?a|none|-|0)", x[3], re.IGNORECASE)]
+        if no_tin:
+            tot = sum(paid.get(x[0], 0) + paid.get(x[1], 0) for x in no_tin)
+            add(findings, "vendor_no_tin", tot,
+                f"Vendors with no TIN: {', '.join(f'{x[1]} ({x[0]})' for x in no_tin[:5])} "
+                f"({m(tot)} paid)", "Get the TIN before paying (needed for WHT and to prove the "
+                "vendor is real); hold payments until then.", vendors.file)
+    limit = _approval_limit(ctx)
+    groups: dict[tuple[str, str], list[int]] = defaultdict(list)
+    for r in pays.rows():
+        groups[(pays.text(r, pv), str(as_date(pays.val(r, pd))))].append(r)
+    splits = [(k, rs) for k, rs in groups.items() if len(rs) >= 2
+              and all(pays.num(r, pa) < limit for r in rs) and sum(pays.num(r, pa) for r in rs) > limit]
+    if splits:
+        tot = sum(pays.num(r, pa) for _, rs in splits for r in rs)
+        add(findings, "split_purchases", tot,
+            f"Payments split to stay under the approval limit ({m(limit)}): "
+            + "; ".join(f"{v} on {d}: {len(rs)} payments" for (v, d), rs in splits[:4])
+            + f" ({m(tot)} in total)",
+            "Treat each group as one purchase; check who approved it and why it was split.",
+            pays.file)
+    wk = [r for r in pays.rows() if (d := as_date(pays.val(r, pd))) and d.weekday() >= 5
+          and pays.num(r, pa) >= 100_000 and pays.num(r, pa) % 100_000 == 0]
+    if wk:
+        tot = sum(pays.num(r, pa) for r in wk)
+        add(findings, "weekend_round_sums", tot,
+            f"{len(wk)} round-sum payment(s) made at weekends ({m(tot)})",
+            "Check the invoice, the goods received and the approval for each one.", pays.file)
+    vc = pays.col(r"voucher|pv no|pv number|payment no")
+    if vc:
+        nums = sorted({int(n[0]) for r in pays.rows() if (n := re.findall(r"\d+", pays.text(r, vc)))})
+        missing = [n for n in range(nums[0], nums[-1] + 1) if n not in set(nums)] if nums else []
+        if missing:
+            add(findings, "voucher_gaps", 0.0,
+                f"{len(missing)} payment voucher number(s) missing from the sequence "
+                f"({', '.join(map(str, missing[:8]))})",
+                "Find the missing vouchers (cancelled ones must be kept); a gap can hide a "
+                "payment.", pays.file)
+    return result("purchases", findings)
+
+
+# ─── one entry point for the agent ─────────────────────────────────────────────
+KINDS = {"imports": import_checks, "rent": rent_checks, "stock": stock_checks,
+         "settlements": settlement_checks, "group": group_checks, "purchases": purchase_checks}
+
+
+def sector_checks(ctx: ToolContext, kind: str = "auto") -> ToolOutput:
+    """One kind, or every kind that finds something ("auto")."""
+    if kind in KINDS:
+        return KINDS[kind](ctx)
+    findings: list[dict[str, Any]] = []
+    parts: list[str] = []
+    for name, fn in KINDS.items():
+        out = fn(ctx)
+        got = (out.data or {}).get("findings") or []
+        if got:
+            findings += [{**f, "kind": name} for f in got]
+            parts.append(out.summary)
+    if not parts:
+        return ToolOutput(data={"findings": []},
+                          summary="No findings from the stock, rent, import, settlement, group "
+                                  "or purchase checks.")
+    return ToolOutput(data={"findings": findings}, summary="\n".join(parts))

@@ -734,6 +734,9 @@ _ROLE_RANK = {"trial_balance": 0, "books": 1, "bank_statement": 2, "ledger": 3,
               "other": 8, "document": 9}
 _GRANT = re.compile(r"grant|donor|restricted fund", re.IGNORECASE)
 _OVERVIEW_BUDGET_S = 8.0
+_SECTOR_AREA = {"imports": "Imports", "rent": "Rent", "stock": "Stock",
+                "settlements": "Settlements", "group": "Group and director",
+                "purchases": "Purchases"}
 
 
 def job_overview(ctx: ToolContext, conv: Conversation) -> dict[str, Any]:
@@ -767,6 +770,7 @@ def job_overview(ctx: ToolContext, conv: Conversation) -> dict[str, Any]:
         checks.append(("payroll_checks", "Payroll"))
     if _GRANT.search(names):
         checks.append(("grant_checks", "Grants"))
+    checks.append(("sector_checks", ""))  # one area per kind that finds something
 
     findings: list[dict[str, Any]] = []
     start = time.monotonic()
@@ -778,6 +782,15 @@ def job_overview(ctx: ToolContext, conv: Conversation) -> dict[str, Any]:
         except Exception:  # noqa: BLE001, S112 - a first look never fails on one check
             continue
         items = data.get("points") or data.get("findings") or []
+        if tool == "sector_checks":  # one area per kind that found something
+            by_kind: dict[str, list[dict[str, Any]]] = {}
+            for i in items:
+                by_kind.setdefault(i.get("kind", "other"), []).append(i)
+            for kind, its in by_kind.items():
+                findings.append({"area": _SECTOR_AREA.get(kind, kind.title()), "tool": tool,
+                                 "count": len(its),
+                                 "top": [str(i.get("what", ""))[:160] for i in its[:3]]})
+            continue
         findings.append({"area": title, "tool": tool, "count": len(items),
                          "top": [str(i.get("what", ""))[:160] for i in items[:3]]})
 
@@ -787,9 +800,9 @@ def job_overview(ctx: ToolContext, conv: Conversation) -> dict[str, Any]:
     for b in banks[:2]:
         if has_tb or "ledger" in roles:
             actions.append(f"Reconcile the {b['bank'] or 'bank'} statement to the books")
-    for tool, title in checks:
-        if tool != "review_points":
-            actions.append(f"Explain the {title.lower()} findings")
+    for f in findings:
+        if f["tool"] != "review_points" and f["count"]:
+            actions.append(f"Explain the {f['area'].lower()} findings")
     if has_tb:
         actions.append("Prepare the financial statements and the tax")
     seen: set[str] = set()
@@ -803,6 +816,7 @@ def job_overview(ctx: ToolContext, conv: Conversation) -> dict[str, Any]:
 
 
 CHECK_TOOLS = {"sales_checks", "receivables_checks", "grant_checks", "payroll_checks",
+               "sector_checks",
                "review_points"}
 
 

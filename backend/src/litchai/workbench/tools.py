@@ -28,6 +28,7 @@ from litchai.workbench import (
     receivables_checks,
     recipes,
     revenue_checks,
+    sector_checks,
     sheet_tools,
     trial_balance,
 )
@@ -490,6 +491,11 @@ class NoArgs(_Args):
     pass
 
 
+class SectorChecksArgs(_Args):
+    kind: Literal["auto", "imports", "rent", "stock", "settlements", "group", "purchases"] = Field(
+        "auto", description="which checks; auto runs every kind that finds something")
+
+
 class BankRecArgs(_Args):
     statement: str | None = Field(None, description="part of the statement file name, e.g. GTBank")
     account: str | None = Field(None, description="the TB account code or name for this bank")
@@ -835,6 +841,18 @@ TOOLS: tuple[WorkbenchTool, ...] = (
                   NoArgs, lambda c, a: grant_checks.grant_checks(c),
                   ("review our grant books", "grant report", "restricted funds",
                    "donor rules")),
+    WorkbenchTool("sector_checks", "read",
+                  "Standard checks for other kinds of business: imports (landed cost, USD "
+                  "payables at the year-end rate, LC charges, goods in transit), rent (rent in "
+                  "advance, tenant deposits, WHT on rent, service charge), stock (count vs "
+                  "ledger, NRV, weighted average), settlements (duplicates, netted fees, "
+                  "chargebacks, missing days), group (director's costs and loan, "
+                  "intercompany), purchases (duplicate vendors, split payments, weekend round "
+                  "sums, voucher gaps, no TIN).",
+                  SectorChecksArgs, lambda c, a: sector_checks.sector_checks(c, a.kind),
+                  ("check our stock", "is our rent income right", "check the imports",
+                   "reconcile the settlements", "review the purchases for fraud",
+                   "check the director's account", "intercompany balances")),
     WorkbenchTool("review_points", "read",
                   "Year-end review points found by rules, each with its source and the fix: "
                   "suspense, other income, a VAT account in debit, capital items in repairs, "

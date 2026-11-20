@@ -69,7 +69,20 @@ def score(case: Case, answers: list[str], extra_text: str = "") -> dict[str, Any
 
 
 def registry() -> dict[str, Any]:
-    from litchai.evals.cases import contractor, ngo, payroll, supermarket
+    from litchai.evals.cases import (
+        contractor,
+        fintech,
+        group,
+        importer,
+        manufacturer,
+        ngo,
+        payroll,
+        property,
+        purchases,
+        supermarket,
+    )
 
     return {"supermarket": supermarket.build, "contractor": contractor.build, "ngo": ngo.build,
-            "payroll": payroll.build}
+            "payroll": payroll.build, "importer": importer.build, "property": property.build,
+            "manufacturer": manufacturer.build, "fintech": fintech.build, "group": group.build,
+            "purchases": purchases.build}

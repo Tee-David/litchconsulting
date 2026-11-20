@@ -113,6 +113,10 @@ _TOOL_KEYWORDS: dict[str, tuple[str, ...]] = {
                            "credit note", "billing", "certified", "auditor"),
     "payroll_checks": ("payroll", "salar", "paye", "pension", "staff", "ghost", "wages"),
     "grant_checks": ("grant", "donor", "ngo", "restricted", "funder", "project fund"),
+    "sector_checks": ("stock", "inventory", "import", "customs", "landed", "rent", "tenant",
+                      "property", "settlement", "chargeback", "processor", "director",
+                      "intercompany", "group accounts", "vendor", "procurement", "fraud",
+                      "purchases"),
     "sales_checks": ("sales", "revenue", "pos", "till", "takings", "looks wrong", "look wrong",
                      "wrong", "shops", "branches", "what is wrong"),
     "trace_formula": ("where does", "come from", "trace", "precedent", "what uses"),
@@ -132,6 +136,9 @@ JOB_GROUPS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
                       ("payroll_checks", "tax_compute", "query_sql")),
     "grants": (("grant", "donor", "ngo", "restricted fund"), ("grant_checks", "read_document",
                                                              "query_sql")),
+    "sector": (("stock", "inventory", "import", "rent", "tenant", "settlement", "director",
+                "intercompany", "vendor", "procurement", "fraud"),
+               ("sector_checks", "query_sql", "review_points")),
     "sales_review": (("sales", "revenue", "pos", "till", "takings", "shop"),
                      ("sales_checks", "query_sql", "tax_compute")),
     "bank_rec": (("bank rec", "reconcil", "bank statement"), ("bank_rec", "reconcile",
@@ -367,6 +374,10 @@ def fallback_plan(message: str) -> list[tuple[str, dict[str, Any]]]:
         plan.insert(0, ("grant_checks", {}))
     if any(w in m for w in ("payroll", "salar", "paye", "wages")):
         plan.insert(0, ("payroll_checks", {}))
+    if any(w in m for w in ("stock", "inventor", "import", "customs", "rent", "tenant",
+                            "settlement", "processor", "director", "intercompany", "group",
+                            "vendor", "procurement", "fraud", "purchases")):
+        plan.insert(0, ("sector_checks", {}))
     wants_review = any(w in m for w in ("review", "books", "trial balance", "what is wrong"))
     if wants_review and ("review_points", {}) not in plan:
         plan.append(("review_points", {}))

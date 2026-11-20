@@ -166,3 +166,17 @@ def test_payroll_checks_find_the_payroll_problems_exactly():
     assert got["paye_wrong_rules"] == pytest.approx(abs(f["paye_gap"]))
     assert got["payroll_vs_books"] == pytest.approx(f["december_gross"])
     assert "shared_bank_account" in got
+
+
+@pytest.mark.parametrize("slug,kind", [("importer", "imports"), ("property", "rent"),
+                                       ("manufacturer", "stock"), ("fintech", "settlements"),
+                                       ("group", "group"), ("purchases", "purchases")])
+def test_sector_cases_are_found_by_the_checks_alone(slug, kind):
+    """Cases 5-10: the standard checks find every planted problem, with the key amount."""
+    case, w, conv = _job(slug)
+    ctx = w.context(conv)
+    out = run_tool(ctx, "sector_checks", {"kind": kind})
+    s = score(case, [out.summary])
+    assert s["found"] == s["of"], [p["id"] for p in s["problems"] if not p["found"]]
+    auto = run_tool(ctx, "sector_checks", {})  # "auto" keeps the same findings
+    assert score(case, [auto.summary])["found"] == s["of"]
