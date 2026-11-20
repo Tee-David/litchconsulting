@@ -372,7 +372,8 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
                              router=deps.router, history=history, conversation_id=conv.id,
                              local_only=conv.local_only, masker=masker, max_steps=max_steps,
                              check_args=check_args, check_citation=citation_checker(ctx),
-                             fallback_plan=_plan_for(has_tb), max_tools=len(tools),
+                             fallback_plan=_plan_for(has_tb, _job_checks(ctx, conv)),
+                             max_tools=len(tools),
                              more_tools=[AgentTool(t.name, t.description, t.schema(), t.kind)
                                          for t in TOOLS if t.name not in offered]):
         if ev["type"] == "provider":
@@ -739,6 +740,30 @@ _SECTOR_AREA = {"imports": "Imports", "rent": "Rent", "stock": "Stock",
                 "purchases": "Purchases"}
 
 
+def fitting_checks(roles: set[str], names: str) -> list[tuple[str, str]]:
+    """The standard checks that fit the files in a job: (tool, plain title)."""
+    checks: list[tuple[str, str]] = []
+    if roles & {"trial_balance", "books"}:
+        checks.append(("review_points", "Books"))
+    if "sales_report" in roles:
+        checks.append(("sales_checks", "Sales"))
+    if "invoices" in roles:
+        checks.append(("receivables_checks", "Invoices"))
+    if "payroll" in roles:
+        checks.append(("payroll_checks", "Payroll"))
+    if _GRANT.search(names):
+        checks.append(("grant_checks", "Grants"))
+    checks.append(("sector_checks", ""))  # one area per kind that finds something
+    return checks
+
+
+def _job_checks(ctx: ToolContext, conv: Conversation) -> list[str]:
+    roles = {ref.role or (ref.facts or {}).get("role") or "other" for ref in conv.workbooks}
+    names = " ".join([ref.name for ref in conv.workbooks] + [
+        s for w in ctx.workbooks.values() for s in w.sheets])
+    return [t for t, _ in fitting_checks(roles, names)]
+
+
 def job_overview(ctx: ToolContext, conv: Conversation) -> dict[str, Any]:
     """What the job holds, what the first checks found, and what to do next (v6 C1).
 
@@ -759,18 +784,7 @@ def job_overview(ctx: ToolContext, conv: Conversation) -> dict[str, Any]:
     has_tb = bool(roles & {"trial_balance", "books"})
     banks = [f for f in files if f["role"] == "bank_statement"]
 
-    checks: list[tuple[str, str]] = []  # (tool, plain title)
-    if has_tb:
-        checks.append(("review_points", "Books"))
-    if "sales_report" in roles:
-        checks.append(("sales_checks", "Sales"))
-    if "invoices" in roles:
-        checks.append(("receivables_checks", "Invoices"))
-    if "payroll" in roles:
-        checks.append(("payroll_checks", "Payroll"))
-    if _GRANT.search(names):
-        checks.append(("grant_checks", "Grants"))
-    checks.append(("sector_checks", ""))  # one area per kind that finds something
+    checks = fitting_checks(roles, names)
 
     findings: list[dict[str, Any]] = []
     start = time.monotonic()
@@ -820,7 +834,7 @@ CHECK_TOOLS = {"sales_checks", "receivables_checks", "grant_checks", "payroll_ch
                "review_points"}
 
 
-def _plan_for(has_tb: bool) -> Any:
+def _plan_for(has_tb: bool, job_checks: list[str] | None = None) -> Any:
     """The deterministic plan when the model is down or keeps sending malformed
     steps: on a trial balance, its statements (and CIT when asked); else the
     decision layer's keyword plan."""
@@ -847,5 +861,9 @@ def _plan_for(has_tb: bool) -> Any:
             if _TB_TAX.search(message):
                 steps.append(("tax_compute", {"kind": "cit"}))
             return steps
+        if job_checks and all(s[0] == "profile_workbook" for s in keyword):
+            # Nothing in the words fits a step: run the checks that fit the job's files,
+            # rather than only describing them (fintech run, 20 Nov).
+            return [(t, {}) for t in job_checks][:4]
         return keyword
     return plan

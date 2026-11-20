@@ -193,3 +193,14 @@ def test_messy_file_traps_are_found_and_the_table_is_read():
     assert by["text_date"] == case.figures["text_dates"]
     assert by["text_number"] == case.figures["text_amounts"]
     assert by["duplicate"] == 4
+
+
+def test_fallback_runs_the_checks_that_fit_the_files_when_the_words_do_not():
+    """No model and no keyword step: the checks that fit the job run (fintech run, 20 Nov)."""
+    from litchai.workbench.engine import _plan_for, fitting_checks
+
+    checks = [t for t, _ in fitting_checks({"trial_balance", "sales_report"}, "")]
+    assert checks == ["review_points", "sales_checks", "sector_checks"]
+    plan = _plan_for(True, checks)
+    assert [t for t, _ in plan("How much do they really owe us?")] == checks
+    assert plan("delete the sheet") == [] or plan("delete the sheet")[0][0] != "review_points"
