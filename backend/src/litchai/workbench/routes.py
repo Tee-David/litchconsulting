@@ -312,7 +312,7 @@ def register_workbench_routes(app: FastAPI) -> None:
             if body.blank_workbook:
                 conv.new_seq += 1
                 blank = new_workbook(f"new-{conv.new_seq}", body.blank_workbook)
-                wb.attach_model(conv, blank)
+                wb.attach_model(conv, blank).kind = "work"  # v8: a blank start is the working book
             look = first_look(_deps(wb, conv), conv)
             wb.store.save(conv)
             return {"conversation": conv.public(), "first_look": look}

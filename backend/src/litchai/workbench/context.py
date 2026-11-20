@@ -33,6 +33,13 @@ class ToolContext:
     # Results earlier steps left for later ones in the same turn (e.g. the P&L
     # figures that tax_compute uses), so the model never retypes a figure.
     memory: dict[str, Any] = field(default_factory=dict)
+    # v8: the files given (never changed), the working book, its read-only source copies,
+    # and the full models (``workbooks`` shows the working book without those copies).
+    sources: set[str] = field(default_factory=set)
+    work_id: str | None = None
+    imports: dict[str, Any] = field(default_factory=dict)
+    full: dict[str, Workbook] = field(default_factory=dict)
+    enriched: set[str] = field(default_factory=set)   # copies that Sage changed
 
     def workbook(self, workbook_id: str | None = None) -> Workbook:
         if not self.workbooks:
@@ -103,6 +110,9 @@ def finish_batch(ctx: ToolContext, builder: OpBuilder, title: str, summary: str)
     model with the proposal overlaid), overlay it on the live context so later
     steps see it, and wrap it as a pending batch."""
     model = builder.model
+    if model.id in ctx.sources or (ctx.work_id and model.id == ctx.work_id):
+        model, ops = _to_working_book(ctx, model, list(builder.ops), builder.tool)
+        builder.ops[:] = ops
     trial = copy.deepcopy(model)
     overlay(trial, builder.ops)
     for op in builder.ops:
@@ -124,7 +134,43 @@ def finish_batch(ctx: ToolContext, builder: OpBuilder, title: str, summary: str)
             cell = model.sheets[op.sheet or ""].get(r, c)
             if cell is not None:
                 cell.preview = op.preview_value
-    return new_batch(title, summary, builder.tool, list(builder.ops))
+    if ctx.work_id and ctx.work_id in ctx.full:  # refresh the views the tools see
+        from litchai.workbench.sources import views
+
+        ctx.enriched |= {o.sheet for o in builder.ops if o.sheet in ctx.imports
+                         and o.op != "import_sheet" and not getattr(o, "_expanded", False)}
+        ctx.workbooks.update(views(ctx.full, ctx.work_id, ctx.imports, ctx.enriched))
+    return new_batch(title, summary, builder.tool,
+                     [o for o in builder.ops if not getattr(o, "_expanded", False)])
+
+
+def _to_working_book(ctx: ToolContext, model: Workbook, ops: list[Operation],
+                     tool: str) -> tuple[Workbook, list[Operation]]:
+    """v8: every proposal goes to the working book. A proposal built on a source moves
+    there, with read-only copies of the source sheets it changes or reads."""
+    from litchai.workbench.sources import WORK_NAME, expand_imports, redirect
+
+    head: list[Operation] = []
+    if ctx.work_id is None or ctx.work_id not in ctx.full:
+        work = ctx.add_new_workbook(WORK_NAME)
+        ctx.full[work.id] = work
+        ctx.work_id = work.id
+        head.append(Operation("create_workbook", work.id, new_value=WORK_NAME, tool=tool,
+                              meta={"kind": "work"}, reason="The working book for this job"))
+    work = ctx.full[ctx.work_id]
+    if model.id == ctx.work_id:
+        return work, head + ops
+    stored = head + redirect(ops, model, work, ctx.work_id, ctx.imports, tool)
+    # The live model gets the copies now (cells included), so previews and later steps
+    # in this turn read real values; the stored proposal keeps one compact op per copy.
+    expanded = expand_imports(stored, ctx.full)
+    kept = {id(o) for o in stored}
+    for o in expanded:
+        if id(o) not in kept:
+            o._expanded = True  # type: ignore[attr-defined]
+    # compact import ops first (the overlay skips them; new_batch keeps them), then
+    # the expanded cells (the overlay uses them; new_batch drops them)
+    return work, [o for o in stored if o.op == "import_sheet"] + expanded
 
 
 def ops_of(batches: list[Batch]) -> list[Operation]:

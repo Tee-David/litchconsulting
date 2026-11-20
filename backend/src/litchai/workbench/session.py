@@ -91,6 +91,10 @@ class WorkbookRef:
     role: str | None = None
     note: str = ""
     group: str | None = None
+    # v8: "source" = a file the person gave (never changed); "work" = the working book.
+    kind: str = "source"
+    # v8, working book only: sheet -> {"from": source id, "sheet": name} (read-only copies)
+    imports: dict[str, Any] = field(default_factory=dict)
 
     @property
     def current_sha(self) -> str:
@@ -423,12 +427,37 @@ class Workbench:
                                                            str(op.new_value or op.workbook_id))
                 for wid in {op.workbook_id for op in b.ops}:
                     if wid in out:
-                        overlay(out[wid], [op for op in b.ops if op.workbook_id == wid])
+                        ops = [op for op in b.ops if op.workbook_id == wid]
+                        if any(op.op == "import_sheet" for op in ops):
+                            from litchai.workbench.sources import expand_imports
+
+                            ops = expand_imports(ops, out)
+                        overlay(out[wid], ops)
         return out
 
     def context(self, conv: Conversation, **kw: Any) -> ToolContext:
-        ctx = ToolContext(self.models(conv), client_name=conv.client_name,
-                          period_label=conv.period_label, **kw)
+        from litchai.workbench.sources import source_ids, views, work_ref
+
+        full = self.models(conv)
+        sources = source_ids(conv.workbooks)
+        w = work_ref(conv.workbooks)
+        work_id = w.id if w else next(  # a working book proposed but not accepted yet
+            (op.workbook_id for b in conv.batches if b.status == "pending" for op in b.ops
+             if op.op == "create_workbook" and (op.meta or {}).get("kind") == "work"), None)
+        imports = dict(w.imports) if w else {}
+        for b in conv.batches:  # pending imports count too (no second copy)
+            if b.status == "pending":
+                for op in b.ops:
+                    if op.op == "import_sheet" and op.workbook_id == work_id and op.sheet:
+                        imports[op.sheet] = dict(op.meta or {})
+        # copies that a proposal (pending or accepted) changed after bringing them in
+        enriched = {op.sheet for b in conv.batches if b.status in ("pending", "accepted")
+                    for op in b.ops if op.workbook_id == work_id and op.sheet in imports
+                    and op.op not in ("import_sheet", "delete_sheet")}
+        ctx = ToolContext(views(full, work_id, imports, enriched),
+                          client_name=conv.client_name, period_label=conv.period_label, **kw)
+        ctx.full, ctx.sources, ctx.work_id, ctx.imports = full, sources, work_id, imports
+        ctx.enriched = enriched
         ctx.new_workbook_seq = conv.new_seq + sum(
             1 for b in conv.batches for op in b.ops if op.op == "create_workbook")
         return ctx
@@ -501,6 +530,10 @@ class Workbench:
                 except KeyError as exc:
                     raise WorkbenchError(f"unknown workbook {wid}") from exc
             ops = [op for op in ops if op.op != "create_workbook"]
+            if any(op.op == "import_sheet" for op in ops):
+                from litchai.workbench.sources import expand_imports
+
+                ops = expand_imports(ops, self.models(conv, with_pending=False))
             try:
                 candidate, gate = gate_and_apply(base, ops, self.gate)
             except ApplyConflict as exc:
@@ -529,8 +562,17 @@ class Workbench:
             except KeyError:
                 name = next((str(op.new_value) for op in b.ops
                              if op.op == "create_workbook" and op.workbook_id == wid), wid)
-                ref = WorkbookRef(id=wid, name=name, origin="new")
+                ref = WorkbookRef(id=wid, name=name, origin="new", kind="work")
                 conv.workbooks.append(ref)
+            for op in b.ops:  # v8: keep track of the read-only source copies
+                if op.workbook_id != wid or not op.sheet:
+                    continue
+                if op.op == "import_sheet":
+                    ref.imports[op.sheet] = dict(op.meta or {})
+                elif op.op == "delete_sheet":
+                    ref.imports.pop(op.sheet, None)
+                elif op.op == "rename_sheet" and op.sheet in ref.imports:
+                    ref.imports[str((op.meta or {}).get("to"))] = ref.imports.pop(op.sheet)
             ref.versions.append({"n": len(ref.versions) + 1, "sha": sha, "at": _now(),
                                  "batch_id": b.id, "gate": gate.to_dict()})
         record_as.status, record_as.decided_at = "accepted", _now()

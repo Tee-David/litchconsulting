@@ -28,7 +28,7 @@ from openpyxl import load_workbook
 
 from litchai.workbench.model import Cell, Sheet, Workbook, a1, parse_a1
 
-OP_KINDS = ("set_cell", "create_sheet", "delete_sheet", "create_workbook", "add_chart",
+OP_KINDS = ("set_cell", "create_sheet", "delete_sheet", "create_workbook", "add_chart", "import_sheet",
             "remove_chart", "rename_sheet", "move_sheet", "sheet_props", "copy_sheet",
             "restore_sheet", "insert_rows", "delete_rows", "insert_cols", "delete_cols",
             "merge_cells", "unmerge_cells", "cond_format", "clear_cond_format",
@@ -535,7 +535,7 @@ def inverse_ops(ops: list[Operation]) -> list[Operation]:
                 reason=f"undo: {op.reason}", tool=op.tool, kind="changed",
                 style=op.old_style, old_style=None,
             ))
-        elif op.op == "create_sheet":
+        elif op.op in ("create_sheet", "import_sheet"):
             inv.append(Operation("delete_sheet", op.workbook_id, sheet=op.sheet,
                                  reason=f"undo: {op.reason}", tool=op.tool))
         elif op.op == "add_chart":

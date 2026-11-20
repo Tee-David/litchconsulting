@@ -772,6 +772,8 @@ def job_overview(ctx: ToolContext, conv: Conversation) -> dict[str, Any]:
     start a task by itself (C3)."""
     files: list[dict[str, Any]] = []
     for ref in conv.workbooks:
+        if getattr(ref, "kind", "source") == "work":
+            continue  # v8: the overview lists the sources, not the working book
         f = ref.facts or {}
         role = ref.role or f.get("role") or "other"
         files.append({"workbook_id": ref.id, "name": ref.name, "role": role,
