@@ -180,3 +180,16 @@ def test_sector_cases_are_found_by_the_checks_alone(slug, kind):
     assert s["found"] == s["of"], [p["id"] for p in s["problems"] if not p["found"]]
     auto = run_tool(ctx, "sector_checks", {})  # "auto" keeps the same findings
     assert score(case, [auto.summary])["found"] == s["of"]
+
+
+def test_messy_file_traps_are_found_and_the_table_is_read():
+    """Case 11: text numbers, text dates in both orders and copied rows are all flagged,
+    and a title row above the header does not stop the table being read."""
+    case, w, conv = _job("messy")
+    out = run_tool(w.context(conv), "flag_anomalies", {})
+    s = score(case, [out.summary])
+    assert s["found"] == s["of"], [p["id"] for p in s["problems"] if not p["found"]]
+    by = out.data["by_kind"]
+    assert by["text_date"] == case.figures["text_dates"]
+    assert by["text_number"] == case.figures["text_amounts"]
+    assert by["duplicate"] == 4

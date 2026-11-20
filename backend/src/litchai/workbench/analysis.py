@@ -6,6 +6,7 @@ recompute gate re-checks). Tax rates come only from the shared
 """
 from __future__ import annotations
 
+import re
 import statistics
 from collections import deque
 from datetime import date, datetime
@@ -282,8 +283,34 @@ def flag_anomalies(ctx: ToolContext, *, sheet: str | None = None,
     return ToolOutput(
         data={"count": len(findings), "by_kind": by_kind, "findings": findings[:200]},
         citations=[f["cell"] for f in findings[:20]],
-        summary=f"{len(findings)} findings: " + ", ".join(f"{v} {k}" for k, v in by_kind.items()),
+        summary=_anomaly_summary(len(findings), by_kind),
     )
+
+
+# Plain words for each kind (v6: the summary is what a person reads).
+_KIND_WORDS = {
+    "duplicate": "possible duplicate rows (the same entry twice)",
+    "text_number": "numbers stored as text (they are left out of totals)",
+    "text_date": "dates typed as text (some in day/month, some in month/day order)",
+    "balance_break": "running-balance breaks",
+    "outlier": "unusually large amounts",
+    "round_amount": "large round amounts",
+    "weekend": "entries on a Saturday or Sunday",
+    "benford": "a first-digit pattern that is not normal (Benford test)",
+}
+
+
+def _anomaly_summary(n: int, by_kind: dict[str, int]) -> str:
+    if not n:
+        return "No duplicates, outliers, text dates, text numbers or balance breaks found."
+    order = ["duplicate", "text_number", "text_date", "balance_break", "outlier",
+             "round_amount", "weekend", "benford"]
+    kinds = sorted(by_kind, key=lambda k: order.index(k) if k in order else 99)
+    lines = [f"- {by_kind[k]} {_KIND_WORDS.get(k, k.replace('_', ' '))}" for k in kinds]
+    return f"{n} points to check:\n" + "\n".join(lines)
+
+
+_MDY = re.compile(r"^(0?[1-9]|1[0-2])/(1[3-9]|2\d|3[01])/\d{4}$")  # 07/25/2025
 
 
 def _sheet_findings(sh: Sheet, t: Table, round_threshold: float, z: float) -> list[dict]:
@@ -327,6 +354,8 @@ def _sheet_findings(sh: Sheet, t: Table, round_threshold: float, z: float) -> li
             d = _as_date(v)
             if isinstance(v, str) and looks_like_text_date(v):
                 add("text_date", r, dcol.index, f"Date typed as text ({v!r})")
+            elif isinstance(v, str) and _MDY.match(v.strip()):
+                add("text_date", r, dcol.index, f"Date typed as text in month/day order ({v!r})")
             if d and d.weekday() >= 5:
                 add("weekend", r, dcol.index, f"Posted on a {d.strftime('%A')}", "info")
     for col in t.columns:

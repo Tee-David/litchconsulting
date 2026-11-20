@@ -75,6 +75,7 @@ def registry() -> dict[str, Any]:
         group,
         importer,
         manufacturer,
+        messy,
         ngo,
         payroll,
         property,
@@ -85,4 +86,4 @@ def registry() -> dict[str, Any]:
     return {"supermarket": supermarket.build, "contractor": contractor.build, "ngo": ngo.build,
             "payroll": payroll.build, "importer": importer.build, "property": property.build,
             "manufacturer": manufacturer.build, "fintech": fintech.build, "group": group.build,
-            "purchases": purchases.build}
+            "purchases": purchases.build, "messy": messy.build}
