@@ -284,6 +284,13 @@ def create_app(
     async def health() -> dict:
         return {"status": "ok", "service": "litchai", "version": API_VERSION}
 
+    @app.get("/evals/cases")
+    async def eval_cases() -> dict:
+        """The edge-case scorecard (fictional cases; no client data)."""
+        from litchai.evals.scorecard import load
+
+        return {"cases": load()}
+
     @app.get("/health/queue")
     async def health_queue() -> dict:
         jobs = await queue.job_manager.list_jobs_async()

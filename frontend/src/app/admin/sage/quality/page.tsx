@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { ThumbsDown, ThumbsUp } from "lucide-react";
 import { requireArea } from "@/lib/server-user";
 import { sageQuality } from "@/lib/sage/quality";
+import { getEvalCases, type EvalCaseRow } from "@/lib/litchai/client";
 import { EmptyState } from "@/components/kit";
 import { Kpi, PageHead, Panel } from "@/components/admin/ui/surface";
 import { UrlSegmented } from "@/components/admin/ui/url-segmented";
@@ -34,6 +35,8 @@ export default async function SageQualityPage({ searchParams }: { searchParams: 
   const sp = await searchParams;
   const days = sp.days === "30" ? 30 : 7;
   const q = await sageQuality(days);
+  // The edge-case scorecard lives on the engine; the page works without it.
+  const cases: EvalCaseRow[] | null = await getEvalCases().catch(() => null);
   const total = q.good + q.bad;
   const rate = total ? Math.round((q.good / total) * 100) : null;
 
@@ -127,6 +130,43 @@ export default async function SageQualityPage({ searchParams }: { searchParams: 
           </Panel>
         </>
       )}
+
+      <Panel title="Test cases" sub="Realistic client jobs with planted problems (fictional data). The latest run per case and model.">
+        {cases === null ? (
+          <p className="py-2 text-sm text-muted">The analysis server did not answer, so the test results cannot show now.</p>
+        ) : cases.length === 0 ? (
+          <p className="py-2 text-sm text-muted">No test runs saved yet. Runs from the analysis server show here.</p>
+        ) : (
+          <ul className="divide-y divide-hairline">
+            {[...cases].sort((a, b) => a.case.localeCompare(b.case) || a.chain.localeCompare(b.chain)).map((c) => (
+              <li key={`${c.case}-${c.chain}`} className="flex flex-wrap items-start gap-x-3 gap-y-1 py-3">
+                <span
+                  className={cn(
+                    "grid h-8 min-w-14 shrink-0 place-items-center rounded-ctl px-2 text-sm font-semibold tabular-nums",
+                    c.found_pct >= 80 ? "bg-good-soft text-good" : c.found_pct >= 50 ? "bg-warn-soft text-warn" : "bg-bad-soft text-bad",
+                  )}
+                  aria-label={`${c.found} of ${c.of} problems found`}
+                >
+                  {c.found}/{c.of}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-ink">
+                    {c.client ?? c.case} <span className="font-normal text-muted">· {CHAIN_LABEL[c.chain] ?? c.chain}</span>
+                  </p>
+                  <p className="mt-0.5 text-[12.5px] text-muted">
+                    {c.model_turns} of {c.turns} answers by the model · {c.unusable} unusable repl{c.unusable === 1 ? "y" : "ies"} ·{" "}
+                    {c.tokens.toLocaleString("en-NG")} tokens · {c.seconds}s · {when(c.at)}
+                    {c.trend.length > 1 ? ` · trend ${c.trend.slice(-5).join("% → ")}%` : ""}
+                  </p>
+                  {c.missed.length ? <p className="mt-0.5 text-[12.5px] text-body">Missed: {c.missed.join("; ")}</p> : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
     </div>
   );
 }
+
+const CHAIN_LABEL: Record<string, string> = { groq: "Groq (free models)", deepseek: "DeepSeek" };

@@ -420,3 +420,29 @@ export async function getInsights(documentId: number): Promise<DocumentInsights 
   if (!res.ok) throw new Error(`insights HTTP ${res.status}`);
   return (await res.json()) as DocumentInsights;
 }
+
+/** One edge-case run on the scorecard (fictional cases; see backend evals/scorecard.py). */
+export type EvalCaseRow = {
+  case: string;
+  client: string | null;
+  chain: string;
+  found: number;
+  of: number;
+  found_pct: number;
+  tokens: number;
+  unusable: number;
+  seconds: number;
+  turns: number;
+  model_turns: number;
+  missed: string[];
+  at: string;
+  trend: number[];
+};
+
+/** The latest live run per case and model; [] when the engine has none or is older. */
+export async function getEvalCases(): Promise<EvalCaseRow[]> {
+  const res = await litchaiRaw("/evals/cases");
+  if (res.status === 404 || res.status === 405) return [];
+  if (!res.ok) throw new Error(`evals HTTP ${res.status}`);
+  return ((await res.json()) as { cases: EvalCaseRow[] }).cases;
+}

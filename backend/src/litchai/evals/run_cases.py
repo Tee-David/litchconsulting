@@ -93,6 +93,9 @@ def main(argv: list[str] | None = None) -> int:  # pragma: no cover - VM CLI
     p.add_argument("--out", default=None)
     a = p.parse_args(argv)
     res = run(a.case, a.chain, a.seed)
+    from litchai.evals.scorecard import save
+
+    save(res)  # the scorecard on Admin -> Sage -> Quality
     text = json.dumps(res, indent=1, default=str)
     if a.out:
         with open(a.out, "w", encoding="utf-8") as f:
