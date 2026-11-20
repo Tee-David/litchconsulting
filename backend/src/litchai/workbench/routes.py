@@ -46,6 +46,10 @@ class StartConversation(BaseModel):
     group: str | None = Field(None, max_length=120)  # the archive the files came from
 
 
+class RemoveFile(BaseModel):
+    delete_document: bool = False  # the app says True only when no request uses it
+
+
 class AttachDocuments(BaseModel):
     document_ids: list[int] = Field(min_length=1)
     group: str | None = Field(None, max_length=120)  # the archive the files came from
@@ -331,6 +335,101 @@ def register_workbench_routes(app: FastAPI) -> None:
     def get_conversation(conversation_id: str) -> dict[str, Any]:
         with _workbench() as wb:
             return {"conversation": _get(wb, conversation_id).public()}
+
+    # --- v7: remove a file, purge a workbench, search ----------------------------
+    def _doc_used_elsewhere(wb: Workbench, document_id: int, skip: str) -> bool:
+        return any(getattr(w, "document_id", None) == document_id
+                   for c in wb.store.list(None, 1000) if c.id != skip for w in c.workbooks)
+
+    def _drop_document(wb: Workbench, document_id: int) -> bool:
+        """Delete an uploaded document and its encrypted file (only when unused)."""
+        repo = wb.repo  # type: ignore[attr-defined]
+        if not hasattr(repo, "delete_document"):
+            return False
+        doc = repo.delete_document(document_id)
+        if doc is None:
+            return False
+        try:
+            path = state.storage.path_for(doc.client_id, doc.source_hash)
+            if path.exists() and repo.find_document_by_hash(doc.client_id, doc.source_hash) is None:
+                path.unlink()
+        except (OSError, AttributeError):
+            pass  # the row is gone; a stray file is harmless and private (0600)
+        return True
+
+    @app.post("/workbench/conversations/{conversation_id}/workbooks/{workbook_id}/remove")
+    def remove_file(conversation_id: str, workbook_id: str, body: RemoveFile) -> dict[str, Any]:
+        """Take one file out of a workbench. The upload is deleted only when asked and
+        when no other workbench uses it."""
+        with _workbench() as wb:
+            conv = _get(wb, conversation_id)
+            try:
+                ref = wb.remove_workbook(conv, workbook_id)
+            except KeyError as exc:
+                raise HTTPException(404, "no such file in this workbench") from exc
+            dropped = False
+            doc_id = getattr(ref, "document_id", None)
+            if body.delete_document and doc_id and not _doc_used_elsewhere(wb, doc_id, conv.id):
+                dropped = _drop_document(wb, doc_id)
+            return {"conversation": conv.public(), "document_id": doc_id,
+                    "document_deleted": dropped}
+
+    @app.delete("/workbench/conversations/{conversation_id}")
+    def purge_conversation(conversation_id: str, delete_documents: str = "") -> dict[str, Any]:
+        """Purge a workbench for good (the app calls this 30 days after Trash): the
+        conversation, the listed uploads that nothing else uses, and stored versions
+        that nothing else uses."""
+        with _workbench() as wb:
+            conv = wb.store.get(conversation_id)
+            if conv is None:
+                return {"purged": False, "documents_deleted": 0, "files_deleted": 0}
+            shas = {v["sha"] for w in conv.workbooks for v in w.versions if v.get("sha")}
+            wanted = {int(x) for x in delete_documents.split(",") if x.strip().isdigit()}
+            wb.store.delete(conversation_id)
+            docs = sum(1 for d in wanted
+                       if not _doc_used_elsewhere(wb, d, conversation_id) and _drop_document(wb, d))
+            still = {v["sha"] for c in wb.store.list(None, 1000) for w in c.workbooks
+                     for v in w.versions if v.get("sha")}
+            keep = set()
+            conn = getattr(wb.repo, "conn", None)  # type: ignore[attr-defined]
+            if conn is not None:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT sha256 FROM generated_files")
+                    keep = {r["sha256"] if isinstance(r, dict) else r[0] for r in cur.fetchall()}
+            files = 0
+            for sha in shas - still - keep:
+                try:
+                    path = state.storage.artifact_path_for(sha)
+                    if path.exists():
+                        path.unlink()
+                        files += 1
+                except (OSError, AttributeError):
+                    pass
+            return {"purged": True, "documents_deleted": docs, "files_deleted": files}
+
+    @app.get("/workbench/search")
+    def search_conversations(q: str, limit: int = 30) -> dict[str, Any]:
+        """Workbenches whose name, files or chat text (every session) contain the words."""
+        words = [w for w in q.casefold().split() if w][:6]
+        if not words:
+            return {"results": []}
+        out: list[dict[str, Any]] = []
+        with _workbench() as wb:
+            for c in wb.store.list(None, 1000):
+                fields = [("name", c.title)] + [("file", w.name) for w in c.workbooks]
+                chats = [m for m in c.messages] + [m for t in c.threads for m in t.get("messages", [])]
+                fields += [("chat", str(m.get("content") or "")) for m in chats]
+                for where, text in fields:
+                    low = text.casefold()
+                    if all(w in low for w in words):
+                        i = low.find(words[0])
+                        snip = " ".join(text[max(0, i - 50): i + 90].split())
+                        out.append({"id": c.id, "title": c.title, "where": where,
+                                    "snippet": snip, "updated_at": c.updated_at})
+                        break
+                if len(out) >= min(limit, 100):
+                    break
+        return {"results": out}
 
     @app.patch("/workbench/conversations/{conversation_id}")
     def update_conversation(conversation_id: str, body: UpdateConversation) -> dict[str, Any]:

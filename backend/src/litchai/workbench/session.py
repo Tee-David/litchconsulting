@@ -224,6 +224,7 @@ class ConversationStore(Protocol):
     def get(self, conversation_id: str) -> Conversation | None: ...
     def save(self, conversation: Conversation) -> None: ...
     def list(self, client_id: str | None = None, limit: int = 50) -> list[Conversation]: ...
+    def delete(self, conversation_id: str) -> bool: ...
 
 
 class InMemoryConversationStore:
@@ -246,6 +247,10 @@ class InMemoryConversationStore:
         out = [c for c in (self.get(k) for k in self._d) if c is not None
                and (client_id is None or c.client_id == client_id)]
         return sorted(out, key=lambda c: c.updated_at, reverse=True)[:limit]
+
+    def delete(self, conversation_id: str) -> bool:
+        self._masks.pop(conversation_id, None)
+        return self._d.pop(conversation_id, None) is not None
 
 
 class PgConversationStore:
@@ -284,6 +289,11 @@ class PgConversationStore:
                             "ORDER BY updated_at DESC LIMIT %s", (limit,))
             rows = cur.fetchall()
         return [Conversation.from_state(r["state"], r["mask_state"]) for r in rows]
+
+    def delete(self, conversation_id: str) -> bool:
+        with self.conn.cursor() as cur:
+            cur.execute("DELETE FROM wb_conversation WHERE id = %s", (conversation_id,))
+            return bool(cur.rowcount)
 
 
 # --- parsed workbooks, cached by file content ------------------------------------------
@@ -342,6 +352,18 @@ class Workbench:
                             ai_mode=ai_mode, title=title, client_name=client_name,
                             period_label=period_label)
         return conv
+
+    def remove_workbook(self, conv: Conversation, wb_id: str) -> WorkbookRef:
+        """Take one file out of the job (v7). Proposals that change it are dropped;
+        accepted versions of the other files stay. Raises KeyError for an unknown id."""
+        ref = conv.workbook_ref(wb_id)
+        conv.workbooks = [w for w in conv.workbooks if w.id != wb_id]
+        for b in conv.batches:
+            if b.status == "pending" and any(o.workbook_id == wb_id for o in b.ops):
+                b.status = "rejected"
+                b.decided_at = _now()
+        self.store.save(conv)
+        return ref
 
     def attach_bytes(self, conv: Conversation, data: bytes, *, name: str, origin: str = "xlsx",
                      document_id: int | None = None,

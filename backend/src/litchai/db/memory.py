@@ -241,6 +241,10 @@ class InMemoryRepository:
     def get_document(self, document_id: int) -> Document | None:
         return self._documents.get(document_id)
 
+    def delete_document(self, document_id: int) -> Document | None:
+        """Remove one document (workbench purge). Returns it, or None."""
+        return self._documents.pop(document_id, None)
+
     def find_document_by_hash(self, client_id: str, source_hash: str) -> Document | None:
         for doc in self._documents.values():
             if doc.client_id == client_id and doc.source_hash == source_hash:

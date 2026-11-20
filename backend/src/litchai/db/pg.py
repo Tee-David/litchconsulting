@@ -330,6 +330,15 @@ class PostgresRepository:
             row = cur.fetchone()
             return _document(row) if row else None
 
+    def delete_document(self, document_id: int) -> Document | None:
+        """Remove one document and its rows (cascade). Returns it, or None."""
+        doc = self.get_document(document_id)
+        if doc is None:
+            return None
+        with self.conn.cursor() as cur:
+            cur.execute("DELETE FROM documents WHERE id = %s", (document_id,))
+        return doc
+
     def find_document_by_hash(self, client_id: str, source_hash: str) -> Document | None:
         with self.conn.cursor() as cur:
             cur.execute(
