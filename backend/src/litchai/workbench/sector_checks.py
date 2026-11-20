@@ -268,3 +268,145 @@ def rent_checks(ctx: ToolContext) -> ToolOutput:
                 "Deduct WHT on future payments; the company is liable for the amount not "
                 "withheld, so remit it or get the landlord's credit note.", t.file)
     return result("rent", findings)
+
+
+# ─── case 7: manufacturer ──────────────────────────────────────────────────────
+def stock_checks(ctx: ToolContext) -> ToolOutput:
+    findings: list[dict[str, Any]] = []
+    tb = tb_accounts(ctx)
+    count = None
+    for t in tabs(ctx):
+        if t.col(r"count") and t.col(r"ledger|book|system") and t.col(r"unit cost|cost"):
+            count = t
+    if count is None:
+        return result("stock", findings)
+    code = count.col(r"item code|code|sku")
+    cq, lq = count.col(r"count"), count.col(r"ledger|book|system")
+    uc, nrv = count.col(r"unit cost|cost"), count.col(r"selling|nrv|realisable|realizable")
+    cat = count.col(r"categor|class|type")
+    short = [(count.text(r, code), (count.num(r, lq) - count.num(r, cq)) * count.num(r, uc))
+             for r in count.rows() if abs(count.num(r, lq) - count.num(r, cq)) > 0]
+    if short:
+        tot = sum(v for _, v in short)
+        add(findings, "count_vs_ledger", tot,
+            f"The stock count differs from the ledger on {len(short)} item(s) "
+            f"({', '.join(c for c, _ in short[:5])}); the ledger is {m(tot)} "
+            f"{'higher' if tot > 0 else 'lower'} at cost",
+            "Investigate the differences; adjust the ledger to the count and write off "
+            "the shortage (or find the missing stock).", count.file)
+    if nrv:
+        down = [(count.text(r, code), count.num(r, cq) * (count.num(r, uc) - count.num(r, nrv)))
+                for r in count.rows() if 0 < count.num(r, nrv) < count.num(r, uc)]
+        if down:
+            tot = sum(v for _, v in down)
+            add(findings, "below_nrv", tot,
+                f"Stock held at cost above its net realisable value: {', '.join(c for c, _ in down[:5])}"
+                f" (write-down {m(tot)})",
+                "IAS 2: value stock at the lower of cost and NRV. Write the items down to NRV "
+                "(obsolete or slow-moving stock).", count.file)
+    # weighted average from the purchases of the year
+    buys: dict[str, list[float]] = defaultdict(lambda: [0.0, 0.0])
+    for t in tabs(ctx):
+        if t is count:
+            continue
+        pc, qc, pr = t.col(r"item code|code|sku"), t.col(r"qty|quantity"), t.col(r"unit price|price|unit cost")
+        if pc and qc and pr and t.col(r"date"):
+            for r in t.rows():
+                b = buys[t.text(r, pc)]
+                b[0] += t.num(r, qc)
+                b[1] += t.num(r, qc) * t.num(r, pr)
+    if buys:
+        gap, items = 0.0, []
+        for r in count.rows():
+            b = buys.get(count.text(r, code))
+            if b and b[0]:
+                wavg = b[1] / b[0]
+                d = (count.num(r, uc) - wavg) * count.num(r, cq)
+                if abs(count.num(r, uc) - wavg) > 0.01 * wavg:
+                    gap += d
+                    items.append(count.text(r, code))
+        if items:
+            add(findings, "weighted_average", gap,
+                f"Unit costs do not match the weighted average of this year's purchases for "
+                f"{', '.join(items[:5])}; stock is {m(abs(gap))} {'over' if gap > 0 else 'under'}stated",
+                "Recompute the weighted-average cost from the purchases and correct closing "
+                "stock.", count.file)
+    if cat:
+        kinds = Counter(re.sub(r"s$", "", count.text(r, cat).lower()) for r in count.rows())
+        stock_accts = [n for n, v, _ in tb if re.search(r"inventor|stock", n, re.IGNORECASE)]
+        if len(kinds) >= 2 and len(stock_accts) <= 1:
+            fg = sum(count.num(r, cq) * count.num(r, uc) for r in count.rows()
+                     if re.search(r"finish", count.text(r, cat), re.IGNORECASE))
+            add(findings, "classes_mixed", fg,
+                f"Raw materials and finished goods are in one stock account "
+                f"({', '.join(stock_accts) or 'inventory'}); finished goods are {m(fg)}",
+                "Split stock into raw materials, work in progress and finished goods "
+                "(IAS 2 asks for each class).", "trial balance")
+    return result("stock", findings)
+
+
+# ─── case 8: settlements (fintech, agency banking) ─────────────────────────────
+def settlement_checks(ctx: ToolContext) -> ToolOutput:
+    findings: list[dict[str, Any]] = []
+    tb = tb_accounts(ctx)
+    txns = sets = None
+    for t in tabs(ctx):
+        if t.col(r"txn ids|transaction ids|txn refs|covers"):
+            sets = t
+        elif t.col(r"txn id|transaction id|reference") and t.col(r"amount") and t.col(r"date"):
+            txns = t
+    if sets is None or txns is None:
+        return result("settlement", findings)
+    ids_c = sets.col(r"txn ids|transaction ids|txn refs|covers")
+    sid_c = sets.col(r"settlement id|batch|^id$")
+    net_c, fee_c = sets.col(r"net"), sets.col(r"fee")
+    seen: dict[frozenset[str], str] = {}
+    covered: set[str] = set()
+    dup_amt, dups = 0.0, []
+    for r in sets.rows():
+        ids = frozenset(x.strip() for x in re.split(r"[;,|]", sets.text(r, ids_c)) if x.strip())
+        if ids in seen:
+            dup_amt += sets.num(r, net_c)
+            dups.append(f"{sets.text(r, sid_c)} repeats {seen[ids]}")
+        else:
+            seen[ids] = sets.text(r, sid_c)
+        covered |= ids
+    if dups:
+        add(findings, "duplicate_settlement", dup_amt,
+            f"Settled twice: {', '.join(dups[:5])} ({m(dup_amt)})",
+            "Ask the processor to recover the second payment, or reverse it in the books.",
+            sets.file)
+    id_c, amt_c, d_c = txns.col(r"txn id|transaction id|reference"), txns.col(r"amount"), txns.col(r"date")
+    type_c = txns.col(r"type|status")
+    by_day: dict[str, list[float]] = defaultdict(lambda: [0.0, 0.0])  # all, unsettled
+    cb = 0.0
+    for r in txns.rows():
+        day = str(as_date(txns.val(r, d_c)) or txns.text(r, d_c))
+        a = txns.num(r, amt_c)
+        if re.search(r"chargeback|dispute|reversal", txns.text(r, type_c), re.IGNORECASE):
+            cb += abs(a)
+            continue
+        by_day[day][0] += a
+        if txns.text(r, id_c) not in covered:
+            by_day[day][1] += a
+    gaps = sorted(d for d, (a, u) in by_day.items() if a and abs(a - u) < 1)
+    if gaps:
+        tot = sum(by_day[d][1] for d in gaps)
+        add(findings, "day_not_settled", tot,
+            f"No settlement for the transactions of {', '.join(gaps[:5])} ({m(tot)})",
+            "Chase the processor for the missing settlement and show it as a receivable at "
+            "the period end.", txns.file)
+    if fee_c:
+        fees = sum(sets.num(r, fee_c) for r in sets.rows())
+        if fees > 1 and not any(re.search(r"fee|charge|commission", n, re.IGNORECASE) and v > 0
+                                for n, v, _ in tb):
+            add(findings, "fees_netted", fees,
+                f"Processor fees of {m(fees)} were deducted from the settlements, but the books "
+                "show no fee expense (income is booked net)",
+                "Book income gross and the fees as an expense (do not net them).", sets.file)
+    if cb > 1 and not any(re.search(r"chargeback|dispute", n, re.IGNORECASE) for n, _, _ in tb):
+        add(findings, "chargebacks_not_booked", cb,
+            f"Chargebacks of {m(cb)} in the transactions are not in the books",
+            "Book the chargebacks (a reduction of income or a receivable from the agent).",
+            txns.file)
+    return result("settlement", findings)
