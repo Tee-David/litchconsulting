@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { eq, inArray, isNotNull } from "drizzle-orm";
-import { Activity, PlugZap, Plus, Table2 } from "lucide-react";
-import { conversationsFor } from "@/lib/workbench/server";
+import { and, desc, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
+import { Activity, PlugZap, Plus } from "lucide-react";
 import { db } from "@/lib/db/client";
-import { client, serviceRequest, serviceRequestDocument } from "@/lib/db/schema";
-import { PageHead, Panel } from "@/components/admin/ui/surface";
+import { client, serviceRequest, serviceRequestDocument, workbenchConversation } from "@/lib/db/schema";
+import { requireArea } from "@/lib/server-user";
+import { PageHead } from "@/components/admin/ui/surface";
+import { QueryTabs } from "@/components/admin/ui/tabs";
 import { AnalysesTable, type AnalysisRow } from "@/components/admin/analyses/analyses-table";
+import { WorkbenchList, type WorkbenchRow } from "@/components/admin/analyses/workbench-list";
 import { listDocuments, type LitchaiDocument } from "@/lib/litchai/client";
+import { wbListAll } from "@/lib/litchai/workbench";
 
 export const dynamic = "force-dynamic";
 
@@ -15,31 +18,126 @@ export const dynamic = "force-dynamic";
 const FIRM_OWNER = "00000000-0000-4000-8000-000000000001";
 
 /**
- * AI Studio — cross-client overview of every LitchAI analysis, grouped by
- * client (names resolved from our client table; the backend only knows ids),
- * with deep links back to the service requests that spawned them.
- *
- * Never a dead-end: when the backend/tunnel isn't reachable the studio still
- * renders from our own relay records (cached statuses) with a "not connected"
- * notice, and the welcome workbench shows when nothing has been analyzed yet.
+ * Analyses (v7): the workbenches first (search names, files and chats; filter, sort,
+ * the 5 most recent, then Show more; rename and move to Trash), and the files the AI
+ * has read on a second tab. Never a dead end: when the analysis server does not
+ * answer, both lists show what this app knows, with a notice.
  */
-export default async function LitchaiStudioPage({ searchParams }: { searchParams: Promise<{ requestId?: string }> }) {
+export default async function AnalysesPage({ searchParams }: { searchParams: Promise<{ requestId?: string; tab?: string }> }) {
+  const user = await requireArea("analyses", "/admin/analyses");
+  const { requestId, tab } = await searchParams;
   // "Open in workbench" from a request lands on the workbench start page.
-  const { requestId } = await searchParams;
   if (requestId && /^[0-9a-f-]{36}$/i.test(requestId)) redirect(`/admin/analyses/w/new?requestId=${requestId}`);
-  const recent = await conversationsFor("all", 8).catch(() => []);
   const configured = Boolean(process.env.LITCHAI_API_URL);
+  const filesTab = tab === "files";
+
+  let engineDown = !configured;
+  let body: React.ReactNode;
+  if (!filesTab) {
+    const rows = await db
+      .select({
+        id: workbenchConversation.id,
+        title: workbenchConversation.title,
+        practice: workbenchConversation.practice,
+        createdBy: workbenchConversation.createdBy,
+        createdAt: workbenchConversation.createdAt,
+        updatedAt: workbenchConversation.updatedAt,
+        requestId: workbenchConversation.requestId,
+        requestNumber: serviceRequest.number,
+        clientName: client.name,
+        clientCompany: client.company,
+      })
+      .from(workbenchConversation)
+      .leftJoin(serviceRequest, eq(serviceRequest.id, workbenchConversation.requestId))
+      .leftJoin(client, eq(client.id, workbenchConversation.clientId))
+      .where(
+        and(
+          isNull(workbenchConversation.deletedAt),
+          // a practice workbook is private to the person who made it
+          or(eq(workbenchConversation.practice, false), eq(workbenchConversation.createdBy, user.id)),
+        ),
+      )
+      .orderBy(desc(workbenchConversation.updatedAt))
+      .limit(500);
+    let files = new Map<string, number>();
+    if (configured) {
+      try {
+        files = new Map((await wbListAll(200)).conversations.map((c) => [c.id, c.workbooks.length]));
+      } catch {
+        engineDown = true;
+      }
+    }
+    const list: WorkbenchRow[] = rows.map((r) => ({
+      id: r.id,
+      title: r.title,
+      kind: r.practice ? "practice" : r.requestId ? "request" : "firm",
+      files: files.get(r.id) ?? null,
+      request: r.requestNumber ?? null,
+      client: r.clientCompany || r.clientName || null,
+      createdAt: (r.createdAt as Date).toISOString(),
+      updatedAt: (r.updatedAt as Date).toISOString(),
+      mine: r.createdBy === user.id,
+    }));
+    body = <WorkbenchList rows={list} canSearch={configured && !engineDown} />;
+  } else {
+    body = await filesBody(configured).then(([node, down]) => {
+      engineDown = engineDown || down;
+      return node;
+    });
+  }
+
+  return (
+    <div>
+      <PageHead
+        title="Analyses"
+        lede="Open a client's files in a workbench with Sage beside the sheet. Find any earlier workbench by its name, its files or what was said in its chats."
+        actions={
+          <>
+            <Link href="/admin/analyses/observability" className="inline-flex min-h-[44px] items-center gap-1.5 rounded-ctl border border-hairline bg-paper px-3.5 text-sm font-medium text-ink outline-none hover:bg-surface focus-visible:ring-2 focus-visible:ring-accent/40">
+              <Activity className="size-4" aria-hidden /> AI health
+            </Link>
+            <Link href="/admin/analyses/w/new" data-tour="analyses-new" className="keep-brand inline-flex min-h-[44px] items-center gap-1.5 rounded-ctl bg-brand px-3.5 text-sm font-semibold text-white outline-none hover:bg-brand-hover focus-visible:ring-2 focus-visible:ring-accent/40">
+              <Plus className="size-4" aria-hidden /> New analysis
+            </Link>
+          </>
+        }
+      />
+
+      {engineDown ? (
+        <div role="status" className="mb-4 flex items-start gap-3 rounded-card border border-hairline bg-warn-soft p-4">
+          <PlugZap className="mt-0.5 size-5 shrink-0 text-warn" aria-hidden />
+          <div className="text-sm">
+            <p className="font-semibold text-ink">{configured ? "The analysis server did not answer" : "The analysis server is not connected yet"}</p>
+            <p className="mt-0.5 text-body">The lists show what this app has saved. Search of files and chats, and file counts, come back when the server answers.</p>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="mb-4">
+        <QueryTabs
+          defaultValue="workbenches"
+          tabs={[
+            { label: "Workbenches", value: "workbenches" },
+            { label: "Files the AI has read", value: "files" },
+          ]}
+        />
+      </div>
+      <div data-tour={filesTab ? "analyses-studio" : "analyses-recent"}>{body}</div>
+    </div>
+  );
+}
+
+/** The second tab: every file the analysis server has read, by client and request. */
+async function filesBody(configured: boolean): Promise<[React.ReactNode, boolean]> {
   let documents: LitchaiDocument[] = [];
-  let backendError: string | null = null;
+  let down = false;
   if (configured) {
     try {
       documents = (await listDocuments()).documents;
-    } catch (e) {
-      backendError = e instanceof Error ? e.message : "LitchAI backend unreachable";
+    } catch {
+      down = true;
     }
   }
-
-  // Our side of the fence: relayed request documents (works without the backend).
   const linkedDocs = await db
     .select({
       litchaiDocumentId: serviceRequestDocument.litchaiDocumentId,
@@ -53,8 +151,7 @@ export default async function LitchaiStudioPage({ searchParams }: { searchParams
     .from(serviceRequestDocument)
     .innerJoin(serviceRequest, eq(serviceRequestDocument.requestId, serviceRequest.id))
     .where(isNotNull(serviceRequestDocument.litchaiDocumentId));
-
-  // Backend offline → synthesize the document list from our cached relay rows.
+  // Server offline: build the list from the statuses saved here.
   if (documents.length === 0 && linkedDocs.length > 0) {
     documents = linkedDocs.map((d) => ({
       document_id: Number(d.litchaiDocumentId),
@@ -66,8 +163,6 @@ export default async function LitchaiStudioPage({ searchParams }: { searchParams
       created_at: (d.createdAt as Date).toISOString(),
     }));
   }
-
-  // Client names (the engine only knows ids) and the request each file came from.
   const clientIds = [...new Set(documents.map((d) => d.client_id))].filter((id) => /^[0-9a-f-]{36}$/i.test(id));
   const clients = clientIds.length
     ? await db.select({ id: client.id, name: client.name, company: client.company }).from(client).where(inArray(client.id, clientIds))
@@ -88,67 +183,5 @@ export default async function LitchaiStudioPage({ searchParams }: { searchParams
       createdAt: d.created_at,
     };
   });
-
-  return (
-    <div>
-      <PageHead
-        title="Analyses"
-        lede="Open a client's files in the workbench with Sage beside the grid, and see every file the AI has read."
-        actions={
-          <>
-            <Link href="/admin/analyses/observability" className="inline-flex min-h-[40px] items-center gap-1.5 rounded-ctl border border-hairline bg-paper px-3.5 text-sm font-medium text-ink outline-none hover:bg-surface focus-visible:ring-2 focus-visible:ring-accent/40">
-              <Activity className="size-4" aria-hidden /> AI health
-            </Link>
-            <Link href="/admin/analyses/w/new" data-tour="analyses-new" className="keep-brand inline-flex min-h-[40px] items-center gap-1.5 rounded-ctl bg-brand px-3.5 text-sm font-semibold text-white outline-none hover:bg-brand-hover focus-visible:ring-2 focus-visible:ring-accent/40">
-              <Plus className="size-4" aria-hidden /> New analysis
-            </Link>
-          </>
-        }
-      />
-
-      {(!configured || backendError) && (
-        <div role="status" className="mb-5 flex items-start gap-3 rounded-card border border-hairline bg-warn-soft p-4">
-          <PlugZap className="mt-0.5 size-5 shrink-0 text-warn" aria-hidden />
-          <div className="text-sm">
-            <p className="font-semibold text-ink">{configured ? "The AI server did not answer" : "The AI server is not connected yet"}</p>
-            <p className="mt-0.5 text-body">
-              {configured ? "The list shows the last saved statuses. Try again in a minute." : "The list shows the last saved statuses."}
-            </p>
-          </div>
-        </div>
-      )}
-
-      <div className="space-y-5">
-        <Panel
-          tour="analyses-recent"
-          title="Recent workbenches"
-          action={<Link href="/admin/analyses/w/new" className="text-sm font-medium text-accent hover:underline">New analysis</Link>}
-          bodyClassName="p-0"
-        >
-          {recent.length === 0 ? (
-            <p className="px-5 py-6 text-sm text-body">
-              No workbenches yet. Select <b>New analysis</b> and upload a file, or open one from a request (Work on the files, then Open in workbench).
-            </p>
-          ) : (
-            <ul className="grid divide-y divide-hairline sm:grid-cols-2 sm:divide-y-0">
-              {recent.map((c) => (
-                <li key={c.id} className="sm:border-b sm:border-hairline sm:odd:border-r">
-                  <Link href={`/admin/analyses/w/${c.id}`} className="flex min-h-[52px] items-center gap-3 px-4 py-3 text-sm hover:bg-surface sm:px-5">
-                    <Table2 className="size-4 shrink-0 text-good" aria-hidden />
-                    <span className="min-w-0 flex-1 truncate font-medium text-ink">{c.title}</span>
-                    <span className="shrink-0 text-[12px] text-muted">{(c.updatedAt as Date).toLocaleDateString("en-GB", { timeZone: "Africa/Lagos", day: "numeric", month: "short" })}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-
-        <div data-tour="analyses-studio">
-          <h2 className="mb-3 font-display text-[15px] font-semibold text-ink">Files the AI has read</h2>
-          <AnalysesTable rows={rows} />
-        </div>
-      </div>
-    </div>
-  );
+  return [<AnalysesTable key="files" rows={rows} />, down];
 }

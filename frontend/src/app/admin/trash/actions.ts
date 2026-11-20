@@ -4,19 +4,23 @@ import { revalidatePath } from "next/cache";
 import { and, inArray, isNotNull, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/lib/db/client";
-import { client, invoice, invoiceItem, serviceRequest, ticket, ticketMessage, ticketNote } from "@/lib/db/schema";
+import { client, invoice, invoiceItem, serviceRequest, ticket, ticketMessage, ticketNote, workbenchConversation } from "@/lib/db/schema";
+import { purgeWorkbench } from "@/lib/workbench/server";
 import { recordAudit } from "@/lib/audit";
 import { num } from "@/lib/invoice/money";
 import { actor, DENIED } from "../_lib/guard";
 
-const item = z.object({ type: z.enum(["client", "request", "invoice", "ticket"]), id: z.string().uuid() });
+const item = z.union([
+  z.object({ type: z.enum(["client", "request", "invoice", "ticket"]), id: z.string().uuid() }),
+  z.object({ type: z.literal("workbench"), id: z.string().regex(/^wb-[0-9a-f]{6,32}$/) }),
+]);
 const list = z.array(item).min(1).max(500);
 type Res = { ok: true; message: string } | { ok: false; error: string };
 
 const group = (items: z.infer<typeof list>, t: string) => items.filter((i) => i.type === t).map((i) => i.id);
 
 function touch() {
-  for (const p of ["/admin/trash", "/admin/clients", "/admin/requests", "/admin/billing", "/admin/help-desk", "/admin"]) revalidatePath(p);
+  for (const p of ["/admin/trash", "/admin/clients", "/admin/requests", "/admin/billing", "/admin/help-desk", "/admin/analyses", "/admin"]) revalidatePath(p);
 }
 
 /** Restore anything in Trash. */
@@ -30,6 +34,7 @@ export async function restoreTrashAction(items: z.infer<typeof list>): Promise<R
   if (ids("request").length) await db.update(serviceRequest).set({ deletedAt: null, deletedBy: null }).where(inArray(serviceRequest.id, ids("request")));
   if (ids("invoice").length) await db.update(invoice).set({ deletedAt: null, deletedBy: null }).where(inArray(invoice.id, ids("invoice")));
   if (ids("ticket").length) await db.update(ticket).set({ deletedAt: null, deletedBy: null }).where(inArray(ticket.id, ids("ticket")));
+  if (ids("workbench").length) await db.update(workbenchConversation).set({ deletedAt: null, deletedBy: null }).where(inArray(workbenchConversation.id, ids("workbench")));
   await recordAudit({ action: "trash.restored", entity: "trash", meta: { count: p.length, types: [...new Set(p.map((i) => i.type))] } });
   touch();
   return { ok: true, message: `Restored ${p.length} ${p.length === 1 ? "item" : "items"}.` };
@@ -69,6 +74,16 @@ export async function purgeTrashAction(items: z.infer<typeof list>): Promise<Res
       }
     }
   });
+  // Workbenches live on the analysis server too: purge there, then here (in Trash only).
+  const w = group(p, "workbench");
+  if (w.length) {
+    const inTrash = await db.select({ id: workbenchConversation.id }).from(workbenchConversation)
+      .where(and(inArray(workbenchConversation.id, w), isNotNull(workbenchConversation.deletedAt)));
+    for (const r of inTrash) {
+      await purgeWorkbench(r.id);
+      n += 1;
+    }
+  }
   await recordAudit({ action: "trash.purged", entity: "trash", meta: { count: n, kept } });
   touch();
   return { ok: true, message: `Deleted ${n} for good${kept.length ? `. Kept ${kept.join(", ")}: money was paid on them` : ""}.` };

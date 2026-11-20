@@ -27,13 +27,16 @@ import {
   wbOpenThread,
   wbFeedback,
   wbListByDocument,
+  wbRemoveFile,
+  wbSearch,
+  type WbSearchHit,
   type WbBatch,
   type WbConversation,
   type WbConflict,
   type WbFirstLook,
   type WbProvider,
 } from "@/lib/litchai/workbench";
-import { ensureRelayed, requestContext, workbenchAccess } from "./server";
+import { ensureRelayed, requestContext, requestLinkedDocIds, workbenchAccess } from "./server";
 import { unreadableFile } from "@/lib/ai-words";
 
 type Res<T = object> = ({ ok: true; message?: string } & T) | { ok: false; error: string };
@@ -620,3 +623,75 @@ export async function openDocumentInWorkbenchAction(engineDocId: number): Promis
     return fail(e, "The workbench could not open this file.");
   }
 }
+
+// --- v7: delete, rename, remove a file, search ----------------------------------------
+/** Who may delete or rename: an admin, or the person who made the workbench. */
+async function owner(conversationId: string) {
+  const a = await guard(conversationId);
+  if (!a) return null;
+  return a.role === "admin" || a.row.createdBy === a.user.id ? a : null;
+}
+
+/** Move a workbench to Trash (restorable for 30 days, then purged everywhere). */
+export async function deleteWorkbenchAction(conversationId: string): Promise<Res> {
+  const a = await owner(conversationId);
+  if (!a) return DENIED;
+  await db.update(workbenchConversation).set({ deletedAt: new Date(), deletedBy: a.user.name || a.user.email })
+    .where(eq(workbenchConversation.id, conversationId));
+  await recordAudit({ action: "workbench.trashed", entity: "workbench", entityId: conversationId, meta: { title: a.row.title } });
+  return { ok: true, message: `"${a.row.title}" is in Trash. You can restore it for 30 days.` };
+}
+
+export async function renameWorkbenchAction(conversationId: string, title: string): Promise<Res> {
+  const a = await owner(conversationId);
+  if (!a) return DENIED;
+  const t = title.trim().slice(0, 120);
+  if (!t) return { ok: false, error: "Type a name." };
+  await wbPatch(conversationId, { title: t }).catch(() => null);
+  await db.update(workbenchConversation).set({ title: t, updatedAt: new Date() }).where(eq(workbenchConversation.id, conversationId));
+  await recordAudit({ action: "workbench.renamed", entity: "workbench", entityId: conversationId, meta: { from: a.row.title, to: t } });
+  return { ok: true, message: "Renamed." };
+}
+
+/** Take one file out of a workbench. Its upload is deleted unless a request uses it. */
+export async function removeFileAction(conversationId: string, workbookId: string): Promise<Res<{ conversation: WbConversation }>> {
+  const a = await owner(conversationId);
+  if (!a) return DENIED;
+  if (!/^[\w.-]{1,80}$/.test(workbookId)) return { ok: false, error: "That file is not in this workbench." };
+  try {
+    const before = await wbGet(conversationId);
+    const ref = before.conversation.workbooks.find((w) => w.id === workbookId);
+    if (!ref) return { ok: false, error: "That file is not in this workbench." };
+    if (before.conversation.workbooks.length === 1)
+      return { ok: false, error: "A workbench needs at least one file. To remove everything, move the workbench to Trash on the Analyses page." };
+    const linked = typeof ref.document_id === "number" ? (await requestLinkedDocIds([ref.document_id])).has(ref.document_id) : true;
+    const res = await wbRemoveFile(conversationId, workbookId, !linked);
+    await touch(conversationId);
+    await recordAudit({ action: "workbench.file_removed", entity: "workbench", entityId: conversationId,
+      meta: { file: ref.name, upload_deleted: res.document_deleted } });
+    return { ok: true, conversation: res.conversation, message: `${ref.name} was removed from this workbench.` };
+  } catch (e) {
+    return { ok: false, error: e instanceof WorkbenchError ? e.message : "The file could not be removed. Try again in a minute." };
+  }
+}
+
+/** Search names, files and chat text. Only workbenches this person can open. */
+export async function searchWorkbenchesAction(q: string): Promise<Res<{ hits: WbSearchHit[] }>> {
+  const u = await getSessionUser();
+  if (!u || roleOf(u) !== "admin") return DENIED;
+  const words = q.trim().slice(0, 80);
+  if (words.length < 2) return { ok: true, hits: [] };
+  try {
+    const { results } = await wbSearch(words, 60);
+    const ids = results.map((r) => r.id);
+    const live = ids.length
+      ? await db.select({ id: workbenchConversation.id, practice: workbenchConversation.practice, createdBy: workbenchConversation.createdBy, deletedAt: workbenchConversation.deletedAt })
+          .from(workbenchConversation).where(inArray(workbenchConversation.id, ids))
+      : [];
+    const ok = new Set(live.filter((r) => !r.deletedAt && (!r.practice || r.createdBy === u.id)).map((r) => r.id));
+    return { ok: true, hits: results.filter((r) => ok.has(r.id)) };
+  } catch {
+    return { ok: false, error: "Search is not available now. The analysis server did not answer." };
+  }
+}
+

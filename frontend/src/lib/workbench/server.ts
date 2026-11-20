@@ -5,6 +5,7 @@ import { client, serviceRequest, serviceRequestDocument, workbenchConversation }
 import { canWorkOnRequest, getSessionUser } from "@/lib/server-user";
 import { roleOf } from "@/lib/access";
 import { WORKBENCH_SHEET_TYPES } from "@/lib/upload-types";
+import { wbGet, wbPurge } from "@/lib/litchai/workbench";
 
 /**
  * Workbench access. A conversation is reachable when its request is one the
@@ -15,7 +16,7 @@ export async function workbenchAccess(id: string) {
   const u = await getSessionUser();
   if (!u || u.banned) return { ok: false as const, status: 401 };
   const [row] = await db.select().from(workbenchConversation).where(eq(workbenchConversation.id, id)).limit(1);
-  if (!row) return { ok: false as const, status: 404 };
+  if (!row || row.deletedAt) return { ok: false as const, status: 404 }; // in Trash: not open
   // A practice workbook (sample data) opens only for the person who made it.
   const allowed = row.practice
     ? row.createdBy === u.id
@@ -113,9 +114,39 @@ export async function conversationsFor(requestIds: string[] | "all", limit = 40)
   const q = db.select().from(workbenchConversation);
   const rows =
     requestIds === "all"
-      ? await q.where(eq(workbenchConversation.practice, false)).orderBy(desc(workbenchConversation.updatedAt)).limit(limit)
+      ? await q.where(and(eq(workbenchConversation.practice, false), isNull(workbenchConversation.deletedAt))).orderBy(desc(workbenchConversation.updatedAt)).limit(limit)
       : requestIds.length
-        ? await q.where(inArray(workbenchConversation.requestId, requestIds)).orderBy(desc(workbenchConversation.updatedAt)).limit(limit)
+        ? await q.where(and(inArray(workbenchConversation.requestId, requestIds), isNull(workbenchConversation.deletedAt))).orderBy(desc(workbenchConversation.updatedAt)).limit(limit)
         : [];
   return rows;
 }
+
+/** Engine documents that a request uses: never deleted with a workbench. */
+export async function requestLinkedDocIds(ids: number[]): Promise<Set<number>> {
+  if (!ids.length) return new Set();
+  const rows = await db
+    .select({ d: serviceRequestDocument.litchaiDocumentId })
+    .from(serviceRequestDocument)
+    .where(inArray(serviceRequestDocument.litchaiDocumentId, ids.map(String)));
+  return new Set(rows.map((r) => Number(r.d)));
+}
+
+/**
+ * v7: delete a workbench for good, on the analysis server and here. Uploads that a
+ * request uses are kept; the engine also keeps uploads another workbench uses.
+ * Called by Trash (Delete for good) and by the sweep after 30 days.
+ */
+export async function purgeWorkbench(id: string): Promise<{ documents: number; files: number }> {
+  let docIds: number[] = [];
+  try {
+    const { conversation } = await wbGet(id);
+    docIds = conversation.workbooks.map((w) => w.document_id).filter((d): d is number => typeof d === "number");
+  } catch {
+    docIds = []; // already gone on the engine: only our row is left
+  }
+  const keep = await requestLinkedDocIds(docIds);
+  const res = await wbPurge(id, docIds.filter((d) => !keep.has(d))).catch(() => null);
+  await db.delete(workbenchConversation).where(eq(workbenchConversation.id, id));
+  return { documents: res?.documents_deleted ?? 0, files: res?.files_deleted ?? 0 };
+}
+

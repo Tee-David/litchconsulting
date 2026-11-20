@@ -122,6 +122,10 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
       ? firstLook.primary_workbook_id
       : initial.workbooks[0]?.id) ?? "",
   );
+  // A file taken out of the job (v7): open another one.
+  useEffect(() => {
+    if (wbId && !conv.workbooks.some((w) => w.id === wbId)) setWbId(conv.workbooks[0]?.id ?? "");
+  }, [conv.workbooks, wbId]);
   // Files added before the first message refresh the job overview (v6 C1).
   const msgCount = useRef(initial.messages.length);
   msgCount.current = conv.messages.length;

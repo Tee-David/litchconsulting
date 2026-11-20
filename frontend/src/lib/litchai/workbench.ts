@@ -248,6 +248,22 @@ export const wbGet = (id: string) => call<{ conversation: WbConversation }>(`/wo
 export const wbPatch = (id: string, body: { ai_mode?: string; title?: string; model?: string }) =>
   call<{ conversation: WbConversation }>(`/workbench/conversations/${enc(id)}`, { ...json(body), method: "PATCH" });
 
+/** v7: take one file out of a workbench; the upload is deleted only when asked and unused. */
+export const wbRemoveFile = (id: string, workbookId: string, deleteDocument: boolean) =>
+  call<{ conversation: WbConversation; document_id: number | null; document_deleted: boolean }>(
+    `/workbench/conversations/${enc(id)}/workbooks/${enc(workbookId)}/remove`, json({ delete_document: deleteDocument }));
+/** v7: purge a workbench for good (after 30 days in Trash). */
+export const wbPurge = (id: string, deleteDocuments: number[]) =>
+  call<{ purged: boolean; documents_deleted: number; files_deleted: number }>(
+    `/workbench/conversations/${enc(id)}?delete_documents=${deleteDocuments.join(",")}`, { method: "DELETE" });
+export type WbSearchHit = { id: string; title: string; where: "name" | "file" | "chat"; snippet: string; updated_at: string };
+/** v7: workbenches whose name, files or chat text contain the words. */
+export const wbSearch = (q: string, limit = 30) =>
+  call<{ results: WbSearchHit[] }>(`/workbench/search?q=${encodeURIComponent(q)}&limit=${limit}`);
+/** v7: every workbench with its file count (no messages), newest first. */
+export const wbListAll = (limit = 200) =>
+  call<{ conversations: { id: string; workbooks: { id: string; name: string }[]; updated_at?: string }[] }>(
+    `/workbench/conversations?limit=${limit}`);
 export const wbFirstLook = (id: string) => call<WbFirstLook>(`/workbench/conversations/${enc(id)}/first-look`);
 
 export const wbAttach = (id: string, documentIds: number[], group?: string | null) =>

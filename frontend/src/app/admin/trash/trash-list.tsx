@@ -8,9 +8,9 @@ import { Button, ConfirmSheet, DataTable, EmptyState, type BulkAction, type Tabl
 import { useToast } from "@/components/admin/ui/toaster";
 import { purgeTrashAction, restoreTrashAction } from "./actions";
 
-export type TrashItem = { key: string; type: "client" | "request" | "invoice" | "ticket"; id: string; name: string; sub: string; deletedAt: string; movedBy: string | null };
+export type TrashItem = { key: string; type: "client" | "request" | "invoice" | "ticket" | "workbench"; id: string; name: string; sub: string; deletedAt: string; movedBy: string | null };
 
-const TYPE_LABEL: Record<TrashItem["type"], string> = { client: "Client", request: "Request", invoice: "Invoice or quote", ticket: "Support ticket" };
+const TYPE_LABEL: Record<TrashItem["type"], string> = { client: "Client", request: "Request", invoice: "Invoice or quote", ticket: "Support ticket", workbench: "Workbench" };
 const daysLeft = (iso: string) => Math.max(0, 30 - Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000));
 
 export function TrashList({ items }: { items: TrashItem[] }) {
@@ -77,7 +77,7 @@ export function TrashList({ items }: { items: TrashItem[] }) {
   const views: TableView<TrashItem>[] = [
     { id: "all", label: "All", predicate: () => true },
     { id: "soon", label: "Deleted within 5 days", predicate: (t) => daysLeft(t.deletedAt) <= 5 },
-    ...(["client", "request", "invoice", "ticket"] as const).map((ty) => ({ id: ty, label: TYPE_LABEL[ty], predicate: (t: TrashItem) => t.type === ty })),
+    ...(["client", "request", "invoice", "ticket", "workbench"] as const).map((ty) => ({ id: ty, label: TYPE_LABEL[ty], predicate: (t: TrashItem) => t.type === ty })),
   ];
   const bulk: BulkAction<TrashItem>[] = [
     { id: "restore", label: "Restore", icon: <RotateCcw className="size-4" />, run: restore },

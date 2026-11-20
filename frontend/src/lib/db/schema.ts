@@ -896,6 +896,9 @@ export const workbenchConversation = pgTable(
     practice: boolean("practice").default(false).notNull(),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
+    /** v7: in Trash since this time; purged on the analysis server after 30 days. */
+    deletedAt: deletedAt(),
+    deletedBy: text("deleted_by"),
   },
   (t) => [index("workbench_conversation_request_idx").on(t.requestId)]
 );

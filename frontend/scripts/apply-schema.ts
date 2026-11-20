@@ -454,6 +454,8 @@ export const STATEMENTS = [
     "created_at" timestamp with time zone DEFAULT now() NOT NULL)`,
   // Practice workbooks (Learn Sage): sample data, opened only by their maker.
   `ALTER TABLE "workbench_conversation" ADD COLUMN IF NOT EXISTS "practice" boolean DEFAULT false NOT NULL`,
+  `ALTER TABLE "workbench_conversation" ADD COLUMN IF NOT EXISTS "deleted_at" timestamptz`,
+  `ALTER TABLE "workbench_conversation" ADD COLUMN IF NOT EXISTS "deleted_by" text`,
   // Virus scan of bank-transfer proofs (documents already carry scan_status).
   `ALTER TABLE "payment" ADD COLUMN IF NOT EXISTS "proof_scan_status" text DEFAULT 'unscanned' NOT NULL`,
   // Trash shows who moved each item there.

@@ -9,7 +9,9 @@ import {
   serviceRequestDocument,
   invoice,
   ticket,
+  workbenchConversation,
 } from "@/lib/db/schema";
+import { purgeWorkbench } from "@/lib/workbench/server";
 import { sendTemplate } from "@/lib/email-templates";
 import { notifyAdmin } from "@/lib/notify";
 import { sweepRateLimits } from "@/lib/rate-limit";
@@ -136,8 +138,15 @@ export async function GET(req: Request) {
     .delete(serviceRequest)
     .where(and(isNotNull(serviceRequest.deletedAt), lt(serviceRequest.deletedAt, thirtyDaysAgo)))
     .returning({ id: serviceRequest.id });
+  // Workbenches: purge on the analysis server too (uploads a request uses are kept).
+  const oldWorkbenches = await db
+    .select({ id: workbenchConversation.id })
+    .from(workbenchConversation)
+    .where(and(isNotNull(workbenchConversation.deletedAt), lt(workbenchConversation.deletedAt, thirtyDaysAgo)))
+    .limit(50);
+  for (const w of oldWorkbenches) await purgeWorkbench(w.id).catch(() => null);
   summary.purged =
-    purgedClients.length + purgedInvoices.length + purgedTickets.length + purgedRequests.length;
+    purgedClients.length + purgedInvoices.length + purgedTickets.length + purgedRequests.length + oldWorkbenches.length;
 
   // 5. Erasures due (hold passed, not cancelled). One failure never blocks the rest.
   const holdCutoff = new Date(now - ERASURE_HOLD_DAYS * 24 * 60 * 60 * 1000);

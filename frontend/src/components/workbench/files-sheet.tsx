@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Archive, FileSpreadsheet, FileText, Loader2, Paperclip } from "lucide-react";
+import { Archive, FileSpreadsheet, FileText, Loader2, Paperclip, Trash2 } from "lucide-react";
 import type { WbConversation, WbWorkbookRef } from "@/lib/litchai/workbench";
-import { setFileContextAction } from "@/lib/workbench/actions";
+import { removeFileAction, setFileContextAction } from "@/lib/workbench/actions";
 import { Button, Sheet } from "@/components/kit";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -34,6 +34,19 @@ function FileRow({ conversationId, wb, onConversation }: { conversationId: strin
   const [note, setNote] = useState(wb.note ?? "");
   const [saving, setSaving] = useState<"role" | "note" | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [confirming, setConfirming] = useState(false);
+  const [removing, setRemoving] = useState(false);
+
+  const remove = async () => {
+    setRemoving(true);
+    const r = await removeFileAction(conversationId, wb.id);
+    setRemoving(false);
+    if (r.ok) onConversation(r.conversation);
+    else {
+      setError(r.error);
+      setConfirming(false);
+    }
+  };
 
   const save = async (patch: { role?: string; note?: string }, what: "role" | "note") => {
     setSaving(what);
@@ -58,7 +71,32 @@ function FileRow({ conversationId, wb, onConversation }: { conversationId: strin
           <p className="truncate text-sm font-semibold text-ink" title={wb.name}>{wb.name}</p>
           <p className="text-[12px] text-muted">{meta || "No dates found"}</p>
         </div>
+        {!confirming ? (
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            aria-label={`Remove ${wb.name} from this job`}
+            title="Remove from this job"
+            className="grid size-11 shrink-0 place-items-center rounded-ctl text-muted hover:bg-bad-soft hover:text-bad focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          >
+            <Trash2 className="size-4" aria-hidden />
+          </button>
+        ) : null}
       </div>
+      {confirming ? (
+        <div role="alertdialog" aria-label={`Remove ${wb.name}?`} className="rounded-ctl border border-hairline bg-bad-soft px-3 py-2.5 text-[13px] text-body">
+          <p>
+            <b className="font-semibold text-ink">Remove {wb.name} from this job?</b> Changes Sage proposed for it are dropped. The uploaded
+            file is also deleted, unless a request or another workbench uses it.
+          </p>
+          <div className="mt-2 flex justify-end gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setConfirming(false)} disabled={removing}>Keep it</Button>
+            <Button size="sm" variant="danger" onClick={() => void remove()} disabled={removing}>
+              {removing ? <Loader2 className="size-3.5 animate-spin" aria-hidden /> : null} Remove file
+            </Button>
+          </div>
+        </div>
+      ) : null}
       <div className="grid gap-2 sm:grid-cols-[minmax(0,13rem)_1fr]">
         <div>
           <span className="mb-1 block text-[11.5px] text-muted">What it is{wb.role ? "" : " (read by the workbench)"}</span>
