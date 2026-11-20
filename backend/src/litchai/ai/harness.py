@@ -328,6 +328,42 @@ _FINAL_ACTIONS = {"answer", "final_answer", "respond", "response", "reply", "don
                   "end", "message"}
 
 
+_ENVELOPE_KEYS = {"tool", "args", "args_json", "action", "thought", "plan", "answer"}
+
+
+def _unwrap_envelope(payload: dict[str, Any]) -> dict[str, Any]:
+    """The whole step put inside the tool arguments (DeepSeek, 20 Nov):
+    tool "query_sql" with args {"tool": "query_sql", "args": {"sql": ...}}, or a call
+    to a tool named "action" whose arguments are the step. Lift the inner step out."""
+    a0 = payload.get("args")
+    if payload.get("tool") == "action" and isinstance(a0, dict) and isinstance(a0.get("tool"), str) \
+            and not ({"args", "args_json"} & set(a0)):
+        rest = {k: v for k, v in a0.items() if k not in _ENVELOPE_KEYS}
+        return {**payload, "tool": a0["tool"], "args": rest, "args_json": None}
+    for _ in range(2):
+        args = payload.get("args")
+        if args is None and isinstance(payload.get("args_json"), str):
+            try:
+                args = json.loads(payload["args_json"], strict=False)
+            except (json.JSONDecodeError, TypeError):
+                return payload
+        if not isinstance(args, dict) or not args or not set(args) <= _ENVELOPE_KEYS \
+                or not ({"args", "args_json"} & set(args) or "tool" in args
+                        and payload.get("tool") in (None, "", "action")):
+            return payload
+        inner_tool = args.get("tool") if isinstance(args.get("tool"), str) else None
+        tool = payload.get("tool")
+        if tool in (None, "", "action") or (inner_tool and _bare_tool(inner_tool) == _bare_tool(str(tool))):
+            tool = inner_tool or tool
+        payload = {**payload, "tool": tool, "args": args.get("args"),
+                   "args_json": args.get("args_json")}
+        if payload["args"] is None and payload["args_json"] is None:
+            payload["args"] = {}
+        if args.get("action") == "final" and args.get("answer"):
+            payload = {**payload, "action": "final", "answer": args["answer"]}
+    return payload
+
+
 def parse_turn(text: str, offered: set[str],
                check_args: Callable[[str, dict[str, Any]], str | None] | None = None,
                reads: set[str] | None = None,
@@ -349,6 +385,8 @@ def parse_turn(text: str, offered: set[str],
             payload = {"action": "tool", "tool": name, "args_json": args}
         else:
             payload = {"action": "tool", "tool": name, "args": args}
+    if isinstance(payload, dict):
+        payload = _unwrap_envelope(payload)
     if isinstance(payload, dict) and str(payload.get("tool") or "").endswith("parallel"):
         # A "parallel" pseudo-tool carrying the real calls in its arguments.
         a = payload.get("args")

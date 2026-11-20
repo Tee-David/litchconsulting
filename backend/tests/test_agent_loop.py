@@ -273,6 +273,15 @@ def test_parse_turn_tolerates_prose_extra_objects_and_raw_newlines():
     turn, err = parse_turn('{"action":"final","answer":"line1\nline2"}', set())
     assert err is None and "line2" in turn.answer
     assert parse_turn("no json at all", set())[0] is None
+    # The whole step inside the arguments (DeepSeek, 20 Nov).
+    turn, err = parse_turn('{"action":"tool","tool":"echo","args":{"tool":"echo","args":{"x":"1"}}}',
+                           {"echo"})
+    assert err is None and turn.tool == "echo" and turn.args == {"x": "1"}
+    turn, err = parse_turn('{"name":"action","arguments":{"action":"tool","tool":"echo",'
+                           '"args_json":"{\\"x\\": \\"2\\"}"}}', {"echo"})
+    assert err is None and turn.tool == "echo"
+    turn, err = parse_turn('{"name":"action","arguments":{"tool":"echo","x":"3"}}', {"echo"})
+    assert err is None and turn.tool == "echo" and turn.args == {"x": "3"}
     # Other spellings of the two actions (qwen on Groq, 19 Nov).
     turn, err = parse_turn('{"action":"answer","answer":"done"}', set())
     assert err is None and turn.action == "final" and turn.answer == "done"
