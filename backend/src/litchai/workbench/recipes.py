@@ -192,6 +192,9 @@ def year_end_steps(ctx: ToolContext, refs: list[Any]) -> list[tuple[str, dict[st
            for w in ctx.workbooks.values() for s in w.sheets):
         steps.append(("depreciation_schedule", {"year_end": _year_end(ctx).isoformat()}))
     steps.append(("review_points", {}))
+    # The checks for imports, rent, stock, settlements, group and purchases (read only;
+    # only the kinds that find something are reported). Importer run, 20 Nov.
+    steps.append(("sector_checks", {}))
     steps.append(("trial_balance_statements", {}))
     steps.append(("tax_compute", {"kind": "cit"}))
     return steps
