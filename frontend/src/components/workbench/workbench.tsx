@@ -29,7 +29,7 @@ import {
 import type { WbBatch, WbCell, WbConflict, WbConversation, WbEvent, WbFirstLook, WbGate, WbStyle, WbUserEdit } from "@/lib/litchai/workbench";
 import { attachDocumentAction, attachFilesAction, decideBatchAction, deliverAction, feedbackAction, getConversationAction, newThreadAction, openThreadAction, restoreVersionAction, runToolAction, saveEditsAction, sheetActionAction } from "@/lib/workbench/actions";
 import { BarChart3, WifiOff, AlignCenter, AlignLeft, AlignRight, Baseline, Bold, Check, CornerDownRight, ChevronDown as Chev, Ellipsis, FolderOpen, Grid2x2, Italic, NotebookPen, PaintBucket, Pencil, SquarePen, TableCellsMerge, Underline, WrapText } from "lucide-react";
-import { setInstructionsAction } from "@/lib/workbench/actions";
+import { setInstructionsAction, startWorkingBookAction } from "@/lib/workbench/actions";
 import type { StyleRequest } from "./grid";
 import { MessageActions } from "@/components/sage-ui/message-actions";
 import { ThreadPicker } from "@/components/sage-ui/thread-picker";
@@ -117,14 +117,17 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const [conv, setConv] = useState(initial);
   const [look, setLook] = useState(firstLook);
   // v6 C2: open the most useful file first (books or TB, then bank, ledgers, the rest).
-  const [wbId, setWbId] = useState(
-    (firstLook?.primary_workbook_id && initial.workbooks.some((w) => w.id === firstLook.primary_workbook_id)
-      ? firstLook.primary_workbook_id
-      : initial.workbooks[0]?.id) ?? "",
-  );
+  // v8: the working book opens first. A job that started with files and has no working
+  // book yet shows the start view (the sources, Preview, Start a blank sheet).
+  const [wbId, setWbId] = useState(initial.workbooks.find((w) => w.kind === "work")?.id ?? "");
   // A file taken out of the job (v7): open another one.
   useEffect(() => {
-    if (wbId && !conv.workbooks.some((w) => w.id === wbId)) setWbId(conv.workbooks[0]?.id ?? "");
+    if (wbId && !conv.workbooks.some((w) => w.id === wbId)) setWbId(conv.workbooks.find((w) => w.kind === "work")?.id ?? "");
+    // the first accepted output makes the working book: open it if nothing is open
+    if (!wbId) {
+      const work = conv.workbooks.find((w) => w.kind === "work");
+      if (work) setWbId(work.id);
+    }
   }, [conv.workbooks, wbId]);
   // Files added before the first message refresh the job overview (v6 C1).
   const msgCount = useRef(initial.messages.length);
@@ -133,7 +136,6 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     if (!next || msgCount.current > 0) return;
     setLook(next);
     setSheetsBy((p) => ({ ...p, ...Object.fromEntries(next.workbooks.map((w) => [w.workbook_id, w.sheet_names])) }));
-    if (next.primary_workbook_id) setWbId(next.primary_workbook_id);
   }, []);
   const [sheetBy, setSheetBy] = useState<Record<string, string>>({});
   const [sheetsBy, setSheetsBy] = useState<Record<string, string[]>>(() =>
@@ -1379,7 +1381,8 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           aria-label="Workbook"
           value={wbId}
           onChange={setWbId}
-          options={conv.workbooks.map((w) => ({ value: w.id, label: w.name }))}
+          options={[...conv.workbooks].sort((a, b) => Number(b.kind === "work") - Number(a.kind === "work"))
+            .map((w) => ({ value: w.id, label: w.kind === "work" ? w.name : `Source · ${w.name}` }))}
           className="mr-1 max-w-[180px] shrink-0"
         />
       ) : null}
@@ -1409,6 +1412,19 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     </div>
   );
 
+  const isSource = Boolean(activeRef && activeRef.kind !== "work");
+  const workRef = conv.workbooks.find((w) => w.kind === "work") ?? null;
+  const sourceBar = isSource && activeRef ? (
+    <div className="flex flex-wrap items-center gap-2 border-b border-hairline bg-info-soft px-3 py-1.5 text-[13px]" role="status">
+      <span className="min-w-0 flex-[1_1_14rem] text-ink">
+        <span className="font-semibold">Source file</span> · {activeRef.name}
+        <span className="text-body"> · read only. Sage reads it and never changes it. Results go to the working book.</span>
+      </span>
+      <Button size="sm" variant="ghost" onClick={() => setWbId(workRef?.id ?? "")}>
+        {workRef ? "Back to the working book" : "Back to the start"}
+      </Button>
+    </div>
+  ) : null;
   const pv = previewV ? activeRef?.versions.find((v) => v.n === previewV) : null;
   const pvLabel = pv ? versionLabel(pv.batch_id ? batchById.get(pv.batch_id) : null) : "";
   const previewBar = pv ? (
@@ -1430,8 +1446,8 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
 
   const gridArea = (
     <div className="flex min-h-0 flex-1 flex-col">
-      {previewBar ?? editBar}
-      {previewBar ? null : formulaBar}
+      {previewBar ?? sourceBar ?? editBar}
+      {previewBar || sourceBar ? null : formulaBar}
       {findBar}
       {legend}
       <div className={cn("min-h-0 flex-1", pdfOpen && hasPdf && "grid grid-rows-2 xl:grid-cols-2 xl:grid-rows-1")}>
@@ -1475,7 +1491,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
               onFind={setFindRes}
               onStats={setStats}
               onToggleFormulas={toggleFormulas}
-              editable={!previewV}
+              editable={!previewV && !isSource}
               onCommit={commitEdits}
               onUndo={() => void stepEdit("undo")}
               onRedo={() => void stepEdit("redo")}
@@ -1494,11 +1510,18 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
               }}
             />
           ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-2 p-6 text-center">
-              <Table2 className="size-6 text-muted" aria-hidden />
-              <p className="text-sm text-body">No workbook open yet. Ask Sage to build one, or add a file.</p>
-              <Button size="sm" onClick={() => setSheetOpen("attach")}><Paperclip className="size-3.5" /> Add a file</Button>
-            </div>
+            <StartView
+              sources={conv.workbooks.filter((w) => w.kind !== "work")}
+              onPreview={setWbId}
+              onAdd={() => setSheetOpen("attach")}
+              onBlank={async () => {
+                const res = await startWorkingBookAction(conv.id);
+                if (!res.ok) return toast.error(res.error);
+                setConv(res.conversation);
+                const work = res.conversation.workbooks.find((w) => w.kind === "work");
+                if (work) setWbId(work.id);
+              }}
+            />
           )}
         </div>
       </div>
@@ -2303,9 +2326,65 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
 
 /** One clear title: the job's name, or the main file plus a count (v6: names were joined with "+"). */
 function jobTitle(conv: WbConversation): string {
-  const books = conv.workbooks;
+  const books = conv.workbooks.filter((w) => w.kind !== "work");
   if (books.length <= 1) return books[0]?.name ?? conv.title;
   const group = books.find((w) => w.group)?.group;
   if (group && books.every((w) => w.group === group)) return `${group} · ${books.length} files`;
   return `${books[0].name} and ${books.length - 1} more file${books.length === 2 ? "" : "s"}`;
 }
+
+/** v8: the centre before any sheet exists: the sources (preview any of them) and a blank start. */
+function StartView({ sources, onPreview, onAdd, onBlank }: {
+  sources: WbConversation["workbooks"];
+  onPreview: (id: string) => void;
+  onAdd: () => void;
+  onBlank: () => void | Promise<unknown>;
+}) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div className="mx-auto flex h-full w-full max-w-xl flex-col justify-center gap-4 overflow-y-auto p-5">
+      <div>
+        <h2 className="font-display text-[17px] font-semibold text-ink">{sources.length ? "Your files are ready" : "Start your work"}</h2>
+        <p className="mt-1 text-sm text-body">
+          {sources.length
+            ? "Sage has read them and keeps them as they are. Tell Sage what you need on the right, or open a file to look at it. Sheets appear here only when you ask for a result."
+            : "Add the files for this job, or start with a blank sheet."}
+        </p>
+      </div>
+      {sources.length ? (
+        <ul className="divide-y divide-hairline rounded-card border border-hairline bg-paper">
+          {sources.map((w) => {
+            const f = w.facts;
+            const period = f?.period ? (f.period[0] === f.period[1] ? f.period[0] : `${f.period[0]} to ${f.period[1]}`) : null;
+            const meta = [f?.label ? f.label.charAt(0).toUpperCase() + f.label.slice(1) : null, f?.bank, period, f?.rows ? `${f.rows.toLocaleString("en-NG")} rows` : null].filter(Boolean).join(" · ");
+            return (
+              <li key={w.id} className="flex items-center gap-3 px-3 py-2.5">
+                <FileText className="size-4 shrink-0 text-muted" aria-hidden />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-ink" title={w.name}>{w.name}</p>
+                  {meta ? <p className="truncate text-[12.5px] text-muted">{meta}</p> : null}
+                </div>
+                <Button size="sm" variant="ghost" onClick={() => onPreview(w.id)}>Open</Button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={onAdd}><Paperclip className="size-3.5" aria-hidden /> Add files</Button>
+        <Button
+          variant="ghost"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            await onBlank();
+            setBusy(false);
+          }}
+        >
+          Start a blank sheet
+        </Button>
+      </div>
+    </div>
+  );
+}
+

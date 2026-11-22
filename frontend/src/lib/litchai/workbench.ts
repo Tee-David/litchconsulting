@@ -63,6 +63,9 @@ export type WbWorkbookRef = {
   role?: string | null;
   note?: string;
   group?: string | null;
+  /** v8: "source" = a file given (never changed); "work" = the working book. */
+  kind?: "source" | "work";
+  imports?: Record<string, { from: string; sheet: string }>;
 };
 
 /** One harness event (SSE frame). `type` drives the UI. */
@@ -264,6 +267,9 @@ export const wbSearch = (q: string, limit = 30) =>
 export const wbListAll = (limit = 200) =>
   call<{ conversations: { id: string; workbooks: { id: string; name: string }[]; updated_at?: string }[] }>(
     `/workbench/conversations?limit=${limit}`);
+/** v8: open the working book now (one empty sheet). */
+export const wbStartWorkingBook = (id: string) =>
+  call<{ conversation: WbConversation }>(`/workbench/conversations/${enc(id)}/working-book`, { method: "POST" });
 export const wbFirstLook = (id: string) => call<WbFirstLook>(`/workbench/conversations/${enc(id)}/first-look`);
 
 export const wbAttach = (id: string, documentIds: number[], group?: string | null) =>

@@ -158,26 +158,6 @@ export function CiteChip({ refText, onCite }: { refText: string; onCite: (ref: s
 
 type Step = { t: string; d?: string; s: "done" | "run" | "wait" | "fail" | "switch"; tool?: string; args?: string; tech?: string };
 
-/** A step title that says its state in words: "Reading a range", "Read a range", "Failed to read a range". */
-const RUN_LABEL: Record<string, string> = {
-  profile_workbook: "Reading the workbook",
-  profile_range: "Reading a range",
-  query_sql: "Querying the sheets",
-  categorise_rows: "Classifying rows",
-  build_statement: "Building a statement",
-  pivot: "Making a pivot table",
-  write_cells: "Writing cells",
-  add_formula_column: "Adding a formula column",
-  add_chart: "Making a chart",
-  reconcile: "Reconciling bank to ledger",
-  flag_anomalies: "Checking for anomalies",
-  tax_compute: "Computing tax",
-  create_sheet: "Making a new sheet",
-  create_workbook: "Making a new workbook",
-  clean_values: "Converting text values",
-  trial_balance_statements: "Building statements from the trial balance",
-};
-const lower = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
 
 /** The steps of one turn, in order: tools (with what they did) and provider switches. */
 function stepsOf(events: WbEvent[], running: boolean): Step[] {

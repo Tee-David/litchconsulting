@@ -28,6 +28,7 @@ import {
   wbFeedback,
   wbListByDocument,
   wbRemoveFile,
+  wbStartWorkingBook,
   wbSearch,
   type WbSearchHit,
   type WbBatch,
@@ -692,6 +693,19 @@ export async function searchWorkbenchesAction(q: string): Promise<Res<{ hits: Wb
     return { ok: true, hits: results.filter((r) => ok.has(r.id)) };
   } catch {
     return { ok: false, error: "Search is not available now. The analysis server did not answer." };
+  }
+}
+
+/** v8: open the working book (one empty sheet) for a job that started with files. */
+export async function startWorkingBookAction(conversationId: string): Promise<Res<{ conversation: WbConversation }>> {
+  const a = await guard(conversationId);
+  if (!a) return DENIED;
+  try {
+    const { conversation } = await wbStartWorkingBook(conversationId);
+    await touch(conversationId);
+    return { ok: true, conversation };
+  } catch (e) {
+    return { ok: false, error: e instanceof WorkbenchError ? e.message : "The working book could not be opened. Try again in a minute." };
   }
 }
 
