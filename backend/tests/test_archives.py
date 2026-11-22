@@ -39,9 +39,10 @@ def test_kind_and_plain_zip_with_skips():
                  "__MACOSX/._tb.csv": b"junk", "empty.csv": b""})
     assert archive_kind(data) == "zip" and archive_kind(b"%PDF") is None
     res = unpack(data)
-    assert [n for n, _, _ in res.files] == ["tb.csv"]          # flat: no folders
+    # flat (no folders); the archive inside is opened too (v8)
+    assert [n for n, _, _ in res.files] == ["x.csv", "tb.csv"]
     reasons = dict(res.skipped)
-    assert "archive inside" in reasons["inner.zip"] and "not read" in reasons["notes.exe"]
+    assert "inner.zip" not in reasons and "not read" in reasons["notes.exe"]
     assert reasons["empty.csv"] == "empty file" and not res.encrypted
 
 
@@ -85,3 +86,12 @@ def test_unpack_endpoint_makes_one_document_per_file(tmp_path):
                          content=_aes_zip(tmp_path, "pw"),
                          headers={"content-type": "application/octet-stream", "X-Archive-Password": "pw"})
         assert ok.status_code == 201 and ok.json()["encrypted"] is True
+
+
+def test_archives_inside_archives_open_two_levels_deep():
+    level3 = _zip({"deep.csv": b"a,1"})
+    level2 = _zip({"mid.csv": b"a,2", "level3.zip": level3})
+    res = unpack(_zip({"top.csv": b"a,3", "level2.zip": level2}))
+    names = [n for n, _, _ in res.files]
+    assert "top.csv" in names and "mid.csv" in names and "deep.csv" not in names
+    assert "three levels" in dict(res.skipped)["level3.zip"]

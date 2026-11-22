@@ -88,14 +88,14 @@ export function StartForm({
 
       {mode === "upload" ? (
         <div className="mt-4">
-          <input ref={fileRef} type="file" multiple accept={WORKBENCH_UPLOAD_ACCEPT} className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => setUploads(Array.from(e.target.files ?? []).slice(0, 12))} />
+          <input ref={fileRef} type="file" multiple accept={WORKBENCH_UPLOAD_ACCEPT} className="sr-only" tabIndex={-1} aria-hidden onChange={(e) => setUploads(Array.from(e.target.files ?? []).slice(0, 30))} />
           <button
             type="button"
             onClick={() => fileRef.current?.click()}
             onDragOver={(e) => e.preventDefault()}
             onDrop={(e) => {
               e.preventDefault();
-              const list = Array.from(e.dataTransfer.files ?? []).slice(0, 12);
+              const list = Array.from(e.dataTransfer.files ?? []).slice(0, 30);
               if (list.length) setUploads(list);
             }}
             className="flex w-full flex-col items-center gap-1 rounded-ctl border border-dashed border-line-strong px-4 py-6 text-center text-sm text-body outline-none hover:bg-cloud focus-visible:ring-2 focus-visible:ring-act/30"

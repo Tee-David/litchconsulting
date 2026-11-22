@@ -90,7 +90,7 @@ export function AttachSheet({
           <label className="ml-6 flex min-h-[44px] cursor-pointer items-center gap-2 rounded-ctl border border-dashed border-line-strong px-3 py-2 text-[13px] text-body hover:bg-cloud">
             <Upload className="size-4 text-muted" aria-hidden />
             <span className="min-w-0 flex-1 truncate">{uploads.length === 0 ? "Choose files" : uploads.length === 1 ? uploads[0].name : `${uploads.length} files: ${uploads.map((f) => f.name).join(", ")}`}</span>
-            <input type="file" multiple accept={WORKBENCH_UPLOAD_ACCEPT} className="sr-only" onChange={(e) => setUploads(Array.from(e.target.files ?? []).slice(0, 12))} />
+            <input type="file" multiple accept={WORKBENCH_UPLOAD_ACCEPT} className="sr-only" onChange={(e) => setUploads(Array.from(e.target.files ?? []).slice(0, 30))} />
           </label>
         )}
         <label className={radio}>

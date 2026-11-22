@@ -874,7 +874,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   // D1: paste or drop screenshots and files; long pasted text becomes a .txt file.
   const addFiles = useCallback(
     (files: File[]) => {
-      for (const file of files.slice(0, 12)) {
+      for (const file of files.slice(0, 30)) {
         const id = `att-${++attSeq}`;
         const image = file.type.startsWith("image/");
         const isText = file.type === "text/plain" && file.name.startsWith("Pasted text");

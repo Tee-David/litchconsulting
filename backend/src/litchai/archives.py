@@ -114,7 +114,8 @@ def _entries(listing: str) -> list[dict[str, str]]:
     return out
 
 
-def unpack(data: bytes, password: str | None = None, limits: Limits | None = None) -> Unpacked:
+def unpack(data: bytes, password: str | None = None, limits: Limits | None = None,
+           depth: int = 0) -> Unpacked:
     lim = limits or Limits()
     kind = archive_kind(data)
     if kind is None:
@@ -155,7 +156,23 @@ def unpack(data: bytes, password: str | None = None, limits: Limits | None = Non
             if name.startswith((".", "~$")) or name.startswith("__MACOSX"):
                 continue
             if ext in ARCHIVE_EXT:
-                res.skipped.append((name, "an archive inside the archive: unpack it first"))
+                # v8: an archive inside the archive is opened too (two levels at most),
+                # with the same password and limits
+                if depth >= 1:
+                    res.skipped.append((name, "an archive three levels deep: unpack it first"))
+                    continue
+                try:
+                    inner = unpack(f.read_bytes(), password, lim, depth + 1)
+                except ArchiveError as exc:
+                    res.skipped.append((name, str(exc) or "the archive inside could not be opened"))
+                    continue
+                for iname, imime, idata in inner.files:
+                    if len(res.files) >= lim.max_files:
+                        res.skipped.append((iname, f"more than {lim.max_files} files"))
+                        continue
+                    res.files.append((iname, imime, idata))
+                res.skipped.extend(inner.skipped)
+                res.encrypted = res.encrypted or inner.encrypted
                 continue
             mime = MIME_BY_EXT.get(ext)
             if mime is None:
