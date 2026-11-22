@@ -13,11 +13,22 @@ export function batchLine(b: WbBatch): string {
   if (c.changed_cells) bits.push(`${c.changed_cells.toLocaleString("en-NG")} changed`);
   if (c.new_sheets) bits.push(`${c.new_sheets} new sheet${c.new_sheets === 1 ? "" : "s"}`);
   if (c.charts) bits.push(`${c.charts} chart${c.charts === 1 ? "" : "s"}`);
+  if (c.copied_sheets) bits.push(`${c.copied_sheets} sheet${c.copied_sheets === 1 ? "" : "s"} copied from your sources`);
   if (!c.changed_cells && (c.new_cells || c.new_sheets)) bits.push("nothing overwritten");
   return bits.join(" · ");
 }
 
 /** The first cell a batch touches (for Edit / jump). */
+/** What the waiting proposals change, in plain words ("· 12 cells", "· 1 sheet copied"). */
+function waitingWhat(pending: WbBatch[], cells: number): string {
+  if (cells) return ` · ${cells.toLocaleString("en-NG")} cell${cells === 1 ? "" : "s"}`;
+  const copied = pending.reduce((a, b) => a + (b.counts.copied_sheets ?? 0), 0);
+  const sheets = pending.reduce((a, b) => a + (b.counts.new_sheets ?? 0), 0);
+  if (copied) return ` · ${copied} sheet${copied === 1 ? "" : "s"} copied`;
+  if (sheets) return ` · ${sheets} new sheet${sheets === 1 ? "" : "s"}`;
+  return " · formatting only";
+}
+
 export function firstRef(b: WbBatch): string | null {
   const op = b.ops.find((o) => o.op === "set_cell" && o.sheet && o.cell);
   return op ? `${/^[A-Za-z_][\w.]*$/.test(op.sheet!) ? op.sheet : `'${op.sheet}'`}!${op.cell}` : null;
@@ -70,7 +81,7 @@ export function Proposals({
         <Layers className="size-4 text-muted" aria-hidden />
         <span className="text-[13px] font-semibold text-ink">Proposed changes</span>
         <span className={cn("ml-auto text-[12px]", pending.length ? "font-medium text-warn" : "text-muted")}>
-          {pending.length ? `${pending.length} waiting · ${cells.toLocaleString("en-NG")} cell${cells === 1 ? "" : "s"}` : "All decided"}
+          {pending.length ? `${pending.length} waiting${waitingWhat(pending, cells)}` : "All decided"}
         </span>
         <ChevronDown className={cn("size-4 text-muted transition-transform duration-150", expanded && "rotate-180")} aria-hidden />
       </button>

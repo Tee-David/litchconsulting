@@ -92,8 +92,10 @@ class Batch:
         changed = sum(1 for o in self.ops if o.op == "set_cell" and o.kind == "changed")
         sheets = sum(1 for o in self.ops if o.op == "create_sheet")
         charts = sum(1 for o in self.ops if o.op == "add_chart")
+        # v8: a read-only copy of a source sheet is one op (its cells come at apply time)
+        copied = sum(1 for o in self.ops if o.op == "import_sheet")
         return {"new_cells": new, "changed_cells": changed, "new_sheets": sheets,
-                "charts": charts, "ops": len(self.ops)}
+                "charts": charts, "copied_sheets": copied, "ops": len(self.ops)}
 
     def to_dict(self) -> dict[str, Any]:
         return {

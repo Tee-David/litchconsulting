@@ -1978,7 +1978,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         onSubmit={() => void send(text)}
         running={running}
         onStop={() => abort.current?.abort()}
-        placeholder={voice.listening ? "Listening. Speak now, then tap the mic to stop." : local ? "Ask about this workbook (local model, slower)…" : "Ask about this workbook… (type @ to point at a file)"}
+        placeholder={voice.listening ? "Listening. Speak now, then tap the mic to stop." : local ? "Ask about this workbook (local model, slower)…" : "Ask Sage… (@ names a file)"}
         quote={quote}
         onClearQuote={() => setQuote(null)}
         attachments={atts}

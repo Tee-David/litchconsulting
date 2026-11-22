@@ -44,7 +44,7 @@ export type WbBatch = {
   gate: WbGate | null;
   inverse_of: string | null;
   step: number | null;
-  counts: { new_cells: number; changed_cells: number; new_sheets: number; charts: number; ops: number };
+  counts: { new_cells: number; changed_cells: number; new_sheets: number; charts: number; copied_sheets?: number; ops: number };
   ops: WbOp[];
   risk?: "safe" | "risky";
   risk_reasons?: string[];
