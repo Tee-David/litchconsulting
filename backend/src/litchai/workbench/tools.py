@@ -371,7 +371,7 @@ class CondFormatArgs(_Args):
 def _cond_format(ctx: ToolContext, a: CondFormatArgs) -> ToolOutput:
     from litchai.workbench.condfmt import CondFormatError
 
-    wb = ctx.workbook(a.workbook_id) if a.workbook_id else next(iter(ctx.workbooks.values()))
+    wb = ctx.workbook_for(a.workbook_id, [a.sheet])
     sh = next((s for s in wb.sheets.values() if s.name.lower() == a.sheet.lower()), None)
     if sh is None:
         raise ToolError(f"there is no sheet {a.sheet!r}")
@@ -586,7 +586,7 @@ def _query(ctx: ToolContext, a: QuerySqlArgs) -> ToolOutput:
 
 
 def _chart(ctx: ToolContext, a: ChartArgs) -> ToolOutput:
-    wb = ctx.workbook(a.workbook_id)
+    wb = ctx.workbook_for(a.workbook_id, [a.sheet])
     spec = a.model_dump()
     spec["series"] = [s.model_dump() for s in a.series]
     try:
@@ -611,7 +611,7 @@ def _write_cells(ctx: ToolContext, a: WriteCellsArgs) -> ToolOutput:
     from litchai.workbench.formula import FormulaError, check_user_formula
     from litchai.workbench.model import parse_a1, qualify
 
-    wb = ctx.workbook(a.workbook_id)
+    wb = ctx.workbook_for(a.workbook_id, [a.sheet])
     try:
         sh = wb.sheet(a.sheet)
     except KeyError as exc:

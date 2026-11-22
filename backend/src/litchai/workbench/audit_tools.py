@@ -56,7 +56,7 @@ def _covers(ref: str, sheet: str, own: str, r: int, c: int) -> bool:
 
 def trace_formula(ctx: ToolContext, *, cell: str, sheet: str | None = None,
                   depth: int = 2, workbook_id: str | None = None) -> ToolOutput:
-    wb = ctx.workbook(workbook_id)
+    wb = ctx.workbook_for(workbook_id, [sheet, cell.split("!")[0].strip("'") if "!" in cell else None])
     sh = _sheet(wb, sheet)
     r, c = parse_a1(cell.upper().replace("$", ""))
     depth = max(1, min(depth, 4))
@@ -108,7 +108,7 @@ def _fresh(model: Workbook) -> Workbook:
 def goal_seek(ctx: ToolContext, *, target_cell: str, target_value: float, changing_cell: str,
               sheet: str | None = None, changing_sheet: str | None = None,
               workbook_id: str | None = None) -> ToolOutput:
-    wb = ctx.workbook(workbook_id)
+    wb = ctx.workbook_for(workbook_id, [sheet, changing_sheet])
     ts = _sheet(wb, sheet)
     cs = _sheet(wb, changing_sheet or ts.name)
     tr, tc = parse_a1(target_cell.upper().replace("$", ""))

@@ -275,7 +275,7 @@ def _format(b: OpBuilder, sh: Sheet, a: dict[str, Any], reason: str, style: bool
 
 def range_actions(ctx: ToolContext, *, actions: list[dict[str, Any]],
                   workbook_id: str | None = None) -> ToolOutput:
-    wb = ctx.workbook(workbook_id)
+    wb = ctx.workbook_for(workbook_id, [n for a in actions for n in [a.get("sheet"), *(a.get("sheets") or []), *(a.get("keep") or [])]], prefer_work=True)
     b = OpBuilder(wb, "range_actions")
     done: list[str] = []
     layout: dict[str, dict[str, Any]] = {}

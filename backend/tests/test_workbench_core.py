@@ -260,7 +260,7 @@ def test_writes_never_touch_the_file_until_accepted():
 def _workbench(gate=passing_gate):
     wbench = Workbench(InMemoryBlobStore(), InMemoryConversationStore(), gate=gate)
     conv = wbench.create(client_id=None, client_name="Okonkwo Agro")
-    wbench.attach_bytes(conv, ledger_bank_xlsx(), name="ledger.xlsx", document_id=1)
+    wbench.attach_bytes(conv, ledger_bank_xlsx(), name="ledger.xlsx", document_id=1, kind="work")
     return wbench, conv
 
 

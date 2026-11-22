@@ -2,6 +2,7 @@
 Hand check: revenue 185.4m, gross profit 73.1m, PBT 33.05m."""
 from __future__ import annotations
 
+from litchai.workbench.sources import work_id_of
 from litchai.evals.fixtures import scripted_categoriser
 from litchai.evals.workbench import _taxonomy, _workbench
 from litchai.workbench.engine import _SHEET_NAME, _plan_for, _wants_analysis
@@ -26,7 +27,7 @@ def test_financial_analysis_builds_live_formulas_that_match_the_hand_check():
     assert out.batch is not None and out.batch.status == "pending"
     wb.add_batch(conv, out.batch)
     wb.accept(conv, out.batch.id)
-    sh = wb.models(conv)["doc-1"].sheets["Financial Analysis"]
+    sh = wb.models(conv)[work_id_of(conv)].sheets["Financial Analysis"]  # v8: the working book
     labels = {sh.value(r, 1): r for r in range(1, 80) if sh.value(r, 1)}
     for head in ("Profitability Analysis", "Liquidity Analysis", "Asset Analysis",
                  "Validation Checks"):

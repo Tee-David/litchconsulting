@@ -100,17 +100,23 @@ def test_conversation_lifecycle(tmp_path):
         assert result["proposal"]["risk"] == "safe"
         assert frames[-1]["citations"][0] == "Recon!C22"
 
-        # the grid sees the pending proposal; the file does not
-        cells = c.get(f"/workbench/conversations/{cid}/workbooks/doc-{doc.id}/sheets/Recon").json()
+        # v8: the output goes to the working book; the source file never changes
+        conv = c.get(f"/workbench/conversations/{cid}").json()["conversation"]
+        wid = next(op["workbook_id"] for b in conv["batches"] if b["id"] == batch_id
+                   for op in b["ops"])
+        assert wid != f"doc-{doc.id}"
+        cells = c.get(f"/workbench/conversations/{cid}/workbooks/{wid}/sheets/Recon").json()
         assert any(x["pending"] and x["pending"]["batch_id"] == batch_id for x in cells["cells"])
         dl = c.get(f"/workbench/conversations/{cid}/workbooks/doc-{doc.id}.xlsx")
         assert "Recon" not in load_workbook(io.BytesIO(dl.content)).sheetnames
 
-        # accept → new version; undo → back
+        # accept → the working book gets the sheet; the source still does not
         acc = c.post(f"/workbench/conversations/{cid}/batches/{batch_id}/accept").json()
         assert acc["batch"]["status"] == "accepted"
-        dl = c.get(f"/workbench/conversations/{cid}/workbooks/doc-{doc.id}.xlsx")
+        dl = c.get(f"/workbench/conversations/{cid}/workbooks/{wid}.xlsx")
         assert "Recon" in load_workbook(io.BytesIO(dl.content)).sheetnames
+        dl = c.get(f"/workbench/conversations/{cid}/workbooks/doc-{doc.id}.xlsx")
+        assert "Recon" not in load_workbook(io.BytesIO(dl.content)).sheetnames
         assert c.post(f"/workbench/conversations/{cid}/batches/{batch_id}/reject"
                       ).status_code == 409
         und = c.post(f"/workbench/conversations/{cid}/batches/{batch_id}/undo").json()

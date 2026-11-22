@@ -133,9 +133,10 @@ def _workbench(task: dict[str, Any]) -> tuple[Any, Any]:
         for i, (name, data) in enumerate(qa_files(fixture), start=1):
             copy = to_working_copy(data, name, wb_id=f"doc-{i}", document_id=i)
             wb.attach_bytes(conv, copy.xlsx, name=name, origin=copy.origin, document_id=i,
-                            source=copy.source(name))
+                            source=copy.source(name), kind=task.get("kind", "source"))
         return wb, conv
-    wb.attach_bytes(conv, FIXTURES[fixture](), name=f"{fixture}.xlsx", document_id=1)
+    wb.attach_bytes(conv, FIXTURES[fixture](), name=f"{fixture}.xlsx", document_id=1,
+                    kind=task.get("kind", "source"))
     return wb, conv
 
 

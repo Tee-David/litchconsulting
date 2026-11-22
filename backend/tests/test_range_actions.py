@@ -14,7 +14,7 @@ from litchai.workbench.tools import run_tool
 
 
 def _ctx():
-    wb, conv = _workbench({"fixture": "qa_tb"})
+    wb, conv = _workbench({"fixture": "qa_tb", "kind": "work"})
     return wb, conv, wb.context(conv, taxonomy=_taxonomy(), categoriser=scripted_categoriser)
 
 

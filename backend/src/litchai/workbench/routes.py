@@ -407,6 +407,19 @@ def register_workbench_routes(app: FastAPI) -> None:
                     pass
             return {"purged": True, "documents_deleted": docs, "files_deleted": files}
 
+    @app.post("/workbench/conversations/{conversation_id}/working-book")
+    def start_working_book(conversation_id: str) -> dict[str, Any]:
+        """v8: open the working book now (one empty sheet). Nothing changes if it exists."""
+        from litchai.workbench.sources import WORK_NAME, work_ref
+
+        with _workbench() as wb:
+            conv = _get(wb, conversation_id)
+            if work_ref(conv.workbooks) is None:
+                conv.new_seq += 1
+                wb.attach_model(conv, new_workbook(f"new-{conv.new_seq}", WORK_NAME)).kind = "work"
+                wb.store.save(conv)
+            return {"conversation": conv.public()}
+
     @app.get("/workbench/search")
     def search_conversations(q: str, limit: int = 30) -> dict[str, Any]:
         """Workbenches whose name, files or chat text (every session) contain the words."""

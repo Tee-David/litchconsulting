@@ -10,7 +10,7 @@ from litchai.workbench.tools import run_tool
 
 
 def _setup():
-    wb, conv = _workbench({"fixture": "qa_tb"})
+    wb, conv = _workbench({"fixture": "qa_tb", "kind": "work"})
     ctx = wb.context(conv, taxonomy=_taxonomy(), categoriser=scripted_categoriser)
     out = run_tool(ctx, "trial_balance_statements", {})  # Sage makes 2 sheets
     wb.add_batch(conv, out.batch)

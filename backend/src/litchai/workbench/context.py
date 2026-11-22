@@ -40,6 +40,7 @@ class ToolContext:
     imports: dict[str, Any] = field(default_factory=dict)
     full: dict[str, Workbook] = field(default_factory=dict)
     enriched: set[str] = field(default_factory=set)   # copies that Sage changed
+    pending_imports: set[str] = field(default_factory=set)  # copies not accepted yet
 
     def workbook(self, workbook_id: str | None = None) -> Workbook:
         if not self.workbooks:
@@ -52,6 +53,34 @@ class ToolContext:
             if wb.name.lower() == workbook_id.lower():
                 return wb
         raise ToolError(f"no workbook {workbook_id!r} (open: {list(self.workbooks)})")
+
+    def workbook_for(self, workbook_id: str | None, names: list[Any],
+                     prefer_work: bool = False) -> Workbook:
+        """v8: the workbook that holds the named sheets (the working book first), so
+        "trace 'Income statement'!C8" finds the sheet Sage made in the working book.
+        When every named sheet is in the working book, but some only as a read-only
+        copy (hidden from the tools), the full working book is returned. With no sheet
+        named and ``prefer_work``, an edit goes to the working book."""
+        wanted = {str(n).lower() for n in names if isinstance(n, str) and n}
+        work_view = self.workbooks.get(self.work_id or "")
+        work_full = self.full.get(self.work_id or "")
+        if not wanted:
+            if prefer_work and work_view is not None and not workbook_id:
+                return work_view
+            return self.workbook(workbook_id)
+        if workbook_id and wanted <= {s.lower() for s in self.workbook(workbook_id).sheets}:
+            return self.workbook(workbook_id)
+        if work_full is not None:
+            full_names = {s.lower() for s in work_full.sheets}
+            view_names = {s.lower() for s in work_view.sheets} if work_view else set()
+            if wanted <= view_names:
+                return work_view  # type: ignore[return-value]
+            if wanted <= full_names:
+                return work_full
+        for wb in self.workbooks.values():
+            if wanted & {s.lower() for s in wb.sheets}:
+                return wb
+        return self.workbook(workbook_id)
 
     def find_sheet(self, sheet: str | None, workbook_id: str | None = None,
                    prefer: Callable[[Table], bool] | None = None) -> tuple[Workbook, Sheet, Table]:
@@ -110,26 +139,24 @@ def finish_batch(ctx: ToolContext, builder: OpBuilder, title: str, summary: str)
     model with the proposal overlaid), overlay it on the live context so later
     steps see it, and wrap it as a pending batch."""
     model = builder.model
+    ops = list(builder.ops)  # one list: builder.ops may build a new list on each read
     if model.id in ctx.sources or (ctx.work_id and model.id == ctx.work_id):
-        model, ops = _to_working_book(ctx, model, list(builder.ops), builder.tool)
-        builder.ops[:] = ops
+        model, ops = _to_working_book(ctx, model, ops, builder.tool)
+    from litchai.workbench.model import parse_a1
+
     trial = copy.deepcopy(model)
-    overlay(trial, builder.ops)
-    for op in builder.ops:
+    overlay(trial, ops)
+    for op in ops:
         if op.op == "set_cell" and op.new_formula and op.preview_value is None:
             op.preview_value = safe_preview(trial, op.sheet or "", op.new_formula)
             # feed the preview back so dependants evaluate without recursion limits
-            from litchai.workbench.model import parse_a1
-
             r, c = parse_a1(op.cell or "A1")
             cell = trial.sheets[op.sheet or ""].get(r, c)
             if cell is not None:
                 cell.preview = op.preview_value
-    overlay(model, builder.ops)
-    for op in builder.ops:  # carry previews into the live overlay too
+    overlay(model, ops)
+    for op in ops:  # carry previews into the live overlay too
         if op.op == "set_cell" and op.new_formula:
-            from litchai.workbench.model import parse_a1
-
             r, c = parse_a1(op.cell or "A1")
             cell = model.sheets[op.sheet or ""].get(r, c)
             if cell is not None:
@@ -137,11 +164,11 @@ def finish_batch(ctx: ToolContext, builder: OpBuilder, title: str, summary: str)
     if ctx.work_id and ctx.work_id in ctx.full:  # refresh the views the tools see
         from litchai.workbench.sources import views
 
-        ctx.enriched |= {o.sheet for o in builder.ops if o.sheet in ctx.imports
+        ctx.enriched |= {o.sheet for o in ops if o.sheet in ctx.imports
                          and o.op != "import_sheet" and not getattr(o, "_expanded", False)}
         ctx.workbooks.update(views(ctx.full, ctx.work_id, ctx.imports, ctx.enriched))
     return new_batch(title, summary, builder.tool,
-                     [o for o in builder.ops if not getattr(o, "_expanded", False)])
+                     [o for o in ops if not getattr(o, "_expanded", False)])
 
 
 def _to_working_book(ctx: ToolContext, model: Workbook, ops: list[Operation],
@@ -160,7 +187,8 @@ def _to_working_book(ctx: ToolContext, model: Workbook, ops: list[Operation],
     work = ctx.full[ctx.work_id]
     if model.id == ctx.work_id:
         return work, head + ops
-    stored = head + redirect(ops, model, work, ctx.work_id, ctx.imports, tool)
+    stored = head + redirect(ops, model, work, ctx.work_id, ctx.imports, tool,
+                             ctx.pending_imports)
     # The live model gets the copies now (cells included), so previews and later steps
     # in this turn read real values; the stored proposal keeps one compact op per copy.
     expanded = expand_imports(stored, ctx.full)
@@ -170,7 +198,8 @@ def _to_working_book(ctx: ToolContext, model: Workbook, ops: list[Operation],
             o._expanded = True  # type: ignore[attr-defined]
     # compact import ops first (the overlay skips them; new_batch keeps them), then
     # the expanded cells (the overlay uses them; new_batch drops them)
-    return work, [o for o in stored if o.op == "import_sheet"] + expanded
+    compact = [o for o in stored if o.op in ("create_workbook", "import_sheet")]
+    return work, compact + [o for o in expanded if o.op != "create_workbook"]
 
 
 def ops_of(batches: list[Batch]) -> list[Operation]:

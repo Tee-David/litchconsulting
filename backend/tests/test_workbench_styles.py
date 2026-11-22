@@ -90,5 +90,6 @@ def test_write_cells_never_empties_a_cell_by_accident(tmp_path):
         ok = c.post(base, json={"args": {"sheet": "Bank", "cells": [
             {"cell": "A1", "style": {"bold": True, "fill": "DBEAFE", "border": "bottom"}}]}})
         assert ok.status_code == 200, ok.text
-        op = ok.json()["batch"]["ops"][0]
+        # v8: the source is copied into the working book first, then styled there
+        op = next(o for o in ok.json()["batch"]["ops"] if o["op"] == "set_cell")
         assert op["style"]["b"] is True and op["style"]["bg"] == "DBEAFE" and op["new_value"] == op["old_value"]

@@ -62,7 +62,7 @@ def _targets(wb: Workbook, a: dict[str, Any]) -> list[str]:
 def sheet_actions(ctx: ToolContext, *, actions: list[dict[str, Any]],
                   workbook_id: str | None = None, values_first: bool = False,
                   allow_broken_refs: bool = False) -> ToolOutput:
-    wb = ctx.workbook(workbook_id)
+    wb = ctx.workbook_for(workbook_id, [n for a in actions for n in [a.get("sheet"), *(a.get("sheets") or []), *(a.get("keep") or [])]], prefer_work=True)
     b = OpBuilder(wb, "sheet_actions")
     ops: list[Operation] = []
     titles: list[str] = []
@@ -125,7 +125,9 @@ def sheet_actions(ctx: ToolContext, *, actions: list[dict[str, Any]],
     breaks: list[str] = []
     if deleting:
         deleting = list(dict.fromkeys(deleting))
-        visible_left = [n for n, s in wb.sheets.items() if not s.hidden and n not in deleting]
+        # count the whole file (the working book also holds read-only source copies)
+        whole = ctx.full.get(wb.id, wb)
+        visible_left = [n for n, s in whole.sheets.items() if not s.hidden and n not in deleting]
         if not visible_left:
             raise ToolError("a workbook keeps at least one visible sheet: say which to keep")
         stays = [n for n in wb.sheets if n not in deleting]
@@ -164,7 +166,7 @@ def sheet_actions(ctx: ToolContext, *, actions: list[dict[str, Any]],
     title = title[0].upper() + title[1:]
     batch = finish_batch(ctx, b, title[:140], " ".join(notes)[:300] or title[:300])
     data = {"workbook_id": wb.id, "done": titles, "deleted": deleting, "broken_refs": breaks[:20],
-            "notes": notes, "sheets_after": [n for n in wb.sheets if n not in deleting]}
+            "notes": notes, "sheets_after": [n for n in ctx.full.get(wb.id, wb).sheets if n not in deleting]}
     return ToolOutput(data=data, batch=batch,
                       summary=f"Proposed: {title}." + (" " + " ".join(notes) if notes else ""))
 

@@ -9,7 +9,7 @@ from litchai.workbench.tools import run_tool
 
 
 def _accepted_statements():
-    wb, conv = _workbench({"fixture": "qa_tb"})
+    wb, conv = _workbench({"fixture": "qa_tb", "kind": "work"})
     ctx = wb.context(conv, taxonomy=_taxonomy(), categoriser=scripted_categoriser)
     out = run_tool(ctx, "trial_balance_statements", {})
     wb.add_batch(conv, out.batch)

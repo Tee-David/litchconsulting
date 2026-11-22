@@ -687,6 +687,9 @@ def create_sheet(ctx: ToolContext, *, name: str, workbook_id: str | None = None,
                  headers: list[str] | None = None, rows: list[list[Any]] | None = None,
                  title: str | None = None) -> ToolOutput:
     wb = ctx.workbook(workbook_id)
+    # v8: a new sheet belongs in the working book (never in a source file)
+    if ctx.work_id and ctx.work_id in ctx.workbooks and (workbook_id is None or wb.id in ctx.sources):
+        wb = ctx.workbooks[ctx.work_id]
     return _layout(ctx, wb, name, headers, rows, title, "create_sheet")
 
 

@@ -8,6 +8,7 @@ import json
 import pytest
 from openpyxl import Workbook as XlWorkbook
 
+from litchai.workbench.sources import work_id_of
 from litchai.ai.provider import ProviderResponse
 from litchai.ai.router import ProviderError, ProviderRouter, ProviderSpec
 from litchai.evals.fixtures import scripted_categoriser
@@ -47,7 +48,7 @@ def test_kanem_tb_gives_the_qa_figures_and_a_proposal():
     wb.accept(conv, out.batch.id)
     assert out.batch.status == "accepted"
     # the proposed sheet's own formulas give the same PBT
-    sheet = wb.models(conv)["doc-1"].sheets["Income statement"]
+    sheet = wb.models(conv)[work_id_of(conv)].sheets["Income statement"]  # v8: the working book
     assert sheet.value(13, 2) == 33_050_000
 
 

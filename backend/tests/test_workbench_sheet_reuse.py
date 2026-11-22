@@ -10,8 +10,8 @@ from test_workbench_api import _client, _setup
 from litchai.queue import queue
 
 
-def _sheets(c, cid, doc_id):
-    dl = c.get(f"/workbench/conversations/{cid}/workbooks/doc-{doc_id}.xlsx")
+def _sheets(c, cid, wid):
+    dl = c.get(f"/workbench/conversations/{cid}/workbooks/{wid}.xlsx")
     return load_workbook(io.BytesIO(dl.content)).sheetnames
 
 
@@ -26,7 +26,7 @@ def test_same_sheet_is_rebuilt_not_copied(tmp_path):
     with queue.replace_connector(testing.InMemoryConnector()), _client(app) as c:
         cid = c.post("/workbench/conversations", json={"document_ids": [doc.id]}
                      ).json()["conversation"]["id"]
-        before = _sheets(c, cid, doc.id)
+        source_before = _sheets(c, cid, f"doc-{doc.id}")
 
         # Asked twice before accepting: the first proposal is replaced, the name stays.
         first = _recon(c, cid)
@@ -38,6 +38,8 @@ def test_same_sheet_is_rebuilt_not_copied(tmp_path):
         assert created == ["Recon"]
         acc = c.post(f"/workbench/conversations/{cid}/batches/{second['id']}/accept")
         assert acc.status_code == 200 and acc.json()["batch"]["status"] == "accepted"
+        wid = second["ops"][0]["workbook_id"]  # v8: the working book
+        before = [s for s in _sheets(c, cid, wid) if s != "Recon"]
 
         # Asked again after accepting: the same sheet is rebuilt in place.
         third = _recon(c, cid)
@@ -45,7 +47,8 @@ def test_same_sheet_is_rebuilt_not_copied(tmp_path):
         assert {o["sheet"] for o in third["ops"]} == {"Recon"}
         assert c.post(f"/workbench/conversations/{cid}/batches/{third['id']}/accept"
                       ).json()["batch"]["status"] == "accepted"
-        assert _sheets(c, cid, doc.id) == [*before, "Recon"]
+        assert _sheets(c, cid, wid) == [*before, "Recon"]
+        assert _sheets(c, cid, f"doc-{doc.id}") == source_before  # the source never changes
 
         # An explicit "new sheet" with a taken name still makes a new sheet.
         r = c.post(f"/workbench/conversations/{cid}/tools/create_sheet", json={"args": {"name": "Recon"}})

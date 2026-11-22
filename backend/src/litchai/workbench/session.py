@@ -371,7 +371,7 @@ class Workbench:
 
     def attach_bytes(self, conv: Conversation, data: bytes, *, name: str, origin: str = "xlsx",
                      document_id: int | None = None,
-                     source: dict[str, Any] | None = None) -> WorkbookRef:
+                     source: dict[str, Any] | None = None, kind: str = "source") -> WorkbookRef:
         wb_id = f"doc-{document_id}" if document_id is not None else f"file-{len(conv.workbooks)+1}"
         if any(w.id == wb_id for w in conv.workbooks):
             return conv.workbook_ref(wb_id)
@@ -385,7 +385,7 @@ class Workbench:
             facts = None
         ref = WorkbookRef(id=wb_id, name=name, origin=origin, document_id=document_id,
                           versions=[{"n": 1, "sha": sha, "at": _now(), "batch_id": None,
-                                     "gate": None}], source=source, facts=facts)
+                                     "gate": None}], source=source, facts=facts, kind=kind)
         conv.workbooks.append(ref)
         return ref
 
@@ -431,7 +431,7 @@ class Workbench:
                         if any(op.op == "import_sheet" for op in ops):
                             from litchai.workbench.sources import expand_imports
 
-                            ops = expand_imports(ops, out)
+                            ops = expand_imports(ops, out, set(out[wid].sheets))
                         overlay(out[wid], ops)
         return out
 
@@ -445,11 +445,13 @@ class Workbench:
             (op.workbook_id for b in conv.batches if b.status == "pending" for op in b.ops
              if op.op == "create_workbook" and (op.meta or {}).get("kind") == "work"), None)
         imports = dict(w.imports) if w else {}
-        for b in conv.batches:  # pending imports count too (no second copy)
+        pending: set[str] = set()
+        for b in conv.batches:  # copies in proposals not accepted yet
             if b.status == "pending":
                 for op in b.ops:
-                    if op.op == "import_sheet" and op.workbook_id == work_id and op.sheet:
+                    if op.op == "import_sheet" and op.workbook_id == work_id and op.sheet                             and op.sheet not in imports:
                         imports[op.sheet] = dict(op.meta or {})
+                        pending.add(op.sheet)
         # copies that a proposal (pending or accepted) changed after bringing them in
         enriched = {op.sheet for b in conv.batches if b.status in ("pending", "accepted")
                     for op in b.ops if op.workbook_id == work_id and op.sheet in imports
@@ -458,6 +460,7 @@ class Workbench:
                           client_name=conv.client_name, period_label=conv.period_label, **kw)
         ctx.full, ctx.sources, ctx.work_id, ctx.imports = full, sources, work_id, imports
         ctx.enriched = enriched
+        ctx.pending_imports = pending
         ctx.new_workbook_seq = conv.new_seq + sum(
             1 for b in conv.batches for op in b.ops if op.op == "create_workbook")
         return ctx
@@ -520,8 +523,14 @@ class Workbench:
         results: dict[str, tuple[bytes, Any]] = {}
         gate_summary: dict[str, Any] = {"status": "passed", "errors": [], "formulas": 0,
                                         "workbooks": {}}
+        known = {r.id for r in conv.workbooks}
         for wid, ops in by_wb.items():
-            new_wb = any(op.op == "create_workbook" for op in ops)
+            # v8: a working book proposed by an earlier, still pending batch is new here
+            # too; one that exists already is never made twice (any accept order).
+            new_wb = wid not in known and (
+                any(op.op == "create_workbook" for op in ops) or any(
+                    op.op == "create_workbook" and op.workbook_id == wid
+                    for ob in conv.batches for op in ob.ops))
             if new_wb:
                 base = to_xlsx_bytes(new_workbook(wid, wid, [_PLACEHOLDER]))
             else:
@@ -533,7 +542,8 @@ class Workbench:
             if any(op.op == "import_sheet" for op in ops):
                 from litchai.workbench.sources import expand_imports
 
-                ops = expand_imports(ops, self.models(conv, with_pending=False))
+                have = set(load_xlsx(base, wb_id=wid, name=wid).sheets) if not new_wb else set()
+                ops = expand_imports(ops, self.models(conv, with_pending=False), have)
             try:
                 candidate, gate = gate_and_apply(base, ops, self.gate)
             except ApplyConflict as exc:
@@ -560,7 +570,7 @@ class Workbench:
             try:
                 ref = conv.workbook_ref(wid)
             except KeyError:
-                name = next((str(op.new_value) for op in b.ops
+                name = next((str(op.new_value) for ob in [b, *conv.batches] for op in ob.ops
                              if op.op == "create_workbook" and op.workbook_id == wid), wid)
                 ref = WorkbookRef(id=wid, name=name, origin="new", kind="work")
                 conv.workbooks.append(ref)
