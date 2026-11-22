@@ -317,6 +317,8 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
     if fast is not None:
         for ev in fast:
             ev.setdefault("ms", int((time.monotonic() - t0) * 1000))
+            if ev["type"] == "final":
+                ev["sources_used"] = sources_used(ctx, conv, fast)
             yield ev
         _finish(wbench, conv, masker, fast)
         return
@@ -337,6 +339,11 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
                              pending="\n".join(pending) or "(none)", max_steps=max_steps,
                              tool_menu="{tool_menu}")
     user = message
+    named = mentioned(conv, message)
+    if named:
+        # v8: "@GTBank statement" or files chosen in the Sources panel
+        user += ("\n(The person points to these files: " + "; ".join(
+            f"{r.name} (workbook {r.id})" for r in named) + ". Use them for this request.)")
     if pointed and selection:
         preview = selection_preview(ctx, selection)
         user += (f"\n(The person selected {selection}. \"This\", \"these\" or \"selected\" means "
@@ -385,6 +392,8 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
             continue  # kept as a total on the answer, not as a step
         if ev["type"] in ("final", "error"):
             ev["tokens"] = dict(used)
+        if ev["type"] == "final":
+            ev["sources_used"] = sources_used(ctx, conv, events)
         # Elapsed time, so the page can say "Worked in 4 steps · 6 s".
         ev.setdefault("ms", int((time.monotonic() - t0) * 1000))
         events.append(ev)
@@ -406,10 +415,63 @@ def _finish(wbench: Workbench, conv: Conversation, masker: Masker,
         "unverified_figures": (final or {}).get("unverified_figures") or [],
         "ms": (final or {}).get("ms"),
         "tokens": (final or {}).get("tokens"),
+        "sources_used": (final or {}).get("sources_used") or [],
         "steps": [e for e in events if e["type"] in ("plan", "tool_call", "tool_result",
                                                       "fallback", "provider", "retry")][:60],
     })
     wbench.store.save(conv)
+
+
+_MENTION = re.compile(r"@\[([^\]]{1,160})\]|@([\w.\-]{3,80})")
+
+
+def mentioned(conv: Conversation, message: str) -> list[Any]:
+    """Files named with @ in the message: @[GTBank statement.csv] or @GTBank_statement."""
+    names = [a or b for a, b in _MENTION.findall(message or "")]
+    if not names:
+        return []
+    out = []
+    for n in names:
+        low = n.lower().strip()
+        ref = next((r for r in conv.workbooks if r.name.lower() == low), None) or next(
+            (r for r in conv.workbooks if r.name.lower().startswith(low)), None)
+        if ref is not None and ref not in out:
+            out.append(ref)
+    return out
+
+
+def sources_used(ctx: ToolContext, conv: Conversation, events: list[dict[str, Any]]) -> list[str]:
+    """The files an answer used (v8 "Used:" line): from the tools' workbook arguments and
+    the cells they cited; a read-only copy in the working book counts as its source."""
+    by_id = {r.id: r for r in conv.workbooks if getattr(r, "kind", "source") == "source"}
+    sheet_owner: dict[str, str] = {}
+    for rid in by_id:
+        for sh in getattr(ctx.full.get(rid) or ctx.workbooks.get(rid), "sheets", {}) or {}:
+            sheet_owner.setdefault(sh.lower(), rid)
+    for sheet, meta in (ctx.imports or {}).items():
+        if meta.get("from") in by_id:
+            sheet_owner[sheet.lower()] = str(meta["from"])
+    used: list[str] = []
+
+    def add(rid: str | None) -> None:
+        if rid in by_id and by_id[rid].name not in used:
+            used.append(by_id[rid].name)
+
+    for e in events:
+        if e.get("type") == "tool_call":
+            args = e.get("args") or {}
+            for k in ("workbook_id", "workbook", "statement"):
+                v = args.get(k)
+                if isinstance(v, str):
+                    add(v if v in by_id else next((i for i, r in by_id.items()
+                                                   if v.lower() in r.name.lower()), None))
+            if isinstance(args.get("sheet"), str):
+                add(sheet_owner.get(args["sheet"].lower()))
+        if e.get("type") in ("tool_result", "final") and e.get("ok", True):
+            for c in e.get("citations") or []:
+                sheet = str(c).rsplit("!", 1)[0].strip("'") if "!" in str(c) else ""
+                add(sheet_owner.get(sheet.lower()))
+    return used[:8]
 
 
 CONFIDENT_ROUTE = 0.8   # tool_route confidence that offers 5 tools instead of 8

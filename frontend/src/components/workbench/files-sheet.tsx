@@ -29,7 +29,13 @@ const when = (p?: [string, string]) => {
   return p[0] === p[1] ? f(p[0]) : `${f(p[0])} to ${f(p[1])}`;
 };
 
-function FileRow({ conversationId, wb, onConversation }: { conversationId: string; wb: WbWorkbookRef; onConversation: (c: WbConversation) => void }) {
+function FileRow({ conversationId, wb, onConversation, onOpen, onAsk }: {
+  conversationId: string;
+  wb: WbWorkbookRef;
+  onConversation: (c: WbConversation) => void;
+  onOpen?: (id: string) => void;
+  onAsk?: (name: string) => void;
+}) {
   const role = wb.role ?? wb.facts?.role ?? "other";
   const [note, setNote] = useState(wb.note ?? "");
   const [saving, setSaving] = useState<"role" | "note" | null>(null);
@@ -71,6 +77,8 @@ function FileRow({ conversationId, wb, onConversation }: { conversationId: strin
           <p className="truncate text-sm font-semibold text-ink" title={wb.name}>{wb.name}</p>
           <p className="text-[12px] text-muted">{meta || "No dates found"}</p>
         </div>
+        {onOpen ? <Button size="sm" variant="ghost" onClick={() => onOpen(wb.id)}>Open</Button> : null}
+        {onAsk ? <Button size="sm" variant="ghost" onClick={() => onAsk(wb.name)}>Ask about it</Button> : null}
         {!confirming ? (
           <button
             type="button"
@@ -127,15 +135,24 @@ function FileRow({ conversationId, wb, onConversation }: { conversationId: strin
  * statement" or "take the terms from the loan letter" finds the right file. Files
  * from one ZIP, RAR or 7z stay grouped under the archive's name.
  */
-export function FilesSheet({ open, onClose, conv, onConversation, onAdd }: {
+export function FilesSheet({ open, onClose, conv, onConversation, onAdd, onOpen, onAsk }: {
   open: boolean;
   onClose: () => void;
   conv: WbConversation;
   onConversation: (c: WbConversation) => void;
   onAdd: () => void;
+  /** v8: open a source read-only, or point the next question at it (@[name]) */
+  onOpen?: (id: string) => void;
+  onAsk?: (name: string) => void;
 }) {
+  const [q, setQ] = useState("");
+  const sources = conv.workbooks.filter((w) => w.kind !== "work");
+  const low = q.trim().toLowerCase();
+  const shown = low
+    ? sources.filter((w) => `${w.name} ${w.facts?.label ?? ""} ${w.note ?? ""}`.toLowerCase().includes(low))
+    : sources;
   const groups = new Map<string, WbWorkbookRef[]>();
-  for (const w of conv.workbooks) {
+  for (const w of shown) {
     const g = w.group ?? "";
     groups.set(g, [...(groups.get(g) ?? []), w]);
   }
@@ -143,8 +160,8 @@ export function FilesSheet({ open, onClose, conv, onConversation, onAdd }: {
     <Sheet
       open={open}
       onClose={onClose}
-      title="Files in this job"
-      description="Say what each file is and what it is for. Sage reads this before every answer."
+      title="Your sources"
+      description="The files you gave. Sage reads them and never changes them. Say what each file is and what it is for."
       footer={
         <>
           <Button onClick={onAdd}><Paperclip className="size-3.5" /> Add files</Button>
@@ -152,8 +169,22 @@ export function FilesSheet({ open, onClose, conv, onConversation, onAdd }: {
         </>
       }
     >
-      {conv.workbooks.length === 0 ? (
+      {sources.length > 5 ? (
+        <label className="mb-3 block">
+          <span className="mb-1 block text-[12.5px] font-medium text-ink">Search the sources</span>
+          <input
+            type="search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="File name, kind or note"
+            className="h-11 w-full rounded-ctl border border-hairline bg-paper px-3 text-sm text-ink outline-none focus:border-act focus:ring-2 focus:ring-act/20"
+          />
+        </label>
+      ) : null}
+      {sources.length === 0 ? (
         <p className="text-sm text-muted">No files yet. Add files, or a ZIP of them.</p>
+      ) : shown.length === 0 ? (
+        <p className="text-sm text-muted">No source matches {q}.</p>
       ) : (
         <div className="space-y-4">
           {[...groups.entries()].map(([g, list]) => (
@@ -165,7 +196,7 @@ export function FilesSheet({ open, onClose, conv, onConversation, onAdd }: {
               ) : null}
               <ul className="divide-y divide-hairline rounded-card border border-hairline bg-surface">
                 {list.map((w) => (
-                  <FileRow key={w.id} conversationId={conv.id} wb={w} onConversation={onConversation} />
+                  <FileRow key={w.id} conversationId={conv.id} wb={w} onConversation={onConversation} onOpen={onOpen} onAsk={onAsk} />
                 ))}
               </ul>
             </section>

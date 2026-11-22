@@ -129,6 +129,11 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
       if (work) setWbId(work.id);
     }
   }, [conv.workbooks, wbId]);
+  // v8: open a source named in an answer's "Used:" line (read only).
+  const openSource = (name: string) => {
+    const ref = conv.workbooks.find((w) => w.name === name);
+    if (ref) setWbId(ref.id);
+  };
   // Files added before the first message refresh the job overview (v6 C1).
   const msgCount = useRef(initial.messages.length);
   msgCount.current = conv.messages.length;
@@ -158,6 +163,11 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
   const [running, setRunning] = useState(false);
   const abort = useRef<AbortController | null>(null);
   const [text, setText] = useState("");
+  // v8: "@" in the message box lists the sources whose name matches what follows it.
+  const mentionQuery = /@([^\s@[\]]*)$/.exec(text)?.[1];
+  const mentionHits = mentionQuery === undefined ? [] : conv.workbooks
+    .filter((w) => w.kind !== "work" && w.name.toLowerCase().includes(mentionQuery.toLowerCase()))
+    .slice(0, 6);
   const [selection, setSelection] = useState<Range | null>(null);
   const [context, setContext] = useState<Range | null>(null);
   // D1: Reply / Ask-about quote, attachments in the composer, edit-and-resend, branch view.
@@ -1082,7 +1092,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
                 </button>
               ) : null}
               <button type="button" role="menuitem" className={menuItem} onClick={() => setSheetOpen("files")}>
-                <FolderOpen className="size-4 text-muted" /> Files in this job ({conv.workbooks.length})
+                <FolderOpen className="size-4 text-muted" /> Your sources ({conv.workbooks.filter((w) => w.kind !== "work").length})
               </button>
               <div className="my-1 border-t border-hairline" />
               <button type="button" role="menuitem" className={menuItem} onClick={() => setSheetOpen("engine")}>
@@ -1420,6 +1430,19 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         <span className="font-semibold">Source file</span> · {activeRef.name}
         <span className="text-body"> · read only. Sage reads it and never changes it. Results go to the working book.</span>
       </span>
+      <Button
+        size="sm"
+        variant="ghost"
+        onClick={async () => {
+          const res = await runToolAction({ conversationId: conv.id, tool: "copy_to_working_book", args: { workbook_id: activeRef.id, sheet } });
+          if (!res.ok) return toast.error(res.error);
+          await refresh();
+          toast.success(`${sheet} is ready to copy. Accept it in Proposed changes to edit it in the working book.`);
+          setView("sage");
+        }}
+      >
+        Copy this sheet into the working book
+      </Button>
       <Button size="sm" variant="ghost" onClick={() => setWbId(workRef?.id ?? "")}>
         {workRef ? "Back to the working book" : "Back to the start"}
       </Button>
@@ -1632,7 +1655,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
     const am = bv < n - 1 ? prev!.branches![bv].assistant : m;
     if (!am) return <p key={i} className="text-[12.5px] text-muted">No answer was saved for that version.</p>;
     const steps = (am.steps ?? []) as WbEvent[];
-    const final: WbEvent = { type: "final", answer: am.content, citations: am.citations ?? [], attribution: am.attribution ?? null, unverified_figures: am.unverified_figures ?? [], ms: (am as { ms?: number | null }).ms ?? null, tokens: (am as { tokens?: unknown }).tokens ?? null };
+    const final: WbEvent = { type: "final", answer: am.content, citations: am.citations ?? [], attribution: am.attribution ?? null, unverified_figures: am.unverified_figures ?? [], ms: (am as { ms?: number | null }).ms ?? null, tokens: (am as { tokens?: unknown }).tokens ?? null, sources_used: (am as { sources_used?: string[] }).sources_used ?? [] };
     const latest = bv === n - 1;
     return (
       <div key={i} className="space-y-2">
@@ -1640,7 +1663,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           <span className="grid size-[22px] place-items-center rounded-[7px] bg-brand text-white keep-brand"><SageIcon className="size-3.5" /></span>
           Sage
         </p>
-        <TurnView events={am.content ? [...steps, final] : [...steps, { type: "error", message: "No answer was saved for this turn." }]} running={false} onCite={goTo} onRetry={i === lastIdx && latest ? retry : undefined} />
+        <TurnView events={am.content ? [...steps, final] : [...steps, { type: "error", message: "No answer was saved for this turn." }]} running={false} onCite={goTo} onRetry={i === lastIdx && latest ? retry : undefined} onSource={openSource} />
         {artifactsFor(am.proposals ?? []).map((x) => (
           // Artifact (shadcn.io/ai): a new sheet or chart Sage made, with a way to open it.
           <div key={x.key} className="flex items-center gap-3 rounded-xl border border-hairline bg-paper px-3 py-2.5">
@@ -1824,7 +1847,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
                 <span className="grid size-[22px] place-items-center rounded-[7px] bg-brand text-white keep-brand"><SageIcon className="size-3.5" /></span>
                 Sage
               </p>
-              <TurnView events={live.events} running={running} onCite={goTo} onRetry={retry} />
+              <TurnView events={live.events} running={running} onCite={goTo} onRetry={retry} onSource={openSource} />
             </div>
           </>
         ) : null}
@@ -1911,6 +1934,28 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
           </div>
         </section>
       ) : null}
+      {mentionHits.length ? (
+        <div role="listbox" aria-label="Files to point at" className="rounded-card border border-hairline bg-paper p-1 shadow-sm">
+          <p className="px-2 pb-1 pt-0.5 text-[11.5px] text-muted">Point Sage at a file</p>
+          {mentionHits.map((w) => (
+            <button
+              key={w.id}
+              role="option"
+              aria-selected={false}
+              type="button"
+              onClick={() => {
+                setText(text.replace(/@([^\s@[\]]*)$/, `@[${w.name}] `));
+                setTimeout(() => composer.current?.focus(), 0);
+              }}
+              className="flex min-h-10 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] text-ink hover:bg-surface focus-visible:bg-surface focus-visible:outline-none"
+            >
+              <FileText className="size-3.5 shrink-0 text-muted" aria-hidden />
+              <span className="min-w-0 flex-1 truncate">{w.name}</span>
+              {w.facts?.label ? <span className="hidden shrink-0 text-[11.5px] text-muted sm:inline">{w.facts.label.split(" (")[0]}</span> : null}
+            </button>
+          ))}
+        </div>
+      ) : null}
       <PromptBox
         value={voice.listening && voice.transcript ? `${text.trim() ? `${text.trimEnd()} ` : ""}${voice.transcript}` : text}
         readOnly={voice.listening}
@@ -1918,7 +1963,7 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         onSubmit={() => void send(text)}
         running={running}
         onStop={() => abort.current?.abort()}
-        placeholder={voice.listening ? "Listening. Speak now, then tap the mic to stop." : local ? "Ask about this workbook (local model, slower)…" : "Ask about this workbook…"}
+        placeholder={voice.listening ? "Listening. Speak now, then tap the mic to stop." : local ? "Ask about this workbook (local model, slower)…" : "Ask about this workbook… (type @ to point at a file)"}
         quote={quote}
         onClearQuote={() => setQuote(null)}
         attachments={atts}
@@ -2309,6 +2354,15 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
         conv={conv}
         onConversation={setConv}
         onAdd={() => setSheetOpen("attach")}
+        onOpen={(id) => {
+          setWbId(id);
+          setSheetOpen(null);
+        }}
+        onAsk={(name) => {
+          setText((t) => `${t.trimEnd()}${t.trim() ? " " : ""}@[${name}] `);
+          setSheetOpen(null);
+          setTimeout(() => composer.current?.focus(), 0);
+        }}
       />
       <EngineSheet
         open={sheetOpen === "engine"}

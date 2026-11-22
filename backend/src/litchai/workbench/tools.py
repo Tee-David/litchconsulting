@@ -491,6 +491,11 @@ class NoArgs(_Args):
     pass
 
 
+class CopyArgs(_Args):
+    workbook_id: str = Field(description="the source file's workbook id")
+    sheet: str | None = Field(None, description="the sheet to copy (default: the first)")
+
+
 class SectorChecksArgs(_Args):
     kind: Literal["auto", "imports", "rent", "stock", "settlements", "group", "purchases"] = Field(
         "auto", description="which checks; auto runs every kind that finds something")
@@ -841,6 +846,12 @@ TOOLS: tuple[WorkbenchTool, ...] = (
                   NoArgs, lambda c, a: grant_checks.grant_checks(c),
                   ("review our grant books", "grant report", "restricted funds",
                    "donor rules")),
+    WorkbenchTool("copy_to_working_book", "write",
+                  "Copy a source sheet into the working book so its figures can be edited "
+                  "there (sources never change).",
+                  CopyArgs, lambda c, a: __import__("litchai.workbench.sources", fromlist=["x"])
+                  .copy_to_working_book(c, workbook_id=a.workbook_id, sheet=a.sheet),
+                  ("copy this into the working book", "I want to edit the statement figures")),
     WorkbenchTool("sector_checks", "read",
                   "Standard checks for other kinds of business: imports (landed cost, USD "
                   "payables at the year-end rate, LC charges, goods in transit), rent (rent in "

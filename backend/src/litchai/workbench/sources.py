@@ -214,6 +214,25 @@ def work_ref(refs: list[Any]) -> Any | None:
     return next((r for r in refs if getattr(r, "kind", "source") == "work"), None)
 
 
+def copy_to_working_book(ctx: Any, *, workbook_id: str, sheet: str | None = None) -> Any:
+    """Copy one source sheet into the working book (to edit its figures there)."""
+    from litchai.workbench.context import ToolError, ToolOutput, finish_batch
+    from litchai.workbench.ops import OpBuilder
+
+    src = ctx.workbook(workbook_id)
+    if src.id not in ctx.sources:
+        raise ToolError("that sheet is already in the working book")
+    name = src.sheet(sheet).name if sheet else next(iter(src.sheets))
+    b = OpBuilder(src, "copy_to_working_book")
+    # an empty property change marks the sheet as used, so it is brought in (and shown)
+    b._ops.append(Operation("sheet_props", src.id, sheet=name, meta={}, tool=b.tool,
+                            reason=f"Copy {name} into the working book to edit it"))
+    batch = finish_batch(ctx, b, f"Copy {name} into the working book",
+                         f"From {src.name}. The source file stays as it is.")
+    return ToolOutput(data={"sheet": name, "from": src.name}, batch=batch,
+                      summary=f"{name} from {src.name} is ready to copy into the working book.")
+
+
 def work_id_of(conv: Any) -> str | None:
     """The working book's id: accepted, else proposed by a pending batch."""
     w = work_ref(conv.workbooks)

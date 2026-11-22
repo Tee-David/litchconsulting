@@ -51,3 +51,26 @@ def test_a_changed_copy_replaces_its_source_for_the_next_step():
     assert "Ledger" not in ctx.workbooks[src].sheets  # and the source sheet is hidden
     pnl = run_tool(ctx, "build_statement", {"kind": "pnl"})
     assert pnl.batch is not None and all(o.workbook_id == wid for o in pnl.batch.ops)
+
+
+def test_mentions_used_line_and_copy_to_the_working_book():
+    from litchai.workbench.engine import mentioned, sources_used
+
+    wb, conv = _workbench({"fixture": "qa_tb"})
+    src = conv.workbooks[0]
+    assert mentioned(conv, f"check @[{src.name}] please") == [src]
+    assert mentioned(conv, "check @nothing_like_this") == []
+    ctx = _ctx(wb, conv)
+    events = [{"type": "tool_call", "tool": "tb_lines", "args": {"workbook_id": src.id}},
+              {"type": "final", "citations": ["'Trial balance'!C5"]}]
+    assert sources_used(ctx, conv, events) == [src.name]
+
+    out = run_tool(ctx, "copy_to_working_book", {"workbook_id": src.id, "sheet": "Trial balance"})
+    wb.add_batch(conv, out.batch)
+    wid = work_id_of(conv)
+    assert any(o.op == "import_sheet" for o in out.batch.ops)
+    wb.accept(conv, out.batch.id)
+    ctx = _ctx(wb, conv)
+    assert "Trial balance" in ctx.workbooks[wid].sheets       # the copy is used now
+    assert "Trial balance" not in ctx.workbooks[src.id].sheets
+    assert "Trial balance" in wb.models(conv)[src.id].sheets  # the source is unchanged

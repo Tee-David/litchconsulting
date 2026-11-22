@@ -70,24 +70,54 @@ export function CitedText({ text, onCite }: { text: string; onCite: (ref: string
   const lines = text.split(/\n+/).filter((l) => l.trim());
   return (
     <div className="space-y-2 text-[14px] leading-relaxed text-ink" data-sage-answer>
-      {lines.map((line, i) => {
-        const bullet = /^\s*[-•*]\s+/.test(line);
-        const body = line.replace(/^\s*[-•*]\s+/, "");
-        const parts: ReactNode[] = [];
-        let last = 0;
-        for (const m of body.matchAll(REF_IN_TEXT)) {
-          parts.push(bold(body.slice(last, m.index)));
-          parts.push(<CiteChip key={`${i}-${m.index}`} refText={m[0]} onCite={onCite} />);
-          last = (m.index ?? 0) + m[0].length;
-        }
-        parts.push(bold(body.slice(last)));
-        return bullet ? (
-          <p key={i} className="flex gap-2 pl-1"><span aria-hidden className="text-faint">•</span><span>{parts}</span></p>
-        ) : (
-          <p key={i}>{parts}</p>
-        );
-      })}
+      {lines.map((line, i) => (
+        <CitedLine key={i} line={line} k={i} onCite={onCite} />
+      ))}
     </div>
+  );
+}
+
+/** At most 3 cell links show on a line; the rest fold into "+N more" (v8: short answers). */
+const SHOWN_REFS = 3;
+function CitedLine({ line, k, onCite }: { line: string; k: number; onCite: (ref: string) => void }) {
+  const [all, setAll] = useState(false);
+  const bullet = /^\s*[-•*]\s+/.test(line);
+  const body = line.replace(/^\s*[-•*]\s+/, "");
+  const parts: ReactNode[] = [];
+  let last = 0;
+  let n = 0;
+  let hidden = 0;
+  for (const m of body.matchAll(REF_IN_TEXT)) {
+    const between = body.slice(last, m.index);
+    if (n >= SHOWN_REFS && !all) {
+      hidden += 1;
+      // drop the separator between folded links (", ", " and "), keep real words
+      if (!/^[\s,;]*(and|to|&)?[\s,;]*$/i.test(between)) parts.push(bold(between));
+    } else {
+      parts.push(bold(between));
+      parts.push(<CiteChip key={`${k}-${m.index}`} refText={m[0]} onCite={onCite} />);
+    }
+    n += 1;
+    last = (m.index ?? 0) + m[0].length;
+  }
+  if (hidden) {
+    parts.push(
+      <button
+        key="more"
+        type="button"
+        onClick={() => setAll(true)}
+        className="mx-0.5 inline-flex min-h-6 items-center rounded-md border border-hairline bg-surface px-1.5 align-baseline text-[12px] font-medium text-body hover:bg-cloud focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        aria-label={`Show ${hidden} more cell link${hidden === 1 ? "" : "s"}`}
+      >
+        +{hidden} more
+      </button>,
+    );
+  }
+  parts.push(bold(body.slice(last)));
+  return bullet ? (
+    <p className="flex gap-2 pl-1"><span aria-hidden className="text-faint">•</span><span>{parts}</span></p>
+  ) : (
+    <p>{parts}</p>
   );
 }
 
@@ -250,11 +280,14 @@ export function TurnView({
   running,
   onCite,
   onRetry,
+  onSource,
 }: {
   events: WbEvent[];
   running: boolean;
   onCite: (ref: string) => void;
   onRetry?: () => void;
+  /** v8: open a source file named in the "Used:" line */
+  onSource?: (name: string) => void;
 }) {
   const final = events.find((e) => e.type === "final");
   const error = events.find((e) => e.type === "error");
@@ -342,6 +375,23 @@ export function TurnView({
       {final ? (
         <div className="space-y-2">
           <CitedText text={s(final.answer)} onCite={onCite} />
+          {Array.isArray(final.sources_used) && final.sources_used.length ? (
+            <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[12.5px] text-muted">
+              <span>Used:</span>
+              {(final.sources_used as string[]).map((n, i) => (
+                <Fragment key={n}>
+                  {onSource ? (
+                    <button type="button" onClick={() => onSource(n)} className="max-w-[16rem] truncate font-medium text-body underline decoration-hairline underline-offset-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40" title={`Open ${n} (read only)`}>
+                      {n}
+                    </button>
+                  ) : (
+                    <span className="max-w-[16rem] truncate text-body">{n}</span>
+                  )}
+                  {i < (final.sources_used as string[]).length - 1 ? <span aria-hidden>·</span> : null}
+                </Fragment>
+              ))}
+            </p>
+          ) : null}
           {Array.isArray(final.citations) && final.citations.length > 0 ? (
             <Trace
               size="sm"

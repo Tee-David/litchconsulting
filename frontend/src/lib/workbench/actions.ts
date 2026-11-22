@@ -453,7 +453,7 @@ export async function restoreVersionAction(input: z.input<typeof restoreSchema>)
 }
 
 // --- direct tools (chips, new sheet / workbook, chart re-proposals) ----------------
-const TOOLS = ["flag_anomalies", "reconcile", "categorise_rows", "build_statement", "clean_values", "create_sheet", "create_workbook", "add_chart", "pivot", "profile_workbook"] as const;
+const TOOLS = ["flag_anomalies", "reconcile", "categorise_rows", "build_statement", "clean_values", "create_sheet", "create_workbook", "add_chart", "pivot", "profile_workbook", "copy_to_working_book"] as const;
 const toolSchema = z.object({
   conversationId: id,
   tool: z.enum(TOOLS),
