@@ -97,6 +97,12 @@ All mail is nodemailer/SMTP (`lib/email.ts`) — there is **no** Resend integrat
 - **Analyses (AI Studio):** `/admin/analyses` (`components/admin/analyses/*`) is the separate
   document→Excel workbench over the same LitchAI engine — not the chatbot. Old routes
   `/admin/assistant` and `/admin/litchai` permanently redirect (`next.config.ts`).
+- **Workbench model (v8):** uploaded files are **sources** (never changed; no sheets on
+  upload); every proposal goes through `finish_batch`, which moves it to the **working book**
+  with read-only copies (`import_sheet`) of the source sheets it uses (`workbench/sources.py`).
+  Tools see the working book without unchanged copies, so nothing is counted twice. Tests that
+  edit a workbook attach it with `kind="work"`. The UI stays plain: tool names, SQL and tokens
+  only behind "Show technical details" (`components/workbench/plain-steps.ts`).
 - **⚠️ Keeping Sage current (do this when you ship a substantial surface/capability):** Sage
   only knows what's in its grounding + tools, so a big new feature is invisible to it until you
   teach it. When you add a meaningful admin surface or capability, in the same change: (1) add
