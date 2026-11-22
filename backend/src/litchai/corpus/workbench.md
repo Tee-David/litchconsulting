@@ -321,3 +321,20 @@ Each check names the problem, the amount, the file it came from and the fix.
   missing payment voucher numbers, vendors with no TIN.
 
 The job overview runs these checks when the files fit, and shows what they found.
+
+## Sources and the working book
+
+A workbench has two parts. **Sources** are the files you give: spreadsheets, CSVs,
+PDFs, scans, letters and the files inside ZIP, RAR or 7z archives. Sage reads them
+and cites them, but never changes them. The **working book** holds the sheets that you
+and Sage make: reconciliations, journals, statements, schedules and charts.
+
+Adding files makes no sheets. Sage lists the files, runs the checks that fit them and
+asks what you want to do. The working book is made by the first result you accept,
+or at once with "Start a blank sheet". When a result needs figures from a source (for
+example statements from a trial balance), Sage brings in a read-only copy of that
+source sheet, so the formulas stay live. Open any source to look at it: it opens read
+only. Blank templates (an IFRS annual report form) are labelled as templates and are
+not treated as client figures. When the files cover different periods, the overview
+says so first. Under each answer, "Show technical details" shows the steps, tool names
+and queries for people who want them.
