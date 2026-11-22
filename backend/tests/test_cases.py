@@ -204,3 +204,7 @@ def test_fallback_runs_the_checks_that_fit_the_files_when_the_words_do_not():
     plan = _plan_for(True, checks)
     assert [t for t, _ in plan("How much do they really owe us?")] == checks
     assert plan("delete the sheet") == [] or plan("delete the sheet")[0][0] != "review_points"
+    # a grant question runs the grant check first, then the other checks that fit
+    ngo = [t for t, _ in fitting_checks({"trial_balance"}, "grant agreement")]
+    tools = [t for t, _ in _plan_for(True, ngo)("Review our grant books for the donor")]
+    assert tools[0] == "grant_checks" and "review_points" in tools

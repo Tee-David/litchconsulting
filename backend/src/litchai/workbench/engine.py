@@ -989,8 +989,12 @@ def _plan_for(has_tb: bool, job_checks: list[str] | None = None) -> Any:
         if checks and not _TB_EDIT_JOB.search(message):
             # The standard checks answer "what is wrong" better than the statements
             # (19 Nov: an NGO review got only the TB statements). Other steps the
-            # request names (a reconciliation) still run.
-            return keyword
+            # request names (a reconciliation) still run. The other checks that fit the
+            # files are added (NGO run 22 Nov: the grant check ran, but the books check
+            # that finds unbooked bank charges did not).
+            have = {t for t, _ in keyword}
+            extra = [(t, {}) for t in (job_checks or []) if t not in have and t != "flag_anomalies"]
+            return (keyword + extra)[:6]
         if _TB_EDIT_JOB.search(message):
             if re.search(r"\b(classif|categor|account type)", message, re.IGNORECASE):
                 return [("categorise_rows", {})]
