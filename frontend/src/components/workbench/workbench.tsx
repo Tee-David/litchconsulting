@@ -29,7 +29,7 @@ import {
 import type { WbBatch, WbCell, WbConflict, WbConversation, WbEvent, WbFirstLook, WbGate, WbStyle, WbUserEdit } from "@/lib/litchai/workbench";
 import { attachDocumentAction, attachFilesAction, decideBatchAction, deliverAction, feedbackAction, getConversationAction, newThreadAction, openThreadAction, restoreVersionAction, runToolAction, saveEditsAction, sheetActionAction } from "@/lib/workbench/actions";
 import { BarChart3, WifiOff, AlignCenter, AlignLeft, AlignRight, Baseline, Bold, Check, CornerDownRight, ChevronDown as Chev, Ellipsis, FolderOpen, Grid2x2, Italic, NotebookPen, PaintBucket, Pencil, SquarePen, TableCellsMerge, Underline, WrapText } from "lucide-react";
-import { setInstructionsAction, startWorkingBookAction } from "@/lib/workbench/actions";
+import { setAutoFormatAction, setInstructionsAction, startWorkingBookAction } from "@/lib/workbench/actions";
 import type { StyleRequest } from "./grid";
 import { MessageActions } from "@/components/sage-ui/message-actions";
 import { ThreadPicker } from "@/components/sage-ui/thread-picker";
@@ -1095,6 +1095,21 @@ export function Workbench({ initial, firstLook, request, files, pdfDocs, canDeli
                 <FolderOpen className="size-4 text-muted" /> Your sources ({conv.workbooks.filter((w) => w.kind !== "work").length})
               </button>
               <div className="my-1 border-t border-hairline" />
+              <button
+                type="button"
+                role="menuitemcheckbox"
+                aria-checked={Boolean(conv.auto_format)}
+                className={menuItem}
+                title="Bold, colours, widths and number formats are applied at once. Changes to figures and formulas always wait for you."
+                onClick={async () => {
+                  const res = await setAutoFormatAction(conv.id, !conv.auto_format);
+                  if (!res.ok) return toast.error(res.error);
+                  setConv(res.conversation);
+                  toast.success(res.conversation.auto_format ? "Formatting changes are now applied at once. Figures still wait for you." : "Every change waits for you again.");
+                }}
+              >
+                <Check className={cn("size-4", conv.auto_format ? "text-good" : "text-transparent")} aria-hidden /> Accept formatting changes by itself
+              </button>
               <button type="button" role="menuitem" className={menuItem} onClick={() => setSheetOpen("engine")}>
                 {local ? <Lock className="size-4 text-muted" /> : <Cloud className="size-4 text-muted" />} What powers Sage: {engineLabel(local ? "local" : "cloud").toLowerCase()}
               </button>

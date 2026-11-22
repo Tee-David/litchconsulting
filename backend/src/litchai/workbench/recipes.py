@@ -192,6 +192,16 @@ def year_end_steps(ctx: ToolContext, refs: list[Any]) -> list[tuple[str, dict[st
            for w in ctx.workbooks.values() for s in w.sheets):
         steps.append(("depreciation_schedule", {"year_end": _year_end(ctx).isoformat()}))
     steps.append(("review_points", {}))
+    # The standard checks that fit the files (payroll run, 22 Nov: the year-end review
+    # missed every payroll problem because payroll_checks never ran).
+    roles = {(r.role or (r.facts or {}).get("role")) for r in refs}
+    names = " ".join(r.name for r in refs).lower()
+    for role, tool in (("sales_report", "sales_checks"), ("invoices", "receivables_checks"),
+                       ("payroll", "payroll_checks")):
+        if role in roles:
+            steps.append((tool, {}))
+    if re.search(r"grant|donor|restricted", names):
+        steps.append(("grant_checks", {}))
     # The checks for imports, rent, stock, settlements, group and purchases (read only;
     # only the kinds that find something are reported). Importer run, 20 Nov.
     steps.append(("sector_checks", {}))

@@ -48,6 +48,10 @@ const W: Record<string, Words> = {
   statement_of_affairs: { run: "Preparing the statement of affairs", done: "Prepared the statement of affairs" },
   cac_filing_tracker: { run: "Checking the CAC filings", done: "Checked the CAC filings" },
   annual_report_pack: { run: "Preparing the annual report", done: "Prepared the annual report" },
+  scan_checks: { run: "Checking the scanned figures for misreads", done: "Checked the scanned figures for misreads" },
+  fx_rates: { run: "Looking up the CBN exchange rate", done: "Looked up the CBN exchange rate" },
+  read_macros: { run: "Reading the macros (without running them)", done: "Read the macros (without running them)" },
+  copy_to_working_book: { run: "Copying the sheet into the working book", done: "Copied the sheet into the working book" },
 };
 
 const human = (tool: string) => tool.replace(/_/g, " ");

@@ -1,0 +1,10 @@
+[Unit]
+Description=Keep the CBN official exchange rates for the workbench (cbn.gov.ng JSON feed)
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=litch
+Group=litch
+WorkingDirectory=/srv/projects/litchconsulting/app/backend
+ExecStart=/usr/local/bin/litch-run /srv/projects/litchconsulting/venv/bin/python -m litchai.fx_rates refresh

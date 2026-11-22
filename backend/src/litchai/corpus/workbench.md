@@ -347,3 +347,25 @@ box helps when there are many files. Under each answer, "Used:" names the files 
 answer came from; click one to open it. An answer shows at most three cell links on a
 line; "+N more" shows the rest. To edit a source's figures, open it and choose "Copy
 this sheet into the working book"; the source file stays as it is.
+
+## Macros, CBN exchange rates, scanned figures and formatting
+
+Macros: Sage never runs a macro, because a macro is a program. When an .xlsm or .xls
+file arrives, Sage reads the VBA code and keeps it with the file. The overview says
+when a file has macros and warns when the code can do risky things (start programs,
+download files) or runs by itself when the file opens. Ask "what does the macro do"
+and Sage explains it in plain words and can rebuild it with formulas.
+
+Exchange rates: the server keeps the CBN official exchange rates (cbn.gov.ng), refreshed
+twice a day. Ask "what was the dollar rate on 31 December" and Sage gives the central,
+buying or selling rate for that day, or the last rate published before it, with the
+source. The import checks use the CBN rate when the job has no rates file.
+
+Scanned figures: figures read from a PDF or a photo are checked for misreads: the
+running balance must follow from the row above, a similar line must not be exactly 10,
+100 or 1,000 times larger, rows must be readable, and dates must not jump back. Each
+finding names the row and the page to compare with the scan.
+
+Formatting: in the workbench menu, "Accept formatting changes by itself" applies bold,
+colours, widths and number formats at once. Changes to figures and formulas always wait
+for you.

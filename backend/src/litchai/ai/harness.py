@@ -717,6 +717,20 @@ def run_agent_loop(
                 if step == 0 and fallback_plan is not None:
                     yield from _degraded(user, execute, fallback_plan, proposals, citations,
                                          check_citation)
+                elif found_so_far:
+                    # The models went busy after the checks ran: answer with what was
+                    # found, never throw the findings away (edge-case run 22 Nov).
+                    good, dropped = _check_citations(citations, check_citation)
+                    yield {"type": "final", "answer": _stopped_answer(found_so_far, proposals)
+                           .replace("I stopped before the end of this request.",
+                                    "The AI service became busy, so I stopped there."),
+                           "citations": good, "dropped_citations": dropped,
+                           "proposals": proposals, "steps": step, "degraded": True,
+                           "attribution": {"pipeline": tools_used, "model": provider_seen,
+                                           "decision": "heuristic"}}
+                elif fallback_plan is not None:
+                    yield from _degraded(user, execute, fallback_plan, proposals, citations,
+                                         check_citation)
                 else:
                     reason = failure_kind(exc)
                     yield {"type": "error", "reason": reason, "message": FAILURE_WORDS[reason],

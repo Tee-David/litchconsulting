@@ -362,8 +362,11 @@ def fallback_plan(message: str) -> list[tuple[str, dict[str, Any]]]:
             plan.append(("build_statement", {"kind": kind}))
     if _tax_question(message):
         plan.append(("tax_compute", {"kind": "cit"}))  # takes the profit from the P&L
-    if any(w in m for w in ("text date", "fix the date", "stored as text")):
+    if any(w in m for w in ("text date", "fix the date", "stored as text", "clean", "mess",
+                            "tidy")):
         plan.append(("clean_values", {}))
+        if ("flag_anomalies", {}) not in plan:
+            plan.append(("flag_anomalies", {}))
     if any(w in m for w in ("anomal", "unusual", "duplicate", "outlier", "check")):
         plan.append(("flag_anomalies", {}))
     if any(w in m for w in ("sales", "revenue", "pos ", "takings", "till")):

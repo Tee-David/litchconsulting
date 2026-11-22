@@ -125,6 +125,8 @@ class Conversation:
     new_seq: int = 0
     # A7: standing instructions for this workbench, used in every answer.
     instructions: str = ""
+    # v8: formatting-only proposals (styles, widths, colours by rule) are accepted at once
+    auto_format: bool = False
 
     @property
     def local_only(self) -> bool:
@@ -152,6 +154,7 @@ class Conversation:
             "created_at": self.created_at, "updated_at": self.updated_at,
             "new_seq": self.new_seq,
             "instructions": self.instructions,
+            "auto_format": self.auto_format,
             "workbooks": [w.__dict__ for w in self.workbooks],
             "batches": [b.to_dict() for b in self.batches],
             "messages": self.messages,
@@ -211,7 +214,8 @@ class Conversation:
                    ) -> Conversation:
         c = cls(id=state["id"])
         for k in ("client_id", "ai_mode", "title", "client_name", "period_label", "provider",
-                  "model", "created_at", "updated_at", "new_seq", "instructions"):
+                  "model", "created_at", "updated_at", "new_seq", "instructions",
+                  "auto_format"):
             if k in state:
                 setattr(c, k, state[k])
         c.workbooks = [WorkbookRef(**w) for w in state.get("workbooks", [])]
@@ -337,6 +341,24 @@ def _cached_model(blobs: Any, ref: Any) -> Workbook:
 
 
 # --- the service ---------------------------------------------------------------------
+_FORMAT_OPS = {"sheet_props", "sheet_layout", "cond_format", "clear_cond_format", "merge_cells",
+               "unmerge_cells"}
+
+
+def format_only(batch: Any) -> bool:
+    """True when a proposal changes only how cells look, never a value or a formula."""
+    if not batch.ops:
+        return False
+    for op in batch.ops:
+        if op.op in _FORMAT_OPS:
+            continue
+        if op.op == "set_cell" and op.new_value == op.old_value and \
+                (op.new_formula or None) == (op.old_formula or None) and (op.style or op.number_format):
+            continue
+        return False
+    return True
+
+
 class WorkbenchError(ValueError):
     pass
 
@@ -464,6 +486,7 @@ class Workbench:
         ctx.full, ctx.sources, ctx.work_id, ctx.imports = full, sources, work_id, imports
         ctx.enriched = enriched
         ctx.pending_imports = pending
+        ctx.memory["refs"] = conv.workbooks  # the files, labels and macros (read_macros)
         ctx.new_workbook_seq = conv.new_seq + sum(
             1 for b in conv.batches for op in b.ops if op.op == "create_workbook")
         return ctx
@@ -472,6 +495,11 @@ class Workbench:
         batch.step = step
         _supersede(conv, batch)
         conv.batches.append(batch)
+        if conv.auto_format and format_only(batch):
+            # v8 switch: formatting never changes a figure, so it is applied at once
+            self.accept(conv, batch.id)
+            if batch.status == "accepted":
+                batch.summary = (batch.summary + " · accepted by itself (formatting only)").strip(" ·")
         return batch
 
     # -- decisions --------------------------------------------------------------------

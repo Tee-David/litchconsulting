@@ -20,6 +20,7 @@ dependencies = [
   "duckdb>=1.1",        # workbench query_sql: read-only SQL over sheet tables
   "sqlglot>=25",        # workbench query_sql: parse + allow-list the SQL before it runs
   "python-docx>=1.1",   # workbench: Word tables become sheets (workbench/formats.py)
+  "oletools>=0.60",     # workbench: read VBA macros (never run them), workbench/macros.py
 ]
 
 [project.optional-dependencies]

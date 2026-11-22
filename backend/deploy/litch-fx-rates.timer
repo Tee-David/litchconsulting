@@ -1,0 +1,9 @@
+[Unit]
+Description=Refresh the CBN exchange rates twice a day (the CBN publishes on working days)
+
+[Timer]
+OnCalendar=*-*-* 06,14:20:00 Africa/Lagos
+Persistent=true
+
+[Install]
+WantedBy=timers.target

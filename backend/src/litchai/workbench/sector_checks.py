@@ -134,7 +134,13 @@ def fx_rate_on(ctx: ToolContext, day: date) -> float | None:
             d, v = as_date(t.val(r, dc)), t.num(r, rc)
             if d and v and d <= day and (best is None or d > best[0]):
                 best = (d, v)
-    return best[1] if best else None
+    if best:
+        return best[1]
+    # v8: no rates file in the job: the CBN official rate kept on the server
+    from litchai.fx_rates import rate_on
+
+    hit = rate_on("USD", day)
+    return hit[0] if hit else None
 
 
 # ─── case 5: importer ──────────────────────────────────────────────────────────

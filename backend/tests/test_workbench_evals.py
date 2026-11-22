@@ -74,7 +74,8 @@ def test_scripted_run_passes_a_reconcile_task():
         {"action": "tool", "tool": "reconcile", "args": {}},
         {"action": "final", "answer": "Outstanding payments total ₦1,045,000."},
     ]))
-    assert s.passed and s.tools_called == ["reconcile"] and s.provider_used == "groq"
+    # v8: a reconcile request runs the standard checks that fit the files first
+    assert s.passed and s.tools_called[-1] == "reconcile" and s.provider_used == "groq"
 
 
 def test_injection_answer_fails_and_wrong_tool_fails():

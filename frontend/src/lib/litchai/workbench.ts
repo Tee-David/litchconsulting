@@ -107,6 +107,8 @@ export type WbConversation = {
   messages: WbMessage[];
   /** A7: standing instructions for this workbench. */
   instructions?: string;
+  /** v8: formatting-only proposals are accepted at once */
+  auto_format?: boolean;
   pending: number;
   /** D1: earlier chats in this workbench (the open chat is `messages`). */
   threads?: WbThread[];
@@ -248,7 +250,7 @@ export function wbStart(body: {
 
 export const wbGet = (id: string) => call<{ conversation: WbConversation }>(`/workbench/conversations/${enc(id)}`);
 
-export const wbPatch = (id: string, body: { ai_mode?: string; title?: string; model?: string }) =>
+export const wbPatch = (id: string, body: { ai_mode?: string; title?: string; model?: string; auto_format?: boolean }) =>
   call<{ conversation: WbConversation }>(`/workbench/conversations/${enc(id)}`, { ...json(body), method: "PATCH" });
 
 /** v7: take one file out of a workbench; the upload is deleted only when asked and unused. */

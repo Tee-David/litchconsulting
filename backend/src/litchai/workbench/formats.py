@@ -66,10 +66,14 @@ class Converted:
     origin: str                       # xlsx | csv | tsv | txt | json | docx | xls | ods
     converted: bool
     notes: list[str] = field(default_factory=list)
+    macros: dict[str, Any] | None = None   # v8: VBA read (never run), see macros.py
 
     def source(self, filename: str) -> dict[str, Any]:
-        return {"filename": filename, "format": self.origin, "converted": self.converted,
-                "notes": self.notes}
+        out = {"filename": filename, "format": self.origin, "converted": self.converted,
+               "notes": self.notes}
+        if self.macros:
+            out["macros"] = self.macros
+        return out
 
 
 def extension(filename: str, mime: str | None = None) -> str:
@@ -89,11 +93,11 @@ def to_working_copy(data: bytes, filename: str, mime: str | None = None, *,
     ext = extension(filename, mime)
     if ext in XLSX_EXT:
         load_xlsx(data, wb_id=wb_id, name=filename)  # opens, or raises
-        return Converted(data, "xlsx", converted=False)
+        return Converted(data, "xlsx", converted=False, macros=_macros(data, filename, ext))
     if ext in OFFICE_EXT:
         out = soffice_to_xlsx(data, ext)
         kind = ext[1:]
-        return Converted(out, kind, converted=True, notes=[
+        return Converted(out, kind, converted=True, macros=_macros(data, filename, ext), notes=[
             (f"Converted from {kind.upper()} to XLSX with LibreOffice. Values and formulas are "
             "kept; macros, some formatting and embedded images may be lost. The original file "
             "is unchanged.")])
@@ -111,6 +115,15 @@ def to_working_copy(data: bytes, filename: str, mime: str | None = None, *,
                                        allow_notes=ext == ".txt")
         return Converted(to_xlsx_bytes(wb), ext[1:], converted=True, notes=notes)
     raise FormatError(f"{filename}: this file type cannot be opened in the workbench.")
+
+
+def _macros(data: bytes, filename: str, ext: str) -> dict[str, Any] | None:
+    """VBA code in an .xlsm or .xls file (read, never run)."""
+    if ext not in (".xlsm", ".xls", ".xlsb"):
+        return None
+    from litchai.workbench.macros import read_vba
+
+    return read_vba(data, filename)
 
 
 # --- text decoding ----------------------------------------------------------------

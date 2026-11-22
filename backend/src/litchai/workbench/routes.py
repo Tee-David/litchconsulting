@@ -94,6 +94,7 @@ class UpdateConversation(BaseModel):
     title: str | None = None
     period_label: str | None = None
     client_name: str | None = None
+    auto_format: bool | None = None  # accept formatting-only proposals by itself
 
 
 class AcceptBatch(BaseModel):
@@ -458,6 +459,8 @@ def register_workbench_routes(app: FastAPI) -> None:
                 if body.model and body.model not in names:
                     raise HTTPException(422, f"model must be one of {sorted(names)} or empty")
                 conv.model = body.model
+            if body.auto_format is not None:
+                conv.auto_format = body.auto_format
             for k in ("title", "period_label", "client_name"):
                 v = getattr(body, k)
                 if v is not None:

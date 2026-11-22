@@ -148,4 +148,5 @@ def test_the_first_prompt_stays_small():
     # +100 for the names-only "Also available" line (open menu), +100 for the v5 tools
     # (36 tools). Far under Groq's 8,000 tokens a minute; the transcript is the real cost.
     assert max(r["tokens_est"] for r in rows) <= 1500
-    assert sum(r["tokens_est"] for r in rows) / len(rows) <= 1300
+    # +20 for the v8 tools (fx_rates, read_macros, copy_to_working_book) in the names line
+    assert sum(r["tokens_est"] for r in rows) / len(rows) <= 1320

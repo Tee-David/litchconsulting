@@ -491,6 +491,16 @@ class NoArgs(_Args):
     pass
 
 
+class FxArgs(_Args):
+    currency: str = Field("USD", description="USD, GBP, EUR, CNY ...")
+    on: str | None = Field(None, description="YYYY-MM-DD (default: today)")
+    kind: Literal["central", "buying", "selling"] = "central"
+
+
+class MacroArgs(_Args):
+    workbook_id: str | None = Field(None, description="the file with macros (default: every one)")
+
+
 class CopyArgs(_Args):
     workbook_id: str = Field(description="the source file's workbook id")
     sheet: str | None = Field(None, description="the sheet to copy (default: the first)")
@@ -846,6 +856,28 @@ TOOLS: tuple[WorkbenchTool, ...] = (
                   NoArgs, lambda c, a: grant_checks.grant_checks(c),
                   ("review our grant books", "grant report", "restricted funds",
                    "donor rules")),
+    WorkbenchTool("scan_checks", "read",
+                  "Find figures that were probably misread from a PDF or a scan: the running "
+                  "balance breaks, a shifted decimal, unreadable rows, dates out of order. Each "
+                  "names the row and page to compare with the scan.",
+                  NoArgs, lambda c, a: __import__("litchai.workbench.scan_checks", fromlist=["x"])
+                  .scan_checks(c, __import__("litchai.workbench.scan_checks", fromlist=["x"])
+                               .scanned_names(c.memory.get("refs") or [])),
+                  ("was the scan read correctly", "check the PDF figures", "misread")),
+    WorkbenchTool("fx_rates", "read",
+                  "The CBN official exchange rate for a currency on a date (or the last one "
+                  "published before it), with its source. Use it for year-end revaluation and "
+                  "for receipts in foreign currency when no rates file is in the job.",
+                  FxArgs, lambda c, a: __import__("litchai.fx_rates", fromlist=["x"])
+                  .fx_rates_tool(c, currency=a.currency, on=a.on, kind=a.kind),
+                  ("what was the dollar rate on 31 December", "CBN rate", "exchange rate")),
+    WorkbenchTool("read_macros", "read",
+                  "Read the VBA macros in a file (never run them): the code of each module and "
+                  "any warnings (runs by itself, can start programs or download files). Use it "
+                  "to explain a macro or to rebuild what it does with formulas.",
+                  MacroArgs, lambda c, a: __import__("litchai.workbench.macros", fromlist=["x"])
+                  .read_macros_tool(c, c.memory.get("refs") or [], a.workbook_id),
+                  ("what does the macro do", "explain the VBA", "is this macro safe")),
     WorkbenchTool("copy_to_working_book", "write",
                   "Copy a source sheet into the working book so its figures can be edited "
                   "there (sources never change).",

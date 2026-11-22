@@ -94,7 +94,8 @@ def test_conversation_lifecycle(tmp_path):
         frames = [json.loads(line[6:]) for line in raw.splitlines() if line.startswith("data: ")]
         types = [f["type"] for f in frames]
         assert types[0] == "start" and types[-1] == "final"
-        result = next(f for f in frames if f["type"] == "tool_result")
+        # v8: the standard checks may run first; the reconcile step is found by name
+        result = next(f for f in frames if f["type"] == "tool_result" and f["tool"] == "reconcile")
         assert result["data"]["difference"] == 0
         batch_id = result["proposal"]["id"]
         assert result["proposal"]["risk"] == "safe"

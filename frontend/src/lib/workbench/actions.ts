@@ -164,6 +164,18 @@ export async function setModelAction(conversationId: string, model: string): Pro
   }
 }
 
+/** v8: accept formatting-only proposals by itself (figures and formulas always wait). */
+export async function setAutoFormatAction(conversationId: string, on: boolean): Promise<Res<{ conversation: WbConversation }>> {
+  if (!(await guard(conversationId))) return DENIED;
+  try {
+    const res = await wbPatch(conversationId, { auto_format: Boolean(on) });
+    await recordAudit({ action: "workbench.auto_format", entity: "workbench", entityId: conversationId, meta: { on: Boolean(on) } });
+    return { ok: true, conversation: res.conversation };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
 // --- chats in a workbench (D1) and feedback (A1) ------------------------------------
 export async function newThreadAction(conversationId: string): Promise<Res<{ conversation: WbConversation }>> {
   if (!(await guard(conversationId))) return DENIED;

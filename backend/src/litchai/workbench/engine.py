@@ -368,6 +368,28 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
                if m.get("role") in ("user", "assistant")]
     events: list[dict[str, Any]] = []
     used = {"input_tokens": 0, "output_tokens": 0, "calls": 0}
+    # v8: a "check / what is wrong / reconcile" request runs the standard checks that fit
+    # the files first (no model), and the model starts from their findings (edge-case run
+    # 22 Nov: the model ran its own SQL and missed every settlement problem).
+    pre_events: list[dict[str, Any]] = []
+    if _CHECK_INTENT.search(message) and not pointed:
+        found: list[str] = []
+        for k, name in enumerate([t for t in _job_checks(ctx, conv)
+                                  if (t != "review_points" or has_tb) and t != "flag_anomalies"],
+                                 start=90):
+            call_ev = {"type": "tool_call", "step": k, "tool": name, "args": {},
+                       "layer": "pipeline"}
+            obs = execute(name, {}, k)
+            res_ev = {"type": "tool_result", "step": k, "tool": name, "ok": obs.ok,
+                      "summary": obs.summary, "error": obs.error, "proposal": obs.proposal,
+                      "citations": (obs.citations or [])[:20], "data": obs.data}
+            pre_events += [call_ev, res_ev]  # sent right after the "start" event
+            if obs.ok and obs.summary and not obs.summary.startswith("No "):
+                found.append(obs.summary)
+        if found:
+            user += ("\n(The standard checks already ran and found:\n" + "\n".join(found)[:1200]
+                     + "\nStart your answer from these findings. Do not run these checks "
+                     "again.)")
     if hasattr(deps.router, "pin"):
         # Each turn starts on the chosen model, else on the firm's default (the head
         # of the chain). A fallback in one turn must not move later turns to Groq.
@@ -379,10 +401,18 @@ def run_turn(deps: TurnDeps, conv: Conversation, message: str, *,
                              router=deps.router, history=history, conversation_id=conv.id,
                              local_only=conv.local_only, masker=masker, max_steps=max_steps,
                              check_args=check_args, check_citation=citation_checker(ctx),
-                             fallback_plan=_plan_for(has_tb, _job_checks(ctx, conv)),
+                             fallback_plan=lambda _m, _p=_plan_for(has_tb, _job_checks(ctx, conv)): _p(message),
                              max_tools=len(tools),
                              more_tools=[AgentTool(t.name, t.description, t.schema(), t.kind)
                                          for t in TOOLS if t.name not in offered]):
+        if ev["type"] == "start" and pre_events:
+            events.append(ev)
+            yield ev
+            for pe in pre_events:
+                pe.setdefault("ms", int((time.monotonic() - t0) * 1000))
+                events.append(pe)
+                yield pe
+            continue
         if ev["type"] == "provider":
             conv.provider = ev["provider"]
         if ev["type"] == "usage":
@@ -422,6 +452,9 @@ def _finish(wbench: Workbench, conv: Conversation, masker: Masker,
     wbench.store.save(conv)
 
 
+_CHECK_INTENT = re.compile(
+    r"\b(check|checks|wrong|review|audit|reconcil\w*|look(s|ing)? (off|wrong)|problems?|issues?|"
+    r"mistakes?|errors?|fraud|suspicious|owe[sd]?|agree|tally|mess)\b", re.IGNORECASE)
 _MENTION = re.compile(r"@\[([^\]]{1,160})\]|@([\w.\-]{3,80})")
 
 
@@ -827,9 +860,11 @@ def period_mismatch(files: list[dict[str, Any]]) -> str | None:
             "say which period to use.")
 
 
-def fitting_checks(roles: set[str], names: str) -> list[tuple[str, str]]:
+def fitting_checks(roles: set[str], names: str, scanned: bool = False) -> list[tuple[str, str]]:
     """The standard checks that fit the files in a job: (tool, plain title)."""
     checks: list[tuple[str, str]] = []
+    if scanned:  # v8: figures read from a PDF or a scan are checked for misreads first
+        checks.append(("scan_checks", "Scans"))
     if roles & {"trial_balance", "books"}:
         checks.append(("review_points", "Books"))
     if "sales_report" in roles:
@@ -848,7 +883,11 @@ def _job_checks(ctx: ToolContext, conv: Conversation) -> list[str]:
     roles = {ref.role or (ref.facts or {}).get("role") or "other" for ref in conv.workbooks}
     names = " ".join([ref.name for ref in conv.workbooks] + [
         s for w in ctx.workbooks.values() for s in w.sheets])
-    return [t for t, _ in fitting_checks(roles, names)]
+    # the anomaly checks fit every job (duplicates, text dates, text numbers)
+    from litchai.workbench.scan_checks import scanned_names
+
+    return [t for t, _ in fitting_checks(roles, names, bool(scanned_names(conv.workbooks)))] + [
+        "flag_anomalies"]
 
 
 def job_overview(ctx: ToolContext, conv: Conversation) -> dict[str, Any]:
@@ -873,12 +912,20 @@ def job_overview(ctx: ToolContext, conv: Conversation) -> dict[str, Any]:
     has_tb = bool(roles & {"trial_balance", "books"})
     banks = [f for f in files if f["role"] == "bank_statement"]
 
-    checks = fitting_checks(roles, names)
+    from litchai.workbench.scan_checks import scanned_names
+
+    checks = fitting_checks(roles, names, bool(scanned_names(conv.workbooks)))
 
     findings: list[dict[str, Any]] = []
     periods = period_mismatch(files)
     if periods:
         findings.append({"area": "Periods", "tool": "periods", "count": 1, "top": [periods]})
+    from litchai.workbench.macros import summary_line as macro_line
+
+    for ref in conv.workbooks:  # v8: macros are read, never run
+        if (ref.source or {}).get("macros"):
+            findings.append({"area": f"Macros in {ref.name}", "tool": "read_macros", "count": 1,
+                             "top": [macro_line(ref.source["macros"])]})
     start = time.monotonic()
     for tool, title in checks:
         if time.monotonic() - start > _OVERVIEW_BUDGET_S:
