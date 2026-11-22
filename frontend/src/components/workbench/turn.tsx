@@ -1,10 +1,11 @@
 "use client";
 
-import { Fragment, createContext, useContext, useRef, useState, type ReactNode } from "react";
+import { Fragment, createContext, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, Lightbulb, ListTree, RefreshCw, Table2 } from "lucide-react";
 import { Trace, TraceOutput, seconds, useElapsed, type TraceStatus } from "@/components/sage-ui/trace";
 import type { WbEvent } from "@/lib/litchai/workbench";
 import { REF_IN_TEXT } from "./refs";
+import { plainReason, stepWords } from "./plain-steps";
 import { FAILURE, failureKind, modelName, slotLabel } from "@/lib/ai-words";
 
 export const PROVIDER_LABEL: Record<string, string> = {
@@ -155,7 +156,7 @@ export function CiteChip({ refText, onCite }: { refText: string; onCite: (ref: s
   );
 }
 
-type Step = { t: string; d?: string; s: "done" | "run" | "wait" | "fail" | "switch"; tool?: string; args?: string };
+type Step = { t: string; d?: string; s: "done" | "run" | "wait" | "fail" | "switch"; tool?: string; args?: string; tech?: string };
 
 /** A step title that says its state in words: "Reading a range", "Read a range", "Failed to read a range". */
 const RUN_LABEL: Record<string, string> = {
@@ -188,13 +189,16 @@ function stepsOf(events: WbEvent[], running: boolean): Step[] {
       const r = results.get(Number(e.step));
       const args = argsSummary(tool, (e.args as Record<string, unknown>) ?? {});
       const st: Step["s"] = r ? (r.ok === false ? "fail" : "done") : running ? "run" : "fail";
-      const label = TOOL_LABEL[tool] ?? tool;
+      // v8: plain words. A step that did not fit the files is "skipped" with a plain
+      // reason; the tool name, its arguments and the raw error are technical details.
+      const raw = r && r.ok === false ? s(r.error) : "";
       out.push({
-        t: st === "run" ? (RUN_LABEL[tool] ?? label) : st === "fail" ? `Failed: ${lower(label)}` : label,
-        d: r ? (r.ok === false ? s(r.error) : s(r.summary)) : undefined,
+        t: stepWords(tool, st === "run" ? "run" : st === "fail" ? "skip" : "done"),
+        d: r ? (r.ok === false ? plainReason(raw) : s(r.summary)) : undefined,
         s: st,
         tool,
         args,
+        tech: [tool, raw].filter(Boolean).join(" · "),
       });
     } else if (e.type === "fallback" && s(e.detail) !== "skipped") {
       out.push({
@@ -238,7 +242,27 @@ function receipt(events: WbEvent[]): string {
   return bits.join(" · ");
 }
 
-const TRACE_STATUS: Record<Step["s"], TraceStatus> = { done: "done", run: "running", wait: "waiting", fail: "error", switch: "switch" };
+const TRACE_STATUS: Record<Step["s"], TraceStatus> = { done: "done", run: "running", wait: "waiting", fail: "none", switch: "switch" };
+
+/** "Show technical details" (tool names, SQL, tokens, models): off by default, remembered. */
+function useTechDetails(): [boolean, (v: boolean) => void] {
+  const [on, setOn] = useState(false);
+  useEffect(() => {
+    try {
+      setOn(localStorage.getItem("wb-tech") === "1");
+    } catch {
+      /* private window: stays off */
+    }
+  }, []);
+  return [on, (v: boolean) => {
+    setOn(v);
+    try {
+      localStorage.setItem("wb-tech", v ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }];
+}
 
 /** Plan + tool steps + notices + the answer for one turn (live or from history). */
 export function TurnView({
@@ -270,12 +294,14 @@ export function TurnView({
   const tk = (final?.tokens ?? null) as { input_tokens?: number; output_tokens?: number; calls?: number } | null;
   const tokenTotal = tk ? (tk.input_tokens ?? 0) + (tk.output_tokens ?? 0) : 0;
   const tokenText = tokenTotal ? `${tokenTotal >= 1000 ? `${(tokenTotal / 1000).toFixed(1)}k` : tokenTotal} tokens` : null;
+  const [tech, setTech] = useTechDetails();
+  const doneSteps = steps.filter((x) => x.s === "done").length;
 
   return (
     <div className="space-y-2.5">
       {steps.length > 0 || live ? (
         <Trace
-          status={live ? "running" : failed ? "error" : "none"}
+          status={live ? "running" : "none"}
           icon={<ListTree />}
           title={
             live
@@ -284,38 +310,50 @@ export function TurnView({
                 : steps.length
                   ? "Thinking"
                   : "Reading the workbook"
-              : calls
-                ? `Worked in ${calls} step${calls === 1 ? "" : "s"}${failed ? `, ${failed} failed` : ""}`
-                : "Answered directly"
+              : doneSteps
+                ? `Checked ${doneSteps} thing${doneSteps === 1 ? "" : "s"}${failed ? `, skipped ${failed}` : ""}`
+                : calls
+                  ? "Looked at the files"
+                  : "Answered directly"
           }
           meta={
             live
               ? [planTotal > 1 ? `step ${Math.min(calls + (current ? 0 : 1), planTotal)} of ${planTotal}` : null, elapsed > 1 ? `${elapsed} s` : null].filter(Boolean).join(" · ") || null
-              : [seconds(doneMs), tokenText].filter(Boolean).join(" · ") || null
+              : [seconds(doneMs), tech ? tokenText : null].filter(Boolean).join(" · ") || null
           }
         >
           <div className="space-y-0.5 pt-0.5">
-            {thoughts.length ? (
+            {thoughts.length && tech ? (
               <Trace size="sm" icon={<Lightbulb />} title={live ? "Thinking" : "Thought"} status={live ? "running" : "none"}>
                 <TraceOutput>{thoughts.join(" ")}</TraceOutput>
               </Trace>
             ) : null}
             {steps.map((x, i) => (
-              <Trace key={i} size="sm" status={TRACE_STATUS[x.s]} title={x.t} defaultOpen={x.s === "fail" ? true : undefined}>
-                {x.args || x.d ? (
+              <Trace key={i} size="sm" status={TRACE_STATUS[x.s]} title={x.t}>
+                {x.d || (tech && (x.args || x.tech)) ? (
                   <>
-                    {x.args ? <TraceOutput mono>{x.args}</TraceOutput> : null}
                     {x.d ? <TraceOutput>{x.d}</TraceOutput> : null}
+                    {tech && x.args ? <TraceOutput mono>{x.args}</TraceOutput> : null}
+                    {tech && x.tech ? <TraceOutput mono>{x.tech}</TraceOutput> : null}
                   </>
                 ) : undefined}
               </Trace>
             ))}
-            {retries > 0 && !live ? (
+            {retries > 0 && !live && tech ? (
               <p className="flex min-h-8 items-center gap-2 text-[12px] text-muted">
                 <RefreshCw className="size-3.5" aria-hidden /> {retries === 1 ? "One step was malformed and asked again." : `${retries} steps were malformed and asked again.`}
               </p>
             ) : null}
-            {!live ? <p className="pt-1 text-[11.5px] text-muted">{receipt(events)}</p> : null}
+            {!live && tech ? <p className="pt-1 text-[11.5px] text-muted">{receipt(events)}</p> : null}
+            {!live ? (
+              <button
+                type="button"
+                onClick={() => setTech(!tech)}
+                className="mt-1 min-h-8 text-[12px] font-medium text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 dark:text-info"
+              >
+                {tech ? "Hide technical details" : "Show technical details"}
+              </button>
+            ) : null}
           </div>
         </Trace>
       ) : null}

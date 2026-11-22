@@ -543,6 +543,20 @@ FAILURE_WORDS = {
 # Tools whose output is a description of the files, not an answer: never printed as
 # the answer (v6: a raw sheet profile was shown to the person).
 _DESCRIBE_ONLY = {"profile_workbook", "profile_range"}
+def _stopped_answer(found: list[str], proposals: list[Any]) -> str:
+    """The steps ran out: answer with what was found, never "I reached the step limit"."""
+    ready = (f" {len(proposals)} change{'s are' if len(proposals) != 1 else ' is'} ready for "
+             "you to review below." if proposals else " Nothing was changed.")
+    if not found:
+        return ("This request needs more steps than I can take at once." + ready + " Please ask "
+                "for one part at a time, for example \"check the bank statement\" or \"check "
+                "the sales\".")
+    body = "\n\n".join(dict.fromkeys(found))
+    return ("Here is what I found so far.\n\n" + body + "\n\nI stopped before the end of this "
+            "request." + ready + " Say \"continue\" and I will go on, or ask for one part at "
+            "a time.")
+
+
 _ASK_WHAT = ("I have read the files. What would you like me to do with them? For example:\n"
              "- Check the books for errors and the adjustments needed\n"
              "- Reconcile a bank statement to the trial balance\n"
@@ -642,6 +656,7 @@ def run_agent_loop(
     proposals: list[dict[str, Any]] = []
     citations: list[str] = []
     tools_used: list[str] = []
+    found_so_far: list[str] = []  # plain findings, for an answer if the steps run out
     provider_seen: str | None = None
     # Figures the answer may quote: the question, the chat so far, tool results.
     grounded: list[float] = figures_in(" ".join(m["content"] for m in base[1:]))
@@ -793,8 +808,8 @@ def run_agent_loop(
 
         if step >= max_steps:
             good, dropped = _check_citations(citations, check_citation)
-            yield {"type": "final", "answer": "I reached the step limit. Here is what I did so "
-                   "far; review the proposals and ask me to continue.", "citations": good,
+            yield {"type": "final", "answer": _stopped_answer(found_so_far, proposals),
+                   "citations": good,
                    "dropped_citations": dropped, "proposals": proposals, "steps": step,
                    "attribution": {"pipeline": tools_used, "model": provider_seen,
                                    "decision": "heuristic"}, "truncated": True}
@@ -822,6 +837,8 @@ def run_agent_loop(
                 observed = [f.result() for f in futures]
         for (st, name, args), obs in zip(calls_now, observed):
             tools_used.append(name)
+            if obs.ok and obs.summary and name not in _DESCRIBE_ONLY | {"query_sql"}:
+                found_so_far.append(obs.summary)
             citations.extend(obs.citations or [])
             if obs.proposal:
                 proposals.append(obs.proposal)

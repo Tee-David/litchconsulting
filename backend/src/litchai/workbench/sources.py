@@ -199,6 +199,13 @@ def redirect(ops: list[Operation], src: Workbook, work: Workbook, work_id: str,
     return new_ops
 
 
+def template_ids(refs: list[Any]) -> set[str]:
+    """Blank templates: kept out of the automatic scans (their sample figures are not
+    client data); still readable when the person names them."""
+    return {r.id for r in refs if (getattr(r, "role", None) or (getattr(r, "facts", None) or {})
+                                   .get("role")) == "template"}
+
+
 def source_ids(refs: list[Any]) -> set[str]:
     return {r.id for r in refs if getattr(r, "kind", "source") == "source"}
 

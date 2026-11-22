@@ -456,8 +456,11 @@ class Workbench:
         enriched = {op.sheet for b in conv.batches if b.status in ("pending", "accepted")
                     for op in b.ops if op.workbook_id == work_id and op.sheet in imports
                     and op.op not in ("import_sheet", "delete_sheet")}
-        ctx = ToolContext(views(full, work_id, imports, enriched),
-                          client_name=conv.client_name, period_label=conv.period_label, **kw)
+        from litchai.workbench.sources import template_ids
+
+        seen = {k: v for k, v in views(full, work_id, imports, enriched).items()
+                if k not in template_ids(conv.workbooks)}
+        ctx = ToolContext(seen, client_name=conv.client_name, period_label=conv.period_label, **kw)
         ctx.full, ctx.sources, ctx.work_id, ctx.imports = full, sources, work_id, imports
         ctx.enriched = enriched
         ctx.pending_imports = pending

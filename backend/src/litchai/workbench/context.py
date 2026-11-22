@@ -49,6 +49,8 @@ class ToolContext:
             return next(iter(self.workbooks.values()))
         if workbook_id in self.workbooks:
             return self.workbooks[workbook_id]
+        if workbook_id in self.full:  # a template: out of the scans, readable by name
+            return self.full[workbook_id]
         for wb in self.workbooks.values():
             if wb.name.lower() == workbook_id.lower():
                 return wb

@@ -410,6 +410,7 @@ def register_workbench_routes(app: FastAPI) -> None:
     @app.post("/workbench/conversations/{conversation_id}/working-book")
     def start_working_book(conversation_id: str) -> dict[str, Any]:
         """v8: open the working book now (one empty sheet). Nothing changes if it exists."""
+        from litchai.workbench.model import new_workbook
         from litchai.workbench.sources import WORK_NAME, work_ref
 
         with _workbench() as wb:

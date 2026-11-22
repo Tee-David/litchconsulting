@@ -28,6 +28,7 @@ ROLES = {
     "asset_register": "fixed asset register",
     "sales_report": "sales or settlement report",
     "register": "register or schedule",
+    "template": "blank template (a form to fill, not client figures)",
     "document": "letter, contract or notes",
     "books": "books (several schedules)",
     "other": "other data",
@@ -65,6 +66,18 @@ def _text_only(wb: Workbook) -> bool:
     cols = {k[1] for s in wb.sheets.values() for k in s.cells}
     texty = sum(1 for c in cells if isinstance(c.value, str) and len(c.value) > 25)
     return len(cols) <= 2 and texty >= max(3, len(cells) // 3)
+
+
+_TEMPLATE_NAME = re.compile(r"template|blank|pro[\s_-]?forma|specimen|illustrative", re.IGNORECASE)
+_TEMPLATE_SHEET = re.compile(r"^(instructions?|read ?me|cover( page)?|how to use|guide)$", re.IGNORECASE)
+
+
+def _is_template(wb: Workbook, filename: str) -> bool:
+    """A blank form (an IFRS annual report template, a schedule to fill): its name says
+    so, or it has an Instructions or Cover sheet beside the forms."""
+    if _TEMPLATE_NAME.search(filename or wb.name or ""):
+        return True
+    return any(_TEMPLATE_SHEET.match(s.strip()) for s in wb.sheets) and len(wb.sheets) >= 3
 
 
 def _period(sh: Sheet) -> tuple[str | None, str | None]:
@@ -130,7 +143,9 @@ def describe(wb: Workbook, filename: str | None = None) -> dict[str, Any]:
                     if r <= 6 and isinstance(c.value, str))[:3000]
     # The bank from the file name first; from the text only for a statement.
     bank = next((b for b in BANKS if b.lower() in low), None)
-    if _text_only(wb):
+    if _is_template(wb, name):
+        role = "template"
+    elif _text_only(wb):
         role = "document"
     else:
         single = len([s for s in wb.sheets.values() if s.cells]) == 1

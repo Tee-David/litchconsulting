@@ -740,6 +740,31 @@ _SECTOR_AREA = {"imports": "Imports", "rent": "Rent", "stock": "Stock",
                 "purchases": "Purchases"}
 
 
+def period_mismatch(files: list[dict[str, Any]]) -> str | None:
+    """One plain sentence when the data files cover periods that do not overlap (a bank
+    statement for January and a cash book for February cannot be reconciled)."""
+    from datetime import date as _d
+
+    def nice(x: str) -> str:
+        try:
+            return _d.fromisoformat(x).strftime("%d %b %Y").lstrip("0")
+        except ValueError:
+            return x
+
+    spans = [(f["label"].split(" (")[0], f["period"]) for f in files
+             if f.get("period") and f["role"] not in ("template", "document", "other", "register")]
+    if len(spans) < 2:
+        return None
+    start = max(p[0] for _, p in spans)
+    end = min(p[1] for _, p in spans)
+    if start <= end:
+        return None
+    parts = "; ".join(f"{lbl}: {nice(p[0])} to {nice(p[1])}" for lbl, p in spans[:5])
+    return (f"The files cover different periods ({parts}). Checks that compare files need "
+            "the same period, so some answers will be partial. Add the missing months, or "
+            "say which period to use.")
+
+
 def fitting_checks(roles: set[str], names: str) -> list[tuple[str, str]]:
     """The standard checks that fit the files in a job: (tool, plain title)."""
     checks: list[tuple[str, str]] = []
@@ -789,6 +814,9 @@ def job_overview(ctx: ToolContext, conv: Conversation) -> dict[str, Any]:
     checks = fitting_checks(roles, names)
 
     findings: list[dict[str, Any]] = []
+    periods = period_mismatch(files)
+    if periods:
+        findings.append({"area": "Periods", "tool": "periods", "count": 1, "top": [periods]})
     start = time.monotonic()
     for tool, title in checks:
         if time.monotonic() - start > _OVERVIEW_BUDGET_S:
