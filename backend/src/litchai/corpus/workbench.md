@@ -338,3 +338,12 @@ only. Blank templates (an IFRS annual report form) are labelled as templates and
 not treated as client figures. When the files cover different periods, the overview
 says so first. Under each answer, "Show technical details" shows the steps, tool names
 and queries for people who want them.
+
+## Pointing Sage at files, and what an answer used
+
+Type @ in the message box to point Sage at a file, for example @GTBank statement. In
+Your sources, "Ask about it" does the same, "Open" shows a file read only, and a search
+box helps when there are many files. Under each answer, "Used:" names the files the
+answer came from; click one to open it. An answer shows at most three cell links on a
+line; "+N more" shows the rest. To edit a source's figures, open it and choose "Copy
+this sheet into the working book"; the source file stays as it is.
