@@ -343,6 +343,6 @@ visually in sync, same layout, watermark, stamp, signature. Keep `tsc`, lint and
 ---
 
 <div align="center">
-  <p>Built by <a href="https://wedigcreativity.com.ng">WDC Solutions Hub</a></p>
+  <p>Built by <a href="https://wedigcreativity.com">WDC Solutions Hub</a></p>
   <p>&copy; 2026 Litch Consulting. All rights reserved.</p>
 </div>

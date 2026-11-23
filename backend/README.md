@@ -287,6 +287,6 @@ narrations, LLM usage) live in `litchai.categorize.reports.SQL_VIEWS`.
 ---
 
 <div align="center">
-  <p>Built by <a href="https://wedigcreativity.com.ng">WDC Solutions Hub</a></p>
+  <p>Built by <a href="https://wedigcreativity.com">WDC Solutions Hub</a></p>
   <p>&copy; 2026 Litch Consulting. All rights reserved.</p>
 </div>
